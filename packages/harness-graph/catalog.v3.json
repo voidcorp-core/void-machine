@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:695aac983dc39b461b358328482fa59f84001c912abf93860e964c90535ebf0f"
+    "rootHash": "sha256:18c998ac7938a94c2614768b6c6bada805c122c88e07cddf6a56a736721dd947"
   },
   "nodes": [
     {
@@ -619,6 +619,34 @@
           {
             "kind": "path",
             "ref": "packages/core/commands/backlog-autopilot.md",
+            "hashOrVersion": "catalog-v1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog:command:command:session-handoff",
+      "kind": "command",
+      "label": "session-handoff",
+      "data": {
+        "legacy": {
+          "description": "Close the current work session — route each fact to where state lives, then write the residue the next session cannot re-derive, ending on one exact next action.",
+          "id": "command:session-handoff",
+          "lines": 24,
+          "name": "session-handoff",
+          "pack": null,
+          "source": "packages/core/commands/session-handoff.md",
+          "staticTokens": 342,
+          "type": "command"
+        }
+      },
+      "provenance": {
+        "origin": "extracted",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "path",
+            "ref": "packages/core/commands/session-handoff.md",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -4711,6 +4739,54 @@
           {
             "kind": "path",
             "ref": "packages/core/skills/security-guidance/SKILL.md",
+            "hashOrVersion": "catalog-v1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog:skill:skill:session-handoff",
+      "kind": "skill",
+      "label": "session-handoff",
+      "data": {
+        "legacy": {
+          "description": "Close a work session so the next one starts without re-deriving anything. Routes state to where state lives, writes only what nothing else holds, ends on one exact next action.",
+          "enforcement": {
+            "floor": "ci",
+            "inline": {
+              "claude": "active",
+              "codex": "active",
+              "hermes": "ci-only"
+            }
+          },
+          "evalTargets": [
+            {
+              "provider": "anthropic",
+              "runtime": "claude",
+              "tier": "opus"
+            }
+          ],
+          "id": "skill:session-handoff",
+          "lines": 181,
+          "name": "session-handoff",
+          "owner": "folpe",
+          "pack": null,
+          "runtimes": [
+            "claude",
+            "codex"
+          ],
+          "source": "packages/core/skills/session-handoff/SKILL.md",
+          "staticTokens": 2153,
+          "type": "skill"
+        }
+      },
+      "provenance": {
+        "origin": "extracted",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "path",
+            "ref": "packages/core/skills/session-handoff/SKILL.md",
             "hashOrVersion": "catalog-v1"
           }
         ]

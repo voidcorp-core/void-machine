@@ -893,7 +893,7 @@
         }
       ],
       "id": "skill:autopilot",
-      "lines": 116,
+      "lines": 166,
       "name": "autopilot",
       "owner": "folpe",
       "pack": null,
@@ -902,7 +902,7 @@
         "codex"
       ],
       "source": "packages/core/skills/autopilot/SKILL.md",
-      "staticTokens": 1446,
+      "staticTokens": 2398,
       "type": "skill"
     },
     {

@@ -100,6 +100,34 @@ with native subagents. Both read the *same* `OrchestrationPlan` and return the *
 
 ---
 
+## Resuming, and closing
+
+A session that comes back reads the remote before it reads its own cursor. Pipe the full pull
+request observation — number, state, head ref and sha, base ref and sha, merge sha, checks —
+into `autopilot status`, and act on the verdict it returns:
+
+| Verdict | What it means | What you do |
+|---|---|---|
+| `publish` | nothing was observed on the remote | publish; it is idempotent against an existing request |
+| `republish` | the remote head lags the local one | push the same branch again |
+| `rebase` | the base moved under the run | rebase, reconcile again, re-run the whole suite; the proofs are stale |
+| `await-checks` / `fix-checks` | required checks pending, or red on this diff | wait, or fix locally and push again |
+| `ready` | every required check is green | leave it for the human, move the included tickets to In Review |
+| `merged` | GitHub reported a merge commit | move the included tickets to Done, close the lease |
+| `blocked` | closed unmerged, a foreign branch, a merge with no commit, a red check this diff does not own | stop and report; none of these is a completion |
+| `observe-again` | the reading was partial | read it again; a partial answer is not an answer |
+
+The verdicts that end a run demand evidence and refuse an inference. An absent pull request is
+an absence. A closed one is a refusal. Only a merge commit is a merge. Tracker writes carry an
+idempotency key derived from the run, so a write whose result came back unknown is retried as
+the same write and never as a second one — and a partial write keeps the run in
+`tracker-reconciliation` rather than letting it call itself synced.
+
+`abort` releases the claim, never the work: leases go back, branches, commits and the cursor
+stay exactly where they are, and no ticket moves forward.
+
+---
+
 ## What a worker is given, and what it may do
 
 Given: exactly one ticket id, one worktree path, one branch, and the paths of the global plan

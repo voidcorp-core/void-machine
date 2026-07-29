@@ -14,9 +14,25 @@
 import { type ClusterPlan, type ClusterPlanInput, planCluster } from '../lib/autopilot/cluster-plan.js';
 import { type ConfirmationInput, confirmReservation } from '../lib/autopilot/cluster-reservation.js';
 import { autopilotFailure, renderAutopilotFailure, toAutopilotFailure } from '../lib/autopilot/errors.js';
-import type { RunState } from '../lib/autopilot/run-state.js';
+import {
+  type PullRequestObservation,
+  recoverRemote,
+  type RecoveryVerdict,
+} from '../lib/autopilot/remote-recovery.js';
+import type { RunState, TicketRunState } from '../lib/autopilot/run-state.js';
 import { listRunIds, readRun, writeRun } from '../lib/autopilot/state-store.js';
-import { type NextAction, nextAction, type RunSituation } from '../lib/autopilot/transition-oracle.js';
+import {
+  type LifecyclePlan,
+  type LifecycleTicket,
+  planTrackerLifecycle,
+} from '../lib/autopilot/tracker-lifecycle.js';
+import {
+  type BoundaryReading,
+  type NextAction,
+  nextAction,
+  type PullRequestReading,
+  type RunSituation,
+} from '../lib/autopilot/transition-oracle.js';
 
 export interface AutopilotCommandResult {
   readonly stdout: string;
@@ -59,7 +75,18 @@ stdin JSON (CandidateObservation):
   }
 
 stdin JSON (ReservationReceipt): { "intent", "applied": [], "reobservation" }
-stdin JSON (RemoteObservation):  { "tracker", "pullRequest", "workerRefs" }
+stdin JSON (RemoteObservation):  { "tracker", "pullRequest", "workerRefs",
+                                   "trackerStates"?, "ticketStates"? }
+
+pullRequest carries either a bare state ("open" | "merged" | "closed") or the
+full observation — number, state, headRef, headSha, baseRef, baseSha, mergeSha,
+checks. Only the full form yields a recovery verdict: a bare "open" cannot tell a
+branch that matches the local tree from one whose base moved underneath it.
+
+Add trackerStates: { "review", "done" } to also get the tracker lifecycle plan.
+Without it no transition is planned — the CLI never guesses what your board calls
+a state. ticketStates maps a ticket id to its observed state, so a write that
+would change nothing is skipped rather than sent.
 
 Merging is a human gate: there is no --auto-merge.
 `.trimStart();
@@ -149,8 +176,106 @@ function resolveRun(context: AutopilotCommandContext, explicit: string | undefin
   return live[0] as RunState;
 }
 
-function situationFrom(state: RunState, stdin: string): RunSituation {
-  const observation = parseStdin<Partial<RunSituation>>(stdin, 'remote observation');
+/**
+ * A remote observation, in either shape the skill may produce.
+ *
+ * `pullRequest` carries a bare state when nothing more was read, or the full
+ * observation once the run has something published to compare against. The
+ * detailed form is what recovery needs: a bare `open` cannot tell a branch that
+ * matches the local tree from one whose base moved underneath it.
+ */
+interface RemoteObservation {
+  readonly tracker: RunSituation['tracker'];
+  readonly pullRequest: BoundaryReading<PullRequestReading | PullRequestObservation>;
+  readonly workerRefs: RunSituation['workerRefs'];
+  /** Native state names the tracker lifecycle transitions into. */
+  readonly trackerStates?: { readonly review: string; readonly done: string };
+  /** Native state currently observed per ticket, used to skip redundant writes. */
+  readonly ticketStates?: Record<string, string>;
+}
+
+interface Resolved {
+  readonly situation: RunSituation;
+  readonly recovery?: RecoveryVerdict | undefined;
+  /** Absent whenever the observation did not name the tracker's own states. */
+  readonly lifecycle?: LifecyclePlan | undefined;
+}
+
+function isDetailed(value: PullRequestReading | PullRequestObservation): value is PullRequestObservation {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Reduce a detailed observation to what the transition oracle reasons about. */
+function narrow(
+  reading: BoundaryReading<PullRequestReading | PullRequestObservation>,
+): BoundaryReading<PullRequestReading> {
+  if (reading.kind !== 'value') return reading;
+  return { kind: 'value', value: isDetailed(reading.value) ? reading.value.state : reading.value };
+}
+
+function rangeOf(state: RunState, ticket: TicketRunState): string | undefined {
+  const head = ticket.commits[ticket.commits.length - 1];
+  return head === undefined ? undefined : `${state.base.sha.slice(0, 12)}..${head.slice(0, 12)}`;
+}
+
+function lifecycleTickets(state: RunState, observed: Record<string, string>): LifecycleTicket[] {
+  return state.tickets.map((ticket) => {
+    const common = {
+      id: ticket.id,
+      // Unknown rather than assumed: an empty state matches no target, so the
+      // write is planned and the tracker itself settles whether it was needed.
+      state: observed[ticket.id] ?? '',
+    };
+    if (ticket.phase !== 'committed') {
+      return {
+        ...common,
+        disposition: 'excluded' as const,
+        cause: ticket.blocker ?? `the ticket stopped at phase \`${ticket.phase}\``,
+        resume: `resolve the blocker on ${ticket.id}, then plan a new cluster for it`,
+      };
+    }
+    const range = rangeOf(state, ticket);
+    return {
+      ...common,
+      disposition: 'included' as const,
+      ...(range === undefined ? {} : { range }),
+    };
+  });
+}
+
+/**
+ * Plan the tracker moves this verdict justifies, or none.
+ *
+ * None is the common answer: without the program's own state names the CLI
+ * would have to guess what "review" is called, and a guessed transition is a
+ * ticket moved to a state the board does not have.
+ */
+function lifecycleFor(
+  state: RunState,
+  observation: RemoteObservation,
+  recovery: RecoveryVerdict,
+): LifecyclePlan | undefined {
+  const states = observation.trackerStates;
+  if (states === undefined) return undefined;
+
+  const stage = recovery.kind === 'merged' ? 'merged' : recovery.kind === 'ready' ? 'published' : undefined;
+  if (stage === undefined) return undefined;
+
+  return planTrackerLifecycle({
+    stage,
+    runId: state.runId,
+    states,
+    pullRequest:
+      recovery.pullRequestNumber === null || state.integration.prUrl === null
+        ? null
+        : { number: recovery.pullRequestNumber, url: state.integration.prUrl },
+    mergeSha: recovery.mergeSha,
+    tickets: lifecycleTickets(state, observation.ticketStates ?? {}),
+  });
+}
+
+function situationFrom(state: RunState, stdin: string): Resolved {
+  const observation = parseStdin<Partial<RemoteObservation>>(stdin, 'remote observation');
   if (
     observation?.tracker === undefined ||
     observation?.pullRequest === undefined ||
@@ -163,11 +288,38 @@ function situationFrom(state: RunState, stdin: string): RunSituation {
       'observe all three boundaries and pass them together; the CLI never fills one in for you',
     );
   }
-  return {
+
+  const situation: RunSituation = {
     state,
     tracker: observation.tracker,
-    pullRequest: observation.pullRequest,
+    pullRequest: narrow(observation.pullRequest),
     workerRefs: observation.workerRefs,
+  };
+
+  // Recovery needs something published to compare the remote against. Before
+  // reconciliation there is no integration head, and every remote answer would
+  // be about a branch this run has not produced yet.
+  const detailed =
+    observation.pullRequest.kind !== 'value' || isDetailed(observation.pullRequest.value);
+  const integration = state.integration;
+  if (!detailed || integration.branch === null || integration.headSha === null) {
+    return { situation };
+  }
+
+  const recovery = recoverRemote({
+    expected: {
+      integrationBranch: integration.branch,
+      integrationSha: integration.headSha,
+      baseBranch: state.base.branch,
+      baseSha: state.base.sha,
+    },
+    pullRequest: observation.pullRequest as BoundaryReading<PullRequestObservation>,
+  });
+
+  return {
+    situation,
+    recovery,
+    lifecycle: lifecycleFor(state, observation as RemoteObservation, recovery),
   };
 }
 
@@ -195,7 +347,7 @@ function renderPlan(plan: ClusterPlan): string {
   return `${lines.join('\n')}\n`;
 }
 
-function renderRun(state: RunState, action: NextAction | undefined): string {
+function renderRun(state: RunState, action: NextAction | undefined, recovery?: RecoveryVerdict): string {
   const lines: string[] = [];
   lines.push(`run ${state.runId} — cluster ${state.clusterId} on ${state.base.branch}@${state.base.sha.slice(0, 7)}`);
   for (const ticket of state.tickets) {
@@ -207,6 +359,7 @@ function renderRun(state: RunState, action: NextAction | undefined): string {
       state.integration.prUrl === null ? '' : ` (${state.integration.prUrl})`
     }`,
   );
+  if (recovery !== undefined) lines.push(`recovery: ${recovery.kind} — ${recovery.detail}`);
   if (action !== undefined) lines.push(`next: ${action.kind} — ${action.detail}`);
   return `${lines.join('\n')}\n`;
 }
@@ -251,8 +404,13 @@ function statusCommand(
     };
     return emit(json, { state, next: action }, renderRun(state, action));
   }
-  const action = nextAction(situationFrom(state, stdin));
-  return emit(json, { state, next: action }, renderRun(state, action));
+  const { situation, recovery, lifecycle } = situationFrom(state, stdin);
+  const action = nextAction(situation);
+  return emit(
+    json,
+    { state, next: action, recovery, lifecycle },
+    renderRun(state, action, recovery),
+  );
 }
 
 function resumeCommand(
@@ -270,8 +428,15 @@ function resumeCommand(
       'observe the tracker, the pull request and the worker refs, then pipe them into `autopilot resume`',
     );
   }
-  const action = nextAction(situationFrom(state, stdin));
-  return emit(json, { runId: state.runId, next: action }, `next: ${action.kind} — ${action.detail}\n`);
+  const { situation, recovery, lifecycle } = situationFrom(state, stdin);
+  const action = nextAction(situation);
+  const human = [
+    recovery === undefined ? undefined : `recovery: ${recovery.kind} — ${recovery.detail}`,
+    `next: ${action.kind} — ${action.detail}`,
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join('\n');
+  return emit(json, { runId: state.runId, next: action, recovery, lifecycle }, `${human}\n`);
 }
 
 function abortCommand(

@@ -115,7 +115,7 @@ export function assessProofs(
 ): ProofAssessment {
   const statuses = proofs.map((proof) => assess(proof, context));
 
-  const proven = proofs.filter((proof, index) => statuses[index]?.fresh === true);
+  const proven = proofs.filter((_, index) => statuses[index]?.fresh === true);
   const missing = context.requiredCommands.filter(
     (required) => !proven.some((proof) => sameCommand(required, proof.command)),
   );

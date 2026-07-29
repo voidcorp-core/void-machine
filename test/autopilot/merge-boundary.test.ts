@@ -54,9 +54,8 @@ interface Argv {
 function argvLiterals(file: string, text: string): Argv[] {
   const found: Argv[] = [];
   const start = /\[\s*'(?:git|gh)'/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = start.exec(text)) !== null) {
+  for (const match of text.matchAll(start)) {
     let depth = 0;
     let end = match.index;
     for (; end < text.length; end += 1) {

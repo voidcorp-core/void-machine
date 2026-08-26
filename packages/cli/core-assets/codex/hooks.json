@@ -97,8 +97,23 @@
     ],
     "SessionStart": [
       {
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context codex" }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-reminder codex" }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-audit codex" }
         ]
       }
     ],

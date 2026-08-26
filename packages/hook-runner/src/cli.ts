@@ -13,9 +13,12 @@ import { resolveInstall } from './lifecycle/context-executor.js';
 import { readFreshnessCache } from './freshness/cache.js';
 import { compareFreshness } from './freshness/compare.js';
 import { freshnessNotice, resolveFreshness } from './freshness/notice.js';
-import type { LifecycleExecution } from './lifecycle/executor-shared.js';
+import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
+import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
 import { executeFormat } from './lifecycle/format-executor.js';
 import { executeLargeChange } from './lifecycle/large-change-executor.js';
+import { observeResume } from './lifecycle/resume-observer.js';
+import { checkpointReminderOutput } from './lifecycle/session-close-intent.js';
 import { executeTrim } from './lifecycle/trim-executor.js';
 import { executeTypecheck } from './lifecycle/typecheck-executor.js';
 import {
@@ -149,7 +152,10 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
     // start must not wait on an answer that can be one session old without
     // anyone being worse off. The recompute happens below, after stdout.
     const alert = cachedInvocationAlert(root);
-    process.stdout.write(`${JSON.stringify(sessionStartOutput(install.version, notice, alert))}\n`);
+    const resume = observeResume(root, Date.now());
+    process.stdout.write(
+      `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}\n`,
+    );
     await refreshFreshnessInBackground(install.version);
     refreshInvocationVerdict(root);
     await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
@@ -163,6 +169,41 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
       agentRuntime,
       root,
     );
+    return;
+  }
+  if (hook === 'checkpoint-reminder') {
+    const prompt = record(rawInput)?.['prompt'];
+    const output = typeof prompt === 'string' ? checkpointReminderOutput(prompt) : undefined;
+    const execution: LifecycleExecution = {
+      status: output === undefined ? 'skipped' : 'ok',
+      details: { reminded: output !== undefined },
+    };
+    if (output !== undefined) process.stdout.write(`${JSON.stringify(output)}\n`);
+    await observeHook(hook, execution, rawInput, agentRuntime, root);
+    return;
+  }
+  if (hook === 'checkpoint-audit') {
+    const now = Date.now();
+    const observed = observeResume(root, now);
+    const audit = auditCheckpoint({
+      now,
+      checkpoint: observed.bundle.checkpoint,
+      ...(observed.checkpointWrittenAt === undefined
+        ? {}
+        : { checkpointWrittenAt: observed.checkpointWrittenAt }),
+      git: observed.bundle.git,
+    });
+    const execution: LifecycleExecution = {
+      status: audit.status,
+      details: { reasons: [...audit.reasons] },
+      ...(audit.reasons.length === 0
+        ? {}
+        : {
+            diagnostic: `void-harness SessionEnd audit: ${audit.reasons.join(', ')}\n`,
+          }),
+    };
+    if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);
+    await observeHook(hook, execution, rawInput, agentRuntime, root);
     return;
   }
   const execution = hook === 'format'

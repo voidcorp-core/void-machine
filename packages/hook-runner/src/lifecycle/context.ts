@@ -18,6 +18,7 @@ export function sessionStartOutput(
   version: string,
   notice?: string,
   invocationAlert?: string,
+  resumeContext?: string,
 ): SessionStartOutput {
   const installed = version.trim() === '' ? 'unknown' : version.trim();
   const base =
@@ -29,10 +30,12 @@ export function sessionStartOutput(
   // end is read as more of the same sentence rather than as a separate warning.
   const alert =
     invocationAlert === undefined || invocationAlert.trim() === '' ? '' : `\n${invocationAlert.trim()}`;
+  const resume =
+    resumeContext === undefined || resumeContext.trim() === '' ? '' : `\n${resumeContext.trimEnd()}`;
   return {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: `${base}${suffix}${alert}`,
+      additionalContext: `${base}${suffix}${alert}${resume}`,
     },
   };
 }

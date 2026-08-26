@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { auditCheckpoint } from './checkpoint-audit.js';
+import {
+  auditCheckpoint,
+  type CheckpointAuditInput,
+} from './checkpoint-audit.js';
 
 const NOW = Date.parse('2026-08-26T12:00:00Z');
 
@@ -16,7 +19,7 @@ describe('auditCheckpoint', () => {
     expect(JSON.stringify(result)).not.toContain('written this session');
   });
 
-  it.each([
+  const degradedCases: readonly [string, Partial<CheckpointAuditInput>, string][] = [
     ['missing', { checkpoint: undefined }, 'checkpoint-absent'],
     ['empty', { checkpoint: { isEmpty: true } }, 'checkpoint-empty'],
     [
@@ -34,7 +37,9 @@ describe('auditCheckpoint', () => {
       { checkpoint: { head: 'old', isEmpty: false }, git: { head: 'new' } },
       'checkpoint-head-moved',
     ],
-  ])('reports a %s checkpoint as advisory evidence', (_label, partial, reason) => {
+  ];
+
+  it.each(degradedCases)('reports a %s checkpoint as advisory evidence', (_label, partial, reason) => {
     const result = auditCheckpoint({
       now: NOW,
       checkpoint: { branch: 'main', head: 'abc123', isEmpty: false },

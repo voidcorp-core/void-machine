@@ -28,3 +28,4 @@ export * from './specialist/completion.js';
 export * from './specialist/routing.js';
 export * from './security/scope.js';
 export * from './security/severity.js';
+export * from './session/index.js';

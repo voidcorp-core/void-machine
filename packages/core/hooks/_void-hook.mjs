@@ -1318,16 +1318,18 @@ function refreshInvocationVerdict(root) {
 }
 
 // src/lifecycle/context.ts
-function sessionStartOutput(version, notice, invocationAlert2) {
+function sessionStartOutput(version, notice, invocationAlert2, resumeContext) {
   const installed = version.trim() === "" ? "unknown" : version.trim();
   const base = `void-harness ${installed} is active. Non-negotiable floor: never edit secrets, keys or lockfiles; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`void-harness doctor\` if runtime health is uncertain.`;
   const suffix = notice === void 0 || notice.trim() === "" ? "" : ` ${notice.trim()}`;
   const alert = invocationAlert2 === void 0 || invocationAlert2.trim() === "" ? "" : `
 ${invocationAlert2.trim()}`;
+  const resume = resumeContext === void 0 || resumeContext.trim() === "" ? "" : `
+${resumeContext.trimEnd()}`;
   return {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: `${base}${suffix}${alert}`
+      additionalContext: `${base}${suffix}${alert}${resume}`
     }
   };
 }
@@ -1655,6 +1657,25 @@ function freshnessNotice(freshness, source) {
   return `void-harness ${installed} is installed; ${latest ?? "a newer version"} is published. Run \`void-harness update\` to upgrade.`;
 }
 
+// src/lifecycle/checkpoint-audit.ts
+var DAY_MS = 864e5;
+var STALE_DAYS = 7;
+function auditCheckpoint(input) {
+  const reasons = [];
+  if (input.checkpoint === void 0) reasons.push("checkpoint-absent");
+  else if (input.checkpoint.isEmpty) reasons.push("checkpoint-empty");
+  if (input.checkpoint !== void 0 && input.checkpointWrittenAt !== void 0 && Math.max(0, input.now - input.checkpointWrittenAt) > STALE_DAYS * DAY_MS) {
+    reasons.push("checkpoint-stale");
+  }
+  if (input.checkpoint?.branch !== void 0 && input.git.branch !== void 0 && input.checkpoint.branch !== input.git.branch) {
+    reasons.push("checkpoint-branch-moved");
+  }
+  if (input.checkpoint?.head !== void 0 && input.git.head !== void 0 && input.checkpoint.head !== input.git.head) {
+    reasons.push("checkpoint-head-moved");
+  }
+  return reasons.length === 0 ? { status: "ok", reasons } : { status: "degraded", reasons };
+}
+
 // src/lifecycle/format-executor.ts
 import { spawnSync } from "node:child_process";
 
@@ -1757,8 +1778,8 @@ function assessLargeChange(assessment) {
 }
 
 // src/lifecycle/large-change-executor.ts
-function runGit(git, root, args, env) {
-  const result = spawnSync2(git, args, {
+function runGit(git2, root, args, env) {
+  const result = spawnSync2(git2, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -1771,22 +1792,22 @@ function runGit(git, root, args, env) {
     output: result.status === 0 ? result.stdout.trim() : ""
   };
 }
-function verifiedRef(git, root, ref, env) {
+function verifiedRef(git2, root, ref, env) {
   if (ref === "" || ref.includes("\r") || ref.includes("\n") || ref.includes("\0")) return false;
   return runGit(
-    git,
+    git2,
     root,
     ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`],
     env
   ).ok;
 }
-function baseRef(git, root, env) {
+function baseRef(git2, root, env) {
   const configured = env["VOID_HARNESS_BASE_REF"]?.trim();
   if (configured !== void 0 && configured !== "") {
-    return verifiedRef(git, root, configured, env) ? configured : void 0;
+    return verifiedRef(git2, root, configured, env) ? configured : void 0;
   }
   const upstream = runGit(
-    git,
+    git2,
     root,
     ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
     env
@@ -1798,14 +1819,14 @@ function baseRef(git, root, env) {
     "main",
     "master"
   ];
-  return candidates.find((candidate) => verifiedRef(git, root, candidate, env));
+  return candidates.find((candidate) => verifiedRef(git2, root, candidate, env));
 }
 function executeLargeChange(root, env) {
-  const git = findExecutable("git", root, env);
-  if (git === void 0) {
+  const git2 = findExecutable("git", root, env);
+  if (git2 === void 0) {
     return { status: "skipped", details: { reason: "git-unavailable" } };
   }
-  const base = baseRef(git, root, env);
+  const base = baseRef(git2, root, env);
   if (base === void 0) {
     const configuredBase = env["VOID_HARNESS_BASE_REF"]?.trim();
     return {
@@ -1815,18 +1836,18 @@ function executeLargeChange(root, env) {
       }
     };
   }
-  const mergeBase = runGit(git, root, ["merge-base", "HEAD", base], env);
+  const mergeBase = runGit(git2, root, ["merge-base", "HEAD", base], env);
   if (!mergeBase.ok) {
     return { status: "degraded", details: { reason: "merge-base-failed" } };
   }
   const range = `${mergeBase.output}..HEAD`;
   const diff = runGit(
-    git,
+    git2,
     root,
     ["diff", "--numstat", "--no-renames", range, "--"],
     env
   );
-  const messages = runGit(git, root, ["log", "--format=%B", range, "--"], env);
+  const messages = runGit(git2, root, ["log", "--format=%B", range, "--"], env);
   if (!diff.ok || !messages.ok) {
     return { status: "degraded", details: { reason: "change-query-failed" } };
   }
@@ -1856,15 +1877,449 @@ function executeLargeChange(root, env) {
   };
 }
 
+// src/lifecycle/resume-observer.ts
+import { execFileSync } from "node:child_process";
+import {
+  existsSync as existsSync6,
+  lstatSync as lstatSync3,
+  readFileSync as readFileSync9,
+  statSync as statSync3
+} from "node:fs";
+import { basename as basename3, join as join11 } from "node:path";
+
+// ../mission-engine/dist/session/checkpoint.js
+var PROSE_SECTIONS = {
+  objective: "objective",
+  position: "position",
+  state: "state",
+  "where you are": "state",
+  "next action": "nextAction",
+  next: "nextAction"
+};
+var LIST_SECTIONS = {
+  "open loops": "openLoops",
+  open: "openLoops",
+  "dead ends": "deadEnds",
+  assumptions: "assumptions",
+  "working set": "workingSet",
+  files: "workingSet"
+};
+var MAX_INPUT = 5e5;
+var MAX_LINE = 200;
+var MAX_ITEMS = 20;
+function clamp(text2) {
+  const flat = [...text2].filter((ch) => {
+    const point = ch.codePointAt(0) ?? 0;
+    return point >= 32 || ch === "\n" || ch === "	";
+  }).join("").trim();
+  return flat.length <= MAX_LINE ? flat : `${flat.slice(0, MAX_LINE - 1)}\u2026`;
+}
+function frontmatterField(raw, key) {
+  const block2 = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
+  if (block2 === void 0)
+    return void 0;
+  for (const line of block2.split(/\r?\n/)) {
+    const separator = line.indexOf(":");
+    if (separator < 1)
+      continue;
+    if (line.slice(0, separator).trim().toLowerCase() !== key)
+      continue;
+    const value = line.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+    return value === "" ? void 0 : clamp(value);
+  }
+  return void 0;
+}
+function bodyOf(raw) {
+  return /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n([\s\S]*))?$/.exec(raw)?.[1] ?? raw;
+}
+function sectionsOf(body) {
+  const found = [];
+  for (const line of body.split(/\r?\n/)) {
+    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line) ?? void 0;
+    if (heading !== void 0) {
+      found.push({ title: (heading[1] ?? "").toLowerCase().replace(/\s+/g, " ").trim(), lines: [] });
+      continue;
+    }
+    found[found.length - 1]?.lines.push(line);
+  }
+  return found;
+}
+function prose(lines) {
+  const text2 = lines.join("\n").trim();
+  return text2 === "" ? void 0 : text2;
+}
+function bullets(lines) {
+  const items = [];
+  let open3 = false;
+  for (const line of lines) {
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line)?.[1];
+    if (bullet !== void 0) {
+      items.push(bullet);
+      open3 = true;
+      continue;
+    }
+    if (line.trim() === "") {
+      open3 = false;
+      continue;
+    }
+    if (open3 && items.length > 0) {
+      items[items.length - 1] = `${items[items.length - 1] ?? ""} ${line.trim()}`;
+    }
+  }
+  return items.map((item) => clamp(item)).filter((item) => item !== "").slice(0, MAX_ITEMS);
+}
+function parseCheckpoint(raw) {
+  const bounded = raw.length > MAX_INPUT ? raw.slice(0, MAX_INPUT) : raw;
+  const proseFields = {};
+  const listFields = {
+    openLoops: [],
+    deadEnds: [],
+    assumptions: [],
+    workingSet: []
+  };
+  for (const section of sectionsOf(bodyOf(bounded))) {
+    const proseKey = PROSE_SECTIONS[section.title];
+    if (proseKey !== void 0) {
+      const text2 = prose(section.lines);
+      if (text2 !== void 0)
+        proseFields[proseKey] = text2;
+      continue;
+    }
+    const listKey = LIST_SECTIONS[section.title];
+    if (listKey !== void 0)
+      listFields[listKey] = bullets(section.lines);
+  }
+  const objective = proseFields["objective"];
+  const nextAction = proseFields["nextAction"];
+  const resumeSource = objective ?? nextAction;
+  const resumeLine = resumeSource === void 0 ? void 0 : clamp(resumeSource.split("\n")[0] ?? "");
+  const branch = frontmatterField(bounded, "branch");
+  const head = frontmatterField(bounded, "head");
+  const date = frontmatterField(bounded, "date");
+  const isEmpty = objective === void 0 && nextAction === void 0 && proseFields["state"] === void 0 && proseFields["position"] === void 0 && Object.values(listFields).every((items) => items.length === 0);
+  return {
+    ...objective === void 0 ? {} : { objective },
+    ...proseFields["position"] === void 0 ? {} : { position: proseFields["position"] },
+    ...proseFields["state"] === void 0 ? {} : { state: proseFields["state"] },
+    ...nextAction === void 0 ? {} : { nextAction },
+    openLoops: listFields["openLoops"] ?? [],
+    deadEnds: listFields["deadEnds"] ?? [],
+    assumptions: listFields["assumptions"] ?? [],
+    workingSet: listFields["workingSet"] ?? [],
+    ...branch === void 0 ? {} : { branch },
+    ...head === void 0 ? {} : { head },
+    ...date === void 0 ? {} : { date },
+    ...resumeLine === void 0 || resumeLine === "" ? {} : { resumeLine },
+    isEmpty
+  };
+}
+
+// ../mission-engine/dist/session/resume.js
+var DAY_MS2 = 864e5;
+var STALE_DAYS2 = 7;
+var CONTEXT_CHARS_MAX = 4e3;
+function summarizeProgram(descriptor) {
+  return {
+    status: descriptor.status,
+    program: descriptor.program,
+    plan: descriptor.plan,
+    spec: descriptor.spec,
+    ...descriptor.progress === void 0 ? {} : {
+      progress: {
+        provider: descriptor.progress.provider,
+        scope: descriptor.progress.scope
+      }
+    }
+  };
+}
+function programGap(input) {
+  if (input.programError !== void 0) {
+    return { reason: "program-invalid", detail: input.programError };
+  }
+  if (input.program === void 0) {
+    return {
+      reason: "program-absent",
+      detail: "no .void/program.md; resume can still use a local checkpoint and Git"
+    };
+  }
+  return void 0;
+}
+function checkpointGap(input) {
+  if (input.checkpoint === void 0) {
+    return {
+      reason: "checkpoint-absent",
+      detail: "no .void/machine/checkpoint.md; invoke void-checkpoint before ending a session"
+    };
+  }
+  if (input.checkpoint.isEmpty) {
+    return {
+      reason: "checkpoint-empty",
+      detail: "the checkpoint exists but carries no recognised session residue"
+    };
+  }
+  if (input.checkpointWrittenAt === void 0)
+    return void 0;
+  const ageDays = Math.max(0, Math.floor((input.now - input.checkpointWrittenAt) / DAY_MS2));
+  return ageDays > STALE_DAYS2 ? {
+    reason: "checkpoint-stale",
+    detail: `the checkpoint is ${String(ageDays)} days old`
+  } : void 0;
+}
+function treeGaps(input) {
+  const gaps = [];
+  const checkpoint = input.checkpoint;
+  if (checkpoint?.branch !== void 0 && input.git.branch !== void 0 && checkpoint.branch !== input.git.branch) {
+    gaps.push({
+      reason: "checkpoint-branch-moved",
+      detail: `checkpoint branch ${checkpoint.branch}; current branch ${input.git.branch}`
+    });
+  }
+  if (checkpoint?.head !== void 0 && input.git.head !== void 0 && checkpoint.head !== input.git.head) {
+    gaps.push({
+      reason: "checkpoint-head-moved",
+      detail: `checkpoint HEAD ${checkpoint.head}; current HEAD ${input.git.head}`
+    });
+  }
+  return gaps;
+}
+function composeResumeBundle(input) {
+  const gaps = [programGap(input), checkpointGap(input), ...treeGaps(input)].filter((gap) => gap !== void 0);
+  return {
+    schemaVersion: 1,
+    project: input.project,
+    ...input.program === void 0 ? {} : { program: summarizeProgram(input.program) },
+    ...input.checkpoint === void 0 ? {} : { checkpoint: input.checkpoint },
+    git: {
+      ...input.git.branch === void 0 ? {} : { branch: input.git.branch },
+      ...input.git.head === void 0 ? {} : { head: input.git.head },
+      dirtyFiles: input.git.dirtyFiles
+    },
+    gaps
+  };
+}
+function checkpointContext(checkpoint) {
+  return [
+    checkpoint.date === void 0 ? void 0 : `Checkpoint date: ${checkpoint.date}`,
+    checkpoint.objective === void 0 ? void 0 : `Objective: ${checkpoint.objective}`,
+    checkpoint.position === void 0 ? void 0 : `Position: ${checkpoint.position}`,
+    checkpoint.state === void 0 ? void 0 : `State: ${checkpoint.state}`,
+    checkpoint.nextAction === void 0 ? void 0 : `Next action: ${checkpoint.nextAction}`,
+    checkpoint.openLoops.length === 0 ? void 0 : `Open loops: ${checkpoint.openLoops.join("; ")}`,
+    checkpoint.deadEnds.length === 0 ? void 0 : `Dead ends: ${checkpoint.deadEnds.join("; ")}`,
+    checkpoint.assumptions.length === 0 ? void 0 : `Unverified assumptions: ${checkpoint.assumptions.join("; ")}`
+  ].filter((line) => line !== void 0);
+}
+function boundContext(text2) {
+  if (text2.length <= CONTEXT_CHARS_MAX)
+    return text2;
+  return `${text2.slice(0, CONTEXT_CHARS_MAX - 1)}\u2026`;
+}
+function renderResumeContext(bundle) {
+  const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
+  if (bundle.program === void 0 && !usefulCheckpoint)
+    return "";
+  const lines = ["[void-harness resume]", `Project: ${bundle.project.name}`];
+  if (bundle.git.branch !== void 0)
+    lines.push(`Branch: ${bundle.git.branch}`);
+  if (bundle.git.head !== void 0)
+    lines.push(`HEAD: ${bundle.git.head}`);
+  if (bundle.git.dirtyFiles > 0)
+    lines.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
+  if (bundle.program !== void 0) {
+    lines.push(`Program: ${bundle.program.program}`);
+    lines.push(`Plan: ${bundle.program.plan}`);
+    lines.push(`Spec: ${bundle.program.spec}`);
+    if (bundle.program.progress !== void 0) {
+      lines.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
+    }
+  }
+  if (usefulCheckpoint && bundle.checkpoint !== void 0) {
+    lines.push(...checkpointContext(bundle.checkpoint));
+  }
+  for (const gap of bundle.gaps)
+    lines.push(`Gap: ${gap.detail}`);
+  return boundContext(`${lines.join("\n")}
+`);
+}
+
+// src/lifecycle/resume-observer.ts
+var PROGRAM_PATHS = [
+  join11(".void", "program.md"),
+  join11(".void", "active.md"),
+  join11("plans", "ACTIVE.md")
+];
+var CHECKPOINT_PATHS = [
+  join11(".void", "machine", "checkpoint.md"),
+  join11(".void", "local", "checkpoint.md"),
+  join11(".void", "session", "current.md")
+];
+var MAX_READ_BYTES = 5e5;
+var GIT_TIMEOUT_MS = 200;
+function readBounded(path) {
+  try {
+    const info = lstatSync3(path);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_READ_BYTES) return void 0;
+    return readFileSync9(path, "utf8");
+  } catch {
+    return void 0;
+  }
+}
+function frontmatter(raw) {
+  return /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
+}
+function cleanScalar(value) {
+  if (value === void 0) return void 0;
+  const clean2 = value.trim().replace(/^['"]|['"]$/g, "");
+  return clean2 === "" ? void 0 : clean2;
+}
+function rootScalar(block2, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return cleanScalar(new RegExp(`^${escaped}:\\s*(.+?)\\s*$`, "m").exec(block2)?.[1]);
+}
+function nestedBlock(block2, key) {
+  const lines = block2.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `${key}:` && /^\S/.test(line));
+  if (start < 0) return void 0;
+  const nested = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line)) break;
+    nested.push(line.replace(/^ {2}/, ""));
+  }
+  return nested.join("\n");
+}
+function programFrom(raw, legacy) {
+  const block2 = frontmatter(raw);
+  if (block2 === void 0) return void 0;
+  if (!legacy && rootScalar(block2, "schemaVersion") !== "1") return void 0;
+  const status = rootScalar(block2, "status");
+  const program = rootScalar(block2, "program");
+  const plan = rootScalar(block2, "plan");
+  const spec = rootScalar(block2, "spec");
+  if (status !== "executing" && status !== "completed" || program === void 0 || plan === void 0 || spec === void 0) {
+    return void 0;
+  }
+  const progressBlock = nestedBlock(block2, legacy ? "tracker" : "progress");
+  const provider = progressBlock === void 0 ? void 0 : rootScalar(progressBlock, "provider");
+  const scope = progressBlock === void 0 ? void 0 : rootScalar(progressBlock, "scope");
+  return {
+    status,
+    program,
+    plan,
+    spec,
+    ...provider === void 0 || scope === void 0 ? {} : { progress: { provider, scope } }
+  };
+}
+function observeProgram(root) {
+  const present = PROGRAM_PATHS.filter((relative10) => existsSync6(join11(root, relative10)));
+  if (present.length === 0) return { program: void 0 };
+  if (present.length > 1) {
+    return {
+      program: void 0,
+      programError: `multiple program descriptors: ${present.join(", ")}`
+    };
+  }
+  const relative9 = present[0];
+  if (relative9 === void 0) return { program: void 0 };
+  const raw = readBounded(join11(root, relative9));
+  const program = raw === void 0 ? void 0 : programFrom(raw, relative9 !== PROGRAM_PATHS[0]);
+  return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative9}` } : { program };
+}
+function git(root, args) {
+  try {
+    return execFileSync("git", [...args], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    return void 0;
+  }
+}
+function gitObservation(root) {
+  const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const dirty = git(root, ["status", "--porcelain"]);
+  return {
+    branch: branch === "HEAD" ? void 0 : branch,
+    head,
+    dirtyFiles: dirty === void 0 || dirty === "" ? 0 : dirty.split(/\r?\n/).length
+  };
+}
+function checkpointObservation(root) {
+  for (const relative9 of CHECKPOINT_PATHS) {
+    const path = join11(root, relative9);
+    const raw = readBounded(path);
+    if (raw === void 0) continue;
+    try {
+      return { checkpoint: parseCheckpoint(raw), checkpointWrittenAt: statSync3(path).mtimeMs };
+    } catch {
+      return { checkpoint: parseCheckpoint(raw) };
+    }
+  }
+  return {};
+}
+function observeResume(root, now) {
+  const checkpoint = checkpointObservation(root);
+  const bundle = composeResumeBundle({
+    project: { name: basename3(root), path: root },
+    now,
+    git: gitObservation(root),
+    ...observeProgram(root),
+    checkpoint: checkpoint.checkpoint,
+    ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }
+  });
+  return {
+    bundle,
+    context: renderResumeContext(bundle),
+    ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }
+  };
+}
+
+// src/lifecycle/session-close-intent.ts
+var MAX_PROMPT_CHARS = 8e3;
+function searchablePrompt(prompt) {
+  return prompt.slice(0, MAX_PROMPT_CHARS).normalize("NFD").replace(new RegExp("\\p{Diacritic}", "gu"), "").toLowerCase().replace(/[’'_-]/g, " ").replace(/\s+/g, " ").trim();
+}
+var NEGATED_CLOSE = [
+  /\b(?:do not|don t|dont|never) stop here\b/,
+  /\bne (?:nous )?arretons? pas ici\b/
+];
+var EXPLICIT_CLOSE = [
+  /\bon s arrete ici\b/,
+  /\bon reprend (?:demain|plus tard)\b/,
+  /\bje reprends? demain\b/,
+  /\bfin de journee\b/,
+  /\bstop here(?: for today)?\b/,
+  /\b(?:let us |we will )?resume tomorrow\b/,
+  /\b(?:fais|faire|make|create|write) (?:un |a )?checkpoint\b/,
+  /\bcheckpoint\b.*\b(?:end|close|finish|finir|termine?r?)\b.*\b(?:session|journee|today)\b/,
+  /\b(?:end|close) the session\b/
+];
+function detectsSessionCloseIntent(prompt) {
+  const searchable = searchablePrompt(prompt);
+  if (NEGATED_CLOSE.some((pattern) => pattern.test(searchable))) return false;
+  return EXPLICIT_CLOSE.some((pattern) => pattern.test(searchable));
+}
+function checkpointReminderOutput(prompt) {
+  if (!detectsSessionCloseIntent(prompt)) return void 0;
+  return {
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: "Explicit session-close intent detected. Invoke `void-checkpoint` before the closing response. Route durable facts to their owner, show any shared write before applying it, and do not mark the current work unit complete merely because the session ends."
+    }
+  };
+}
+
 // src/lifecycle/trim-executor.ts
 import { createHash } from "node:crypto";
 import {
-  lstatSync as lstatSync3,
+  lstatSync as lstatSync4,
   mkdirSync as mkdirSync3,
   realpathSync as realpathSync3,
   writeFileSync as writeFileSync3
 } from "node:fs";
-import { join as join11, relative as relative4 } from "node:path";
+import { join as join12, relative as relative4 } from "node:path";
 
 // src/lifecycle/trim.ts
 function record4(value) {
@@ -1936,7 +2391,7 @@ function safeOutputDirectory(root) {
     const canonicalRoot = realpathSync3(root);
     const directory = voidMachinePath(root, "outputs");
     mkdirSync3(directory, { recursive: true, mode: 448 });
-    const info = lstatSync3(directory);
+    const info = lstatSync4(directory);
     const canonicalDirectory = realpathSync3(directory);
     if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory)) {
       return void 0;
@@ -1972,7 +2427,7 @@ function executeTrim(rawInput, root, env) {
   }
   const hash = createHash("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
-  const file = join11(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
+  const file = join12(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
   const spillPath = relative4(realpathSync3(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
@@ -2008,15 +2463,15 @@ function executeTrim(rawInput, root, env) {
 }
 
 // src/lifecycle/typecheck-executor.ts
-import { existsSync as existsSync6 } from "node:fs";
-import { join as join13 } from "node:path";
+import { existsSync as existsSync7 } from "node:fs";
+import { join as join14 } from "node:path";
 import { spawnSync as spawnSync3 } from "node:child_process";
 
 // src/lifecycle/typecheck.ts
 import {
   dirname as dirname5,
   isAbsolute as isAbsolute4,
-  join as join12,
+  join as join13,
   relative as relative5,
   resolve as resolve4
 } from "node:path";
@@ -2118,7 +2573,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!within3(root, target)) continue;
     let current = dirname5(target);
     while (within3(root, current)) {
-      const config = join12(current, "tsconfig.json");
+      const config = join13(current, "tsconfig.json");
       if (hasFile(config)) {
         found.add(config);
         break;
@@ -2132,9 +2587,9 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
 
 // src/lifecycle/typecheck-executor.ts
 function runGit2(root, args, env) {
-  const git = findExecutable("git", root, env);
-  if (git === void 0) return { ok: false, output: "" };
-  const result = spawnSync3(git, args, {
+  const git2 = findExecutable("git", root, env);
+  if (git2 === void 0) return { ok: false, output: "" };
+  const result = spawnSync3(git2, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -2174,8 +2629,8 @@ function executeTypecheck(root, env) {
   if (changed.length === 0) {
     return { status: "skipped", details: { reason: "no-touched-typescript" } };
   }
-  const configs = nearestTsconfigs(changed, root, existsSync6);
-  const configured = configuredTypecheck(readJson(join13(root, ".void", "config.json")));
+  const configs = nearestTsconfigs(changed, root, existsSync7);
+  const configured = configuredTypecheck(readJson(join14(root, ".void", "config.json")));
   const configuredArgv = "argv" in configured ? configured.argv : void 0;
   const warning = "warning" in configured ? configured.warning : void 0;
   const fallback = findExecutable("tsc", root, env);
@@ -2266,7 +2721,7 @@ import { resolve as resolve8 } from "node:path";
 // src/project-registry.ts
 import { createHash as createHash2 } from "node:crypto";
 import { lstat, mkdir, open, readFile, realpath } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join14, relative as relative6, resolve as resolve5 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join15, relative as relative6, resolve as resolve5 } from "node:path";
 function code(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
 }
@@ -2279,7 +2734,7 @@ async function registerProjectRoot(root, globalDir) {
   const base = resolve5(globalDir);
   await mkdir(base, { recursive: true, mode: 448 });
   const canonicalBase = await realpath(base);
-  const projects = join14(base, "projects");
+  const projects = join15(base, "projects");
   await mkdir(projects, { recursive: true, mode: 448 });
   const info = await lstat(projects);
   if (!info.isDirectory() || info.isSymbolicLink()) {
@@ -2290,7 +2745,7 @@ async function registerProjectRoot(root, globalDir) {
     throw new Error("HOOK_REGISTRY_ESCAPE: projects resolves outside global dir");
   }
   const slug = createHash2("sha256").update(canonicalRoot).digest("hex").slice(0, 32);
-  const pointer = join14(projects, `${slug}.path`);
+  const pointer = join15(projects, `${slug}.path`);
   try {
     const handle = await open(pointer, "wx", 384);
     try {
@@ -2314,7 +2769,7 @@ async function registerProjectRoot(root, globalDir) {
 // src/runtime-input.ts
 import { createHash as createHash3 } from "node:crypto";
 import {
-  basename as basename3,
+  basename as basename4,
   extname,
   isAbsolute as isAbsolute6,
   relative as relative7,
@@ -2359,7 +2814,7 @@ function nameFor(tool, category, input) {
     const explicit = text(input["name"]);
     if (explicit !== "") return explicit;
     const script = text(input["scriptPath"]);
-    return script === "" || script.endsWith("/") ? "inline" : basename3(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
+    return script === "" || script.endsWith("/") ? "inline" : basename4(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
   }
   return tool || "unknown";
 }
@@ -2454,7 +2909,7 @@ import {
 import {
   dirname as dirname6,
   isAbsolute as isAbsolute7,
-  join as join15,
+  join as join16,
   relative as relative8,
   resolve as resolve7
 } from "node:path";
@@ -2886,9 +3341,9 @@ async function writeSequencedEventInternal(options) {
     throw new Error("HOOK_INVALID_EVENT_ID: expected evt_<opaque-id>");
   }
   const run = await safeRunDirectory(options.root, options.missionId);
-  const logPath = join15(run, "events.jsonl");
-  const statePath = join15(run, ".seq.state");
-  const lockPath = join15(run, ".seq.lock");
+  const logPath = join16(run, "events.jsonl");
+  const statePath = join16(run, ".seq.state");
+  const lockPath = join16(run, ".seq.lock");
   await Promise.all([
     rejectSymlink(logPath),
     rejectSymlink(statePath),
@@ -3111,8 +3566,11 @@ async function runLifecycle(input) {
     const cached = readFreshnessCache(process.env, Date.now());
     const notice = cached === void 0 ? void 0 : freshnessNotice(compareFreshness(install.version, cached.latest), install.source);
     const alert = cachedInvocationAlert(root);
-    process.stdout.write(`${JSON.stringify(sessionStartOutput(install.version, notice, alert))}
-`);
+    const resume = observeResume(root, Date.now());
+    process.stdout.write(
+      `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}
+`
+    );
     await refreshFreshnessInBackground(install.version);
     refreshInvocationVerdict(root);
     await observeHook(hook, execution2, rawInput ?? {}, agentRuntime, root);
@@ -3126,6 +3584,39 @@ async function runLifecycle(input) {
       agentRuntime,
       root
     );
+    return;
+  }
+  if (hook === "checkpoint-reminder") {
+    const prompt = record3(rawInput)?.["prompt"];
+    const output = typeof prompt === "string" ? checkpointReminderOutput(prompt) : void 0;
+    const execution2 = {
+      status: output === void 0 ? "skipped" : "ok",
+      details: { reminded: output !== void 0 }
+    };
+    if (output !== void 0) process.stdout.write(`${JSON.stringify(output)}
+`);
+    await observeHook(hook, execution2, rawInput, agentRuntime, root);
+    return;
+  }
+  if (hook === "checkpoint-audit") {
+    const now = Date.now();
+    const observed = observeResume(root, now);
+    const audit = auditCheckpoint({
+      now,
+      checkpoint: observed.bundle.checkpoint,
+      ...observed.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: observed.checkpointWrittenAt },
+      git: observed.bundle.git
+    });
+    const execution2 = {
+      status: audit.status,
+      details: { reasons: [...audit.reasons] },
+      ...audit.reasons.length === 0 ? {} : {
+        diagnostic: `void-harness SessionEnd audit: ${audit.reasons.join(", ")}
+`
+      }
+    };
+    if (execution2.diagnostic !== void 0) process.stderr.write(execution2.diagnostic);
+    await observeHook(hook, execution2, rawInput, agentRuntime, root);
     return;
   }
   const execution = hook === "format" ? executeFormat(rawInput, root, process.env) : hook === "trim" ? executeTrim(rawInput, root, process.env) : hook === "typecheck" ? executeTypecheck(root, process.env) : hook === "large-change" ? executeLargeChange(root, process.env) : void 0;

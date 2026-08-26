@@ -11,7 +11,7 @@ black box — each `claude -p` worker's output went only to a log file, the term
 showed `[HH:MM:SS] iteration N/M`, and the decisions workers took were never
 surfaced at the HITL boundary (PR merge). Spec/plan:
 `docs/specs/2026-06-18-backlog-loop-observability.md`,
-`plans/2026-06-18-backlog-loop-observability-plan.md`.
+`docs/plans/2026-06-18-backlog-loop-observability-plan.md`.
 
 Decision: rewrite the orchestrator in TypeScript under
 `packages/cli/src/lib/backlog/`, exposed as `void-harness backlog-loop` (flags,

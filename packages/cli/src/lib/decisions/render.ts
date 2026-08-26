@@ -1,4 +1,4 @@
-import type { DecisionRecord } from './types.js';
+import type { DecisionRecord, DecisionStatus } from './types.js';
 
 function sorted(records: readonly DecisionRecord[]): readonly DecisionRecord[] {
   return [...records].sort((left, right) => {
@@ -9,12 +9,39 @@ function sorted(records: readonly DecisionRecord[]): readonly DecisionRecord[] {
   });
 }
 
-function metadata(record: DecisionRecord): Record<string, unknown> {
+function supersessionIndex(
+  records: readonly DecisionRecord[],
+): ReadonlyMap<string, readonly string[]> {
+  const index = new Map<string, string[]>();
+  for (const record of records) {
+    for (const target of record.supersedes) {
+      const replacements = index.get(target) ?? [];
+      replacements.push(record.id);
+      replacements.sort();
+      index.set(target, replacements);
+    }
+  }
+  return index;
+}
+
+function effectiveStatus(
+  record: DecisionRecord,
+  supersededBy: readonly string[],
+): DecisionStatus {
+  return supersededBy.length === 0 ? record.status : 'superseded';
+}
+
+function metadata(
+  record: DecisionRecord,
+  supersededBy: readonly string[],
+): Record<string, unknown> {
   return {
     id: record.id,
     title: record.title,
     createdAt: record.createdAt,
-    status: record.status,
+    status: effectiveStatus(record, supersededBy),
+    declaredStatus: record.status,
+    supersededBy,
     deciders: record.deciders,
     supersedes: record.supersedes,
     file: record.file,
@@ -25,10 +52,13 @@ function metadata(record: DecisionRecord): Record<string, unknown> {
 export function renderDecisionsJson(
   records: readonly DecisionRecord[],
 ): string {
+  const index = supersessionIndex(records);
   return `${JSON.stringify(
     {
       schemaVersion: 1,
-      decisions: sorted(records).map(metadata),
+      decisions: sorted(records).map((record) =>
+        metadata(record, index.get(record.id) ?? [])
+      ),
     },
     null,
     2,
@@ -38,6 +68,7 @@ export function renderDecisionsJson(
 export function renderDecisionsMarkdown(
   records: readonly DecisionRecord[],
 ): string {
+  const index = supersessionIndex(records);
   const lines = [
     '# Decisions',
     '',
@@ -45,8 +76,12 @@ export function renderDecisionsMarkdown(
     '',
   ];
   for (const record of sorted(records)) {
+    const supersededBy = index.get(record.id) ?? [];
+    const replacement = supersededBy.length === 0
+      ? ''
+      : ` (superseded by ${supersededBy.map((id) => `\`${id}\``).join(', ')})`;
     lines.push(
-      `- [${record.title}](${record.file}) - ${record.status} - ${record.createdAt} - \`${record.id}\``,
+      `- [${record.title}](${record.file}) - ${effectiveStatus(record, supersededBy)} - ${record.createdAt} - \`${record.id}\`${replacement}`,
     );
   }
   return `${lines.join('\n')}\n`;

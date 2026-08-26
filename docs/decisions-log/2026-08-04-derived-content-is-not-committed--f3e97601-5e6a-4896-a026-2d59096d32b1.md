@@ -53,7 +53,7 @@ Ignore `derived` state, except the paths whose absence from a fresh clone is an
   working one or a loudly broken one.
 
 Everything else (`.claude/skills/`, `.claude/agents/`, `.claude/commands/`,
-`.agents/skills/`, `.codex/agents/`, `.void/PHILOSOPHY.md`) is ignored: without
+`.agents/skills/`, `.codex/agents/`, `.void/installed/PHILOSOPHY.md`) is ignored: without
 them the agent has fewer capabilities until the next `hydrate`, and nothing
 errors.
 

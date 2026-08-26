@@ -31,7 +31,7 @@ Context: `autonomous-backlog-loop` covers the sequential walk-away case; it does
 not cover "drain a few independent tickets in parallel, attended, without
 breaking anything". Spec/plan:
 `docs/specs/2026-06-18-backlog-batch-parallel.md`,
-`plans/2026-06-18-backlog-batch-parallel-plan.md`.
+`docs/plans/2026-06-18-backlog-batch-parallel-plan.md`.
 
 Decision: ship a **sister** skill `backlog-batch` (not a mode of the loop). A
 two-layer design: an **in-session launcher** selects an independent eligible

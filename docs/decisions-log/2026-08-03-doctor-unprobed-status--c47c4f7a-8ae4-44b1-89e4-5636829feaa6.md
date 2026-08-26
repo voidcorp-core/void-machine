@@ -29,8 +29,8 @@ GitHub answering 403 "Upgrade to GitHub Pro or make this repository public" — 
 private repo on a free plan cannot have a protected base at all, which is the
 constraint that actually mattered and the one the message hid.
 
-The same collapse existed one line up: a `plans/ACTIVE.md` that exists but does
-not parse was caught and reported as "no plans/ACTIVE.md", sending the reader to
+The same collapse existed one line up: a `.void/program.md` that exists but does
+not parse was caught and reported as "no .void/program.md", sending the reader to
 author a program already written, while the parser's own problem/cause/fix was
 discarded.
 

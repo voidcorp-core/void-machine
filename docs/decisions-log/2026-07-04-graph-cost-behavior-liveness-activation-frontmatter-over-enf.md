@@ -9,7 +9,7 @@ Context: the consumer cost report flagged doctrine skills (`tdd`, `security-guid
 `commit-discipline`, ...) as `dead` / `low-yield`. Root cause: the activation-meter is a
 PreToolUse hook, so it only records a `skill` event when a skill is invoked through the
 Skill tool. Doctrine skills are never invoked that way -- their rule is carried passively
-via `@.void/PHILOSOPHY.md` + enforcing hooks -- so `invocations` is permanently 0 and
+via `@.void/installed/PHILOSOPHY.md` + enforcing hooks -- so `invocations` is permanently 0 and
 `staticTokens` (the full SKILL.md size) is charged as if paid every session, which it is
 not (only PHILOSOPHY's summary is resident; the SKILL.md loads only on invocation). A
 second blind spot: a workflow launched by `scriptPath` recorded `name: "inline"`, never

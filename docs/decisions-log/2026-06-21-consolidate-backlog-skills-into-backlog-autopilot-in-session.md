@@ -37,4 +37,4 @@ deleted loop.
 Why: keeps the user-facing capability one skill (anti-bloat rule 3, no residual
 overlap), in session (MCP/subscription alive), without the context rot a single
 long LLM orchestrator would suffer. See `docs/specs/2026-06-21-backlog-autopilot.md`
-and `plans/2026-06-21-backlog-autopilot-plan.md`.
+and `docs/plans/2026-06-21-backlog-autopilot-plan.md`.

@@ -21,7 +21,7 @@ trackers without placing Linear-specific identifiers or a mutable queue in unive
 
 Ship a conditional, tracker-agnostic active-program bootstrap in every generated runtime document.
 
-The bootstrap is dormant unless a project-owned `plans/ACTIVE.md` has `status: executing`.
+The bootstrap is dormant unless a project-owned `.void/program.md` has `status: executing`.
 `ticket-writer` creates that pointer only after a human-approved multi-ticket plan is fully
 materialized with native dependencies. The pointer stores immutable routing and lifecycle-state
 names; the configured tracker owns status, assignee, blockers, resume comments, and review
@@ -51,7 +51,7 @@ Negative:
 
 ## Alternatives considered
 
-- Create `plans/ACTIVE.md` during every `void-harness init`. Rejected because most projects do not
+- Create `.void/program.md` during every `void-harness init`. Rejected because most projects do not
   have an active multi-ticket program and a placeholder would create noise or false activation.
 - Encode Linear workspace/team/project fields in the generated doctrine. Rejected because core
   doctrine must remain provider-agnostic and usable outside VoidCorp.

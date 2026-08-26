@@ -3,7 +3,7 @@ schemaVersion: 1
 id: "adr:5e488cf1-e5f2-42f3-8827-4cc138c0c075"
 createdAt: "2026-07-26T14:59:08.444Z"
 title: "Compile canonical specialists to runtime-native agents"
-status: proposed
+status: superseded
 deciders: ["folpe"]
 supersedes: []
 ---

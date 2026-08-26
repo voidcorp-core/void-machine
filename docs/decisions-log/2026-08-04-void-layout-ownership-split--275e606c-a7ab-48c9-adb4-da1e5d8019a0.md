@@ -79,7 +79,7 @@ Negative:
 - A layout change for every existing consumer. Mitigated by `update` migrating
   automatically, and by every reader falling back to the pre-split path so an
   un-migrated project keeps working and keeps its history.
-- Paths in tooling and docs moved (`.void/runs/` → `.void/local/runs/`, likewise
+- Paths in tooling and docs moved (`.void/runs/` → `.void/machine/runs/`, likewise
   receipts, cache, state), which is churn for anything that hardcoded them.
 - One more directory level on every observed path.
 

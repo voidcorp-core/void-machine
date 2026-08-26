@@ -87,11 +87,15 @@ ADRs are an append-only data model, not a generated document:
   identity; concurrent workers never allocate a shared counter or index.
 - `void-harness decisions check` validates the schema, unique identities,
   supersession links and cycles. In CI, `DECISIONS_BASE` also rejects edits,
-  renames or deletions of accepted records.
+  renames or deletions of accepted records. Its only edit exception is a
+  repository-local path substitution with unchanged frontmatter, headings,
+  structure and surrounding prose, and an existing root-confined target.
 - Decision loading is root-confined, rejects symlinks and bounds each record to
   256 KiB before parsing.
 - `void-harness decisions render --format markdown|json` produces a read-only
-  projection on stdout. It never commits or rewrites a shared artifact.
+  projection on stdout. It computes effective supersession from inbound
+  `supersedes` links, preserves the declared status, and names every replacing
+  record. It never commits or rewrites a shared artifact.
 - `docs/DECISIONS.md` is only the frozen pre-v3 landing page. Existing repos keep
   their detected ADR directory; new consumer projects default to
   `docs/decisions/`.

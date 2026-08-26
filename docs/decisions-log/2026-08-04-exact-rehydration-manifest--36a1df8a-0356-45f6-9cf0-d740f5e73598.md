@@ -39,7 +39,7 @@ which is `observed`:
 
 | artifact | class | says |
 | --- | --- | --- |
-| `.void/local/receipts/install-v1.json` | `observed` | what THIS MACHINE installed |
+| `.void/machine/receipts/install-v1.json` | `observed` | what THIS MACHINE installed |
 | `.void/install-manifest.json` | `project` | what THIS PROJECT expects |
 
 Add `void-harness hydrate`, which restores from it under two rules:

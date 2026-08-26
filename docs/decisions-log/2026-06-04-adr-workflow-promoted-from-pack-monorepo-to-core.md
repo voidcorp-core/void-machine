@@ -8,7 +8,7 @@ title: "adr-workflow promoted from pack-monorepo to core"
 Context: `adr-workflow` lived in pack-monorepo, but ADRs are a universal craftsman
 concern and the repo meta-rule already mandates logging non-obvious decisions.
 
-Decision: move the skill to `packages/core/skills/adr-workflow`, generalize the
+Decision: move the skill to `packages/core/skills/void-decide`, generalize the
 "monorepo" wording to "codebase", add the missing `.source`, and drop "ADR workflow"
 from the pack-monorepo manifest description. Audit note updated (pack → core).
 

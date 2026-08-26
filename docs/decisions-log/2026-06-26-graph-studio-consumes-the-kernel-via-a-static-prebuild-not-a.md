@@ -6,7 +6,7 @@ title: "graph-studio consumes the kernel via a static prebuild, not a runtime im
 ## 2026-06-26: graph-studio consumes the kernel via a static prebuild, not a runtime import
 
 **Decision:** `apps/graph-studio` does not import `@voidcorp/harness-graph` into
-the browser bundle. A Node prebuild (`scripts/prepare-data.ts`, run by tsx) reads
+the browser bundle. A Node prebuild (`apps/graph-studio/scripts/prepare-data.ts`, run by tsx) reads
 `model.json` + `.void/usage.log`, runs the kernel's `analyze()`, and writes four
 static JSON blobs the browser renders.
 

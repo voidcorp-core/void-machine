@@ -26,13 +26,13 @@ external impeccable.
   the build rules, does not restate them).
 - **forge** (voidcorp plugin) owns market recon, the scored 12-dimension critique, the slop registry, and the
   multi-variant design prompts — bridged by the `docs/specs/` `source: forge` artifact contract. Four forge
-  issues are drafted (specs in `plans/skill-audits/ui-review.md`) but NOT yet filed — creation on the external
+  issues are drafted (specs in `docs/plans/skill-audits/void-ui-review.md`) but NOT yet filed — creation on the external
   `voidcorp-core/forge` repo was blocked by the permission classifier; a tracked follow-up for Folpe.
   **DESIGN.md** stays the design-system contract (produced by `impeccable document`/`init` or by hand).
 - **Deferred to Vague 4** (claude-in-chrome MCP): every live-browser piece — screenshots, `live`/variant
   iteration, the comparison board, the atomic-fix loop. Rejected: all gstack + impeccable runtime.
 
-The full section-by-section distribution matrix is in `plans/skill-audits/ui-review.md`. Routing repointed
+The full section-by-section distribution matrix is in `docs/plans/skill-audits/void-ui-review.md`. Routing repointed
 across skills, agents, CLAUDE.md/AGENTS.md, PHILOSOPHY, and the decision matrix.
 
 Why: UI craft is core value; depending on an external `impeccable` skill (which itself dies with a future

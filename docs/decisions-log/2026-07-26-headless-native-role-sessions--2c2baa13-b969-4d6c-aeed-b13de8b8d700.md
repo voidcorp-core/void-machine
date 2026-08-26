@@ -3,7 +3,7 @@ schemaVersion: 1
 id: "adr:2c2baa13-b969-4d6c-aeed-b13de8b8d700"
 createdAt: "2026-07-26T18:27:35.751Z"
 title: "Launch fresh native role sessions for headless certification"
-status: proposed
+status: accepted
 deciders: ["folpe"]
 supersedes: []
 ---

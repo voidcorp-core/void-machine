@@ -20,7 +20,7 @@ TypeScript sources.
 ## Decision
 
 The source repository compiles both runtime adapters into the gitignored
-`.void/generated/current` boundary. Compilation starts in a uniquely owned
+`.void/machine/generated/current` boundary. Compilation starts in a uniquely owned
 `.staging-*` directory and atomically swaps the complete artifact. A
 deterministic receipt binds current source inputs, rollout mode, file hashes and
 modes.

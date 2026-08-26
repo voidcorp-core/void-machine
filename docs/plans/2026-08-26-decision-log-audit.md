@@ -11,7 +11,7 @@ de supersession, leurs références entrantes versionnées et les chemins de dé
 corps. Il ne juge pas qu'une décision est obsolète uniquement parce que son implémentation a été
 renommée.
 
-## Inventaire observé
+## Inventaire initial observé
 
 | Signal | Valeur |
 |---|---:|
@@ -52,29 +52,34 @@ Une nouvelle décision n'est pas créée pour enregistrer un simple changement d
 
 ## Groupe programme et reprise
 
-Trois ADR portent aujourd'hui le même arc :
+Trois ADR portaient le même arc avant disposition :
 
 - `adr:4f0cad51-1167-4b04-9d5d-a9c1c1605d26`, pointeur de programme avec progression Linear ;
 - `adr:4152e915-f0f8-4763-888e-2bddd66da5a3`, continuité du programme livrée aux consommateurs ;
-- `adr:b93f13a9-3877-480d-a722-39476f93d84d`, handoff de session, encore proposé.
+- `adr:b93f13a9-3877-480d-a722-39476f93d84d`, handoff de session alors encore proposé.
 
-La simplification retenue n'ajoute pas de quatrième fichier. L'ADR de handoff proposé devient la
+La simplification retenue n'ajoute pas de quatrième fichier. L'ADR de handoff est devenu la
 décision courante sur le contrat de programme, le checkpoint et la reprise ; il supersède les deux
 ADR acceptés dont la dépendance au tracker change réellement. Les deux anciens fichiers restent
 lisibles comme historique, et leurs seules références de chemin sont migrées mécaniquement vers
 `.void/program.md`.
 
-## Disposition des cinq propositions
+## Disposition appliquée aux cinq propositions
 
-| ADR proposé | Preuve actuelle | Disposition proposée |
+| ADR initialement proposé | Preuve actuelle | Disposition appliquée |
 |---|---|---|
-| Handoff de session `b93f...` | `checkpoint`, `resume` et le nouveau besoin de bootstrap convergent | Amender, faire approuver, accepter et superséder les deux ADR de programme |
-| Spécialistes canoniques `5e48...` | Déjà ciblé par la supersession de `9138...` | Passer à `superseded` ; aucun nouveau contenu |
-| Contrôleur de team review `5a59...` | Contrôleur, review loop et tests existent dans `packages/mission-engine` | Accepter après validation explicite de cette disposition |
-| Sessions natives headless `2c2b...` | Adaptateurs spécialistes et documentation d'architecture existent | Accepter après validation explicite de cette disposition |
-| Reprise par reçus `14b9...` | Recovery, reçus et idempotency keys sont implémentés et testés | Accepter après validation explicite de cette disposition |
+| Handoff de session `b93f...` | `checkpoint`, `resume` et le nouveau besoin de bootstrap convergent | Amendé, accepté et déclarant les deux ADR de programme dans `supersedes` |
+| Spécialistes canoniques `5e48...` | Déjà ciblé par la supersession de `9138...` | Passé à `superseded` ; aucun nouveau contenu |
+| Contrôleur de team review `5a59...` | Contrôleur, review loop et tests existent dans `packages/mission-engine` | Accepté après validation explicite |
+| Sessions natives headless `2c2b...` | Adaptateurs spécialistes et documentation d'architecture existent | Accepté après validation explicite |
+| Reprise par reçus `14b9...` | Recovery, reçus et idempotency keys sont implémentés et testés | Accepté après validation explicite |
 
 Après disposition, aucune proposition ancienne ne reste silencieusement ouverte.
+
+La projection observe désormais 151 décisions : 150 déclarées `accepted`, une déclarée
+`superseded`, aucune `proposed`. En statut effectif, 141 sont `accepted` et 10 `superseded` ; les
+deux anciennes décisions de programme rejoignent les huit cibles déjà remplacées sans que leur
+fichier historique soit réécrit.
 
 ## Migrations de références certaines
 
@@ -101,20 +106,20 @@ liens cassés. Les noms de systèmes retirés, comme `.void/harness-feedback/` o
 Les remplacer par leur successeur falsifierait l'alternative historique et sort donc du périmètre
 d'une migration mécanique.
 
-## Garde-fou à faire évoluer
+## Garde-fou livré
 
-Le contrôle actuel bloque tout octet modifié dans un ADR accepté. Il doit conserver ce défaut
-fermé pour les suppressions, renommages et modifications sémantiques, mais reconnaître une
-migration de référence bornée :
+Le contrôle conserve son défaut fermé pour les suppressions, renommages et modifications
+sémantiques, mais reconnaît une migration de référence bornée :
 
 - frontmatter, titres et structure inchangés ;
 - seuls une destination de lien local ou un chemin local délimité peuvent changer ;
 - la nouvelle cible doit rester dans le dépôt et exister ;
 - toute autre différence continue d'exiger une supersession.
 
-La doctrine, `void-decide`, `docs/CONTRIBUTING.md`, `AGENTS.md` et `CLAUDE.md` doivent porter la
-même règle. Le contrôle et ses tests sont la preuve que l'exception ne devient pas une autorisation
-générale de réécrire l'histoire.
+La doctrine, `void-decide`, `docs/CONTRIBUTING.md`, `AGENTS.md` et `CLAUDE.md` portent la même
+règle. Le contrôle et ses tests prouvent que l'exception ne devient pas une autorisation générale
+de réécrire l'histoire. Les 24 occurrences certaines passent ce garde-fou contre
+`origin/develop` ; toute autre modification d'un fichier accepté reste refusée.
 
 ## Ce que l'audit déconseille
 
@@ -135,6 +140,6 @@ git grep -n 'plans/ACTIVE.md\|.void/active.md' -- docs/decisions-log
 ```
 
 Ces commandes observent respectivement la validité structurelle, les statuts et supersessions, puis
-les références du groupe programme. La vérification finale devra aussi prouver qu'aucune référence
-versionnée à `.void/active.md` ou `plans/ACTIVE.md` ne subsiste hors des fixtures explicites de
-compatibilité.
+les références du groupe programme. La vérification finale doit aussi prouver qu'aucune référence
+à `.void/active.md` ou `plans/ACTIVE.md` ne subsiste dans les surfaces vivantes hors compatibilité
+explicite et documents historiques qui décrivent précisément la migration.

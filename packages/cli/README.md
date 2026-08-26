@@ -66,8 +66,11 @@ npx voidharness decisions check [--base <git-ref>]
 npx voidharness decisions render --format markdown|json
 ```
 
-Each accepted ADR is immutable. Reverse it with a new record and
-`--supersedes <adr:id>`.
+Accepted decision content is immutable. Reverse it with a new record and
+`--supersedes <adr:id>`. A proven repository-local path substitution is the
+only in-place exception; the new target must exist and the surrounding record
+must remain unchanged. Rendered views expose both declared and effective status
+and identify the records that supersede an older decision.
 
 ### `install --global`
 

@@ -6,7 +6,7 @@ title: "harness token frugality — the lever is model tiering, not `activation`
 ## 2026-07-10: harness token frugality — the lever is model tiering, not `activation` flags (DEV-403)
 
 Directive: minimize the harness's token footprint with zero quality loss. The audit
-(`plans/2026-07-10-harness-token-frugality-audit.md`) corrected the ticket's lead assumption:
+(`docs/plans/2026-07-10-harness-token-frugality-audit.md`) corrected the ticket's lead assumption:
 - **`activation: always` is not a content loader** — it is read only by the graph cost/behavior model
   (DECISIONS 2026-07-04). Flipping `always` → `on-demand` saves zero session tokens and would corrupt the graph
   liveness model. Rejected.

@@ -2,83 +2,87 @@
 schemaVersion: 1
 id: "adr:b93f13a9-3877-480d-a722-39476f93d84d"
 createdAt: "2026-07-29T17:57:31.881Z"
-title: "A session handoff routes state to its owner and records only the residue"
-status: proposed
-deciders: []
-supersedes: []
+title: "Compose durable program context with local session residue"
+status: accepted
+deciders: ["folpe"]
+supersedes:
+  - "adr:4f0cad51-1167-4b04-9d5d-a9c1c1605d26"
+  - "adr:4152e915-f0f8-4763-888e-2bddd66da5a3"
 ---
 
-# A session handoff routes state to its owner and records only the residue
+# Compose durable program context with local session residue
 
 ## Context
 
-Work in this harness spans sessions. A session ends and the next one starts with an empty
-context, reconstructing state from the diff, the tracker and the branch name. It reconstructs
-*what was done* accurately, because that is written down, and *what was ruled out* not at all,
-because nothing records it — so it re-attempts a dead end, confidently, since the dead end
-presents itself as the obvious first idea.
+Work in this harness spans sessions. A later session needs two different views: the durable global
+state of the programme, and the short-lived residue of what happened just before one local stop.
+Treating them as one document creates a reconciliation problem because global context belongs in
+Git while a checkpoint changes at every close and belongs to one machine.
 
-The obvious response is a handoff document that summarises the session. That response fails in a
-specific way we have already seen elsewhere in this repository: the document becomes a second
-copy of state that already lives somewhere authoritative. `plans/ACTIVE.md` had to be given an
-explicit rule for exactly this — the tracker owns mutable execution state, and the durable file
-never stores a hand-maintained "next ticket" — because two copies of a fact means one of them is
-wrong within a day and the reader cannot tell which.
+The earlier programme decisions put immutable routing in `.void/program.md` and mutable progress in
+Linear or another capable tracker. That separated routing from progress, but coupled automatic
+continuity to a remote provider and left no offline place for dead ends, assumptions, or evidence
+freshness. A tracker comment cannot be the only session handoff, and a local checkpoint cannot
+become a second progress ledger.
 
-So the question is not "what should a handoff contain", it is "what does a handoff contain that
-nothing else already holds".
+The boundary is therefore not "active versus handoff". It is global programme context, provider-
+owned mutable progress, and local session residue, composed only when a runtime needs to resume.
 
 ## Decision
 
-A session handoff routes every fact to its authoritative owner first — tracker for execution
-state, diff for what the code does, doctrine for durable rules, memory for cross-session facts,
-an ADR for a decision with a credible alternative — and records only the residue: dead ends with
-their reason, assumptions labelled as unverified, proofs bound to the commit they were proven
-against, and exactly one next action specific enough to execute.
+Use `.void/program.md` as the project-owned, versioned programme descriptor. It carries programme
+identity, plan and spec links, optional provider-neutral progress routing, stable unit order, human
+gates, and explicit autopilot consent. It never stores a current or next unit. When a progress
+provider is declared, that provider owns mutable state; when it is absent or a capability is
+unavailable, only the remote action requiring it stops.
+
+Replace `.void/machine/checkpoint.md` at every deliberate session close. It is local, ignored,
+offline-readable, bound to branch and HEAD, and contains only residue no other artefact owns:
+dead ends, open assumptions, proof freshness, and one exact physical resume action. It never stores
+programme priority or a current or next unit.
+
+Compose programme, checkpoint, and Git into one `ResumeBundle` for CLI and runtime consumption.
+Both runtimes inject that same bundle at documented session starts. `UserPromptSubmit` may remind
+the model when the user explicitly intends to close a session; `SessionEnd` may audit presence,
+freshness, branch, and HEAD. Hooks remain advisory and never write semantic checkpoint content.
 
 ## Consequences
 
 Positive:
 
-- The handoff is short by construction, and its length is a signal: a long one means the routing
-  step was skipped.
-- The expensive half of a session's knowledge — what was ruled out — is the part that gets
-  written down, instead of the cheap half that the diff already carries.
-- No fact has two homes, so nothing can drift out of sync with its own copy.
-- A proof carries the commit it was green on, so a stale proof is visible rather than trusted.
+- The programme gives a versioned project overview without becoming a mutable execution cursor.
+- The checkpoint survives an offline close and records the expensive knowledge that Git and the
+  provider do not hold.
+- `ResumeBundle` removes reconciliation from callers: each source keeps one responsibility and the
+  read model composes them.
+- Linear, GitHub, Jira, another adapter, or no provider can use the same programme contract.
+- A stale checkpoint is visible through its branch and HEAD instead of being trusted silently.
 
 Negative:
 
-- The author must decide where each fact belongs before writing, which is more work than
-  narrating the session and is easy to skip under time pressure.
-- A handoff written by someone who skips the routing step looks correct and is a duplicate; the
-  discipline is enforced by an exit test, not by a schema.
-- Facts routed to the tracker or to doctrine require those systems to be reachable at the moment
-  of closing.
+- Two files exist because they have different ownership and lifetimes; readers must use the bundle
+  rather than picking one as a complete handoff.
+- A deliberate close still requires model judgment. A direct clear or crashed process may leave no
+  fresh checkpoint, and the final audit can only report that fact.
+- Provider-backed automatic selection remains unavailable when the declared adapter lacks the
+  required capability.
 
 ## Alternatives considered
 
-- **A session summary document.** Rejected: a narrative of what happened duplicates the commit
-  messages and the tracker, ages badly, and buries the next action at the bottom. It is pleasant
-  to write and nearly useless to read, which is why it is the default failure.
-
-- **A symmetric save/restore pair**, as gstack's `/context-save` and `/context-restore` do.
-  Rejected on the restore half: the next session should read the tracker and the memory, which
-  are authoritative. A restore file would duplicate them and would be trusted while stale —
-  precisely the failure the routing rule exists to prevent. Only the closing half is kept.
-
-- **An automatic hook on session end.** Rejected for the reason `learning-capture` already
-  documented for its own Stop nudge: a stop event cannot distinguish an interruption from a
-  context limit from a completed turn. A handoff written on a false positive is authoritative and
-  describes a moment nobody chose, which is worse than no handoff at all. The trigger stays
-  human, or the model's own reading of the conversation.
-
-- **Moving tracker state as part of closing** (for instance marking the unit done). Rejected: a
-  session ending is not a unit completing, and conflating them is how a stopped ticket ends up
-  marked done.
+- **Keep programme and checkpoint in one versioned file.** Rejected because a per-session rewrite
+  would churn shared Git state, conflict across machines, and mix global context with local residue.
+- **Keep all continuity in the tracker.** Rejected because it couples local recovery to network and
+  provider availability, while dead ends and local proof freshness are not mutable work status.
+- **Keep only `.void/program.md`.** Rejected because global intent cannot reconstruct the last local
+  reasoning boundary or identify stale evidence after an interruption.
+- **Write the checkpoint automatically at SessionEnd.** Rejected because the hook runs after the
+  model and lacks the semantic context to invent assumptions, dead ends, or the next physical move.
+- **Maintain a local current or next unit.** Rejected because it duplicates provider state and
+  recreates the drift the earlier active-program pointer was designed to avoid.
 
 ## Reversal cost
 
-Low. The skill writes nothing on its own and adds no schema, no storage and no CLI surface —
-it is prose plus a command. Withdrawing it leaves the tracker, the memory and the ADR log
-exactly as they were, since those are where the facts were routed in the first place.
+Low to medium. The programme and checkpoint are Markdown, and `ResumeBundle` is a read model over
+those files plus Git. Reversal can remove the hooks and bundle without migrating provider state.
+Collapsing the two files would require choosing one ownership and conflict model, which is exactly
+the ambiguity this decision removes.

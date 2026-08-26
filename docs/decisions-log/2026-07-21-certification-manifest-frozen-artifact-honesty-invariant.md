@@ -5,7 +5,7 @@ title: "the certification manifest is a frozen committed artifact with an honest
 
 ## 2026-07-21: the certification manifest is a frozen committed artifact with an honesty invariant; bundle-bake and eval JSON emission deferred
 
-Phase A step A4 produces `packages/harness-graph/certification.json` — the per-release, frozen join of
+Phase A step A4 produces `packages/core/data/certification.json` — the per-release, frozen join of
 the capability contract (graph model) with the eval-harness reports. It is the repo-authored half of
 the five-state model that `ProjectState` (Phase B) reads and **never recomputes on a consumer
 machine** (spec Fork 5). `buildCertification(model, reports, harnessVersion)` is pure and

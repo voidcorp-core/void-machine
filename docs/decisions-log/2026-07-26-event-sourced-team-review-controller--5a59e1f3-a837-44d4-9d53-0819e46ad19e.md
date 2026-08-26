@@ -3,7 +3,7 @@ schemaVersion: 1
 id: "adr:5a59e1f3-a837-44d4-9d53-0819e46ad19e"
 createdAt: "2026-07-26T16:32:18.809Z"
 title: "Drive team review from an event-sourced pure controller"
-status: proposed
+status: accepted
 deciders: ["folpe"]
 supersedes: []
 ---

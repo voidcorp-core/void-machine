@@ -17,7 +17,7 @@ Every `SKILL.md` carried seven fields this harness invented: `kind`, `owner`, `r
 six fields and the official validator refuses everything else:
 
 ```
-$ npx skills-ref validate packages/core/skills/tdd
+$ npx skills-ref validate packages/core/skills/void-tdd
 Unexpected fields in frontmatter: activation, enforcement, eval_targets, kind, owner, runtimes.
 Only allowed-tools, compatibility, description, license, metadata, name are allowed.
 ```

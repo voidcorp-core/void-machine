@@ -20,7 +20,7 @@ to humans as the authoritative view of ownership, evidence, and progress.
 
 ## Decision
 
-Use one repository-level `plans/ACTIVE.md` pointer for immutable program routing and use Linear as
+Use one repository-level `.void/program.md` pointer for immutable program routing and use Linear as
 the sole owner of mutable execution progress.
 
 When the pointer has `status: executing`, both supported runtimes load its plan and spec, recover an
@@ -49,7 +49,7 @@ Negative:
 
 ## Alternatives considered
 
-- Store and update a mutable next-ticket field in `plans/ACTIVE.md`. Rejected because it creates a
+- Store and update a mutable next-ticket field in `.void/program.md`. Rejected because it creates a
   second execution ledger and can diverge from Linear.
 - Hard-code the current issue in `AGENTS.md` and `CLAUDE.md`. Rejected because every transition
   churns permanent doctrine files and makes cross-runtime parity fragile.

@@ -3,7 +3,7 @@ schemaVersion: 1
 id: "adr:14b9f033-ceab-4738-a148-62c30220239c"
 createdAt: "2026-07-27T09:54:17.140Z"
 title: "Resume missions from receipts and stable idempotency keys"
-status: proposed
+status: accepted
 deciders: ["folpe"]
 supersedes: []
 ---

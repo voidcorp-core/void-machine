@@ -33,7 +33,7 @@ letter but not the spirit, the seven anti-bloat rules on skills/hooks themselves
 Decision: ship a single `doctrine-critic` agent (read-only, isolated context). It
 judges doctrine conformance and **routes** rather than re-implements: it flags
 trust-boundary code and hands off to `/cso`, and hands line-level bug hunting to
-`/code-review`. Spec: `plans/2026-06-01-doctrine-critic-agent.md`. DEV-363 is
+`/code-review`. Spec: `docs/plans/2026-06-01-doctrine-critic-agent.md`. DEV-363 is
 rescoped 3 → 1; the `security-reviewer` and `architect-critic` slots are dropped
 (their value already lives in `/cso`, the boundary hook, and the hexagonal/DDD
 skills). Manifests move from "3 agents on the roadmap" to "1 shipped".

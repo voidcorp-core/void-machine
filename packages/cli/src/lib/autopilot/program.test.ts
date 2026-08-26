@@ -139,6 +139,17 @@ describe('parseProgramDescriptor', () => {
     expect(() => parseProgramDescriptor('---\nstatus: [unclosed\n---\n')).toThrow(/YAML/i);
   });
 
+  it('reports failures through the provider-agnostic program error code', () => {
+    let thrown: unknown;
+    try {
+      parseProgramDescriptor('# no frontmatter\n');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as { failure: { code: string } }).failure.code).toBe('AUTOPILOT_PROGRAM');
+  });
+
   it('requires an explicit autopilot decision', () => {
     expect(() => parseProgramDescriptor(VALID.replace(/autopilot:\n(?:.*\n)*?---/, '---'))).toThrow(
       /autopilot/,

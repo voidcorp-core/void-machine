@@ -57,4 +57,18 @@ describe('sessionStartOutput', () => {
     const context = sessionStartOutput('0.17.0', 'UPGRADE-MARKER').hookSpecificOutput.additionalContext;
     expect(context.indexOf('Non-negotiable floor')).toBeLessThan(context.indexOf('UPGRADE-MARKER'));
   });
+
+  it('appends the ResumeBundle context after the safety floor', () => {
+    const context = sessionStartOutput(
+      '3.4.0',
+      undefined,
+      undefined,
+      '[void-harness resume]\nProgram: portable-resume\n',
+    ).hookSpecificOutput.additionalContext;
+
+    expect(context).toContain('[void-harness resume]');
+    expect(context.indexOf('Non-negotiable floor')).toBeLessThan(
+      context.indexOf('[void-harness resume]'),
+    );
+  });
 });

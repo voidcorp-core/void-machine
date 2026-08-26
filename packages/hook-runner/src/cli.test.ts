@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { build } from 'esbuild';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // The entrypoint runs on import, so it is exercised the way a hook actually runs
 // it: bundled exactly as `pnpm build` does, then executed as a child process with
@@ -130,6 +130,69 @@ describe('lifecycle context', () => {
     try {
       banner(root);
       expect(banner(root)).not.toContain('cannot resolve');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('injects identical resume context for Claude Code and Codex', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-resume-parity-'));
+    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
+    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
+    writeFileSync(
+      join(root, '.void', 'program.md'),
+      '---\nschemaVersion: 1\nstatus: executing\nprogram: parity\nplan: docs/plan.md\nspec: docs/spec.md\nautopilot:\n  enabled: false\n---\n',
+    );
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nResume equally.\n');
+
+    try {
+      const context = (agentRuntime: 'claude' | 'codex'): string => {
+        const result = spawnSync(process.execPath, [hook, 'lifecycle', 'context', agentRuntime], {
+          input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact' }),
+          encoding: 'utf8',
+          env: { ...process.env, VOID_PROJECT_ROOT: root },
+        });
+        return JSON.parse(result.stdout ?? '{}').hookSpecificOutput.additionalContext as string;
+      };
+      expect(context('claude')).toBe(context('codex'));
+      expect(context('codex')).toContain('Program: parity');
+      expect(context('codex')).toContain('Objective: Resume equally.');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('session close lifecycle', () => {
+  it('emits a checkpoint reminder only for explicit close intent', () => {
+    const invoke = (prompt: string): string => {
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'checkpoint-reminder', 'codex'], {
+        input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+      });
+      return result.stdout ?? '';
+    };
+    expect(invoke('on reprend demain')).toContain('void-checkpoint');
+    expect(invoke('stop the process')).toBe('');
+  });
+
+  it('audits SessionEnd without creating or changing a checkpoint', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-session-end-'));
+    mkdirSync(join(root, '.void'), { recursive: true });
+    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
+    const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
+
+    try {
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'checkpoint-audit', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'SessionEnd', reason: 'other' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain('checkpoint-absent');
+      expect(existsSync(checkpoint)).toBe(false);
+      expect(readFileSync(join(root, '.void', 'config.json'), 'utf8')).toBe('{}\n');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

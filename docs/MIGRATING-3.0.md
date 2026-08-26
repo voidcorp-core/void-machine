@@ -70,10 +70,10 @@ reasoning, and the alternatives that lost, are in the decision log.
 Everything at the top is committed; neither subdirectory is. `update` moves what
 was observed, drops what was derived, and leaves what you declared alone.
 
-Two files moved with it. The active-program pointer is now `.void/active.md`,
-still committed, because it carries the tracker routing, the human gates and the
-consent to autonomous execution, and consent nobody can review in a diff is not
-consent. The session residue is now `.void/machine/checkpoint.md`, not committed,
+Two files moved with it. The programme descriptor is now `.void/program.md`,
+still committed, because it carries provider routing, human gates and consent to
+autonomous execution, and consent nobody can review in a diff is not consent. The
+session residue is now `.void/machine/checkpoint.md`, not committed,
 because it is yours and disposable.
 
 Readers fall back to the previous locations, so a project that has not run

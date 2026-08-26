@@ -31,9 +31,9 @@ facts go to memory; a decision with a credible alternative becomes an ADR. What 
 filter is the handoff's real content — dead ends, labelled assumptions, proof freshness, one
 exact next action — and that residue is short.
 
-This generalises the rule `plans/ACTIVE.md` already states for this repo's active program: the
-tracker owns mutable execution state, and the durable file never stores a hand-maintained "next
-ticket". The skill applies the same discipline to everything a session is tempted to write down.
+This generalises the rule `.void/program.md` states for this repo's programme: the declared
+progress provider owns mutable execution state, and the durable file never stores a hand-maintained
+"next unit". The skill applies the same discipline to everything a session is tempted to write down.
 
 ## What was rejected
 

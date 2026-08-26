@@ -45,10 +45,10 @@ The failure is omission of required elements from something already produced.
 ## 2026-07-24 — active handoff after multi-ticket decomposition
 
 Added one post-save responsibility: after a human-approved plan becomes a complete
-multi-ticket pool with native dependencies, `ticket` creates
-`plans/ACTIVE.md`. The file contains immutable provider/scope/issue ordering,
-plan/spec links, lifecycle-state names, and human gates. It never copies the
-current ticket or progress. This is still ticket authoring: the handoff is emitted
+multi-unit pool with native dependencies, `ticket` creates
+`.void/program.md`. The file contains stable provider/scope/unit ordering,
+plan/spec links, lifecycle-state roles, and human gates. It never copies the
+current unit or progress. This is still ticket authoring: the handoff is emitted
 only when the native tickets that it routes have been created successfully.
 
 The contract is tracker-agnostic but capability-gated. A provider must support

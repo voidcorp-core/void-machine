@@ -82,8 +82,8 @@ Les fichiers de hook préfixés par `_` sont exclus du plafond de la règle 5. P
 - La CLI refuse l'option : `if (argv.includes('--auto-merge'))` suivi du message `autopilot does not accept --auto-merge` — `packages/cli/src/commands/autopilot.ts:478-485`.
 - Le corps de PR généré énonce : « Merging is a human action: this branch arms no auto-merge, and no ticket is completed by this body » — `packages/cli/src/lib/autopilot/pr-body.ts:92`.
 - Une suite de tests porte sur cette frontière : `test/autopilot/merge-boundary.test.ts`.
-- `plans/ACTIVE.md` déclare `mergeGate: human` et `humanGates: [DEV-433, DEV-457]`.
-- `plans/ACTIVE.md` déclare `autopilot.enabled: false` et `clusterSize: 4`.
+- `.void/program.md` déclare `mergeGate: human` et les `humanGates` du programme courant.
+- `.void/program.md` déclare `autopilot.enabled: false` et `clusterSize: 4`.
 - L'autopilot exige une confirmation humaine avant le fan-out des workers, et les workers sont commit-only. Preuve : `CLAUDE.md:115`.
 - La publication npm est déclenchée par le merge de la PR de release, décrit comme « the only human gate (HITL) » — `docs/RELEASING.md:57-61`.
 

@@ -44,7 +44,7 @@ Le Project Knowledge System le règle en le matérialisant. Cette spec le rend c
 
 ### Ce qui manque, et bloque
 
-`.void/knowledge.json`, `.void/knowledge/intent.yaml`, `.void/session/current.md` et
+`.void/knowledge.json`, `.void/knowledge/intent.yaml`, `.void/machine/checkpoint.md` et
 `void-harness context` n'existent pas. Ils sont le contenu de cette interface.
 
 **Conséquence structurante : l'interface ne peut pas précéder le PKS.** Construite avant, elle

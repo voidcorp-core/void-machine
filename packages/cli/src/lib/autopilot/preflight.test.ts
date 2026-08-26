@@ -193,8 +193,8 @@ describe('what nobody probed is not what could not be read', () => {
     expect(check?.fix).toMatch(/private repository on a free plan/i);
   });
 
-  it('does not report an unparsable ACTIVE as a missing one', () => {
-    // "no plans/ACTIVE.md" in front of a file that is right there sends the
+  it('does not report an unparsable programme as a missing one', () => {
+    // "no programme" in front of a file that is right there sends the
     // reader to author a program they already wrote (#193, same class).
     const results = autopilotPreflight(
       observation({
@@ -268,7 +268,7 @@ describe('the doctor wiring', () => {
     const observer = DOCTOR.slice(DOCTOR.indexOf('function observeAutopilot'));
     expect(observer).toMatch(/catch \(error\)/);
     // And as malformed, not as absent: the catch used to collapse both into
-    // null, printing "no plans/ACTIVE.md" over a file that was right there.
+    // absence, printing "no programme" over a file that was right there.
     expect(observer).toMatch(/\{ malformed \}/);
   });
 });

@@ -13,7 +13,7 @@ high_risk: true
 
 Remplacer le mélange actuel de batch attended, ancien loop et auto-merge par un
 bounded context `autopilot` unique. Une activation durable dans
-`plans/ACTIVE.md` permet aux sessions suivantes de reprendre le programme sans
+`.void/program.md` permet aux sessions suivantes de reprendre le programme sans
 nouvelle consigne. Autopilot sélectionne au plus quatre tickets Linear prêts et
 indépendants, exécute le vrai `ticket-runner` dans un worktree par ticket,
 conserve une plage de commits par ticket, réconcilie localement, publie une seule
@@ -68,8 +68,8 @@ a ni conteneur de dependency injection, ni faux client Linear dans le domaine.
 Toutes les entrées/sorties JSON portent `schemaVersion: 1`. Les commandes sont :
 
 ```text
-autopilot plan   [--active plans/ACTIVE.md] < CandidateObservation
-autopilot start  [--active plans/ACTIVE.md] < ReservationReceipt
+autopilot plan   [--active .void/program.md] < CandidateObservation
+autopilot start  [--active .void/program.md] < ReservationReceipt
 autopilot status [--run <runId>] < RemoteObservation
 autopilot resume [--run <runId>] < RemoteObservation
 autopilot abort  [--run <runId>] < RemoteObservation
@@ -94,7 +94,7 @@ unique est repris. Plusieurs leases retournent `competing-runs` sans mutation.
 
 ### Un seul modèle d'état
 
-`plans/ACTIVE.md` porte le consentement et le routage stables.
+`.void/program.md` porte le consentement et le routage stables.
 `.void/autopilot/<runId>/state.json` porte le curseur technique local. Linear,
 GitHub et Git restent les sources de vérité distantes.
 
@@ -119,7 +119,7 @@ Ils sont dérivés d'identifiants slug-validés, jamais d'un titre libre.
 
 ### Configuration exécutable sans shell implicite
 
-Le bloc `autopilot` de `ACTIVE.md` utilise des commandes argv :
+Le bloc `autopilot` de `program.md` utilise des commandes argv :
 
 ```yaml
 autopilot:
@@ -150,7 +150,7 @@ La plage A attend le Checkpoint A v3 `DEV-433`. La plage B attend le
 exposant leur contrat final. Elle consomme aussi le contrat subagents Codex
 réel ; elle ne copie ni le cycle qualité ni une API runtime supposée.
 
-Un `plans/ACTIVE.md` déjà `executing` n'est jamais remplacé. Lors du ticketing,
+Un `.void/program.md` déjà `executing` n'est jamais remplacé. Lors du ticketing,
 les unités de ce plan sont soit ajoutées explicitement au programme v3 par le
 mainteneur, soit gardées en attente jusqu'à sa clôture. `ticket-writer` doit
 échouer sur une collision, pas repointer le fichier.
@@ -265,7 +265,7 @@ surface legacy n'est supprimée et aucun changement n'est fusionné séparément
   - `feat(autopilot): load the active program contract because sessions need durable authority`
 - **Notes**: si le bootstrap active-program d'un autre ticket a déjà atterri,
   l'adapter à ce schéma sous tests. Ne jamais conserver deux formes de
-  `ACTIVE.md` ou deux règles de sélection.
+  `program.md` ou deux règles de sélection.
 
 #### A3 - Acquérir un lease Linear logiquement atomique
 
@@ -365,7 +365,7 @@ surface legacy n'est supprimée et aucun changement n'est fusionné séparément
 
 #### Gate A - Foundation interne de Ticket A
 
-Vérifier le bounded context, le schéma `ACTIVE.md`, le lease simulé et la reprise
+Vérifier le bounded context, le schéma `program.md`, le lease simulé et la reprise
 zéro-argument avant le fan-out. Lancer
 `harness:verification-before-completion`. Le moteur historique est encore
 intact ; Ticket A n'est ni poussé ni fusionné séparément.
@@ -673,7 +673,7 @@ rend le nouveau nom public ; A–D partent dans une unique PR.
   - régénérer `packages/cli/core-assets/`, graph model, certification et bundle
     par leurs commandes canoniques
 - **Behavior**:
-  - le runtime généré lit `ACTIVE.md` et reprend automatiquement quand
+  - le runtime généré lit `program.md` et reprend automatiquement quand
     `autopilot.enabled:true` ;
   - aucune question de repointage ou confirmation par cluster n'est demandée ;
   - `/harness:autopilot` fonctionne sans argument ; le CLI rend une vue humaine
@@ -748,7 +748,7 @@ ADR qui supersède celui du 2026-07-25.
 Le découpage cible exactement quatre tickets d'implémentation dans une seule PR.
 `ticket-writer` recherche les doublons, reprend les conventions natives du
 projet et crée les vraies relations `blockedBy`. Il ne crée ni ne remplace
-`plans/ACTIVE.md` tant qu'un autre programme y est `executing`.
+`.void/program.md` tant qu'un autre programme y est `executing`.
 
 | Ref | Linear | Ticket impératif | Taille | Priorité | `blockedBy` | Plage |
 |---|---|---|---:|---|---|---|
@@ -769,7 +769,7 @@ plan retire.
 **Next step**: attendre que DEV-433 soit débloqué et terminé, puis lancer
 `harness:ticket-runner` sur DEV-462 depuis la branche d'intégration unique.
 Chaque reprise relit ce ticket dans Linear et le plan global ; aucun repointage
-manuel de `ACTIVE.md` n'est requis.
+manuel de `program.md` n'est requis.
 
 **Completed**:
 
@@ -1016,7 +1016,7 @@ contradictoire à chaque frontière.
 - répétition exacte de chaque action après crash.
 
 Chaque transition possède un invariant, une action idempotente autorisée et un
-résultat terminal ou reprenable. Les schémas `ACTIVE.md`, marqueur, observation,
+résultat terminal ou reprenable. Les schémas `program.md`, marqueur, observation,
 action et cursor portent tous une version explicite et des limites de taille.
 
 **Decision class** : verification mécanique, auto-décidée.
@@ -1033,7 +1033,7 @@ l'activation et la reprise ne doivent pas devenir un mini-projet opérateur.
 **Decision** : le dogfood mesure séparément :
 
 - activation initiale, harness déjà installé et connectors autorisés :
-  `ACTIVE.md` valide + preview en moins de cinq minutes ;
+  `program.md` valide + preview en moins de cinq minutes ;
 - session suivante : statut cohérent ou erreur actionnable en moins de trente
   secondes hors latence exceptionnelle du provider ;
 - cluster prêt : premier worker lancé en moins de deux minutes ;
@@ -1114,7 +1114,7 @@ risque donc d'être découvrable seulement par les auteurs du plan.
    excluded/blocked, closed-unmerged, Done post-merge et abort idempotent.
 7. **[x][P2] Ajouter l'oracle de transitions et les fault injections** à chaque
    frontière Linear, GitHub, Git, filesystem et runtime.
-8. **[x][P2] Versionner tous les contrats**, y compris `ACTIVE.md` et le marqueur,
+8. **[x][P2] Versionner tous les contrats**, y compris `program.md` et le marqueur,
    puis documenter la compatibilité/refus des versions inconnues.
 9. **[x][P2] Livrer le parcours DevEx testable** : invocation sans argument, sortie
    humaine + `--json`, doctor non mutant, quickstart, erreurs actionnables,

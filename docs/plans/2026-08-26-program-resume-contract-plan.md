@@ -171,19 +171,46 @@ et la disposition du journal.
 
 ## Resume point
 
-**Next step**: Checkpoint A (attendre le signal utilisateur, puis commencer Step 5)
+**Next step**: revue humaine de la branche, puis publication/merge par le mainteneur.
 
 **Completed**:
 
 - Spec approuvee: `docs/specs/2026-08-26-program-resume-contract.md`.
 - Audit ADR termine: `docs/plans/2026-08-26-decision-log-audit.md`.
+- Checkpoint A valide par l'utilisateur.
 - Steps 1 a 4: programme canonique, ResumeBundle, hooks de cycle de vie, puis alignement du skill
   checkpoint et des instructions installees.
+- Step 5: migration de references ADR bornee, avec refus fail-closed des changements semantiques.
+- Step 6: cinq propositions disposees, supersession effective visible et 24 references certaines
+  migrees sans nouvel ADR de consolidation.
+- Step 7: faux positif Biome reproduit puis corrige dans une paire RED/GREEN distincte, sans
+  exclusion redondante dans `biome.json`.
+- Step 8: revue stricte et gates finales executees sur l'arbre corrige.
 
 **Pending**:
 
-- Checkpoint A: validation humaine des contrats observes.
-- Step 5: Garde-fou ADR.
-- Step 6: Disposition et migrations ADR.
-- Step 7: Correctif Biome en paire RED/GREEN.
-- Step 8: Verification finale.
+- Publication de la branche et merge, qui restent des actions humaines.
+- Le programme global `knowledge-and-resume` reste `executing`; cette livraison ne clot pas ses
+  autres unites et ne repointe pas son descripteur.
+
+## Final review evidence
+
+- **Mode**: strict.
+- **Review shape**: revue locale des six dimensions. Les sous-agents de revue ont ete omis car
+  l'instruction de session interdit leur lancement sans demande explicite de l'utilisateur.
+- **Correctness**: trois blockers trouves et corriges: `files.includes` scalaire etait interprete
+  alors que le schema Biome exige une liste; des references vivantes pointaient encore vers les
+  anciens fichiers de programme/checkpoint; la table d'ownership classait encore `active.md` et
+  faisait refuser les references canoniques a `.void/program.md`.
+- **Tests**: `pnpm test` isole, 367 fichiers verts, 3810 tests passants, 1 skip declare. Le corpus
+  Biome cible passe 32 tests sur les trois fichiers concernes.
+- **Security**: lectures Biome confinees a la racine canonique et bornees; commandes de verification
+  en argv avec `shell:false`; migrations ADR refusant cibles absentes, echappees et symlinks.
+- **Structure**: `ResumeBundle` et le checkpoint vivent dans `mission-engine`; CLI et hooks
+  consomment le meme contrat sans acces tracker au demarrage.
+- **Readability**: typecheck global vert; lint global vert avec les 31 warnings de base et aucun
+  nouveau warning sur les fichiers modifies de ce lot.
+- **Performance**: contexte borne a 4000 caracteres, lectures checkpoint/programme bornees, Git de
+  demarrage sous timeouts et resolution Biome limitee a 32 lectures.
+- **Blockers raised**: 3, tous resolus.
+- **Nits raised**: 3 commentaires de terminologie/espacement, tous resolus.

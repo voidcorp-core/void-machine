@@ -123,7 +123,7 @@ Travail du 2026-08-19, présent dans l'arbre, non committé :
 
 - `checkpoint` et `autopilot` existaient en command **et** en skill, avec deux descriptions
   divergentes. Les deux commands sont supprimées ; ce qui n'existait que dans le wrapper est
-  porté dans la skill (le garde `.void/active.md` et `autopilot.enabled: false` pour autopilot,
+  porté dans la skill (le garde `.void/program.md` et `autopilot.enabled: false` pour autopilot,
   le sens d'un argument pour checkpoint).
 - Gate dans `scripts/anti-bloat-check.sh` et test `test/skills/slash-command-uniqueness.test.ts` :
   un nom ne peut pas exister à la fois en command et en skill. Prouvé mordant par injection

@@ -161,7 +161,7 @@ function readPlanCount(root: string): number {
 
 /**
  * The declared program, when the project runs one. Read for display only: the
- * the declared provider owns execution state, and reaching it would put the network on the
+ * declared provider owns execution state, and reaching it would put the network on the
  * path of a view that must stay offline.
  */
 export function readProgram(root: string): ProgramSignal | undefined {

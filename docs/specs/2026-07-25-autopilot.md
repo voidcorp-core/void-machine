@@ -70,7 +70,7 @@ Les noms internes décrivent leur responsabilité, par exemple `clusterPlanner`,
 ## Activation durable
 
 L'autonomie est opt-in par projet. Le pointeur de programme
-`plans/ACTIVE.md` porte une configuration stable équivalente à :
+`.void/program.md` porte une configuration stable équivalente à :
 
 ```yaml
 autopilot:
@@ -90,7 +90,7 @@ committer, pousser la branche d'intégration, ouvrir ou mettre à jour la PR et
 mettre à jour Linear dans le périmètre déclaré. Elle évite toute confirmation
 par session ou par cluster.
 
-`ACTIVE.md` garde le contexte global et les références stables. Il ne duplique
+`program.md` garde le contexte global et les références stables. Il ne duplique
 pas l'état mutable des tickets. Linear reste la source de vérité pour le
 workflow, GitHub pour les branches, PR et checks, Git pour les commits, et
 `.void/autopilot/` pour le curseur technique local.
@@ -130,7 +130,7 @@ exposés dans Linear et dans la PR de réconciliation.
 ## Architecture
 
 ```text
-ACTIVE.md + Linear + GitHub
+program.md + Linear + GitHub
           |
           v
   Autopilot L0 (skill en session)

@@ -191,14 +191,14 @@ Recouvrement nul, et c'est la propriété qui empêche la dérive.
 
 | Artefact | Répond à | Durée de vie | Lu par | Autorité |
 |---|---|---|---|---|
-| `plans/ACTIVE.md` | quel programme exécuter, quel tracker, quels gates | le programme | du code, avec validation de frontmatter | humain |
-| `.void/session/current.md` | où en était la session interrompue | une session | un humain ou un agent qui reprend | dérivé de la session |
+| `.void/program.md` | quel programme exécuter, quel fournisseur de progression, quels gates | le programme | du code, avec validation de frontmatter | humain |
+| `.void/machine/checkpoint.md` | où en était la session interrompue | une session | un humain ou un agent qui reprend | dérivé de la session |
 | `.void/knowledge.json` | ce que le projet est et pourquoi | le projet | les requêtes | mixte, par couche |
 
-`ACTIVE.md` ne bouge pas. Il est parsé par `readActiveProgram`, exigé par le preflight de
-l'autopilot, injecté dans le CLAUDE.md des consommateurs, et son bloc `autopilot` porte le
-consentement à l'exécution autonome. Ce n'est pas un handoff de session, c'est de la
-configuration de programme.
+`.void/program.md` est parsé par `readProgramDescriptor`, exigé par le preflight de l'autopilot,
+injecté dans les instructions des consommateurs, et son bloc `autopilot` porte le consentement à
+l'exécution autonome. Ce n'est pas un handoff de session, c'est la configuration globale du
+programme ; le fournisseur de progression facultatif reste propriétaire de l'état mutable.
 
 ## Fin de session
 
@@ -208,7 +208,7 @@ durable. Sa doctrine énonce déjà qu'un handoff long a échoué son triage.
 
 Deux ajustements :
 
-1. `.void/session/current.md` devient la destination du résidu quand le projet n'a pas de
+1. `.void/machine/checkpoint.md` devient la destination du résidu quand le projet n'a pas de
    convention propre. Aujourd'hui le skill préfère tracker et mémoire, sans fichier de dépôt.
 2. Une ligne de routage pour l'invariant, couche qui n'existait pas.
 

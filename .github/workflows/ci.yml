@@ -209,7 +209,7 @@ jobs:
       - name: Asset paths resolve (no route into a moved directory)
         # Skills are prose an agent reads, and they name paths in it. When the
         # layout moves, those sentences are wrong and nothing says so: moving the
-        # active pointer left four assets routing to plans/ACTIVE.md, found by
+        # programme pointer left four assets routing to an obsolete path, found by
         # reading rather than by the build, and this found four more on its first
         # run. A generated bindings file was the alternative and was rejected: a
         # skill's value is that it reads as prose, and a placeholder costs that.

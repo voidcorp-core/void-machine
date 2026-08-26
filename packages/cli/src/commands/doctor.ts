@@ -724,8 +724,6 @@ function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0
     baseProtected: 'unprobed',
   };
 }
-
-
 /**
  * Hand-written skills that git no longer sees.
  *

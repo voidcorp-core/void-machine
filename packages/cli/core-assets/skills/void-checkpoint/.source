@@ -12,8 +12,8 @@ Inspirations, none vendored:
   the next session reads the tracker and the memory, which are authoritative and would be
   duplicated by a restore file. Only the closing half survives.
 
-- The active-program contract, then at plans/ACTIVE.md and since moved to `.void/active.md`, — "the tracker owns mutable
-  execution state; ACTIVE.md never stores a hand-maintained next ticket". That rule generalises
+- The programme contract at `.void/program.md` — "the declared progress provider owns mutable
+  execution state; the programme never stores a hand-maintained next unit". That rule generalises
   into Step 0's routing table, which is the load-bearing part of the skill.
 
 - `void-learn`'s routing-first structure — the first step is deciding *where a fact

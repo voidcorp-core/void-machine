@@ -62,7 +62,7 @@ Without `plan`, an approved design jumps directly to code. The plan is implicit,
   - Verification: tsc --noEmit && vitest run --coverage --filter checkoutCart
   ```
   Why: makes the discipline cost visible at planning; the user can see "this plan is 3 strict + 2 souple + 1 exploratory" and adjust.
-- **Handoff varies by execution model**: a standalone plan ends with a mutable resume point. A tracker-backed multi-ticket program ends with a stable order/dependency table; `ticket` creates `plans/ACTIVE.md` only after the native pool exists. Why: cross-session shipping without duplicating tracker state.
+- **Handoff varies by execution model**: a standalone plan ends with a mutable resume point. A provider-backed multi-unit programme ends with a stable order/dependency table; `ticket` creates `.void/program.md` only after the native pool exists. Why: cross-session shipping without duplicating provider state.
 - **Verification gates compose with hooks** (new): each step's gate maps to specific harness hooks (`pre-commit typecheck+test`, `tdd-guard`, `tigerstyle-check`). Plans state which hooks must succeed at that step. Why: explicit composition surfaces what protects each step.
 - **Composition with `plan-review`** (was gstack `autoplan`, vendored DEV-385): plans that target high-risk surface (payment, auth, prod migrations) can be reviewed by `harness:plan-review` (`all` mode) after writing. Plans include a flag in frontmatter (`high_risk: true`) that triggers a plan-review recommendation. Why: catch design issues without re-litigating brainstorm.
 
@@ -88,7 +88,7 @@ Without `plan`, an approved design jumps directly to code. The plan is implicit,
 The planning discipline is uniform through steps and verification. Only the final handoff varies:
 
 - standalone sequential work uses the plan's resume point;
-- tracker-backed multi-ticket work uses an immutable execution table, then `ticket` materializes native dependencies and `plans/ACTIVE.md`.
+- provider-backed multi-unit work uses an immutable execution table, then `ticket` materializes native dependencies and `.void/program.md`.
 
 ## Companion hooks
 

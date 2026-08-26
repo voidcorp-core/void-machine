@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { DecisionRecord } from './types.js';
 import { renderDecisionsJson, renderDecisionsMarkdown } from './render.js';
 
-function record(id: string, createdAt: string): DecisionRecord {
+function record(
+  id: string,
+  createdAt: string,
+  supersedes: readonly string[] = [],
+): DecisionRecord {
   return {
     schemaVersion: 1,
     id,
@@ -10,7 +14,7 @@ function record(id: string, createdAt: string): DecisionRecord {
     title: id,
     status: 'accepted',
     deciders: ['folpe'],
-    supersedes: [],
+    supersedes,
     body: `# ${id}`,
     file: `${id}.md`,
     legacy: false,
@@ -38,5 +42,31 @@ describe('decision projections', () => {
         }),
       ],
     });
+  });
+
+  it('exposes effective supersession without rewriting the older record', () => {
+    const old = record('adr:old', '2026-07-23T00:00:00.000Z');
+    const replacement = record(
+      'adr:replacement',
+      '2026-07-24T00:00:00.000Z',
+      ['adr:old'],
+    );
+
+    expect(JSON.parse(renderDecisionsJson([old, replacement]))).toEqual(
+      expect.objectContaining({
+        decisions: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'adr:old',
+            status: 'superseded',
+            declaredStatus: 'accepted',
+            supersededBy: ['adr:replacement'],
+          }),
+        ]),
+      }),
+    );
+    expect(renderDecisionsMarkdown([old, replacement])).toContain(
+      'adr:old` (superseded by `adr:replacement`)',
+    );
+    expect(old.status).toBe('accepted');
   });
 });

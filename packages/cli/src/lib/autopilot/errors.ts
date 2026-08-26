@@ -9,7 +9,7 @@
 export type AutopilotErrorCode =
   | 'AUTOPILOT_USAGE'
   | 'AUTOPILOT_INPUT'
-  | 'AUTOPILOT_ACTIVE_PROGRAM'
+  | 'AUTOPILOT_PROGRAM'
   | 'AUTOPILOT_CONTRACT';
 
 export interface AutopilotFailure {

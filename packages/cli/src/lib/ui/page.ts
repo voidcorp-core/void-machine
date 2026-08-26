@@ -120,9 +120,9 @@ function facts(project) {
     parts.push('no decisions recorded');
   }
   if (project.planCount > 0) parts.push('<b>' + project.planCount + '</b> plans');
-  if (project.activeProgram !== undefined) {
-    parts.push('program <b>' + esc(project.activeProgram.program) + '</b> ('
-      + project.activeProgram.issueCount + ' tickets)');
+  if (project.program !== undefined) {
+    parts.push('program <b>' + esc(project.program.program) + '</b> ('
+      + project.program.unitCount + ' units)');
   }
   return parts.join(' &middot; ');
 }

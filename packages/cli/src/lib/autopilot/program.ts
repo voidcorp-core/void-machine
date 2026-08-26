@@ -1,10 +1,8 @@
-// The active program contract: the durable, human-authored consent that says
-// which program is executing, which tracker owns its state, and whether
-// autopilot may act at all.
+// The program contract: durable global context and explicit automation consent.
 //
-// `plans/ACTIVE.md` is a stable pointer, never a cursor — it deliberately holds
-// no current or next ticket, because the tracker owns progress. What lives here
-// is what a session cannot rediscover: intent, scope, and permission.
+// `.void/program.md` is a descriptor, never a cursor: it deliberately holds no
+// current or next unit. A declared progress provider owns mutable execution
+// state; the core only understands its generic roles and opaque locator.
 //
 // Every field is validated on read. A file that is present but wrong is an
 // error, never a shrug: silently falling back to a default would let a typo in
@@ -17,18 +15,21 @@ import { autopilotFailure } from './errors.js';
 
 export type ProgramStatus = 'executing' | 'completed';
 
-export interface TrackerScope {
-  /** Only `linear` is supported at this increment. */
-  readonly provider: 'linear';
-  /** Native workspace/project/repository query, opaque to the harness. */
+export interface ProgressStates {
+  readonly ready: readonly string[];
+  readonly started: readonly string[];
+  readonly review: readonly string[];
+  readonly done: readonly string[];
+}
+
+export interface ProgressLocator {
+  /** Capability id resolved by an adapter only when a remote action is needed. */
+  readonly provider: string;
+  /** Native workspace/project/repository query, opaque to the core. */
   readonly scope: string;
-  /** Deterministic tie-break order among simultaneously ready tickets. */
-  readonly issues: readonly string[];
-  /** Native states meaning "may be started". */
-  readonly readyStates: readonly string[];
-  readonly startedState: string;
-  readonly reviewState: string;
-  readonly doneStates: readonly string[];
+  /** Deterministic tie-break order among simultaneously ready work units. */
+  readonly order: readonly string[];
+  readonly states: ProgressStates;
 }
 
 export interface AutopilotOwnership {
@@ -52,12 +53,13 @@ export interface AutopilotConfig {
   readonly ownership: AutopilotOwnership;
 }
 
-export interface ActiveProgram {
+export interface ProgramDescriptor {
+  readonly schemaVersion: 1;
   readonly status: ProgramStatus;
   readonly program: string;
   readonly plan: string;
   readonly spec: string;
-  readonly tracker: TrackerScope;
+  readonly progress?: ProgressLocator;
   readonly humanGates: readonly string[];
   readonly autopilot: AutopilotConfig;
 }
@@ -70,29 +72,38 @@ export interface ActiveProgram {
  * migrates on `update` and until then a reader that only knew the new path would
  * report a running program as absent, which is worse than reading an old path.
  */
-const DEFAULT_ACTIVE_PATH = join('.void', 'active.md');
-export const PREVIOUS_ACTIVE_PATH = join('plans', 'ACTIVE.md');
+export const PROGRAM_PATH = join('.void', 'program.md');
+export const LEGACY_PROGRAM_PATHS = [
+  join('.void', 'active.md'),
+  join('plans', 'ACTIVE.md'),
+] as const;
 
-/** The pointer this project actually has, newest location first. */
-export function activeProgramPath(root: string): string {
-  return existsSync(join(root, DEFAULT_ACTIVE_PATH)) || !existsSync(join(root, PREVIOUS_ACTIVE_PATH))
-    ? DEFAULT_ACTIVE_PATH
-    : PREVIOUS_ACTIVE_PATH;
+/** Locate the only declared program, or return the canonical write path. */
+export function programPath(root: string): string {
+  const candidates = [PROGRAM_PATH, ...LEGACY_PROGRAM_PATHS];
+  const present = candidates.filter((candidate) => existsSync(join(root, candidate)));
+  if (present.length > 1) {
+    invalid(
+      'multiple program descriptor files make the source of truth ambiguous',
+      `found ${present.map((path) => `\`${path}\``).join(', ')}`,
+      `keep only \`${PROGRAM_PATH}\`; migrate or remove the legacy duplicate after comparing it`,
+    );
+  }
+  return present[0] ?? PROGRAM_PATH;
 }
 const MAX_CLUSTER_SIZE = 4;
-const SUPPORTED_PROVIDERS = ['linear'] as const;
 
 function invalid(problem: string, cause: string, fix: string): never {
-  throw autopilotFailure('AUTOPILOT_ACTIVE_PROGRAM', problem, cause, fix);
+  throw autopilotFailure('AUTOPILOT_PROGRAM', problem, cause, fix);
 }
 
 function frontmatterOf(text: string): string {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
   if (match === null) {
     invalid(
-      'the active program file carries no frontmatter',
+      'the program descriptor carries no frontmatter',
       'the file does not open with a `---` delimited YAML block',
-      'start the file with a `---` block declaring status, program, plan, spec, tracker and autopilot',
+      'start the file with a `---` block declaring schemaVersion, status, program, plan, spec and autopilot',
     );
   }
   return match[1] as string;
@@ -101,7 +112,7 @@ function frontmatterOf(text: string): string {
 function record(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     invalid(
-      `the active program has no usable \`${field}\` block`,
+      `the program descriptor has no usable \`${field}\` block`,
       `\`${field}\` is ${Array.isArray(value) ? 'a list' : String(value)}, not a mapping`,
       `declare \`${field}:\` as a mapping of its documented fields`,
     );
@@ -113,7 +124,7 @@ function requiredString(source: Record<string, unknown>, field: string, context:
   const value = source[field];
   if (typeof value !== 'string' || value.trim().length === 0) {
     invalid(
-      `the active program is missing \`${context}.${field}\``,
+      `the program descriptor is missing \`${context}.${field}\``,
       value === undefined ? `\`${field}\` is absent` : `\`${field}\` is not a non-empty string`,
       `set \`${field}\` in the \`${context}\` block to the value it names`,
     );
@@ -128,9 +139,9 @@ function nonEmptyStringList(value: unknown, field: string): readonly string[] {
     value.some((entry) => typeof entry !== 'string' || entry.trim().length === 0)
   ) {
     invalid(
-      `the active program has no usable \`${field}\``,
+      `the program descriptor has no usable \`${field}\``,
       `\`${field}\` must be a non-empty list of non-empty strings`,
-      `declare \`${field}\` as a YAML list naming the values your tracker actually uses`,
+      `declare \`${field}\` as a YAML list naming the provider values actually used`,
     );
   }
   return value as string[];
@@ -144,7 +155,7 @@ function nonEmptyStringList(value: unknown, field: string): readonly string[] {
 function confinedPath(value: string, field: string): string {
   if (isAbsolute(value) || value.split(/[\\/]/).includes('..')) {
     invalid(
-      `the active program \`${field}\` leaves the repository`,
+      `the program descriptor \`${field}\` leaves the repository`,
       `\`${value}\` is absolute or walks up out of the project root`,
       `set \`${field}\` to a path relative to the repository root, without \`..\``,
     );
@@ -156,7 +167,7 @@ function pathList(value: unknown, field: string): readonly string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || entry.trim().length === 0)) {
     invalid(
-      `the active program \`${field}\` is not a list of paths`,
+      `the program descriptor \`${field}\` is not a list of paths`,
       `\`${field}\` must be a list of non-empty strings`,
       `declare \`${field}\` as a YAML list of repo-relative path patterns`,
     );
@@ -168,7 +179,7 @@ function verifyCommands(value: unknown): readonly (readonly string[])[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     invalid(
-      'the active program `autopilot.verifyCommands` is not a list',
+      'the program descriptor `autopilot.verifyCommands` is not a list',
       `\`verifyCommands\` is ${String(value)}`,
       'declare `verifyCommands` as a list of argv arrays, for example `- [pnpm, test]`',
     );
@@ -183,7 +194,7 @@ function verifyCommands(value: unknown): readonly (readonly string[])[] {
       command.some((word) => typeof word !== 'string' || word.trim().length === 0)
     ) {
       invalid(
-        'the active program has an unusable entry in `autopilot.verifyCommands`',
+        'the program descriptor has an unusable entry in `autopilot.verifyCommands`',
         `\`${JSON.stringify(command)}\` is not a non-empty array of non-empty strings`,
         'write each command as an argv array, for example `- [pnpm, test]`; commands run with shell:false',
       );
@@ -195,7 +206,7 @@ function verifyCommands(value: unknown): readonly (readonly string[])[] {
 function parseAutopilot(value: unknown): AutopilotConfig {
   if (value === undefined) {
     invalid(
-      'the active program declares no `autopilot` block',
+      'the program descriptor declares no `autopilot` block',
       'the contract requires an explicit autopilot decision, even a negative one',
       'add an `autopilot:` block with `schemaVersion: 1`, `enabled: false` and `mergeGate: human` to opt out',
     );
@@ -205,7 +216,7 @@ function parseAutopilot(value: unknown): AutopilotConfig {
   const schemaVersion = block.schemaVersion;
   if (schemaVersion !== 1) {
     invalid(
-      'the active program declares an autopilot schema this CLI cannot read',
+      'the program descriptor declares an autopilot schema this CLI cannot read',
       schemaVersion === undefined
         ? '`autopilot.schemaVersion` is absent'
         : `\`autopilot.schemaVersion\` is ${String(schemaVersion)}`,
@@ -215,7 +226,7 @@ function parseAutopilot(value: unknown): AutopilotConfig {
 
   if (typeof block.enabled !== 'boolean') {
     invalid(
-      'the active program does not say whether autopilot is enabled',
+      'the program descriptor does not say whether autopilot is enabled',
       '`autopilot.enabled` is not a boolean',
       'set `autopilot.enabled` to true or false; consent is never inferred',
     );
@@ -223,7 +234,7 @@ function parseAutopilot(value: unknown): AutopilotConfig {
 
   if (block.mergeGate !== 'human') {
     invalid(
-      'the active program declares a merge gate autopilot will not honour',
+      'the program descriptor declares a merge gate autopilot will not honour',
       `\`autopilot.mergeGate\` is ${String(block.mergeGate)}, and only \`human\` exists`,
       'set `autopilot.mergeGate: human`; merging the integration PR is a human action',
     );
@@ -232,7 +243,7 @@ function parseAutopilot(value: unknown): AutopilotConfig {
   const clusterSize = block.clusterSize ?? MAX_CLUSTER_SIZE;
   if (!Number.isInteger(clusterSize) || (clusterSize as number) < 1 || (clusterSize as number) > MAX_CLUSTER_SIZE) {
     invalid(
-      'the active program declares an unusable cluster size',
+      'the program descriptor declares an unusable cluster size',
       `\`autopilot.clusterSize\` is ${String(clusterSize)}, outside 1..${MAX_CLUSTER_SIZE}`,
       `set \`autopilot.clusterSize\` between 1 and ${MAX_CLUSTER_SIZE}`,
     );
@@ -241,7 +252,7 @@ function parseAutopilot(value: unknown): AutopilotConfig {
   const base = block.base ?? 'auto';
   if (typeof base !== 'string' || base.trim().length === 0) {
     invalid(
-      'the active program declares an unusable base branch',
+      'the program descriptor declares an unusable base branch',
       '`autopilot.base` is not a non-empty string',
       'set `autopilot.base` to `auto`, or to the exact name of an existing branch',
     );
@@ -262,87 +273,140 @@ function parseAutopilot(value: unknown): AutopilotConfig {
   };
 }
 
-function parseTracker(value: unknown): TrackerScope {
-  const block = record(value, 'tracker');
-  const provider = requiredString(block, 'provider', 'tracker');
-  if (!SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])) {
-    invalid(
-      'the active program names a tracker provider this harness does not support',
-      `\`tracker.provider\` is \`${provider}\`; supported: ${SUPPORTED_PROVIDERS.join(', ')}`,
-      'set `tracker.provider: linear`, or drive this program manually until its provider ships',
-    );
-  }
-
+function parseProgress(value: unknown): ProgressLocator | undefined {
+  if (value === undefined) return undefined;
+  const block = record(value, 'progress');
+  const states = record(block.states, 'progress.states');
   return {
-    provider: 'linear',
-    scope: requiredString(block, 'scope', 'tracker'),
-    issues: nonEmptyStringList(block.issues, 'tracker.issues'),
-    readyStates: nonEmptyStringList(block.readyStates, 'tracker.readyStates'),
-    startedState: requiredString(block, 'startedState', 'tracker'),
-    reviewState: requiredString(block, 'reviewState', 'tracker'),
-    doneStates: nonEmptyStringList(block.doneStates, 'tracker.doneStates'),
+    provider: requiredString(block, 'provider', 'progress'),
+    scope: requiredString(block, 'scope', 'progress'),
+    order: nonEmptyStringList(block.order, 'progress.order'),
+    states: {
+      ready: nonEmptyStringList(states.ready, 'progress.states.ready'),
+      started: nonEmptyStringList(states.started, 'progress.states.started'),
+      review: nonEmptyStringList(states.review, 'progress.states.review'),
+      done: nonEmptyStringList(states.done, 'progress.states.done'),
+    },
   };
 }
 
-/** Pure: validate the frontmatter of an active program file. */
-export function parseActiveProgram(text: string): ActiveProgram {
-  const frontmatter = frontmatterOf(text);
+function parseLegacyProgress(value: unknown): ProgressLocator {
+  const block = record(value, 'tracker');
+  return {
+    provider: requiredString(block, 'provider', 'tracker'),
+    scope: requiredString(block, 'scope', 'tracker'),
+    order: nonEmptyStringList(block.issues, 'tracker.issues'),
+    states: {
+      ready: nonEmptyStringList(block.readyStates, 'tracker.readyStates'),
+      started: [requiredString(block, 'startedState', 'tracker')],
+      review: [requiredString(block, 'reviewState', 'tracker')],
+      done: nonEmptyStringList(block.doneStates, 'tracker.doneStates'),
+    },
+  };
+}
 
+function parseRoot(text: string): Record<string, unknown> {
+  const frontmatter = frontmatterOf(text);
   let parsed: unknown;
   try {
     parsed = parseYaml(frontmatter);
   } catch (error) {
     invalid(
-      'the active program frontmatter is not valid YAML',
+      'the program descriptor frontmatter is not valid YAML',
       error instanceof Error ? error.message : String(error),
       'fix the YAML syntax reported above in the frontmatter block',
     );
   }
-  const root = record(parsed, 'frontmatter');
+  return record(parsed, 'frontmatter');
+}
 
+function parseStatus(root: Record<string, unknown>): ProgramStatus {
   const status = root.status;
   if (status !== 'executing' && status !== 'completed') {
     invalid(
-      'the active program declares an unknown status',
+      'the program descriptor declares an unknown status',
       `\`status\` is ${String(status)}`,
       'set `status` to `executing` while the program runs, or `completed` once it is finished',
     );
   }
+  return status;
+}
 
+function parseHumanGates(root: Record<string, unknown>): readonly string[] {
   const humanGates = root.humanGates;
-  if (humanGates !== undefined && (!Array.isArray(humanGates) || humanGates.some((g) => typeof g !== 'string'))) {
+  if (
+    humanGates !== undefined &&
+    (!Array.isArray(humanGates) ||
+      humanGates.some((gate) => typeof gate !== 'string' || gate.trim().length === 0))
+  ) {
     invalid(
-      'the active program lists unusable human gates',
-      '`humanGates` must be a list of ticket identifiers',
-      'declare `humanGates` as a YAML list of ticket ids, or remove it',
+      'the program descriptor lists unusable human gates',
+      '`humanGates` must be a list of non-empty work-unit identifiers',
+      'declare `humanGates` as a YAML list of provider-native ids, or remove it',
     );
   }
+  return (humanGates as string[] | undefined) ?? [];
+}
 
+function descriptorOf(
+  root: Record<string, unknown>,
+  progress: ProgressLocator | undefined,
+): ProgramDescriptor {
+  const autopilot = parseAutopilot(root.autopilot);
+  if (autopilot.enabled && progress === undefined) {
+    invalid(
+      'the program enables autopilot without a progress source',
+      '`autopilot.enabled` is true but `progress` is absent',
+      'declare a progress provider and its state roles, or set `autopilot.enabled: false`',
+    );
+  }
   return {
-    status,
+    schemaVersion: 1,
+    status: parseStatus(root),
     program: requiredString(root, 'program', 'frontmatter'),
     plan: confinedPath(requiredString(root, 'plan', 'frontmatter'), 'plan'),
     spec: confinedPath(requiredString(root, 'spec', 'frontmatter'), 'spec'),
-    tracker: parseTracker(root.tracker),
-    humanGates: (humanGates as string[] | undefined) ?? [],
-    autopilot: parseAutopilot(root.autopilot),
+    ...(progress === undefined ? {} : { progress }),
+    humanGates: parseHumanGates(root),
+    autopilot,
   };
 }
 
+/** Pure: validate canonical `.void/program.md` frontmatter. */
+export function parseProgramDescriptor(text: string): ProgramDescriptor {
+  const root = parseRoot(text);
+  if (root.schemaVersion !== 1) {
+    invalid(
+      'the program descriptor declares a schema this CLI cannot read',
+      root.schemaVersion === undefined
+        ? '`schemaVersion` is absent'
+        : `\`schemaVersion\` is ${String(root.schemaVersion)}`,
+      'set `schemaVersion: 1`, or upgrade the harness to a version that reads this schema',
+    );
+  }
+  return descriptorOf(root, parseProgress(root.progress));
+}
+
+function parseLegacyDescriptor(text: string): ProgramDescriptor {
+  const root = parseRoot(text);
+  if (root.schemaVersion !== undefined) return parseProgramDescriptor(text);
+  return descriptorOf(root, parseLegacyProgress(root.tracker));
+}
+
 /**
- * Read the active program of a project, or undefined when it declares none.
+ * Read the program descriptor, or undefined when the project declares none.
  *
  * Absent is a normal state — most projects run no program. Present-but-invalid
  * is not: it surfaces, because a broken contract that reads as "no program"
  * would silently disable every guarantee the file exists to carry.
  */
-export function readActiveProgram(root: string, relativePath?: string): ActiveProgram | undefined {
-  relativePath = relativePath ?? activeProgramPath(root);
+export function readProgramDescriptor(root: string, relativePath?: string): ProgramDescriptor | undefined {
+  relativePath = relativePath ?? programPath(root);
   const rootPath = resolve(root);
   const target = resolve(rootPath, relativePath);
   if (isAbsolute(relativePath) || (target !== rootPath && !target.startsWith(rootPath + sep))) {
     invalid(
-      'the requested active program file is outside the project root',
+      'the requested program descriptor is outside the project root',
       `\`${relativePath}\` resolves to ${target}, which is not under ${rootPath}`,
       'pass a path relative to the project root, without `..`',
     );
@@ -354,10 +418,12 @@ export function readActiveProgram(root: string, relativePath?: string): ActivePr
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     invalid(
-      'the active program file could not be read',
+      'the program descriptor could not be read',
       error instanceof Error ? error.message : String(error),
       'check the file permissions, then run the command again',
     );
   }
-  return parseActiveProgram(text);
+  return LEGACY_PROGRAM_PATHS.includes(relativePath)
+    ? parseLegacyDescriptor(text)
+    : parseProgramDescriptor(text);
 }

@@ -8,9 +8,9 @@
 // Offline by construction. No tracker call, no registry fetch, no network: the
 // signals are files and git plumbing, so the answer is the same on a plane.
 
-import { discoveryConfigPath, readProjectsPayload } from '../lib/ui/payload.js';
-import type { ProjectSummary } from '../lib/projects/summary.js';
+import type { ProgramSignal, ProjectSummary } from '../lib/projects/summary.js';
 import { banner, blank, c, footer, glyph, line, meta } from '../lib/render.js';
+import { discoveryConfigPath, readProjectsPayload } from '../lib/ui/payload.js';
 
 function ageLabel(summary: ProjectSummary): string {
   if (summary.idleDays === undefined) return 'no git history';
@@ -24,6 +24,10 @@ function decisionsLabel(summary: ProjectSummary): string {
   if (count === 0) return 'no decisions recorded';
   const suffix = format === 'live-monolith' ? ' (legacy format)' : '';
   return `${String(count)} decision(s)${suffix}`;
+}
+
+export function programLabel(program: ProgramSignal): string {
+  return `program ${program.program} (${String(program.unitCount)} units)`;
 }
 
 /**
@@ -46,11 +50,7 @@ function renderProject(summary: ProjectSummary): void {
 
   const facts: string[] = [decisionsLabel(summary)];
   if (summary.planCount > 0) facts.push(`${String(summary.planCount)} plan(s)`);
-  if (summary.activeProgram !== undefined) {
-    facts.push(
-      `program ${summary.activeProgram.program} (${String(summary.activeProgram.issueCount)} tickets)`,
-    );
-  }
+  if (summary.program !== undefined) facts.push(programLabel(summary.program));
   line(c.dim(`     ${facts.join('  ·  ')}`));
 
   if (summary.resumeLine !== undefined) {

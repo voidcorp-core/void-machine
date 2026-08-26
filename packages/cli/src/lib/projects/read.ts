@@ -11,17 +11,17 @@
 // whole answer.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse as parseYaml } from 'yaml';
-import { observeDecisions, type DecisionEntry } from './decisions-source.js';
+import { readProgramDescriptor } from '../autopilot/program.js';
+import { type DecisionEntry, observeDecisions } from './decisions-source.js';
 import type { DiscoveredProject } from './discover.js';
 import {
-  summarizeProject,
-  type ActiveProgramSignal,
   type CheckpointSignal,
   type GitSignals,
+  type ProgramSignal,
   type ProjectSummary,
+  summarizeProject,
 } from './summary.js';
 
 const NO_GIT: GitSignals = Object.freeze({
@@ -159,28 +159,17 @@ function readPlanCount(root: string): number {
 
 /**
  * The declared program, when the project runs one. Read for display only: the
- * tracker owns execution state, and reaching it would put the network on the
+ * the declared provider owns execution state, and reaching it would put the network on the
  * path of a view that must stay offline.
  */
-export function readActiveProgram(root: string): ActiveProgramSignal | undefined {
-  // The pointer moved into `.void/`; the previous location is still read so a
-  // project that has not run `update` does not read as having no program.
-  const raw =
-    readText(join(root, '.void', 'active.md')) ?? readText(join(root, 'plans', 'ACTIVE.md'));
-  if (raw === undefined) return undefined;
-  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
-  if (frontmatter === undefined) return undefined;
+export function readProgram(root: string): ProgramSignal | undefined {
   try {
-    const parsed = parseYaml(frontmatter) as {
-      status?: unknown;
-      program?: unknown;
-      tracker?: { issues?: unknown };
-    };
-    if (parsed.status !== 'executing' || typeof parsed.program !== 'string') return undefined;
-    const issues = parsed.tracker?.issues;
+    const descriptor = readProgramDescriptor(root);
+    if (descriptor?.status !== 'executing') return undefined;
     return {
-      program: parsed.program,
-      issueCount: Array.isArray(issues) ? issues.length : 0,
+      program: descriptor.program,
+      provider: descriptor.progress?.provider,
+      unitCount: descriptor.progress?.order.length ?? 0,
     };
   } catch {
     return undefined;
@@ -226,8 +215,8 @@ export function readProjectSummary(ref: DiscoveredProject, now: number): Project
     decisions: readDecisions(ref.path),
     planCount: readPlanCount(ref.path),
     ...(() => {
-      const active = readActiveProgram(ref.path);
-      return active === undefined ? {} : { activeProgram: active };
+      const program = readProgram(ref.path);
+      return program === undefined ? {} : { program };
     })(),
     ...(() => {
       const checkpoint = readCheckpoint(ref.path);

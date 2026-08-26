@@ -11,10 +11,10 @@
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { parseCheckpoint, type Checkpoint } from '../lib/session/checkpoint.js';
-import { composeResume, type ResumeReport } from '../lib/session/resume.js';
-import { readDecisions, readGitSignals, readActiveProgram } from '../lib/projects/read.js';
+import { readDecisions, readGitSignals, readProgram } from '../lib/projects/read.js';
 import { banner, blank, c, footer, glyph, heading, line, meta } from '../lib/render.js';
+import { type Checkpoint, parseCheckpoint } from '../lib/session/checkpoint.js';
+import { composeResume, type ResumeReport } from '../lib/session/resume.js';
 
 /** Newest location first; the previous one is read until a project migrates. */
 const CHECKPOINT_PATHS = [
@@ -127,8 +127,8 @@ export async function resume(args: readonly string[]): Promise<void> {
       ? {}
       : { checkpoint: found.checkpoint, checkpointWrittenAt: found.writtenAt }),
     ...(() => {
-      const active = readActiveProgram(root);
-      return active === undefined ? {} : { activeProgram: active };
+      const program = readProgram(root);
+      return program === undefined ? {} : { program };
     })(),
   });
 
@@ -141,10 +141,10 @@ export async function resume(args: readonly string[]): Promise<void> {
   meta('project', report.name);
   meta('branch', report.branch ?? 'no git');
   if (report.dirtyFiles > 0) meta('tree', `${String(report.dirtyFiles)} file(s) uncommitted`);
-  if (report.activeProgram !== undefined) {
+  if (report.program !== undefined) {
     meta(
       'program',
-      `${report.activeProgram.program} (${String(report.activeProgram.issueCount)} tickets)`,
+      `${report.program.program} (${String(report.program.unitCount)} units)`,
     );
   }
   if (report.checkpointAgeDays !== undefined) {

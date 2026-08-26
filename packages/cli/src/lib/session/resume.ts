@@ -8,9 +8,9 @@
 // where the work stood, and a resume that guessed would be confidently wrong
 // exactly when it is trusted most. What is missing is reported as missing.
 
-import type { Checkpoint } from './checkpoint.js';
 import type { DecisionsObservation } from '../projects/decisions-source.js';
-import type { ActiveProgramSignal, GitSignals } from '../projects/summary.js';
+import type { GitSignals, ProgramSignal } from '../projects/summary.js';
+import type { Checkpoint } from './checkpoint.js';
 
 export interface ResumeInput {
   readonly name: string;
@@ -21,7 +21,7 @@ export interface ResumeInput {
   readonly checkpoint?: Checkpoint;
   /** Age of the checkpoint file, for judging how much to trust it. */
   readonly checkpointWrittenAt?: number;
-  readonly activeProgram?: ActiveProgramSignal;
+  readonly program?: ProgramSignal;
 }
 
 /** Why a resume is less useful than it should be. Named, never silent. */
@@ -45,7 +45,7 @@ export interface ResumeReport {
   readonly checkpoint: Checkpoint | undefined;
   readonly checkpointAgeDays: number | undefined;
   readonly recentDecisions: readonly { readonly title: string; readonly date?: string }[];
-  readonly activeProgram: ActiveProgramSignal | undefined;
+  readonly program: ProgramSignal | undefined;
   readonly gaps: readonly ResumeGap[];
 }
 
@@ -116,7 +116,7 @@ export function composeResume(input: ResumeInput): ResumeReport {
     checkpoint: input.checkpoint,
     checkpointAgeDays,
     recentDecisions: input.decisions.recent,
-    activeProgram: input.activeProgram,
+    program: input.program,
     gaps: gapsOf(input, checkpointAgeDays),
   };
 }

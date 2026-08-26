@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { CheckResult } from '../prerequisites.js';
-import { autopilotPreflight, type AutopilotObservation } from './preflight.js';
+import { type AutopilotObservation, autopilotPreflight } from './preflight.js';
 
 function observation(over: Partial<AutopilotObservation> = {}): AutopilotObservation {
   return {
-    activeProgram: {
+    program: {
       status: 'executing',
       autopilot: { enabled: true, mergeGate: 'human', verifyCommands: [['pnpm', 'test']] },
     },
@@ -29,7 +29,7 @@ describe('autopilotPreflight', () => {
   it('every failing check says what to do about it', () => {
     const broken = autopilotPreflight(
       observation({
-        activeProgram: null,
+        program: undefined,
         adapters: [],
         trackerConnector: false,
         worktreesUsable: false,
@@ -43,34 +43,34 @@ describe('autopilotPreflight', () => {
   });
 });
 
-describe('the active program', () => {
+describe('the program', () => {
   it('reports an absent ACTIVE as unknown, not as a failure', () => {
     // Most projects have no program to drain. That is not a broken harness.
-    expect(named(autopilotPreflight(observation({ activeProgram: null })), 'autopilot ACTIVE')?.status).toBe(
+    expect(named(autopilotPreflight(observation({ program: undefined })), 'autopilot program')?.status).toBe(
       'unknown',
     );
   });
 
   it('fails a program that is not executing', () => {
     const results = autopilotPreflight(
-      observation({ activeProgram: { status: 'completed', autopilot: { enabled: true } } }),
+      observation({ program: { status: 'completed', autopilot: { enabled: true } } }),
     );
 
-    expect(named(results, 'autopilot ACTIVE')?.status).toBe('fail');
+    expect(named(results, 'autopilot program')?.status).toBe('fail');
   });
 
   it('fails when autopilot is not enabled, because nothing would resume', () => {
     const results = autopilotPreflight(
-      observation({ activeProgram: { status: 'executing', autopilot: { enabled: false } } }),
+      observation({ program: { status: 'executing', autopilot: { enabled: false } } }),
     );
 
-    expect(named(results, 'autopilot ACTIVE')?.message).toMatch(/enabled/);
+    expect(named(results, 'autopilot program')?.message).toMatch(/enabled/);
   });
 });
 
 describe('the provider-agnostic program boundary', () => {
   it('names the program contract without prescribing a tracker product', () => {
-    const check = named(autopilotPreflight(observation({ activeProgram: null })), 'autopilot program');
+    const check = named(autopilotPreflight(observation({ program: undefined })), 'autopilot program');
 
     expect(check?.message).toMatch(/\.void\/program\.md/);
     expect(check?.message).not.toMatch(/Linear|ACTIVE/);
@@ -81,7 +81,7 @@ describe('the merge gate', () => {
   it('accepts only a human gate', () => {
     const results = autopilotPreflight(
       observation({
-        activeProgram: { status: 'executing', autopilot: { enabled: true, mergeGate: 'auto' } },
+        program: { status: 'executing', autopilot: { enabled: true, mergeGate: 'auto' } },
       }),
     );
 
@@ -92,7 +92,7 @@ describe('the merge gate', () => {
 
   it('treats an absent gate as human rather than as a missing value', () => {
     const results = autopilotPreflight(
-      observation({ activeProgram: { status: 'executing', autopilot: { enabled: true } } }),
+      observation({ program: { status: 'executing', autopilot: { enabled: true } } }),
     );
 
     expect(named(results, 'autopilot merge')?.ok).toBe(true);
@@ -103,7 +103,7 @@ describe('the verify commands', () => {
   it('fails when there are none, because nothing would prove the branch', () => {
     const results = autopilotPreflight(
       observation({
-        activeProgram: { status: 'executing', autopilot: { enabled: true, verifyCommands: [] } },
+        program: { status: 'executing', autopilot: { enabled: true, verifyCommands: [] } },
       }),
     );
 
@@ -114,7 +114,7 @@ describe('the verify commands', () => {
     for (const command of [[], ['pnpm', ''], 'pnpm test' as unknown as string[]]) {
       const results = autopilotPreflight(
         observation({
-          activeProgram: { status: 'executing', autopilot: { enabled: true, verifyCommands: [command] } },
+          program: { status: 'executing', autopilot: { enabled: true, verifyCommands: [command] } },
         }),
       );
 
@@ -125,7 +125,7 @@ describe('the verify commands', () => {
   it('says why argv rather than a string, in the fix', () => {
     const results = autopilotPreflight(
       observation({
-        activeProgram: { status: 'executing', autopilot: { enabled: true, verifyCommands: [[]] } },
+        program: { status: 'executing', autopilot: { enabled: true, verifyCommands: [[]] } },
       }),
     );
 
@@ -198,10 +198,10 @@ describe('what nobody probed is not what could not be read', () => {
     // reader to author a program they already wrote (#193, same class).
     const results = autopilotPreflight(
       observation({
-        activeProgram: { malformed: { problem: 'clusterSize is 9, above the maximum of 4', fix: 'set clusterSize to 4 or less' } },
+        program: { malformed: { problem: 'clusterSize is 9, above the maximum of 4', fix: 'set clusterSize to 4 or less' } },
       }),
     );
-    const check = named(results, 'autopilot ACTIVE');
+    const check = named(results, 'autopilot program');
 
     expect(check?.status).toBe('fail');
     expect(check?.message).not.toMatch(/no plans/);
@@ -214,7 +214,7 @@ describe('what nobody probed is not what could not be read', () => {
     // "human merge gate" ✓ and "no verifyCommands" ✗ off an unparsed file state
     // two things the file never said.
     const results = autopilotPreflight(
-      observation({ activeProgram: { malformed: { problem: 'no frontmatter', fix: 'add a --- block' } } }),
+      observation({ program: { malformed: { problem: 'no frontmatter', fix: 'add a --- block' } } }),
     );
 
     expect(named(results, 'autopilot merge')?.status).toBe('unknown');

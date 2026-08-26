@@ -30,8 +30,12 @@ coordination.
   date/slug/UUID filename.
 - One decision owns one file; projections are stdout-only and never merge
   artifacts.
-- Accepted records cannot be edited, renamed or deleted. Reversal creates a new
-  record with `supersedes`.
+- Accepted decision content cannot be edited, renamed or deleted. Reversal
+  creates a new record with `supersedes`.
+- Since 2026-08-26, the CLI permits only a bounded repository-local reference
+  substitution whose target exists and whose frontmatter, headings, structure
+  and surrounding prose stay unchanged. This keeps moved paths usable without
+  manufacturing an ADR about each rename or weakening semantic immutability.
 - The Markdown + YAML contract remains usable without void-harness or a specific
   model runtime; the CLI adds exclusive creation and deterministic validation.
 

@@ -88,7 +88,7 @@ never carries the current or next unit.
 
 ## Commits
 
-Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Create each non-obvious decision with `void-harness decisions new`; never edit an accepted decision or a shared index. `pnpm decisions:check` validates the records and their immutability.
+Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Create each non-obvious decision with `void-harness decisions new`; accepted decision content is immutable and changes supersede it. The only in-place exception is a bounded repository-local reference migration whose surrounding text is unchanged and whose new target exists inside the repository. Never delete or rename an accepted file, and never edit a shared index. `pnpm decisions:check` validates the records and this narrow immutability exception.
 
 ## Filing a gap
 

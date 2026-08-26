@@ -110,10 +110,19 @@ Low, Medium or High, with the concrete migration cost.
 - `deprecated`: retained for history but discouraged for new work.
 - `superseded`: replaced by a newer record.
 
-Accepted records are immutable. To reverse, clarify or partially replace one,
-create a new ADR whose `supersedes` contains the old `id`. Never edit, delete or
+Accepted decision content is immutable. To reverse, clarify or partially replace
+one, create a new ADR whose `supersedes` contains the old `id`. Never delete or
 rename the accepted file. This preserves evidence and prevents parallel branches
 from rewriting the same history.
+
+One mechanical exception keeps references usable without diluting the journal:
+an accepted file may replace a bounded repository-local path when frontmatter,
+headings, Markdown structure and surrounding prose stay byte-for-byte stable and
+the new target exists inside the repository. `void-harness decisions check`
+proves that narrow shape and fails closed on a missing target, path escape or
+symlink escape. A change to wording, reasoning, scope, consequences or identity
+is not a reference migration; it requires supersession. Do not create a new ADR
+merely to record a proven file move or rename.
 
 ## Workflow
 

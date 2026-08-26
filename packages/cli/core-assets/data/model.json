@@ -1915,7 +1915,7 @@
         }
       ],
       "id": "skill:void-decide",
-      "lines": 139,
+      "lines": 148,
       "name": "void-decide",
       "owner": "folpe",
       "pack": null,
@@ -1924,7 +1924,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-decide/SKILL.md",
-      "staticTokens": 1017,
+      "staticTokens": 1168,
       "type": "skill"
     },
     {

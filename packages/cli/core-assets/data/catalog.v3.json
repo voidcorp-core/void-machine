@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:4d951bbb8137a71ff52333013db01825a756d51f517b3995b1261da5a74103e8"
+    "rootHash": "sha256:4205f6b2bde2a6367dc868896ba8286dd7e618cd6a494ff0e99532430dd34238"
   },
   "nodes": [
     {
@@ -3853,7 +3853,7 @@
             }
           ],
           "id": "skill:void-decide",
-          "lines": 139,
+          "lines": 148,
           "name": "void-decide",
           "owner": "folpe",
           "pack": null,
@@ -3862,7 +3862,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-decide/SKILL.md",
-          "staticTokens": 1017,
+          "staticTokens": 1168,
           "type": "skill"
         }
       },

@@ -115,7 +115,7 @@ Before this, the floor ran in every consumer project and in none of ours — whi
 ## Meta-rules
 
 - Any new convention added in a commit MUST be reflected in `docs/*.md` in the same commit
-- Any non-obvious decision (where a credible alternative exists) MUST be created as its own collision-free file with `void-harness decisions new`; accepted records are immutable and changes supersede them. `docs/DECISIONS.md` is a frozen legacy landing page, never a worker-owned artifact; `pnpm decisions:check` gates structure and immutability.
+- Any non-obvious decision (where a credible alternative exists) MUST be created as its own collision-free file with `void-harness decisions new`; accepted decision content is immutable and changes supersede it. The only in-place exception is a bounded repository-local reference migration whose surrounding text is unchanged and whose new target exists inside the repository. Accepted files are never deleted or renamed. `docs/DECISIONS.md` is a frozen legacy landing page, never a worker-owned artifact; `pnpm decisions:check` gates structure and immutability.
 - Removed concepts must be removed from the docs at the same time
 - Tests run via `pnpm test`; do not skip TDD when adding logic
 - Versions are never hand-edited: release-please bumps every manifest in lockstep from Conventional Commits, and `pnpm version:check` fails CI on any drift (see `docs/RELEASING.md`)

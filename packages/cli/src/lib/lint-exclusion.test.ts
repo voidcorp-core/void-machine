@@ -31,7 +31,7 @@ describe('inspectHarnessLintExclusion', () => {
     // `!.claude/**` and `!.claude` mean the same thing to Biome. Reporting the
     // first as missing would send a reader to add a rule they already have.
     const root = project({
-      'biome.json': JSON.stringify({ files: { includes: ['src/**', '!.claude/**'] } }, null, 2),
+      'biome.json': JSON.stringify({ files: { includes: ['**', '!.claude/**'] } }, null, 2),
     });
 
     expect((await inspectHarnessLintExclusion(root)).kind).toBe('excluded');
@@ -39,9 +39,10 @@ describe('inspectHarnessLintExclusion', () => {
 
   it('accepts an exclusion inherited from an extended Biome config', async () => {
     const root = project({
-      'config/biome.base.json': JSON.stringify({
+      'config/biome.shared.json': JSON.stringify({
         files: { includes: ['**', '!**/.claude/**'] },
       }),
+      'config/biome.base.json': JSON.stringify({ extends: './biome.shared.json' }),
       'biome.json': JSON.stringify({ extends: ['./config/biome.base.json'] }),
     });
 
@@ -98,6 +99,13 @@ describe('inspectHarnessLintExclusion', () => {
       },
       reason: 'not plain JSON',
     },
+    {
+      name: 'a scalar files.includes value',
+      files: {
+        'biome.json': JSON.stringify({ files: { includes: '**' } }),
+      },
+      reason: 'invalid files.includes',
+    },
   ])('reports $name for manual resolution', async ({ files, reason }) => {
     const state = await inspectHarnessLintExclusion(project(files));
 
@@ -125,7 +133,7 @@ describe('the root that gets inspected', () => {
     // the stage holds none of the project's own files. Reading the wrong root
     // is indistinguishable from a project having no linter.
     const stage = project({});
-    const real = project({ 'biome.json': JSON.stringify({ files: { includes: ['src/**'] } }, null, 2) });
+    const real = project({ 'biome.json': JSON.stringify({ files: { includes: ['**'] } }, null, 2) });
 
     expect((await inspectHarnessLintExclusion(stage)).kind).toBe('no-linter');
     expect((await inspectHarnessLintExclusion(real)).kind).toBe('missing');

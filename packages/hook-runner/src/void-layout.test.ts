@@ -85,7 +85,8 @@ describe('the three natures of .void', () => {
     const atTop = Object.keys(VOID_OWNERSHIP).filter((entry) => ownershipOf(entry) === 'project');
     for (const entry of atTop) expect(isMachineEntry(entry), entry).toBe(false);
     expect(atTop).toContain('config.json');
-    expect(atTop).toContain('active.md');
+    expect(atTop).toContain('program.md');
+    expect(atTop).not.toContain('active.md');
   });
 
   // Dropped: three policy layers referenced by code but present in none of the

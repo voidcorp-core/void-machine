@@ -3,12 +3,12 @@ import { deadPaths, harnessPaths, knownVoidPath, layoutEntries } from '../../scr
 
 // Skills are prose an agent reads, and they name paths in that prose. When the
 // layout moves, every one of those sentences is wrong and nothing says so:
-// moving the active pointer left four assets still routing to `plans/ACTIVE.md`,
+// moving the programme pointer left four assets still routing to `plans/ACTIVE.md`,
 // found by reading rather than by the build. On its first run this check found
 // four more that reading had missed.
 describe('harnessPaths', () => {
   it('reads a path the harness owns the meaning of', () => {
-    expect(harnessPaths('read `.void/active.md` first')).toEqual(['.void/active.md']);
+    expect(harnessPaths('read `.void/program.md` first')).toEqual(['.void/program.md']);
   });
 
   // An illustration is the consuming project's business, and asserting on it
@@ -30,10 +30,12 @@ describe('harnessPaths', () => {
 describe('deadPaths', () => {
   const exists = (path: string): boolean => ['docs/specs'].includes(path);
   // `.void/` is answered by the table, so the fixture declares what it classifies.
-  const entries = new Set(['active.md']);
+  const entries = new Set(['program.md']);
 
   it('reports a path that resolves to nothing', () => {
-    expect(deadPaths(['.void/active.md', 'plans/ACTIVE.md'], exists, entries)).toEqual(['plans/ACTIVE.md']);
+    expect(deadPaths(['.void/program.md', 'plans/ACTIVE.md'], exists, entries)).toEqual([
+      'plans/ACTIVE.md',
+    ]);
   });
 
   // A skill saying specs live in `docs/specs/` is right whether or not one has
@@ -52,7 +54,7 @@ describe('deadPaths', () => {
   });
 
   it('says nothing when every path resolves', () => {
-    expect(deadPaths(['.void/active.md'], exists, entries)).toEqual([]);
+    expect(deadPaths(['.void/program.md'], exists, entries)).toEqual([]);
   });
 });
 
@@ -63,7 +65,7 @@ describe('deadPaths', () => {
 describe('layoutEntries and knownVoidPath', () => {
   const source = [
     "export const VOID_OWNERSHIP: Readonly<Record<string, Ownership>> = Object.freeze({",
-    "  'active.md': 'project',",
+    "  'program.md': 'project',",
     "  // a comment holding a brace } to trip a lazy match",
     "  hooks: 'derived',",
     "  runs: 'observed',",
@@ -71,7 +73,7 @@ describe('layoutEntries and knownVoidPath', () => {
   ].join('\n');
 
   it('reads a quoted key and a bare one alike', () => {
-    expect(layoutEntries(source)).toEqual(new Set(['active.md', 'hooks', 'runs']));
+    expect(layoutEntries(source)).toEqual(new Set(['program.md', 'hooks', 'runs']));
   });
 
   it('reads past a comment that contains a closing brace', () => {
@@ -81,7 +83,7 @@ describe('layoutEntries and knownVoidPath', () => {
   it('accepts a path under a level directory by the entry it names', () => {
     const entries = layoutEntries(source);
     expect(knownVoidPath('.void/machine/runs/mis_x/events.jsonl', entries)).toBe(true);
-    expect(knownVoidPath('.void/active.md', entries)).toBe(true);
+    expect(knownVoidPath('.void/program.md', entries)).toBe(true);
   });
 
   it('refuses a path the table does not classify', () => {

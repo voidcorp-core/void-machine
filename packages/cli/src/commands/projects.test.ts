@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { projects } from './projects.js';
+import { programLabel, projects } from './projects.js';
 
 /**
  * The command is a projection: whatever it prints, it must leave every project
@@ -67,6 +67,14 @@ afterEach(() => {
 function declareRoots(): void {
   writeFileSync(join(globalDir, 'discovery.json'), JSON.stringify({ roots: [park] }));
 }
+
+describe('programLabel', () => {
+  it('describes generic work units without assuming a ticket product', () => {
+    expect(
+      programLabel({ program: 'knowledge-and-resume', provider: 'jira', unitCount: 11 }),
+    ).toBe('program knowledge-and-resume (11 units)');
+  });
+});
 
 describe('projects command', () => {
   it('lists every discovered project as json', async () => {

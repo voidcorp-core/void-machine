@@ -11,10 +11,16 @@
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { readDecisions, readGitSignals, readProgram } from '../lib/projects/read.js';
+import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { readGitSignals } from '../lib/projects/read.js';
 import { banner, blank, c, footer, glyph, heading, line, meta } from '../lib/render.js';
 import { type Checkpoint, parseCheckpoint } from '../lib/session/checkpoint.js';
-import { composeResume, type ResumeReport } from '../lib/session/resume.js';
+import {
+  composeResumeBundle,
+  type ResumeBundle,
+  type ResumeBundleInput,
+  renderResumeContext,
+} from '../lib/session/resume-bundle.js';
 
 /** Newest location first; the previous one is read until a project migrates. */
 const CHECKPOINT_PATHS = [
@@ -52,8 +58,8 @@ function readCheckpointFile(
   return undefined;
 }
 
-function renderReport(report: ResumeReport): void {
-  const checkpoint = report.checkpoint;
+function renderHuman(bundle: ResumeBundle): void {
+  const checkpoint = bundle.checkpoint;
 
   // Every line of a prose section, not just the first: `line` indents what it is
   // given, so a paragraph handed over whole loses its shape from the second row.
@@ -93,17 +99,28 @@ function renderReport(report: ResumeReport): void {
     heading('Working set');
     for (const item of checkpoint.workingSet) line(c.dim(item));
   }
-  if (report.recentDecisions.length > 0) {
-    heading('Recent decisions');
-    for (const decision of report.recentDecisions) {
-      line(`${decision.date === undefined ? '' : `${c.dim(decision.date)}  `}${decision.title}`);
-    }
-  }
   // Gaps last and plainly: they are what the reader must NOT assume was covered.
-  if (report.gaps.length > 0) {
+  if (bundle.gaps.length > 0) {
     heading('Not answered here');
-    for (const gap of report.gaps) line(c.yellow(`${glyph.to} ${gap.detail}`));
+    for (const gap of bundle.gaps) line(c.yellow(`${glyph.to} ${gap.detail}`));
   }
+}
+
+function observeProgram(root: string): Pick<ResumeBundleInput, 'program' | 'programError'> {
+  try {
+    return { program: readProgramDescriptor(root) };
+  } catch (error) {
+    return {
+      program: undefined,
+      programError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function selectedFormat(args: readonly string[]): 'human' | 'json' | 'context' {
+  if (args.includes('--json') || args.includes('--format=json')) return 'json';
+  if (args.includes('--context') || args.includes('--format=context')) return 'context';
+  return 'human';
 }
 
 export async function resume(args: readonly string[]): Promise<void> {
@@ -117,46 +134,36 @@ export async function resume(args: readonly string[]): Promise<void> {
   }
 
   const found = readCheckpointFile(root);
-  const report = composeResume({
-    name: root.split('/').pop() ?? root,
-    path: root,
+  const git = readGitSignals(root);
+  const bundle = composeResumeBundle({
+    project: { name: root.split('/').pop() ?? root, path: root },
     now: Date.now(),
-    git: readGitSignals(root),
-    decisions: readDecisions(root),
-    ...(found === undefined
-      ? {}
-      : { checkpoint: found.checkpoint, checkpointWrittenAt: found.writtenAt }),
-    ...(() => {
-      const program = readProgram(root);
-      return program === undefined ? {} : { program };
-    })(),
+    git: { branch: git.branch, head: git.head, dirtyFiles: git.dirtyFiles },
+    ...observeProgram(root),
+    checkpoint: found?.checkpoint,
+    ...(found === undefined ? {} : { checkpointWrittenAt: found.writtenAt }),
   });
 
-  if (args.includes('--json')) {
-    process.stdout.write(`${JSON.stringify(report, undefined, 2)}\n`);
+  const format = selectedFormat(args);
+  if (format === 'json') {
+    process.stdout.write(`${JSON.stringify(bundle, undefined, 2)}\n`);
+    return;
+  }
+  if (format === 'context') {
+    process.stdout.write(renderResumeContext(bundle));
     return;
   }
 
   banner('resume');
-  meta('project', report.name);
-  meta('branch', report.branch ?? 'no git');
-  if (report.dirtyFiles > 0) meta('tree', `${String(report.dirtyFiles)} file(s) uncommitted`);
-  if (report.program !== undefined) {
-    meta(
-      'program',
-      `${report.program.program} (${String(report.program.unitCount)} units)`,
-    );
+  meta('project', bundle.project.name);
+  meta('branch', bundle.git.branch ?? 'no git');
+  if (bundle.git.dirtyFiles > 0) {
+    meta('tree', `${String(bundle.git.dirtyFiles)} file(s) uncommitted`);
   }
-  if (report.checkpointAgeDays !== undefined) {
-    meta(
-      'checkpoint',
-      report.checkpointAgeDays === 0
-        ? 'written today'
-        : `written ${String(report.checkpointAgeDays)} day(s) ago`,
-    );
-  }
+  if (bundle.program !== undefined) meta('program', bundle.program.program);
+  if (bundle.checkpoint?.date !== undefined) meta('checkpoint', bundle.checkpoint.date);
 
-  renderReport(report);
+  renderHuman(bundle);
   blank();
-  footer(report.gaps.length === 0 ? 'complete' : `${String(report.gaps.length)} gap(s)`);
+  footer(bundle.gaps.length === 0 ? 'complete' : `${String(bundle.gaps.length)} gap(s)`);
 }

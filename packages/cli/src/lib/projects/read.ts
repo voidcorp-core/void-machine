@@ -67,6 +67,7 @@ function countLines(value: string | undefined): number {
 export function readGitSignals(path: string): GitSignals {
   const branch = git(path, ['rev-parse', '--abbrev-ref', 'HEAD']);
   if (branch === undefined) return NO_GIT;
+  const head = git(path, ['rev-parse', 'HEAD']);
 
   const lastCommitRaw = git(path, ['log', '-1', '--format=%ct']);
   const lastCommitAt =
@@ -85,6 +86,7 @@ export function readGitSignals(path: string): GitSignals {
   return {
     available: true,
     branch: branch === 'HEAD' ? undefined : branch,
+    ...(head === undefined ? {} : { head }),
     dirtyFiles: countLines(git(path, ['status', '--porcelain'])),
     unpushedCommits,
     lastCommitAt,

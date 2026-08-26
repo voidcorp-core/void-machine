@@ -3,8 +3,8 @@ import type { ProgramDescriptor } from '../autopilot/program.js';
 import { parseCheckpoint } from './checkpoint.js';
 import {
   composeResumeBundle,
-  renderResumeContext,
   type ResumeBundleInput,
+  renderResumeContext,
 } from './resume-bundle.js';
 
 const NOW = Date.parse('2026-08-17T12:00:00Z');

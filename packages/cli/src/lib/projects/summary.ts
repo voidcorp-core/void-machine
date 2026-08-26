@@ -16,6 +16,7 @@ export interface GitSignals {
   /** False when the directory is not a git repository, or git is unusable. */
   readonly available: boolean;
   readonly branch: string | undefined;
+  readonly head?: string;
   readonly dirtyFiles: number;
   readonly unpushedCommits: number;
   readonly lastCommitAt: number | undefined;

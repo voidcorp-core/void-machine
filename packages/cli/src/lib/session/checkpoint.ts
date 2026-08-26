@@ -27,6 +27,7 @@ export interface Checkpoint {
   readonly assumptions: readonly string[];
   readonly workingSet: readonly string[];
   readonly branch?: string;
+  readonly head?: string;
   readonly date?: string;
   /** The single most useful sentence, for a project card. */
   readonly resumeLine?: string;
@@ -175,6 +176,7 @@ export function parseCheckpoint(raw: string): Checkpoint {
   const resumeLine = resumeSource === undefined ? undefined : clamp(resumeSource.split('\n')[0] ?? '');
 
   const branch = frontmatterField(bounded, 'branch');
+  const head = frontmatterField(bounded, 'head');
   const date = frontmatterField(bounded, 'date');
   const isEmpty =
     objective === undefined
@@ -193,6 +195,7 @@ export function parseCheckpoint(raw: string): Checkpoint {
     assumptions: listFields.assumptions ?? [],
     workingSet: listFields.workingSet ?? [],
     ...(branch === undefined ? {} : { branch }),
+    ...(head === undefined ? {} : { head }),
     ...(date === undefined ? {} : { date }),
     ...(resumeLine === undefined || resumeLine === '' ? {} : { resumeLine }),
     isEmpty,

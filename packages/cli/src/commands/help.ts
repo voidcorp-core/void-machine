@@ -68,7 +68,7 @@ export function printHelp(): void {
   cmd('check [--doctrine]', 'Report local vs remote version drift. --doctrine also diffs PHILOSOPHY.md.');
   cmd('graph <sub>', 'Build / gate / report the skill-agent graph (build, check, audit, live, behavior).');
   cmd('graph <query> <file>', 'Ask this project\'s graph: explain · path · impact · subgraph · owners · tests-for · staleness. Bounded (--max-nodes/--max-depth), read-only, and explicit when the answer may be incomplete.');
-  cmd('autopilot [sub]', 'Drain a bounded cluster of ready tickets into one integration PR you merge. plan · start · status · resume · abort; --json for the skill. Resumes from plans/ACTIVE.md, so no ticket or run id is passed.');
+  cmd('autopilot [sub]', 'Drain a bounded cluster of ready work units into one integration PR you merge. plan · start · status · resume · abort; --json for the skill. Resumes from .void/program.md, so no unit or run id is passed.');
   cmd('audit', 'Self-evolution audit: surface stale / never-fired skills as deprecation candidates. HITL.');
   cmd('projects', 'Every Void project on this machine and where attention is owed. Offline projection, never writes; --json for a served view.');
   cmd('resume', 'Pick this project back up: the session checkpoint, recent decisions, and what is NOT answered. Reads, never guesses.');

@@ -141,7 +141,11 @@ Use this only for a standalone sequential plan that is not decomposed into track
 
 The next session reads the resume point and continues.
 
-For a tracker-backed multi-ticket program, do not maintain a second mutable next-step pointer in the plan. Instead, add a final `Execution handoff` table that gives each plan unit a stable order key, title, dependency keys, estimate, and human-gate flag. After `void-ticket` creates the native tickets and dependency relations, it installs `.void/active.md`; the tracker then owns current state and the next ready ticket.
+For a provider-backed multi-unit programme, do not maintain a second mutable next-step pointer in
+the plan. Instead, add a final `Execution handoff` table that gives each plan unit a stable order
+key, title, dependency keys, estimate, and human-gate flag. After `void-ticket` creates the native
+units and dependency relations, it installs `.void/program.md`; the declared progress provider
+then owns current state and readiness.
 
 ---
 
@@ -175,11 +179,12 @@ Wait for response. If changes requested, make them and re-run self-review.
 
 After plan approval, transition to:
 
-- **`void-ticket`** when the plan becomes multiple tracker tickets. It writes native dependencies and the active-program pointer after the pool is approved.
+- **`void-ticket`** when the plan becomes multiple provider-native units. It writes native dependencies and the programme descriptor after the pool is approved.
 - **`void-implement`** for a named single ticket or standalone implementation unit.
 - **`void-autopilot`** only when the user requests its attended independent-ticket flow.
 
-For a tracker-backed program, later sessions recover work from the tracker through `.void/active.md`; they do not mutate the plan to repoint the next ticket.
+For a provider-backed programme, later sessions recover work through `.void/program.md` and the
+declared progress adapter; they do not mutate the plan or checkpoint to repoint the next unit.
 
 ---
 

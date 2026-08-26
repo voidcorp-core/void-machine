@@ -48,18 +48,19 @@ So the first move is triage. For every fact you are tempted to write down:
 
 | The fact is… | It belongs in | Never in the checkpoint |
 |---|---|---|
-| Execution state — status, assignee, blockers, links | the **tracker** | a hand-maintained "next ticket" |
+| Execution state — status, assignee, blockers, links | the declared **progress source** | a hand-maintained current or next unit |
+| Global programme context, phase, plan and spec | **`.void/program.md`** | a session observation |
 | What the code now does | the **diff and its commit messages** | a prose summary of the change |
 | A durable rule, preference, or convention | **doctrine** (via `void-learn`) | a paragraph the next session must re-read forever |
-| A cross-session fact about the user or the project | **memory** | a fact re-stated every session |
 | A design decision with a credible alternative | an **ADR** | a bullet that loses its reasoning |
 
 What survives that filter is the checkpoint's actual subject: **the things no artefact holds** —
 the dead ends, the unproven assumptions, the freshness of your evidence, and the exact next
 move. That list is short. A checkpoint that is long has failed the triage.
 
-If the routing sends something to the tracker or to doctrine, write it there **first**, then
-reference it. A checkpoint that promises "I'll file this later" is where facts go to die.
+If routing sends something to a shared owner, propose that write and get the required human
+approval before applying it. When the owner is available, write it there **first**, then reference
+it. A checkpoint that promises "I'll file this later" is where facts go to die.
 
 ---
 
@@ -71,8 +72,8 @@ item of the residue, not the whole of it.
 
 In this order, because it is the order the next session needs it.
 
-**1. Where you are.** Branch, worktree, the ticket or unit, and whether anything is uncommitted.
-One line. If the working tree is dirty, say exactly which files and why they were left that way
+**1. Where you are.** Branch, worktree, and whether anything is uncommitted. One line. If the
+working tree is dirty, say exactly which files and why they were left that way
 — an unexplained dirty tree reads as an interrupted edit and gets discarded.
 
 **2. What is proven, and against what.** Not "tests pass". Which command, on which commit. A
@@ -96,6 +97,8 @@ one with who or what unblocks it.
 **6. The next action.** Exactly one, exact enough to execute: a command to run, a file and line
 to open, a specific question to ask. "Continue the ticket" is not a next action. "Run
 `pnpm vitest run x.test.ts`; it fails on the third case because the fixture has no `id`" is.
+This is the first physical move for the next session, never a duplicated current or next unit and
+never a priority decision.
 
 ---
 
@@ -119,7 +122,7 @@ Read what you wrote as if you had never seen this work. Then:
 
 1. **Can a stranger take the next action without asking a question?** If not, the next action is
    not specific enough.
-2. **Does any line duplicate the tracker, the diff, or doctrine?** Delete it and link instead.
+2. **Does any line duplicate the progress source, program, diff, or doctrine?** Delete it and link instead.
 3. **Is every claim either proven-with-evidence or labelled as an assumption?**
 4. **Would someone reading only this repeat one of your dead ends?** If yes, the dead end is
    missing or too vague.
@@ -132,42 +135,33 @@ A checkpoint that fails any of these is not shorter than one that passes — it 
 
 ## Where it is written
 
-Follow the project's own convention if it has one. Absent that:
+Write the session residue to **`.void/machine/checkpoint.md`**. This is the canonical local
+checkpoint consumed by `ResumeBundle`; REPLACE it each time rather than appending. It answers one
+question: *what was happening just before the stop*. It lives under `machine/` and is NOT
+committed because it describes one machine at one moment.
 
-- **The tracker** carries the resume comment for the unit in flight: branch, last verified
-  result, remaining work, blocker, exact next action. It is the only place that survives a lost
-  clone, and it is where the work is already tracked.
-- **Memory** carries what outlives this unit: a resume point, a standing constraint, a fact
-  about the project. Replace the previous resume note rather than stacking a new one — two
-  resume points is the same failure as two copies of state.
-- **`.void/machine/checkpoint.md`** — this skill's own file, when the project has no convention
-  of its own. It answers one question, *what was happening just before the stop*, and it is
-  REPLACED each time rather than appended to: history belongs to git and the tracker, and a
-  second timeline is a second thing to keep true.
+The checkpoint has no network dependency. If the declared progress source or provider is
+unavailable, record that unresolved gap when it matters and still write
+`.void/machine/checkpoint.md`. Do not turn an unavailable provider into a reason to lose the
+session residue.
 
-  It exists because the two destinations above are invisible where it matters. Memory is
-  machine-local, the tracker needs the network, and neither can be read by `void-harness resume`
-  or by the projects view — which is exactly what someone returning to one of several projects
-  is looking at. It is a pointer, never a journal.
-
-  It lives under `machine/` and is NOT committed: it records what one machine was doing, so
-  committing it would guarantee a conflict on a file rewritten every evening while helping
-  nobody else.
-
-- **A different file in the repo** when the project asks for one.
+`.void/program.md` remains the versioned global view: programme identity, plan, spec and optional
+progress locator. The program and checkpoint never store a current or next unit. Mutable progress
+stays with the declared provider; the checkpoint's exact next action is only a local physical
+resume move.
 
 One destination per fact. If you cannot decide, the fact probably failed Step 0.
 
 ### The checkpoint's shape
 
-`##` sections, any subset, read leniently. Frontmatter carries `date` and `branch`; the branch
-matters because a checkpoint written on another one describes work that is not in front of the
-reader, and `resume` says so.
+`##` sections, any subset, read leniently. Frontmatter carries `date`, `branch` and `head`; branch
+and HEAD bind the evidence to the tree it describes, and `resume` reports when either moved.
 
 ```markdown
 ---
 date: 2026-08-17
 branch: folpe/dev-621-resume
+head: a1b2c3d
 ---
 
 ## Objective        What this session was for. One line.
@@ -190,15 +184,16 @@ checkpoint back is the cheapest test of whether it was worth writing.
 
 ## HITL
 
-This skill proposes; the human decides. Show the checkpoint before writing it anywhere shared, and
-do not move tracker state as a side effect of closing a session — a session ending is not a unit
-completing. Never write a checkpoint that claims work is done when it is merely stopped.
+This skill proposes shared writes; the human decides. The local checkpoint is the requested
+shutdown artefact. Do not move provider state as a side effect of closing a session — a session
+ending is not a unit completing. Never write a checkpoint that claims work is done when it is
+merely stopped.
 
-**Why there is no automatic hook.** Closing is a judgement about a unit of work, and no runtime
-signal reliably means "session over" — a stop event fires on interruptions, on context limits,
-and on completed turns alike. A checkpoint written on a false positive is worse than none: it looks
-authoritative and describes a moment nobody chose. The trigger is the human, or your own reading
-of the conversation.
+**Why hooks never write it.** `UserPromptSubmit` detects explicit close intent and can remind the
+model to invoke this skill before the closing response. `SessionEnd` can only audit checkpoint
+presence, freshness, branch and HEAD after the model is gone. Neither hook has the semantic context
+to invent dead ends, assumptions or a next action, so both stay advisory and hooks never write a
+checkpoint. A command such as `/clear` can still bypass the prompt hook; invoke this skill first.
 
 ---
 
@@ -211,14 +206,13 @@ of the conversation.
 | "I'll write the checkpoint when I actually need it" | You need it precisely when you can no longer write it. |
 | "Let me summarize the whole session" | A narrative of what happened is not a plan for what is next. Route, then write the residue. |
 | "Everything is green" | Green against which commit, from which command? A stale proof is worse than no proof, because it is trusted. |
-| "The ticket says it all" | Then say so in one line and stop — but check that the ticket really carries the blocker and the next action, rather than assuming it does. |
+| "The progress source says it all" | Then keep the checkpoint to the local residue, but verify that the provider really carries mutable status and blockers rather than assuming it does. |
 | "I'll note the dead end if it comes up again" | It comes up again in the next session, as a fresh idea, and costs the same hour twice. |
 
 ---
 
 ## Composition
 
-Upstream: whatever produced the work. Adjacent: `void-learn` takes the durable rules out
-of the session before the checkpoint is written — a lesson belongs in doctrine, not in a note the
-next session has to re-read. Downstream: the next session reads the tracker and the memory, not
-this skill.
+Upstream: whatever produced the work. Adjacent: `void-learn` takes durable rules out of the
+session; `void-decide` takes structural choices. Downstream: `ResumeBundle` composes the programme,
+this checkpoint and Git into the context read by the CLI and both runtimes.

@@ -171,19 +171,18 @@ et la disposition du journal.
 
 ## Resume point
 
-**Next step**: Step 1 (Livrer le programme canonique avec sa compatibilite de lecture)
+**Next step**: Checkpoint A (attendre le signal utilisateur, puis commencer Step 5)
 
 **Completed**:
 
 - Spec approuvee: `docs/specs/2026-08-26-program-resume-contract.md`.
 - Audit ADR termine: `docs/plans/2026-08-26-decision-log-audit.md`.
+- Steps 1 a 4: programme canonique, ResumeBundle, hooks de cycle de vie, puis alignement du skill
+  checkpoint et des instructions installees.
 
 **Pending**:
 
-- Step 1: Programme canonique et compatibilite.
-- Step 2: ResumeBundle.
-- Step 3: Hooks de cycle de vie.
-- Step 4: Skill et instructions installees.
+- Checkpoint A: validation humaine des contrats observes.
 - Step 5: Garde-fou ADR.
 - Step 6: Disposition et migrations ADR.
 - Step 7: Correctif Biome en paire RED/GREEN.

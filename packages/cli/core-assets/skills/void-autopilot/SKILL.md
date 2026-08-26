@@ -20,7 +20,7 @@ inside autopilot, stop: that behaviour has one owner, and duplicating it means t
 drift and tickets get a different standard depending on how they were started.
 
 It also never merges. Not with a flag, not when the checks are green, not when the diff is
-small. `mergeGate: human` is the only value the active program accepts.
+small. `mergeGate: human` is the only value the programme descriptor accepts.
 
 ---
 
@@ -37,7 +37,7 @@ spawns no agent. Every input and output carries `schemaVersion: 1`.
 **The adapters.** Claude executes the orchestration plan with its Workflow primitive, Codex
 with native subagents. Both read the *same* `OrchestrationPlan` and return the *same*
 `WorkerResult`. An adapter that is missing, or a permission that cannot be proven, returns
-`unsupported-runtime` before any tracker mutation.
+`unsupported-runtime` before any progress-provider mutation.
 
 **The workers.** One ticket, one worktree, one branch, one full `void-implement` run.
 
@@ -45,12 +45,12 @@ with native subagents. Both read the *same* `OrchestrationPlan` and return the *
 
 ## Where the target comes from
 
-The run takes no argument in the normal case. `.void/active.md` names the tracker, the scope and
-the base, so there is nothing to repoint and nothing to ask: not which ticket, not which cluster,
-not which run id, not which tracker.
+The run takes no argument in the normal case. `.void/program.md` names the progress provider, its
+opaque scope and the base, so there is nothing to repoint and nothing to ask: not which work unit,
+not which cluster, not which run id, not which provider.
 
-That file is also the consent, and consent is never inferred. An absent `.void/active.md`, a
-`status` other than `executing`, an `void-autopilot` block that is missing or unreadable, or
+That file is also the consent, and consent is never inferred. An absent `.void/program.md`, a
+`status` other than `executing`, an `autopilot` block that is missing or unreadable, or
 `autopilot.enabled: false` all mean the same thing — say so and stop. Inventing a target here
 claims tickets nobody agreed to hand over.
 
@@ -159,6 +159,6 @@ plan itself, not only in the prompt, so an adapter that honours the plan cannot 
 
 ## Composition
 
-Upstream: `void-ticket` authors the tickets and the active program pointer.
+Upstream: `void-ticket` authors the work units and the program descriptor.
 Per ticket: `void-implement`, entire, once. Downstream: the reconciler owns the
 integration branch, the suite and the PR. The human owns the merge.

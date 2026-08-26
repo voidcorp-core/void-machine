@@ -4,7 +4,7 @@
 
 ## void-harness (managed by `void-harness init`)
 
-Marketplace: `voidcorp` (https://github.com/voidcorp-core/void-harness). Codex doctrine active in this project:
+Codex doctrine active in this project:
 
 - `void` — universal craftsman skills (TDD, TypeScript strict, hexagonal, DDD, ...)
 
@@ -17,9 +17,11 @@ Marketplace: `voidcorp` (https://github.com/voidcorp-core/void-harness). Codex d
 
 To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.
 
-### Active program — when present
+Every skill is invoked by its name: `$void-implement`, `$void-tdd`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.
 
-If `.void/active.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. On a continue/start/resume request without a named ticket, recover the scoped ticket if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready ticket from the declared order and native blocker relations. Fetch the complete ticket before running `void-implement`. The tracker owns mutable execution state: keep status, assignee, blockers, resume comments, and evidence/PR links current; ACTIVE never stores a current or next ticket. If the tracker cannot be read or updated, stop rather than infer progress locally. A specific user request overrides selection; human gates and merges remain human. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
+### Program — when present
+
+If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human gates and merges remain human. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
 
 Run `void-harness doctor` to verify the install.
 
@@ -44,22 +46,24 @@ A **public, MIT** harness installed free and account-free via `npx voidharness` 
 3. `docs/ARCHITECTURE.md` — package boundaries + dependency direction
 4. `docs/specs/` and `docs/plans/` — approved designs, and how each was executed
 
-## Active program bootstrap
+## Program bootstrap
 
-`.void/active.md` is the durable cross-session handoff when it exists with
-`status: executing`. Before choosing implementation work, read it, then read the global plan and
-spec it references. If the user asks to continue, start, or resume without naming a ticket, do not
-ask them to repoint the session:
+`.void/program.md` is the durable global programme descriptor when it exists with
+`status: executing`. Before choosing implementation work, read its global plan and spec.
+`ResumeBundle` composes that context with the local checkpoint and Git.
 
-1. query the configured tracker scope and recover any already-started ticket;
-2. otherwise select the next ready ticket from native tracker state and `blockedBy` relations;
-3. fetch the complete ticket and relations before acting;
-4. execute that unit with `void-implement`;
-5. keep the tracker state, assignee, evidence/PR links, blockers, and resume comment current.
+If the user asks to continue, start, or resume without naming a work unit:
 
-The tracker owns mutable execution state; `.void/active.md` never stores a hand-maintained “next
-ticket”. If the tracker is unavailable, stop rather than infer progress locally. A specific user
-request overrides automatic selection. Human gates and merges remain human.
+1. use the declared progress adapter and recover exactly one already-started scoped unit;
+2. if several units are started, stop and surface the competing claims;
+3. otherwise select the first ready unit from the declared order and native blocker relations;
+4. fetch the complete provider-native unit and relations before running `void-implement`;
+5. keep mutable provider state and review evidence current when the adapter supports them.
+
+The declared provider owns mutable progress. The programme and checkpoint never store a current or
+next unit. If no provider is declared, require a specific unit; if a required capability is
+unavailable, stop that action rather than infer remote progress. A specific user request overrides
+automatic selection. Human gates and merges remain human.
 
 ## Anti-bloat discipline
 

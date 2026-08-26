@@ -84,3 +84,18 @@ left in a handoff is a lesson the next session must re-read forever.
 `void-retrospective` looks back across a window of work to change how the team operates.
 `void-checkpoint` looks forward across a single boundary to let one unit continue. Different
 horizon, different reader, different output — no overlap to police.
+
+## 2026-08-26 — programme and advisory-hook alignment
+
+The original audit coupled routing to a tracker plus memory and rejected an automatic SessionEnd
+writer. The semantic rejection still stands; the ownership vocabulary changed:
+
+- `.void/program.md` owns versioned global context and an optional opaque progress locator;
+- the declared progress provider owns mutable unit state when its adapter is available;
+- `.void/machine/checkpoint.md` is always written locally for open session residue, even offline;
+- `ResumeBundle` composes programme, checkpoint and Git for both runtimes and the CLI;
+- `UserPromptSubmit` only reminds on explicit close intent, while `SessionEnd` only audits. Neither
+  hook writes semantic state or calls another model.
+
+Rejected: storing a current or next unit in either durable file, blocking a local checkpoint on
+provider availability, or treating a session close as completion.

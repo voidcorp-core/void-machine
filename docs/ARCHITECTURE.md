@@ -153,33 +153,35 @@ Rules:
   See the ownership-is-union-of-receipt-and-manifest decision.
 - `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
 
-### Consumer active-program handoff
+### Consumer programme and session handoff
 
 Every generated `CLAUDE.md` or `AGENTS.md` carries the same conditional bootstrap: if
-`.void/active.md` exists with `status: executing`, the runtime reads its plan and spec before
-choosing implementation work. A plain continue/start/resume request recovers exactly one started
-scoped ticket, or selects the first ready ticket from the pointer's stable issue order and the
-tracker’s native blocker relations. The complete ticket is then executed through `void-implement`.
-More than one started scoped ticket is a competing-claim error, never an implicit selection.
+`.void/program.md` exists with `status: executing`, the runtime reads its plan and spec before
+choosing implementation work. `ResumeBundle` composes that versioned global context with the local
+checkpoint and Git. A plain continue/start/resume request uses the declared progress adapter to
+recover exactly one started scoped unit, or selects the first ready unit from the stable order and
+native blocker relations. More than one started unit is a competing-claim error.
 
-The pointer is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
-mutate it. `void-ticket` creates it only after a human-approved multi-ticket plan has been fully
-materialized in a capable tracker. It stores immutable routing only: program, plan/spec links,
-provider scope, ordered ticket identifiers, lifecycle-state names, human gates, and the required
-`void-autopilot` consent block. Mutable status, assignee, blockers, resume comments, and PR/evidence
-links live only in the tracker.
+The programme is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
+mutate it. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
+materialized in a capable progress provider. It stores durable context and routing only: programme,
+plan/spec links, provider scope, ordered unit identifiers, lifecycle-state roles, human gates, and
+the required `autopilot` consent block. Mutable status, assignee, blockers, comments, and review
+evidence live only in the provider.
 
-`packages/cli/src/lib/autopilot/active-program.ts` is the only parser of that contract. It
+`packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
 validates every field on read and refuses a file that is present but wrong, rather than falling
 back to a default: a typo in `mergeGate` must never be what hands a merge to a machine. Paths
 declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
 a YAML syntax.
 
-Automatic continuity is capability-gated rather than Linear-specific: the configured provider
+Automatic continuity is capability-gated rather than Linear-specific: the declared provider
 must support reading and updating status, relations, assignee, comments, and review evidence. If
-that surface is unavailable, the runtime stops instead of inferring progress from local files.
+that surface is unavailable, the runtime stops the remote action instead of inferring progress
+from local files. `.void/machine/checkpoint.md` is replaced at a deliberate session close and stays
+readable offline; neither it nor the programme stores a current or next unit.
 Human gates and merges remain human. A standalone ticket or sequential plan keeps using its normal
-ticket or resume-point flow and does not need an active pointer.
+ticket or resume-point flow and does not need a programme descriptor.
 
 ### Source self-host boundary
 
@@ -848,7 +850,7 @@ the records carry the reasoning at each step.**
 
 | class | what it means | examples | git |
 | --- | --- | --- | --- |
-| `project` | the project authors it; the harness never overwrites it | `.void/config.json`, `.void/PROJECT-DOCTRINE.md`, `.void/active.md`, `.claude/settings.json` | tracked |
+| `project` | the project authors it; the harness never overwrites it | `.void/config.json`, `.void/PROJECT-DOCTRINE.md`, `.void/program.md`, `.claude/settings.json` | tracked |
 | `derived` | `void-harness init` re-materializes it from the harness assets | `.claude/skills/`, `.claude/agents/`, `.agents/skills/`, `.codex/agents/`, `.void/installed/PHILOSOPHY.md` | ignored, per receipt |
 | `observed` | this machine's history; meaningless in another checkout | `machine/runs/`, `machine/cache/`, `machine/receipts/`, `machine/status.json`, `machine/retired/*.jsonl` | never |
 

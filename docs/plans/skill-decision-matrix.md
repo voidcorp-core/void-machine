@@ -201,10 +201,10 @@ The single canonical definition of "execute one ticket well" — one ticket take
 
 ### `checkpoint`
 
-- **Wins**: closing a session with work still open. Routes each piece of state to whatever already owns it (tracker, PR, branch, plan), writes down only the residue nothing else holds — chiefly what was *ruled out* and why — and ends on one exact next action.
+- **Wins**: closing a session with work still open. Routes each fact to the programme, declared progress provider, diff, doctrine or ADR; writes only the local residue nothing else holds — chiefly what was *ruled out* and why — and ends on one exact physical next action.
 - **Loses to**: `learn` on a lesson that outlives this session (that is a doctrine or harness question, not a handoff note); `ticket` on work that deserves its own ticket rather than a paragraph.
-- **Cannot decide**: whether the work itself is done (`verify` owns that); what the next priority is (the tracker and the human own it).
-- **Composes with**: `context` (the handoff is what survives a context reset), `verify` (runs first — a handoff states what is proven, not what is hoped), `learn` (durable lessons routed out of the note).
+- **Cannot decide**: whether the work itself is done (`verify` owns that); what the next priority or unit is (the progress provider and the human own it).
+- **Composes with**: `context` and `ResumeBundle` (the checkpoint survives a reset), `verify` (runs first — a checkpoint states what is proven, not what is hoped), `learn` (durable lessons routed out of the note).
 
 ### `ticket`
 

@@ -51,12 +51,12 @@ describe('checkpoint frontmatter', () => {
 });
 
 describe('routing comes before writing', () => {
-  it('sends execution state to the tracker rather than into the handoff', () => {
-    expect(flat(body(SKILL))).toMatch(/Execution state[\s\S]{0,80}tracker/i);
+  it('sends execution state to the declared progress source rather than into the checkpoint', () => {
+    expect(flat(body(SKILL))).toMatch(/Execution state[\s\S]{0,100}progress source/i);
   });
 
   it('names every authoritative destination, so the residue is what is left', () => {
-    for (const destination of ['tracker', 'diff', 'doctrine', 'memory', 'ADR']) {
+    for (const destination of ['program', 'progress source', 'diff', 'doctrine', 'ADR']) {
       expect(body(SKILL), destination).toMatch(new RegExp(destination, 'i'));
     }
   });
@@ -90,11 +90,10 @@ describe('what it refuses to become', () => {
     expect(flat(body(SKILL))).toMatch(/not a plan for what is next/i);
   });
 
-  it('states why no automatic hook writes it', () => {
-    // A stop event cannot tell an interruption from a closed unit of work, and a
-    // handoff written on a false positive is authoritative and wrong.
-    expect(flat(body(SKILL))).toMatch(/no automatic hook/i);
-    expect(flat(body(SKILL))).toMatch(/false positive/i);
+  it('keeps lifecycle hooks advisory and reserves semantic writing for the skill', () => {
+    expect(flat(body(SKILL))).toMatch(/UserPromptSubmit[\s\S]{0,160}remind/i);
+    expect(flat(body(SKILL))).toMatch(/SessionEnd[\s\S]{0,160}audit/i);
+    expect(flat(body(SKILL))).toMatch(/hooks? never write/i);
   });
 
   it('keeps closing a session apart from completing a unit of work', () => {
@@ -103,6 +102,21 @@ describe('what it refuses to become', () => {
 
   it('refuses to carry a secret into a shared destination', () => {
     expect(flat(body(SKILL))).toMatch(/secret[\s\S]{0,120}redact/i);
+  });
+});
+
+describe('program and checkpoint ownership', () => {
+  it('writes the canonical local checkpoint even when the progress provider is offline', () => {
+    expect(flat(body(SKILL))).toMatch(/progress (?:source|provider)[\s\S]{0,180}unavailable/i);
+    expect(flat(body(SKILL))).toMatch(/still write[\s\S]{0,100}\.void\/machine\/checkpoint\.md/i);
+  });
+
+  it('keeps current and next units out of both durable files', () => {
+    expect(flat(body(SKILL))).toMatch(/program[\s\S]{0,120}checkpoint[\s\S]{0,160}current or next unit/i);
+  });
+
+  it('binds the checkpoint to both branch and HEAD', () => {
+    expect(flat(body(SKILL))).toMatch(/frontmatter[\s\S]{0,100}branch[\s\S]{0,40}head/i);
   });
 });
 

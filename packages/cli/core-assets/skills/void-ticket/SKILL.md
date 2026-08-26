@@ -79,26 +79,31 @@ Native tracker fields (REQUIRED, set the real field, not prose):
 
 ---
 
-## Multi-ticket active-program handoff
+## Multi-ticket programme handoff
 
-After creating a complete pool of two or more tracker tickets intended to run across sessions, create `.void/active.md` in the same change. Do this only after the plan and ticket pool are human-approved and every native dependency is saved. A single standalone ticket does not need an active pointer.
+After creating a complete pool of two or more tickets intended to run across sessions, create
+`.void/program.md` in the same change. Do this only after the plan and ticket pool are
+human-approved and every native dependency is saved. A single standalone ticket does not need a
+programme descriptor.
 
 Use tracker-agnostic routing frontmatter:
 
 ```yaml
 ---
+schemaVersion: 1
 status: executing
 program: <stable-program-slug>
 plan: <repository-relative-plan-path>
 spec: <repository-relative-spec-path>
-tracker:
-  provider: <linear | github | jira | other>
+progress:
+  provider: <adapter capability id>
   scope: <native workspace/project/repository query>
-  issues: [<ordered immutable ticket identifiers>]
-  readyStates: [<native ready states>]
-  startedState: <native started state>
-  reviewState: <native review state>
-  doneStates: [<native completed states>]
+  order: [<ordered immutable work-unit identifiers>]
+  states:
+    ready: [<native ready states>]
+    started: [<native started states>]
+    review: [<native review states>]
+    done: [<native completed states>]
 humanGates: [<ticket identifiers requiring explicit approval>]
 autopilot:
   schemaVersion: 1
@@ -107,11 +112,19 @@ autopilot:
 ---
 ```
 
-The body states that the plan supplies global intent, the complete tracker ticket is the executable unit, native blocker relations decide readiness, and `void-implement` owns the per-ticket lifecycle. `tracker.issues` is the deterministic tie-break order among simultaneously ready tickets; it is scope, not mutable progress. Never store a current/next ticket, copied status, assignee, or completion checklist in ACTIVE.
+The body states that the plan supplies global intent, the complete provider-native record is the
+executable unit, native blocker relations decide readiness, and `void-implement` owns the per-unit
+lifecycle. `progress.order` is the deterministic tie-break among simultaneously ready units; it is
+scope, not mutable progress. Never store a current or next unit, copied status, assignee, or
+completion checklist in the program or checkpoint.
 
 The `void-autopilot` block is required, because consent to autonomous execution is never inferred from silence: a program that does not want it declares `enabled: false`. `mergeGate: human` is the only accepted value. Add `clusterSize` (1..4), `base`, `verifyCommands` (argv arrays, run with `shell:false`) and `ownership.sequential` / `ownership.reconcileOnly` only when the program enables autopilot.
 
-Do not replace an unrelated executing pointer. Stop and surface the collision. When the same program already has an ACTIVE file, preserve its immutable routing unless the user explicitly changes program scope. Automatic selection requires a tracker surface that can read and update status, relations, assignee, comments, and PR/evidence links; if those capabilities are unavailable, do not claim automatic continuity.
+Do not replace an unrelated executing programme. Stop and surface the collision. When the same
+programme already has a descriptor, preserve its routing unless the user explicitly changes
+programme scope. Automatic selection requires a provider adapter that can read and update status,
+relations, assignee, comments, and review evidence; if those capabilities are unavailable, do not
+claim automatic continuity.
 
 ---
 

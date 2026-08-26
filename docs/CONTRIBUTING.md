@@ -50,39 +50,41 @@ Self-host rollout modes are `shadow`, `warn`, `enforce`, and `release-gate`.
 native runtime executables that are unavailable remain an explicit degraded
 state until their dedicated certification lane.
 
-## Active program handoff
+## Programme and session handoff
 
-An executing multi-session program may install a single `.void/active.md` pointer. Root
-`AGENTS.md` and `CLAUDE.md` load it before choosing implementation work, so a later session can
-resume from a plain “continue” without being told the plan or ticket again.
+An executing multi-session programme may install one versioned `.void/program.md` descriptor.
+Root `AGENTS.md` and `CLAUDE.md` load its global plan and spec; `ResumeBundle` composes it with the
+local `.void/machine/checkpoint.md` and Git so a later session can resume from a plain “continue”.
 
-The active file records immutable routing only: global plan, approved spec, tracker provider and
-native scope, issue order, ready/started/review/done states, selection policy, lifecycle rules,
-human gates, and the `void-autopilot` consent block. It does not duplicate a mutable “next ticket”. The
-tracker is the execution ledger:
+The programme records durable context and routing: global plan, approved spec, optional progress
+provider and opaque scope, stable unit order, native ready/started/review/done roles, human gates,
+and the `void-autopilot` consent block. It does not duplicate a mutable current or next unit. The
+declared progress provider is the execution ledger:
 
-- recover an existing `In Progress` issue before claiming new work;
-- claim the selected ready issue in `In Progress` and assign it before editing;
-- add a bounded resume comment when a session stops with work unfinished;
-- attach the PR/evidence and move to `In Review` only after the ticket gates pass;
-- move to `Done` only after merge and final verification;
+- recover exactly one unit in the declared started role before claiming new work;
+- claim the selected ready unit in the provider's started role before editing;
+- keep native blockers, ownership, comments and review evidence truthful when supported;
+- move to the declared review role only after the unit gates pass;
+- move to the declared done role only after merge and final verification;
 - never auto-complete a human gate.
 
-The `void-autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 1`,
+The `autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 1`,
 an explicit `enabled`, and `mergeGate: human`. A program that does not want autopilot declares
 `enabled: false` rather than omitting the block, because consent is never inferred from silence.
-`packages/cli/src/lib/autopilot/active-program.ts` is the single parser of this contract, and its
-tests validate this repository's own `.void/active.md` so the schema and the file cannot drift.
+`packages/cli/src/lib/autopilot/program.ts` is the single parser of this contract, and its tests
+validate this repository's own `.void/program.md` so the schema and the file cannot drift.
 
-Ready means every native `blockedBy` relation is complete. If tracker reads or writes fail, the
-session stops instead of maintaining a competing local pointer. A specific user request still
-overrides automatic selection. When every scoped issue and human gate is complete, the final
-program change marks `.void/active.md` completed; it never repoints itself to unrelated work.
+Ready means every native blocker relation is complete. If a required provider capability is
+unavailable, only the action needing it stops; programme and checkpoint remain readable offline.
+A specific user request still overrides automatic selection. When every scoped unit and human gate
+is complete, the final programme change marks `.void/program.md` completed; it never repoints
+itself to unrelated work.
 
 The same protocol ships to consumer projects through the managed runtime-doc block. It is
-provider-agnostic and dormant unless the consumer has a project-owned `.void/active.md` with
-`status: executing`; `ticket-writer` creates that pointer only after an approved multi-ticket pool
-and native dependencies exist.
+provider-agnostic and dormant unless the consumer has a project-owned `.void/program.md` with
+`status: executing`; `void-ticket` creates that descriptor only after an approved multi-unit pool
+and native dependencies exist. The local checkpoint is replaced on a deliberate session close and
+never carries the current or next unit.
 
 ## Commits
 

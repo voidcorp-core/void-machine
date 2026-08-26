@@ -62,6 +62,6 @@ describe('printHelp', () => {
   });
 
   it('says autopilot resumes on its own, because that is what makes it usable', () => {
-    expect(capture()).toMatch(/ACTIVE\.md/);
+    expect(capture()).toContain('.void/program.md');
   });
 });

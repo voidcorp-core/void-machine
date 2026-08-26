@@ -22,15 +22,17 @@ describe('harnessBlock', () => {
     expect(block).toContain('read at the start');
   });
 
-  it.each(['claude', 'codex'] as const)('installs the active-program bootstrap for %s', (runtime) => {
+  it.each(['claude', 'codex'] as const)('installs the provider-agnostic program bootstrap for %s', (runtime) => {
     const block = harnessBlock(input, runtime);
     const runner = '`void-implement`';
-    expect(block).toContain('`.void/active.md`');
+    expect(block).toContain('`.void/program.md`');
     expect(block).toContain('`status: executing`');
-    expect(block).toContain('The tracker owns mutable execution state');
+    expect(block).toContain('declared progress provider owns mutable execution state');
     expect(block).toContain(runner);
     expect(block).toContain('competing claims');
-    expect(block).toContain('stop rather than infer progress locally');
+    expect(block).toContain('do not infer remote progress');
+    expect(block).toContain('current or next unit');
+    expect(block).toContain('checkpoint');
     // Consent is never inferred from silence: without an enabled autopilot
     // block, no autonomous selection may happen at all.
     expect(block).toContain('autopilot');

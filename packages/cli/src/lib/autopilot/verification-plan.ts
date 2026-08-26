@@ -1,7 +1,7 @@
 // The local suite that must be green before anything is pushed.
 //
 // Every command runs as argv with `shell:false`. Not as a precaution: a verify
-// command comes from the project's own ACTIVE.md, and a shell would turn a path
+// command comes from the project's own programme descriptor, and a shell would turn a path
 // with a space into two arguments and a semicolon into a second command. argv
 // removes the class rather than escaping it.
 //

@@ -9153,7 +9153,7 @@ var VOID_OWNERSHIP = Object.freeze({
   // the top is committed" a rule you can see rather than one you must look up.
   "config.json": "project",
   "PROJECT-DOCTRINE.md": "project",
-  "active.md": "project",
+  "program.md": "project",
   knowledge: "project",
   // Plans, despite the name. Measured on sesame: eight committed `.plan.md`
   // files carrying frozen model decisions that still govern its schema. Read as

@@ -68,6 +68,15 @@ describe('the active program', () => {
   });
 });
 
+describe('the provider-agnostic program boundary', () => {
+  it('names the program contract without prescribing a tracker product', () => {
+    const check = named(autopilotPreflight(observation({ activeProgram: null })), 'autopilot program');
+
+    expect(check?.message).toMatch(/\.void\/program\.md/);
+    expect(check?.message).not.toMatch(/Linear|ACTIVE/);
+  });
+});
+
 describe('the merge gate', () => {
   it('accepts only a human gate', () => {
     const results = autopilotPreflight(
@@ -244,7 +253,7 @@ describe('the doctor wiring', () => {
   it('runs the preflight only for a project that declares a program', () => {
     // Seven extra checks on every project would be noise about a feature they
     // do not use, and would make `doctor` look broken where nothing is wrong.
-    expect(DOCTOR).toMatch(/plans', 'ACTIVE\.md'\)\)\) \{\n\s*checks\.push\(\.\.\.autopilotPreflight/);
+    expect(DOCTOR).toMatch(/programPath\(root\).*checks\.push\(\.\.\.autopilotPreflight/s);
   });
 
   it('probes nothing remote, because --no-remote promises an offline run', () => {

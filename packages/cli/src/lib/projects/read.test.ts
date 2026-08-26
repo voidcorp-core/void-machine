@@ -94,7 +94,7 @@ describe('readProjectSummary', () => {
     expect(summary.name).toBe('bare');
     expect(summary.decisions.format).toBe('none');
     expect(summary.planCount).toBe(0);
-    expect(summary.activeProgram).toBe(undefined);
+    expect(summary.program).toBe(undefined);
     expect(summary.resumeLine).toBe(undefined);
   });
 
@@ -141,27 +141,29 @@ describe('readProjectSummary', () => {
     );
   });
 
-  it('counts plans and surfaces an executing program', () => {
+  it('counts plans and surfaces an executing provider-agnostic program', () => {
     const dir = repo('programme');
-    mkdirSync(join(dir, 'plans'), { recursive: true });
-    writeFileSync(join(dir, 'plans', 'a-plan.md'), '# plan\n');
+    mkdirSync(join(dir, 'docs', 'plans'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'plans', 'a-plan.md'), '# plan\n');
     writeFileSync(
-      join(dir, 'plans', 'ACTIVE.md'),
-      '---\nstatus: executing\nprogram: demo\ntracker:\n  issues: [X-1, X-2]\n---\n\n# Active\n',
+      join(dir, '.void', 'program.md'),
+      '---\nschemaVersion: 1\nstatus: executing\nprogram: demo\nplan: docs/plans/a-plan.md\nspec: docs/specs/demo.md\nprogress:\n  provider: jira\n  scope: ACME\n  order: [X-1, X-2]\n  states:\n    ready: [Todo]\n    started: [Doing]\n    review: [Review]\n    done: [Done]\nautopilot:\n  schemaVersion: 1\n  enabled: false\n  mergeGate: human\n---\n\n# Program\n',
     );
 
     const summary = readProjectSummary({ name: 'programme', path: dir }, NOW);
 
-    expect(summary.planCount).toBe(2);
-    expect(summary.activeProgram).toEqual({ program: 'demo', issueCount: 2 });
+    expect(summary.planCount).toBe(1);
+    expect(summary.program).toEqual({ program: 'demo', provider: 'jira', unitCount: 2 });
   });
 
-  it('ignores an ACTIVE.md that is not executing', () => {
+  it('ignores a program that is not executing', () => {
     const dir = repo('paused');
-    mkdirSync(join(dir, 'plans'), { recursive: true });
-    writeFileSync(join(dir, 'plans', 'ACTIVE.md'), '---\nstatus: done\nprogram: demo\n---\n');
+    writeFileSync(
+      join(dir, '.void', 'program.md'),
+      '---\nschemaVersion: 1\nstatus: completed\nprogram: demo\nplan: docs/plans/demo.md\nspec: docs/specs/demo.md\nautopilot:\n  schemaVersion: 1\n  enabled: false\n  mergeGate: human\n---\n',
+    );
 
-    expect(readProjectSummary({ name: 'paused', path: dir }, NOW).activeProgram).toBe(undefined);
+    expect(readProjectSummary({ name: 'paused', path: dir }, NOW).program).toBe(undefined);
   });
 
   it('surfaces the first meaningful line of a checkpoint', () => {
@@ -189,7 +191,7 @@ describe('readProjectSummary', () => {
   });
 
   it.each([
-    ['unparseable ACTIVE frontmatter', 'plans/ACTIVE.md', '---\n: : :\nnope\n---\n'],
+    ['unparseable program frontmatter', '.void/program.md', '---\n: : :\nnope\n---\n'],
     ['a malformed decisions file', 'docs/DECISIONS.md', `bin${String.fromCharCode(0)}ary`],
     ['an empty checkpoint', '.void/session/current.md', ''],
   ])('degrades instead of throwing on %s', (_label, relative, content) => {

@@ -117,12 +117,12 @@ describe('summarizeProject', () => {
     expect(summary.attention).toEqual([]);
   });
 
-  it('surfaces the active program when the project declares one', () => {
+  it('surfaces the program when the project declares one', () => {
     const summary = summarizeProject(input({
-      activeProgram: { program: 'knowledge-and-resume', issueCount: 11 },
+      program: { program: 'knowledge-and-resume', provider: 'linear', unitCount: 11 },
     }));
 
-    expect(summary.activeProgram?.program).toBe('knowledge-and-resume');
+    expect(summary.program?.program).toBe('knowledge-and-resume');
   });
 
   // Phase 1 ships before the session checkpoint exists. Its absence is a fact

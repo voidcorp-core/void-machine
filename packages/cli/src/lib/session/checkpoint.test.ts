@@ -13,6 +13,7 @@ import { parseCheckpoint } from './checkpoint.js';
 const FULL = `---
 date: 2026-08-17
 branch: folpe/dev-622
+head: a1b2c3d
 ---
 
 # Session checkpoint
@@ -65,10 +66,11 @@ describe('parseCheckpoint', () => {
     ]);
   });
 
-  it('reads the branch and date out of the frontmatter', () => {
+  it('reads the branch, head and date out of the frontmatter', () => {
     const checkpoint = parseCheckpoint(FULL);
 
     expect(checkpoint.branch).toBe('folpe/dev-622');
+    expect(checkpoint.head).toBe('a1b2c3d');
     expect(checkpoint.date).toBe('2026-08-17');
   });
 

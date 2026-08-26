@@ -48,6 +48,7 @@ describe('readGitSignals', () => {
 
     expect(signals.available).toBe(true);
     expect(signals.branch).not.toBe(undefined);
+    expect(signals.head).toMatch(/^[0-9a-f]{40}$/);
     expect(signals.dirtyFiles).toBe(0);
     expect(signals.commitsToday).toBe(1);
     expect(signals.lastCommitAt).toBeTypeOf('number');

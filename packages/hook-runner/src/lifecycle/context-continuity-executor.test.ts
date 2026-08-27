@@ -144,16 +144,18 @@ describe('executeContextContinuity PreCompact', () => {
     expect(existsSync(lock)).toBe(true);
   });
 
-  it('does not remove the recovery claim when another contender wins the hardlink race', () => {
+  it('does not remove an older generation when another contender already owns recovery', () => {
     const root = project();
     const lock = `${checkpoint(root)}.lock`;
     writeFileSync(lock, 'stale\n');
     const observed = lstatSync(lock);
-    linkSync(lock, `${lock}.recovery`);
+    const competing = `${lock}.recovery-1-1-1`;
+    writeFileSync(competing, 'claimed\n');
 
-    expect(claimStaleLock(lock, observed)).toBeUndefined();
-    expect(existsSync(`${lock}.recovery`)).toBe(true);
-    expect(lstatSync(`${lock}.recovery`).ino).toBe(observed.ino);
+    const claim = claimStaleLock(lock, observed, Date.now());
+    if (claim !== undefined) closeSync(claim.descriptor);
+    expect(claim).toBeUndefined();
+    expect(existsSync(competing)).toBe(true);
   });
 
   it('recovers an aged hardlink election orphan left by process death', () => {

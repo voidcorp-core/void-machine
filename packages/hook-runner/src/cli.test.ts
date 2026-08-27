@@ -245,12 +245,15 @@ describe('lifecycle context', () => {
     writeFileSync(join(root, '.void', 'config.json'), '{}\n');
     const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
     const lock = `${checkpoint}.lock`;
+    const orphanClaim = `${lock}.recovery-0-0-0`;
     writeFileSync(
       checkpoint,
       `## Objective\n\nSerialize stale recovery.\n\n${'bounded context '.repeat(25_000)}`,
     );
     writeFileSync(lock, 'stale\n');
     utimesSync(lock, new Date(0), new Date(0));
+    writeFileSync(orphanClaim, 'abandoned\n');
+    utimesSync(orphanClaim, new Date(0), new Date(0));
 
     try {
       await new Promise((resolveWait) => setTimeout(resolveWait, 1_100));
@@ -267,6 +270,7 @@ describe('lifecycle context', () => {
 
       const concurrent = readFileSync(checkpoint, 'utf8');
       expect(paths.filter((path) => concurrent.includes(path))).toHaveLength(1);
+      expect(existsSync(orphanClaim)).toBe(false);
       const runs = join(root, '.void', 'machine', 'runs');
       const statuses = readdirSync(runs).flatMap((mission) =>
         readFileSync(join(runs, mission, 'events.jsonl'), 'utf8')

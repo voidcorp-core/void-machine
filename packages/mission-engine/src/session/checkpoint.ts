@@ -396,7 +396,14 @@ export function advanceMechanicalContext(
     && observation.usedTokens !== state.lastUsedTokens;
   const sourceChanged = observation.resumeSource !== undefined
     && observation.resumeSource !== state.lastResumeSource;
-  const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
+  const cycleChanged = observation.resumeSource === 'compact'
+    ? state.nudgeEmitted
+    : observation.resumeSource === 'clear' && !state.clearPending;
+  const workChanged = reads.changed
+    || modifications.changed
+    || tokensChanged
+    || sourceChanged
+    || cycleChanged;
   const workRevision = state.workRevision + (workChanged ? 1 : 0);
   const reconcile = observation.semanticCheckpointWritten === true;
   const sealChanged = observation.compactionSealed === true

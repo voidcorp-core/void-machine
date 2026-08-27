@@ -1816,7 +1816,8 @@ function advanceMechanicalContext(state, observation) {
   const modifications = mergeRecentPaths(state.modifiedFiles, state.modifiedFilesOverflow, observation.modifiedFiles);
   const tokensChanged = observation.usedTokens !== void 0 && observation.usedTokens !== state.lastUsedTokens;
   const sourceChanged = observation.resumeSource !== void 0 && observation.resumeSource !== state.lastResumeSource;
-  const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
+  const cycleChanged = observation.resumeSource === "compact" ? state.nudgeEmitted : observation.resumeSource === "clear" && !state.clearPending;
+  const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged || cycleChanged;
   const workRevision = state.workRevision + (workChanged ? 1 : 0);
   const reconcile = observation.semanticCheckpointWritten === true;
   const sealChanged = observation.compactionSealed === true && state.sealedWorkRevision !== workRevision;

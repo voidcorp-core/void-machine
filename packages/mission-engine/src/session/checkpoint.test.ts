@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type MechanicalContextState,
   mergeMechanicalContextBlock,
   parseCheckpoint,
   parseMechanicalContextBlock,
-  type MechanicalContextState,
 } from './checkpoint.js';
 
 /**

@@ -1,3 +1,4 @@
+import { governingSkill, RULE_NAMES, withGoverningSkill } from './enforcement/governing-skill.js';
 import {
   discoverProjectRoot,
   evaluateRule,
@@ -6,15 +7,14 @@ import {
   parseHookText,
   type RuleName,
 } from './enforcement/runner.js';
-import { governingSkill, RULE_NAMES, withGoverningSkill } from './enforcement/governing-skill.js';
-import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js';
-import { sessionStartOutput } from './lifecycle/context.js';
-import { resolveInstall } from './lifecycle/context-executor.js';
 import { readFreshnessCache } from './freshness/cache.js';
 import { compareFreshness } from './freshness/compare.js';
 import { freshnessNotice, resolveFreshness } from './freshness/notice.js';
+import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js';
 import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
+import { sessionStartOutput } from './lifecycle/context.js';
 import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
+import { resolveInstall } from './lifecycle/context-executor.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
 import { executeFormat } from './lifecycle/format-executor.js';
 import { executeLargeChange } from './lifecycle/large-change-executor.js';
@@ -137,10 +137,13 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
   const root = projectRoot();
   const rawInput = optionalPayload(input);
   if (hook === 'context' || hook === 'context-continuity') {
-    const continuity = hook === 'context-continuity'
-      ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now())
-      : { status: 'ok', details: {} } satisfies LifecycleExecution;
-    const execution: LifecycleExecution = continuity;
+    const inputRecord = record(rawInput);
+    const event = inputRecord?.['hook_event_name'];
+    if (hook === 'context-continuity' && event !== 'SessionStart') {
+      const execution = executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now());
+      await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
+      return;
+    }
     const install = resolveInstall(root, process.env);
     // Read the cache only: session start must never wait on a network round-trip.
     // The refresh below happens after stdout is written, so a slow or dead registry
@@ -156,8 +159,6 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
     // start must not wait on an answer that can be one session old without
     // anyone being worse off. The recompute happens below, after stdout.
     const alert = cachedInvocationAlert(root);
-    const inputRecord = record(rawInput);
-    const event = inputRecord?.['hook_event_name'];
     if (event === 'SessionStart' || hook === 'context') {
       const source = inputRecord?.['source'];
       const resume = observeResume(root, Date.now(), {
@@ -170,6 +171,9 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
         `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}\n`,
       );
     }
+    const execution = hook === 'context-continuity'
+      ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now())
+      : { status: 'ok', details: {} } satisfies LifecycleExecution;
     await refreshFreshnessInBackground(install.version);
     refreshInvocationVerdict(root);
     await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);

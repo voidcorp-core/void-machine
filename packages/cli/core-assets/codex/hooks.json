@@ -83,6 +83,12 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex" }
+        ]
+      },
+      {
         "matcher": "apply_patch|Edit|Write",
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle format codex" }

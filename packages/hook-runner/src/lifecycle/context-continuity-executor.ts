@@ -11,14 +11,16 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
+  advanceMechanicalContext,
   hashCheckpointObjective,
+  type MechanicalContextState,
   mergeMechanicalContextBlock,
   parseCheckpoint,
   parseMechanicalContextBlock,
-  type MechanicalContextState,
 } from '@voidcorp/mission-engine/session';
+import { normalizeToolCall } from '../enforcement/normalize.js';
 import { type LifecycleExecution, record } from './executor-shared.js';
 
 const CHECKPOINT = join('.void', 'machine', 'checkpoint.md');
@@ -58,6 +60,7 @@ function initialState(raw: string): MechanicalContextState {
     readFilesOverflow: 0,
     modifiedFilesOverflow: 0,
     clearPending: false,
+    lastResumeSource: 'none',
   };
 }
 
@@ -120,10 +123,11 @@ function sealPreCompact(root: string, now: number): ContextContinuityExecution {
   if (block.status === 'invalid') {
     return { status: 'degraded', details: { reason: 'mechanical-block-ambiguous' } };
   }
-  const merged = mergeMechanicalContextBlock(
-    raw,
-    block.status === 'valid' ? block.state : initialState(raw),
-  );
+  const current = block.status === 'valid' ? block.state : initialState(raw);
+  const state = advanceMechanicalContext(current, {
+    objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective),
+  });
+  const merged = mergeMechanicalContextBlock(raw, state);
   if (!merged.ok) {
     return { status: 'degraded', details: { reason: merged.error } };
   }
@@ -131,6 +135,96 @@ function sealPreCompact(root: string, now: number): ContextContinuityExecution {
     return { status: 'skipped', details: { reason: 'checkpoint-lock-or-write-failed' } };
   }
   return { status: 'ok', details: { sealed: true } };
+}
+
+function successfulToolUse(input: Record<string, unknown>): boolean {
+  const response = record(input['tool_response']) ?? record(input['tool_result']);
+  if (response?.['is_error'] === true || response?.['success'] === false) return false;
+  return input['error'] === undefined && input['tool_error'] === undefined;
+}
+
+function boundedProjectPath(root: string, candidate: string): string | undefined {
+  if (
+    candidate === ''
+    || candidate.length > 500
+    || [...candidate].some((character) => character.charCodeAt(0) < 0x20)
+  ) return undefined;
+  const target = isAbsolute(candidate) ? resolve(candidate) : resolve(root, candidate);
+  const local = relative(resolve(root), target);
+  if (local === '' || local.startsWith('..') || isAbsolute(local)) return undefined;
+  return local.split('\\').join('/');
+}
+
+function toolPaths(
+  call: ReturnType<typeof normalizeToolCall>,
+  root: string,
+): { readonly readFiles: readonly string[]; readonly modifiedFiles: readonly string[] } {
+  const isModification = call.tool === 'Edit' || call.tool === 'Write' || call.tool === 'apply_patch';
+  const isRead = call.tool === 'Read' || call.tool === 'read_file' || call.tool === 'view_image';
+  if (!isModification && !isRead) return { readFiles: [], modifiedFiles: [] };
+  const paths = call.edits
+    .map((edit) => boundedProjectPath(root, edit.path))
+    .filter((path): path is string => path !== undefined && path !== CHECKPOINT);
+  return isRead
+    ? { readFiles: paths, modifiedFiles: [] }
+    : { readFiles: [], modifiedFiles: paths };
+}
+
+function evolveCheckpoint(
+  root: string,
+  now: number,
+  observation: Parameters<typeof advanceMechanicalContext>[1],
+): ContextContinuityExecution {
+  const path = join(root, CHECKPOINT);
+  const raw = rawCheckpoint(path);
+  if (raw === undefined) {
+    return { status: 'degraded', details: { reason: 'checkpoint-unreadable' } };
+  }
+  const block = parseMechanicalContextBlock(raw);
+  if (block.status === 'invalid') {
+    return { status: 'degraded', details: { reason: 'mechanical-block-ambiguous' } };
+  }
+  const current = block.status === 'valid' ? block.state : initialState(raw);
+  const next = advanceMechanicalContext(current, observation);
+  if (next === current && block.status === 'valid') {
+    return { status: 'skipped', details: { reason: 'duplicate-observation' } };
+  }
+  const merged = mergeMechanicalContextBlock(raw, next);
+  if (!merged.ok) return { status: 'degraded', details: { reason: merged.error } };
+  if (!atomicCheckpointWrite(path, merged.value, now)) {
+    return { status: 'skipped', details: { reason: 'checkpoint-lock-or-write-failed' } };
+  }
+  return { status: 'ok', details: { advanced: next.workRevision !== current.workRevision } };
+}
+
+function observePostToolUse(
+  input: Record<string, unknown>,
+  root: string,
+  now: number,
+): ContextContinuityExecution {
+  if (!successfulToolUse(input)) {
+    return { status: 'skipped', details: { reason: 'tool-use-failed' } };
+  }
+  try {
+    const call = normalizeToolCall(input);
+    const paths = toolPaths(call, root);
+    const checkpointWrite = (call.tool === 'Edit' || call.tool === 'Write' || call.tool === 'apply_patch')
+      && call.edits.some(
+        (edit) => boundedProjectPath(root, edit.path) === CHECKPOINT,
+      );
+    const raw = checkpointWrite ? rawCheckpoint(join(root, CHECKPOINT)) : undefined;
+    const objectiveHash = raw === undefined
+      ? undefined
+      : hashCheckpointObjective(parseCheckpoint(raw).objective);
+    return evolveCheckpoint(root, now, {
+      readFiles: paths.readFiles,
+      modifiedFiles: paths.modifiedFiles,
+      ...(objectiveHash === undefined ? {} : { objectiveHash }),
+      ...(checkpointWrite ? { semanticCheckpointWritten: true } : {}),
+    });
+  } catch {
+    return { status: 'degraded', details: { reason: 'invalid-tool-input' } };
+  }
 }
 
 export function executeContextContinuity(
@@ -145,5 +239,15 @@ export function executeContextContinuity(
   }
   const event = input['hook_event_name'];
   if (event === 'PreCompact') return sealPreCompact(root, now);
+  if (event === 'PostToolUse') return observePostToolUse(input, root, now);
+  if (event === 'SessionStart') {
+    const source = input['source'];
+    if (
+      source === 'startup' || source === 'resume' || source === 'clear'
+      || source === 'compact' || source === 'fork'
+    ) {
+      return evolveCheckpoint(root, now, { resumeSource: source });
+    }
+  }
   return { status: 'skipped', details: { reason: 'event-not-actionable' } };
 }

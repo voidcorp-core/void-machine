@@ -239,6 +239,13 @@ export function composeResumeBundle(input: ResumeBundleInput): ResumeBundle {
 }
 
 function checkpointContext(checkpoint: Checkpoint): readonly string[] {
+  const mechanical = checkpoint.mechanicalContext;
+  const readOverflow = mechanical === undefined || mechanical.readFilesOverflow === 0
+    ? ''
+    : ` (+${String(mechanical.readFilesOverflow)} older)`;
+  const modifiedOverflow = mechanical === undefined || mechanical.modifiedFilesOverflow === 0
+    ? ''
+    : ` (+${String(mechanical.modifiedFilesOverflow)} older)`;
   return [
     checkpoint.date === undefined ? undefined : `Checkpoint date: ${checkpoint.date}`,
     checkpoint.objective === undefined ? undefined : `Objective: ${checkpoint.objective}`,
@@ -254,6 +261,12 @@ function checkpointContext(checkpoint: Checkpoint): readonly string[] {
     checkpoint.assumptions.length === 0
       ? undefined
       : `Unverified assumptions: ${checkpoint.assumptions.join('; ')}`,
+    mechanical === undefined || mechanical.readFiles.length === 0
+      ? undefined
+      : `Read files: ${mechanical.readFiles.join(', ')}${readOverflow}`,
+    mechanical === undefined || mechanical.modifiedFiles.length === 0
+      ? undefined
+      : `Modified files: ${mechanical.modifiedFiles.join(', ')}${modifiedOverflow}`,
   ].filter((line): line is string => line !== undefined);
 }
 

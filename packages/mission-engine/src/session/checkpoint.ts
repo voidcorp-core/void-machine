@@ -30,6 +30,24 @@ export interface MechanicalContextState {
   readonly readFilesOverflow: number;
   readonly modifiedFilesOverflow: number;
   readonly clearPending: boolean;
+  readonly lastResumeSource: MechanicalResumeSource;
+}
+
+export type MechanicalResumeSource =
+  | 'none'
+  | 'startup'
+  | 'resume'
+  | 'clear'
+  | 'compact'
+  | 'fork';
+
+export interface MechanicalContextObservation {
+  readonly objectiveHash?: string;
+  readonly readFiles?: readonly string[];
+  readonly modifiedFiles?: readonly string[];
+  readonly usedTokens?: number;
+  readonly resumeSource?: Exclude<MechanicalResumeSource, 'none'>;
+  readonly semanticCheckpointWritten?: boolean;
 }
 
 export type MechanicalContextBlock =
@@ -162,7 +180,12 @@ function pathList(block: string, heading: string): readonly string[] | undefined
     .map((line) => /^- (.+)$/.exec(line)?.[1])
     .filter((path): path is string => path !== undefined);
   if (paths.length > MAX_ITEMS) return undefined;
-  if (paths.some((path) => path.length > MAX_PATH || /[\u0000-\u001f]/.test(path))) return undefined;
+  if (
+    paths.some(
+      (path) => path.length > MAX_PATH
+        || [...path].some((character) => character.charCodeAt(0) < 0x20),
+    )
+  ) return undefined;
   return paths;
 }
 
@@ -208,11 +231,13 @@ function mechanicalScalars(
   const lastUsedTokens = integerScalar(block, 'last_used_tokens');
   const readFilesOverflow = integerScalar(block, 'read_files_overflow');
   const modifiedFilesOverflow = integerScalar(block, 'modified_files_overflow');
+  const lastResumeSource = scalar(block, 'last_resume_source');
   if (
     nudgeEmitted === undefined || clearPending === undefined
     || transcriptCursorBytes === undefined || lastMeasurementAtMs === undefined
     || lastUsedTokens === undefined || readFilesOverflow === undefined
     || modifiedFilesOverflow === undefined
+    || !isMechanicalResumeSource(lastResumeSource)
   ) return undefined;
   return {
     schemaVersion: 1,
@@ -224,7 +249,13 @@ function mechanicalScalars(
     readFilesOverflow,
     modifiedFilesOverflow,
     clearPending,
+    lastResumeSource,
   };
+}
+
+function isMechanicalResumeSource(value: string | undefined): value is MechanicalResumeSource {
+  return value === 'none' || value === 'startup' || value === 'resume' || value === 'clear'
+    || value === 'compact' || value === 'fork';
 }
 
 export function parseMechanicalContextBlock(raw: string): MechanicalContextBlock {
@@ -260,6 +291,7 @@ export function renderMechanicalContextBlock(state: MechanicalContextState): str
     `read_files_overflow: ${String(state.readFilesOverflow)}`,
     `modified_files_overflow: ${String(state.modifiedFilesOverflow)}`,
     `clear_pending: ${String(state.clearPending)}`,
+    `last_resume_source: ${state.lastResumeSource}`,
     '```',
     '',
     '### Read files',
@@ -271,6 +303,99 @@ export function renderMechanicalContextBlock(state: MechanicalContextState): str
     renderPaths(state.modifiedFiles),
     MECHANICAL_END,
   ].join('\n');
+}
+
+interface RecentPaths {
+  readonly paths: readonly string[];
+  readonly overflow: number;
+  readonly changed: boolean;
+}
+
+function mergeRecentPaths(
+  current: readonly string[],
+  overflow: number,
+  observed: readonly string[] | undefined,
+): RecentPaths {
+  if (observed === undefined || observed.length === 0) {
+    return { paths: current, overflow, changed: false };
+  }
+  const uniqueObserved = [...new Set(observed)];
+  const merged = [
+    ...current.filter((path) => !uniqueObserved.includes(path)),
+    ...uniqueObserved,
+  ];
+  const displaced = Math.max(0, merged.length - MAX_ITEMS);
+  const paths = merged.slice(displaced);
+  const changed = displaced > 0
+    || paths.length !== current.length
+    || paths.some((path, index) => path !== current[index]);
+  return {
+    paths: changed ? paths : current,
+    overflow: overflow + displaced,
+    changed,
+  };
+}
+
+/** Advance the bounded mechanical chain for one newly observed runtime fact. */
+export function advanceMechanicalContext(
+  state: MechanicalContextState,
+  observation: MechanicalContextObservation,
+): MechanicalContextState {
+  if (
+    observation.objectiveHash !== undefined
+    && observation.objectiveHash !== state.objectiveHash
+  ) {
+    const revision = state.workRevision + 1;
+    return {
+      ...state,
+      objectiveHash: observation.objectiveHash,
+      workRevision: revision,
+      semanticRevision: revision,
+      nudgeEmitted: false,
+      readFiles: [],
+      modifiedFiles: [],
+      readFilesOverflow: 0,
+      modifiedFilesOverflow: 0,
+      clearPending: false,
+    };
+  }
+
+  const reads = mergeRecentPaths(
+    state.readFiles,
+    state.readFilesOverflow,
+    observation.readFiles,
+  );
+  const modifications = mergeRecentPaths(
+    state.modifiedFiles,
+    state.modifiedFilesOverflow,
+    observation.modifiedFiles,
+  );
+  const tokensChanged = observation.usedTokens !== undefined
+    && observation.usedTokens !== state.lastUsedTokens;
+  const sourceChanged = observation.resumeSource !== undefined
+    && observation.resumeSource !== state.lastResumeSource;
+  const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
+  const workRevision = state.workRevision + (workChanged ? 1 : 0);
+  const reconcile = observation.semanticCheckpointWritten === true;
+
+  if (!workChanged && !reconcile) return state;
+  return {
+    ...state,
+    workRevision,
+    semanticRevision: reconcile ? workRevision : state.semanticRevision,
+    nudgeEmitted: observation.resumeSource === 'clear' || observation.resumeSource === 'compact'
+      ? false
+      : state.nudgeEmitted,
+    lastUsedTokens: observation.usedTokens ?? state.lastUsedTokens,
+    readFiles: reads.paths,
+    modifiedFiles: modifications.paths,
+    readFilesOverflow: reads.overflow,
+    modifiedFilesOverflow: modifications.overflow,
+    clearPending: reconcile
+      ? false
+      : observation.resumeSource === 'clear' || state.clearPending,
+    lastResumeSource: observation.resumeSource ?? state.lastResumeSource,
+  };
 }
 
 export function mergeMechanicalContextBlock(

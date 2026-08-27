@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type MechanicalContextState,
   mergeMechanicalContextBlock,
   parseCheckpoint,
-  type MechanicalContextState,
 } from './checkpoint.js';
 import {
   composeResumeBundle,

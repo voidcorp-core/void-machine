@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:b4423d36d909062a835ab26804790302e92c8dd6cc4e8181a8c9996314895fdc"
+    "rootHash": "sha256:5abb6154249cd356389d8dc05a4d63dc90378b65f5810d2a331dbcb68cdae026"
   },
   "nodes": [
     {
@@ -3563,7 +3563,7 @@
             }
           ],
           "id": "skill:void-checkpoint",
-          "lines": 219,
+          "lines": 226,
           "name": "void-checkpoint",
           "owner": "folpe",
           "pack": null,
@@ -3572,7 +3572,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-checkpoint/SKILL.md",
-          "staticTokens": 2703,
+          "staticTokens": 2813,
           "type": "skill"
         }
       },

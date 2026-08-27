@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
+import { afterEach, describe, expect, it } from 'vitest';
 import { executeContextContinuity } from './context-continuity-executor.js';
 
 const roots: string[] = [];

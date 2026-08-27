@@ -7,12 +7,12 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {
+  type MechanicalContextState,
+  mergeMechanicalContextBlock,
+} from '@voidcorp/mission-engine/session';
 import { afterEach, describe, expect, it } from 'vitest';
 import { observeResume } from './resume-observer.js';
-import {
-  mergeMechanicalContextBlock,
-  type MechanicalContextState,
-} from '@voidcorp/mission-engine/session';
 
 const roots: string[] = [];
 

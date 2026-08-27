@@ -1733,7 +1733,7 @@
         }
       ],
       "id": "skill:void-checkpoint",
-      "lines": 219,
+      "lines": 226,
       "name": "void-checkpoint",
       "owner": "folpe",
       "pack": null,
@@ -1742,7 +1742,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-checkpoint/SKILL.md",
-      "staticTokens": 2703,
+      "staticTokens": 2813,
       "type": "skill"
     },
     {

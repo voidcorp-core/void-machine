@@ -180,6 +180,12 @@ is a different question from *what was I doing*, and nothing else in the repo an
 Write it with `void-harness resume` in mind — that command reads this file, and reading your own
 checkpoint back is the cheapest test of whether it was worth writing.
 
+Before every semantic rewrite, read the current file and preserve the single delimited mechanical
+block from `<!-- void-harness:context-continuity:begin -->` through its matching end marker
+byte-for-byte. Require exactly one mechanical block; refuse the rewrite when more than one block
+exists or either marker is ambiguous.
+The lifecycle hook owns that block; this skill owns every semantic section around it.
+
 ---
 
 ## HITL
@@ -189,11 +195,12 @@ shutdown artefact. Do not move provider state as a side effect of closing a sess
 ending is not a unit completing. Never write a checkpoint that claims work is done when it is
 merely stopped.
 
-**Why hooks never write it.** `UserPromptSubmit` detects explicit close intent and can remind the
-model to invoke this skill before the closing response. `SessionEnd` can only audit checkpoint
-presence, freshness, branch and HEAD after the model is gone. Neither hook has the semantic context
-to invent dead ends, assumptions or a next action, so both stay advisory and hooks never write a
-checkpoint. A command such as `/clear` can still bypass the prompt hook; invoke this skill first.
+**The hook boundary.** `UserPromptSubmit` detects explicit close intent and can remind the model to
+invoke this skill before the closing response. `SessionEnd` can only audit checkpoint presence,
+freshness, branch and HEAD after the model is gone. Both stay advisory. `PreCompact` may preserve
+only the delimited mechanical block before known context loss. Hooks never invent or change dead
+ends, assumptions or a next action. A command such as `/clear` can still bypass the prompt hook;
+invoke this skill first.
 
 ---
 

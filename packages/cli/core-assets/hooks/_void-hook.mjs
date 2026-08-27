@@ -1,3 +1,39 @@
+// src/enforcement/governing-skill.ts
+var GOVERNING_SKILL = {
+  "boundary-direction": "void-hexagonal-architecture",
+  "dangerous-command": "void-security-guidance",
+  "design-slop": "void-frontend-design",
+  "no-any": "void-typescript-strict",
+  "no-as-cast": "void-typescript-strict",
+  "no-console": "void-observability",
+  "no-focused-test": "void-testing",
+  "no-null": "void-functional",
+  "protected-file": "void-security-guidance",
+  "secret-content": "void-security-guidance",
+  "tdd-order": "void-tdd",
+  "test-name": "void-testing"
+};
+var RULE_NAMES = [
+  "boundary-direction",
+  "dangerous-command",
+  "design-slop",
+  "no-any",
+  "no-as-cast",
+  "no-console",
+  "no-focused-test",
+  "no-null",
+  "protected-file",
+  "secret-content",
+  "tdd-order",
+  "test-name"
+];
+function governingSkill(rule) {
+  return GOVERNING_SKILL[rule];
+}
+function withGoverningSkill(rule, message) {
+  return `${message} (doctrine: the ${governingSkill(rule)} skill)`;
+}
+
 // src/enforcement/runner.ts
 import {
   closeSync,
@@ -815,630 +851,16 @@ function evaluateRule(rule, rawInput, options) {
   throw new Error("UNKNOWN_ENFORCEMENT_RULE");
 }
 
-// src/enforcement/governing-skill.ts
-var GOVERNING_SKILL = {
-  "boundary-direction": "void-hexagonal-architecture",
-  "dangerous-command": "void-security-guidance",
-  "design-slop": "void-frontend-design",
-  "no-any": "void-typescript-strict",
-  "no-as-cast": "void-typescript-strict",
-  "no-console": "void-observability",
-  "no-focused-test": "void-testing",
-  "no-null": "void-functional",
-  "protected-file": "void-security-guidance",
-  "secret-content": "void-security-guidance",
-  "tdd-order": "void-tdd",
-  "test-name": "void-testing"
-};
-var RULE_NAMES = [
-  "boundary-direction",
-  "dangerous-command",
-  "design-slop",
-  "no-any",
-  "no-as-cast",
-  "no-console",
-  "no-focused-test",
-  "no-null",
-  "protected-file",
-  "secret-content",
-  "tdd-order",
-  "test-name"
-];
-function governingSkill(rule) {
-  return GOVERNING_SKILL[rule];
-}
-function withGoverningSkill(rule, message) {
-  return `${message} (doctrine: the ${governingSkill(rule)} skill)`;
-}
-
-// src/invocation.ts
-import { existsSync as existsSync5, mkdirSync, readFileSync as readFileSync5, readdirSync as readdirSync2, renameSync, writeFileSync } from "node:fs";
-import { dirname as dirname3, join as join6 } from "node:path";
-
-// src/journal.ts
-import { lstatSync, readFileSync as readFileSync4, readdirSync, statSync } from "node:fs";
-import { join as join5 } from "node:path";
-
-// src/void-layout.ts
-import { existsSync as existsSync4 } from "node:fs";
-import { join as join4 } from "node:path";
-var VOID_DIR = ".void";
-var VOID_MACHINE_DIR = "machine";
-var VOID_PREVIOUS_MACHINE_DIR = "local";
-var VOID_OWNERSHIP = Object.freeze({
-  // Declared: authored or hand-edited, never regenerable from a pin. These are
-  // the ONLY things at the top of `.void/`, which is what makes "everything at
-  // the top is committed" a rule you can see rather than one you must look up.
-  "config.json": "project",
-  "PROJECT-DOCTRINE.md": "project",
-  "program.md": "project",
-  knowledge: "project",
-  // Plans, despite the name. Measured on sesame: eight committed `.plan.md`
-  // files carrying frozen model decisions that still govern its schema. Read as
-  // `observed`, doctor told the project to untrack its own architecture
-  // decisions — and nothing writes this directory anyway. It is a leftover of
-  // the `backlog-autopilot` engine deleted at the 2026-07-30 cutover; the
-  // current autopilot writes to `machine/autopilot/`. So there is no writer to
-  // redirect, only a classification that was wrong.
-  "autonomous-runs": "project",
-  // Derived: `void-harness install` re-materializes these, byte for byte from a
-  // pin. Not committed — 1.2 MB of vendored prose rewritten on every bump — but
-  // their absence degrades the agent rather than breaking the project.
-  "PHILOSOPHY.md": "derived",
-  // Derived AND committed, which is why it stays at the top rather than moving
-  // into `installed/`. `.claude/settings.json` names this path and is itself
-  // committed, so ignoring the runner would give a fresh clone a settings file
-  // pointing at a missing file and every tool call would fail on it. See
-  // `DERIVED_LOAD_BEARING`: its absence is an error, not a degradation.
-  hooks: "derived",
-  // Observed: this machine's history. Never meaningful in another checkout, and
-  // losing it costs nothing.
-  runs: "observed",
-  cache: "observed",
-  outputs: "observed",
-  generated: "observed",
-  archives: "observed",
-  autopilot: "observed",
-  receipts: "observed",
-  history: "observed",
-  worktrees: "observed",
-  // Renamed from `state.json`, which named two different things: this snapshot
-  // and an autopilot run's cursor. The cursor keeps its name inside its own run
-  // directory, where nothing else competes for it.
-  "status.json": "observed",
-  // The session checkpoint. Observed on purpose: it is what THIS machine was
-  // doing, so committing it would guarantee a conflict on a file rewritten every
-  // evening while serving nobody else.
-  "checkpoint.md": "observed",
-  // Nothing WRITES these any more — the current telemetry is `runs/*/events.jsonl`
-  // — but they still exist on disk in the park (424 KB in one project), and
-  // "no longer read" is not "no longer there". Dropping them from this table
-  // would let them fall through to the `project` default, and doctor would start
-  // telling those projects to commit their own telemetry.
-  "activations.jsonl": "observed",
-  "outcomes.jsonl": "observed",
-  "usage.log": "observed",
-  // The pre-rename name of `status.json`. Classified for the same reason: it is
-  // on disk in the park, and forgetting it here would make doctor ask projects
-  // to commit it. `LEGACY_RENAMES` sends it to its new name on migration.
-  "state.json": "observed"
-});
-var LEGACY_RENAMES = Object.freeze({
-  "state.json": "status.json"
-});
-var RETIRED_ENTRIES = Object.freeze([
-  "activations.jsonl",
-  "outcomes.jsonl",
-  "usage.log"
-]);
-var MATERIALIZED_OWNERSHIP = Object.freeze({
-  // The project's own wiring: hand-editable, merged rather than regenerated.
-  ".claude/settings.json": "project",
-  // Regenerated by `init` from the harness assets.
-  ".claude/skills/": "derived",
-  ".claude/agents/": "derived",
-  ".claude/commands/": "derived",
-  ".agents/skills/": "derived",
-  ".codex/agents/": "derived",
-  ".void/hooks/": "derived",
-  ".void/installed/PHILOSOPHY.md": "derived",
-  ".codex/hooks.json": "derived"
-});
-var DERIVED_LOAD_BEARING = Object.freeze([
-  ".void/hooks/",
-  ".codex/hooks.json"
-]);
-var UNIT_ROOTS = Object.freeze([
-  ".claude/skills",
-  ".claude/agents",
-  ".claude/commands",
-  ".agents/skills",
-  ".codex/agents"
-]);
-var MACHINE_ENTRIES = Object.freeze(
-  Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "observed").sort()
-);
-var INSTALLED_ENTRIES = Object.freeze(
-  Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "derived").filter((entry) => !DERIVED_LOAD_BEARING.includes(`${VOID_DIR}/${entry}/`)).sort()
-);
-function voidDir(root) {
-  return join4(root, VOID_DIR);
-}
-function voidMachineDir(root) {
-  return join4(root, VOID_DIR, VOID_MACHINE_DIR);
-}
-function previousMachinePath(root, ...segments) {
-  return join4(root, VOID_DIR, VOID_PREVIOUS_MACHINE_DIR, ...segments);
-}
-function voidMachinePath(root, ...segments) {
-  return join4(voidMachineDir(root), ...segments);
-}
-function legacyVoidPath(root, ...segments) {
-  return join4(voidDir(root), ...segments);
-}
-function voidReadPath(root, ...segments) {
-  const candidates = [
-    voidMachinePath(root, ...segments),
-    previousMachinePath(root, ...segments),
-    legacyVoidPath(root, ...segments)
-  ];
-  return candidates.find((candidate) => existsSync4(candidate)) ?? candidates[0];
-}
-
-// src/journal.ts
-var MISSION_DIRECTORY = /^mis_[A-Za-z0-9_-]{8,100}$/;
-var MAX_MISSION_LOGS = 1e4;
-var MAX_JOURNAL_BYTES = 64 * 1024 * 1024;
-function regularFile(path) {
-  try {
-    const info = lstatSync(path);
-    return info.isFile() && !info.isSymbolicLink();
-  } catch {
-    return false;
-  }
-}
-function missionEntries(runs) {
-  try {
-    const info = lstatSync(runs);
-    if (!info.isDirectory() || info.isSymbolicLink()) return [];
-    return readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && MISSION_DIRECTORY.test(entry.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, MAX_MISSION_LOGS);
-  } catch {
-    return [];
-  }
-}
-function journalFiles(root) {
-  const locations = [voidMachinePath(root, "runs"), legacyVoidPath(root, "runs")].filter((directory, index, all) => all.indexOf(directory) === index);
-  const files = [];
-  for (const runs of locations) {
-    for (const entry of missionEntries(runs)) {
-      const path = join5(runs, entry.name, "events.jsonl");
-      if (!regularFile(path)) continue;
-      try {
-        const info = statSync(path);
-        files.push({ path, modifiedMs: info.mtimeMs, bytes: info.size });
-      } catch {
-      }
-    }
-  }
-  return files;
-}
-function readMissionJournals(root, options = {}) {
-  const ceiling = options.maxBytes ?? MAX_JOURNAL_BYTES;
-  let files = journalFiles(root);
-  if (options.recentMissions !== void 0) {
-    files = [...files].sort((a, b) => b.modifiedMs - a.modifiedMs).slice(0, Math.max(0, options.recentMissions));
-  }
-  const parts = [];
-  let bytes = 0;
-  for (const file of [...files].sort((a, b) => a.modifiedMs - b.modifiedMs)) {
-    if (file.bytes > ceiling || bytes + file.bytes > ceiling) break;
-    try {
-      parts.push(readFileSync4(file.path, "utf8"));
-      bytes += file.bytes;
-    } catch {
-    }
-  }
-  return parts.join("\n");
-}
-function journalFingerprint(root) {
-  let bytes = 0;
-  let newest = 0;
-  for (const file of journalFiles(root)) {
-    bytes += file.bytes;
-    if (file.modifiedMs > newest) newest = file.modifiedMs;
-  }
-  return `${Math.round(newest)}:${bytes}`;
-}
-
-// src/retired-skills.ts
-var RETIRED_SKILLS = {
-  "accessibility-first": "void-accessibility",
-  "adr-workflow": "void-decide",
-  "autonomous-backlog-loop": "void-autopilot",
-  "backlog-autopilot": "void-autopilot",
-  "backlog-batch": "void-autopilot",
-  brainstorming: "void-brainstorm",
-  "capture-rule": "void-learn",
-  "claude-md-authoring": "void-claude-md",
-  compounding: "void-learn",
-  "context-management": "void-context",
-  "harness-evolution": "void-learn",
-  "learning-capture": "void-learn",
-  "migrations-safety": "void-migrations",
-  refactoring: "void-refactor",
-  "session-handoff": "void-checkpoint",
-  "systematic-debugging": "void-debug",
-  "ticket-runner": "void-implement",
-  "ticket-writer": "void-ticket",
-  "verification-before-completion": "void-verify",
-  "void-backlog-loop": "void-autopilot",
-  "void-feedback": "void-learn",
-  "writing-plans": "void-plan",
-  // Every skill this harness ships gained the `void-` prefix. A project installed
-  // before that carries journals full of the bare names, and someone who learnt
-  // `/tdd` will type it again: both must land on an answer rather than on silence.
-  accessibility: "void-accessibility",
-  "accessibility-check": "void-accessibility-check",
-  "api-and-interface-design": "void-api-and-interface-design",
-  "async-safety": "void-async-safety",
-  autopilot: "void-autopilot",
-  "background-job-pattern": "void-background-job-pattern",
-  brainstorm: "void-brainstorm",
-  "cache-component-pattern": "void-cache-component-pattern",
-  checkpoint: "void-checkpoint",
-  "claude-md": "void-claude-md",
-  "client-vs-server-component": "void-client-vs-server-component",
-  "code-review": "void-code-review",
-  "commit-discipline": "void-commit-discipline",
-  context: "void-context",
-  debug: "void-debug",
-  decide: "void-decide",
-  "dependency-direction": "void-dependency-direction",
-  "devex-audit": "void-devex-audit",
-  "domain-driven-design": "void-domain-driven-design",
-  "drizzle-migration-safe": "void-drizzle-migration-safe",
-  "eas-build-profile": "void-eas-build-profile",
-  "env-validation": "void-env-validation",
-  "expo-config-plugins": "void-expo-config-plugins",
-  "expo-router-pattern": "void-expo-router-pattern",
-  "form-pattern": "void-form-pattern",
-  "frontend-design": "void-frontend-design",
-  functional: "void-functional",
-  "hexagonal-architecture": "void-hexagonal-architecture",
-  implement: "void-implement",
-  "install-prompt-ux": "void-install-prompt-ux",
-  "instrumentation-setup": "void-instrumentation-setup",
-  learn: "void-learn",
-  "llm-cost-discipline": "void-llm-cost-discipline",
-  "loading-error-boundaries": "void-loading-error-boundaries",
-  "make-pdf": "void-make-pdf",
-  "manifest-checklist": "void-manifest-checklist",
-  merge: "void-merge",
-  migrations: "void-migrations",
-  observability: "void-observability",
-  "offline-first-mutation": "void-offline-first-mutation",
-  "ota-update-strategy": "void-ota-update-strategy",
-  "package-extraction": "void-package-extraction",
-  "parallel-routes-slots": "void-parallel-routes-slots",
-  plan: "void-plan",
-  "plan-review": "void-plan-review",
-  qa: "void-qa",
-  "rate-limit-strategy": "void-rate-limit-strategy",
-  refactor: "void-refactor",
-  retrospective: "void-retrospective",
-  "route-group-decision": "void-route-group-decision",
-  "security-audit": "void-security-audit",
-  "security-guidance": "void-security-guidance",
-  "server-action": "void-server-action",
-  "service-package": "void-service-package",
-  "service-worker-strategy": "void-service-worker-strategy",
-  "source-driven-development": "void-source-driven-development",
-  "state-architecture": "void-state-architecture",
-  tdd: "void-tdd",
-  testing: "void-testing",
-  "testing-server-modules": "void-testing-server-modules",
-  ticket: "void-ticket",
-  "turbo-pipeline-tuning": "void-turbo-pipeline-tuning",
-  "typescript-strict": "void-typescript-strict",
-  "ui-review": "void-ui-review",
-  verify: "void-verify",
-  "webhook-handler-pattern": "void-webhook-handler-pattern"
-};
-function wasEverOurs(name) {
-  return Object.hasOwn(RETIRED_SKILLS, name);
-}
-
-// src/invocation.ts
-var SKILL_RUNTIME_DIRS = [".claude", ".agents"];
-function bareName(raw) {
-  const colon = raw.lastIndexOf(":");
-  return colon >= 0 ? raw.slice(colon + 1) : raw;
-}
-function installedSkillNames(root) {
-  const names = /* @__PURE__ */ new Set();
-  for (const runtime3 of SKILL_RUNTIME_DIRS) {
-    const skills = join6(root, runtime3, "skills");
-    let entries;
-    try {
-      entries = readdirSync2(skills, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (existsSync5(join6(skills, entry.name, "SKILL.md"))) names.add(entry.name);
-    }
-  }
-  return names;
-}
-function eachEvent(body, visit) {
-  for (const line of body.split("\n")) {
-    if (line === "") continue;
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (typeof parsed !== "object" || parsed === null) continue;
-    const record8 = parsed;
-    const payload = record8["payload"];
-    const category = typeof payload === "object" && payload !== null ? payload["category"] : void 0;
-    visit({
-      kind: typeof record8["kind"] === "string" ? record8["kind"] : "",
-      missionId: typeof record8["missionId"] === "string" ? record8["missionId"] : "",
-      category: typeof category === "string" ? category : "",
-      subject: typeof record8["subject"] === "string" ? record8["subject"] : "",
-      ts: typeof record8["ts"] === "string" ? record8["ts"] : ""
-    });
-  }
-}
-var LIVE_WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
-function newestMission(body, nowMs) {
-  let latest = "";
-  let mission = "";
-  eachEvent(body, (event) => {
-    if (event.kind !== "runtime.tool.started") return;
-    if (nowMs !== void 0) {
-      const at = Date.parse(event.ts);
-      if (!Number.isNaN(at) && at < nowMs - LIVE_WINDOW_MS) return;
-    }
-    if (event.ts > latest) {
-      latest = event.ts;
-      mission = event.missionId;
-    }
-  });
-  return mission;
-}
-function recordedSkillNames(body, nowMs) {
-  const names = [];
-  const floor = nowMs === void 0 ? void 0 : nowMs - LIVE_WINDOW_MS;
-  eachEvent(body, (event) => {
-    if (event.kind !== "runtime.tool.started" || event.category !== "skill") return;
-    if (!event.subject.startsWith("skill:")) return;
-    if (floor !== void 0) {
-      const at = Date.parse(event.ts);
-      if (!Number.isNaN(at) && at < floor) return;
-    }
-    names.push({ name: bareName(event.subject.slice("skill:".length)), missionId: event.missionId });
-  });
-  return names;
-}
-function replacementFor(name) {
-  return RETIRED_SKILLS[name];
-}
-function resolutionVerdict(body, installed, options = {}) {
-  const recorded = recordedSkillNames(body, options.nowMs);
-  const ours = (entry) => !installed.has(entry.name) && wasEverOurs(entry.name);
-  const retired = [...new Set(recorded.filter(ours).map((entry) => entry.name))].sort();
-  const newest = newestMission(body, options.nowMs);
-  const unresolved = [
-    ...new Set(recorded.filter((entry) => ours(entry) && entry.missionId === newest).map((entry) => entry.name))
-  ].sort();
-  return { ok: unresolved.length === 0, unresolved, retired };
-}
-function withSuccessor(name) {
-  const replacement = replacementFor(name);
-  return replacement === void 0 ? name : `${name} -> ${replacement}`;
-}
-var MAX_NAMED = 5;
-function invocationAlert(resolution, liveness) {
-  if (resolution.ok && liveness.ok) return void 0;
-  const lines = ["void-harness, invocation surface:"];
-  if (!resolution.ok) {
-    const named = resolution.unresolved.slice(0, MAX_NAMED).map(withSuccessor).join(", ");
-    const rest = resolution.unresolved.length - MAX_NAMED;
-    const tail = rest > 0 ? `, and ${rest} more` : "";
-    lines.push(
-      `  ${resolution.unresolved.length} skill invocation(s) in this run name a skill that no longer exists: ${named}${tail}`
-    );
-  }
-  if (!liveness.ok) {
-    lines.push(
-      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`
-    );
-  }
-  lines.push("  run `void-harness doctor` for the detail");
-  return lines.join("\n");
-}
-var WORKING_MISSION_CALLS = 20;
-var LIVENESS_WINDOW = 3;
-function livenessVerdict(body) {
-  const tallies = /* @__PURE__ */ new Map();
-  eachEvent(body, (event) => {
-    if (event.kind !== "runtime.tool.started" || event.missionId === "") return;
-    const tally = tallies.get(event.missionId) ?? { toolCalls: 0, skillCalls: 0, lastTs: "" };
-    tally.toolCalls += 1;
-    if (event.category === "skill") tally.skillCalls += 1;
-    if (event.ts > tally.lastTs) tally.lastTs = event.ts;
-    tallies.set(event.missionId, tally);
-  });
-  const judged = [...tallies.values()].filter((tally) => tally.toolCalls >= WORKING_MISSION_CALLS).sort((a, b) => a.lastTs < b.lastTs ? 1 : a.lastTs > b.lastTs ? -1 : 0).slice(0, LIVENESS_WINDOW);
-  const toolCalls = judged.reduce((total, tally) => total + tally.toolCalls, 0);
-  const skillCalls = judged.reduce((total, tally) => total + tally.skillCalls, 0);
-  const ok = judged.length < LIVENESS_WINDOW || judged.some((tally) => tally.skillCalls > 0);
-  return { ok, missions: judged.length, toolCalls, skillCalls };
-}
-var REFRESH_MISSIONS = 20;
-function cachePath(root) {
-  return voidMachinePath(root, "invocation.json");
-}
-function cachedInvocationAlert(root) {
-  try {
-    const parsed = JSON.parse(readFileSync5(cachePath(root), "utf8"));
-    if (typeof parsed !== "object" || parsed === null) return void 0;
-    const alert = parsed["alert"];
-    return typeof alert === "string" && alert !== "" ? alert : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function refreshInvocationVerdict(root) {
-  try {
-    const fingerprint = journalFingerprint(root);
-    const path = cachePath(root);
-    try {
-      const previous = JSON.parse(readFileSync5(path, "utf8"));
-      if (typeof previous === "object" && previous !== null && previous["fingerprint"] === fingerprint) return;
-    } catch {
-    }
-    const journals = readMissionJournals(root, { recentMissions: REFRESH_MISSIONS });
-    const alert = invocationAlert(
-      resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
-      livenessVerdict(journals)
-    );
-    const entry = alert === void 0 ? { fingerprint } : { fingerprint, alert };
-    mkdirSync(dirname3(path), { recursive: true });
-    const temporary = `${path}.${process.pid}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify(entry)}
-`);
-    renameSync(temporary, path);
-  } catch {
-  }
-}
-
-// src/lifecycle/context.ts
-function sessionStartOutput(version, notice, invocationAlert2, resumeContext) {
-  const installed = version.trim() === "" ? "unknown" : version.trim();
-  const base = `void-harness ${installed} is active. Non-negotiable floor: never edit secrets, keys or lockfiles; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`void-harness doctor\` if runtime health is uncertain.`;
-  const suffix = notice === void 0 || notice.trim() === "" ? "" : ` ${notice.trim()}`;
-  const alert = invocationAlert2 === void 0 || invocationAlert2.trim() === "" ? "" : `
-${invocationAlert2.trim()}`;
-  const resume = resumeContext === void 0 || resumeContext.trim() === "" ? "" : `
-${resumeContext.trimEnd()}`;
-  return {
-    hookSpecificOutput: {
-      hookEventName: "SessionStart",
-      additionalContext: `${base}${suffix}${alert}${resume}`
-    }
-  };
-}
-
-// src/lifecycle/context-executor.ts
-import { join as join8 } from "node:path";
-
-// src/lifecycle/executor-shared.ts
-import {
-  accessSync,
-  constants,
-  lstatSync as lstatSync2,
-  readFileSync as readFileSync6,
-  realpathSync as realpathSync2
-} from "node:fs";
-import { delimiter, isAbsolute as isAbsolute2, join as join7, relative as relative2 } from "node:path";
-function record3(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
-}
-function boundedInteger(value, fallback, min, max) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
-}
-function within(root, target) {
-  const rel = relative2(root, target);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute2(rel);
-}
-function executable(path) {
-  try {
-    accessSync(path, process.platform === "win32" ? constants.F_OK : constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function findExecutable(name, root, env) {
-  if ((isAbsolute2(name) || name.includes("/") || name.includes("\\")) && executable(name)) {
-    return name;
-  }
-  const suffixes = process.platform === "win32" ? ["", ".cmd", ".exe", ".bat"] : [""];
-  const local = join7(root, "node_modules", ".bin", name);
-  for (const suffix of suffixes) {
-    if (executable(`${local}${suffix}`)) return `${local}${suffix}`;
-  }
-  for (const directory of (env["PATH"] ?? "").split(delimiter)) {
-    if (directory === "") continue;
-    for (const suffix of suffixes) {
-      const candidate = join7(directory, `${name}${suffix}`);
-      if (executable(candidate)) return candidate;
-    }
-  }
-  return void 0;
-}
-function safeExistingFiles(paths, root) {
-  const canonicalRoot = realpathSync2(root);
-  return paths.filter((path) => {
-    try {
-      const info = lstatSync2(path);
-      if (!info.isFile() || info.isSymbolicLink()) return false;
-      return within(canonicalRoot, realpathSync2(path));
-    } catch {
-      return false;
-    }
-  });
-}
-function readJson(path) {
-  try {
-    return JSON.parse(readFileSync6(path, "utf8"));
-  } catch {
-    return void 0;
-  }
-}
-
-// src/lifecycle/context-executor.ts
-var VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
-function readVersion(path) {
-  const version = record3(readJson(path))?.["version"];
-  return typeof version === "string" && VERSION_SHAPE.test(version) ? version : void 0;
-}
-function resolveInstall(root, env) {
-  const explicit = env["VOID_HARNESS_VERSION"];
-  if (explicit !== void 0 && VERSION_SHAPE.test(explicit)) {
-    return { version: explicit, source: void 0 };
-  }
-  const pluginRoot = env["CLAUDE_PLUGIN_ROOT"];
-  if (pluginRoot !== void 0) {
-    const version2 = readVersion(join8(pluginRoot, ".claude-plugin", "plugin.json"));
-    if (version2 !== void 0) return { version: version2, source: "marketplace" };
-  }
-  const receipt = record3(readJson(voidReadPath(root, "receipts", "install-v1.json")));
-  const version = receipt?.["version"];
-  if (typeof version === "string" && VERSION_SHAPE.test(version)) {
-    const declared = receipt?.["source"];
-    const source = declared === "local" || declared === "marketplace" ? declared : void 0;
-    return { version, source };
-  }
-  return { version: "unknown", source: void 0 };
-}
-
 // src/freshness/cache.ts
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync7, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname4, join as join9 } from "node:path";
+import { mkdirSync, readFileSync as readFileSync4, renameSync, writeFileSync } from "node:fs";
+import { dirname as dirname3, join as join4 } from "node:path";
 var CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
 var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function cacheFilePath(env) {
   const xdg = env["XDG_CACHE_HOME"]?.trim();
   const home = env["HOME"]?.trim();
-  const base = xdg !== void 0 && xdg !== "" ? xdg : home !== void 0 && home !== "" ? join9(home, ".cache") : void 0;
-  return base === void 0 ? void 0 : join9(base, "void-harness", "freshness.json");
+  const base = xdg !== void 0 && xdg !== "" ? xdg : home !== void 0 && home !== "" ? join4(home, ".cache") : void 0;
+  return base === void 0 ? void 0 : join4(base, "void-harness", "freshness.json");
 }
 function parseEntry(raw) {
   let json;
@@ -1458,7 +880,7 @@ function readFreshnessCache(env, now) {
   if (path === void 0) return void 0;
   let raw;
   try {
-    raw = readFileSync7(path, "utf8");
+    raw = readFileSync4(path, "utf8");
   } catch {
     return void 0;
   }
@@ -1472,9 +894,9 @@ async function writeFreshnessCache(env, entry) {
   if (path === void 0) return void 0;
   const tmp = `${path}.${process.pid}.tmp`;
   try {
-    mkdirSync2(dirname4(path), { recursive: true });
-    writeFileSync2(tmp, JSON.stringify({ latest: entry.latest, checkedAt: entry.checkedAt }), "utf8");
-    renameSync2(tmp, path);
+    mkdirSync(dirname3(path), { recursive: true });
+    writeFileSync(tmp, JSON.stringify({ latest: entry.latest, checkedAt: entry.checkedAt }), "utf8");
+    renameSync(tmp, path);
   } catch {
   }
   return void 0;
@@ -1613,22 +1035,22 @@ async function fetchLatestVersion(options = {}) {
 }
 
 // src/freshness/npmrc.ts
-import { readFileSync as readFileSync8, statSync as statSync2 } from "node:fs";
-import { join as join10 } from "node:path";
+import { readFileSync as readFileSync5, statSync } from "node:fs";
+import { join as join5 } from "node:path";
 var MAX_NPMRC_BYTES = 64 * 1024;
 function readIfSmall(path) {
   try {
-    if (statSync2(path).size > MAX_NPMRC_BYTES) return void 0;
-    return readFileSync8(path, "utf8");
+    if (statSync(path).size > MAX_NPMRC_BYTES) return void 0;
+    return readFileSync5(path, "utf8");
   } catch {
     return void 0;
   }
 }
 function readNpmrc(cwd, env) {
-  const project = readIfSmall(join10(cwd, ".npmrc"));
+  const project = readIfSmall(join5(cwd, ".npmrc"));
   if (project !== void 0) return project;
   const home = env["HOME"]?.trim();
-  return home === void 0 || home === "" ? void 0 : readIfSmall(join10(home, ".npmrc"));
+  return home === void 0 || home === "" ? void 0 : readIfSmall(join5(home, ".npmrc"));
 }
 
 // src/freshness/notice.ts
@@ -1657,6 +1079,472 @@ function freshnessNotice(freshness, source) {
   return `void-harness ${installed} is installed; ${latest ?? "a newer version"} is published. Run \`void-harness update\` to upgrade.`;
 }
 
+// src/invocation.ts
+import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync7, readdirSync as readdirSync2, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname as dirname4, join as join8 } from "node:path";
+
+// src/journal.ts
+import { lstatSync, readFileSync as readFileSync6, readdirSync, statSync as statSync2 } from "node:fs";
+import { join as join7 } from "node:path";
+
+// src/void-layout.ts
+import { existsSync as existsSync4 } from "node:fs";
+import { join as join6 } from "node:path";
+var VOID_DIR = ".void";
+var VOID_MACHINE_DIR = "machine";
+var VOID_PREVIOUS_MACHINE_DIR = "local";
+var VOID_OWNERSHIP = Object.freeze({
+  // Declared: authored or hand-edited, never regenerable from a pin. These are
+  // the ONLY things at the top of `.void/`, which is what makes "everything at
+  // the top is committed" a rule you can see rather than one you must look up.
+  "config.json": "project",
+  "PROJECT-DOCTRINE.md": "project",
+  "program.md": "project",
+  knowledge: "project",
+  // Plans, despite the name. Measured on sesame: eight committed `.plan.md`
+  // files carrying frozen model decisions that still govern its schema. Read as
+  // `observed`, doctor told the project to untrack its own architecture
+  // decisions — and nothing writes this directory anyway. It is a leftover of
+  // the `backlog-autopilot` engine deleted at the 2026-07-30 cutover; the
+  // current autopilot writes to `machine/autopilot/`. So there is no writer to
+  // redirect, only a classification that was wrong.
+  "autonomous-runs": "project",
+  // Derived: `void-harness install` re-materializes these, byte for byte from a
+  // pin. Not committed — 1.2 MB of vendored prose rewritten on every bump — but
+  // their absence degrades the agent rather than breaking the project.
+  "PHILOSOPHY.md": "derived",
+  // Derived AND committed, which is why it stays at the top rather than moving
+  // into `installed/`. `.claude/settings.json` names this path and is itself
+  // committed, so ignoring the runner would give a fresh clone a settings file
+  // pointing at a missing file and every tool call would fail on it. See
+  // `DERIVED_LOAD_BEARING`: its absence is an error, not a degradation.
+  hooks: "derived",
+  // Observed: this machine's history. Never meaningful in another checkout, and
+  // losing it costs nothing.
+  runs: "observed",
+  cache: "observed",
+  outputs: "observed",
+  generated: "observed",
+  archives: "observed",
+  autopilot: "observed",
+  receipts: "observed",
+  history: "observed",
+  worktrees: "observed",
+  // Renamed from `state.json`, which named two different things: this snapshot
+  // and an autopilot run's cursor. The cursor keeps its name inside its own run
+  // directory, where nothing else competes for it.
+  "status.json": "observed",
+  // The session checkpoint. Observed on purpose: it is what THIS machine was
+  // doing, so committing it would guarantee a conflict on a file rewritten every
+  // evening while serving nobody else.
+  "checkpoint.md": "observed",
+  // Nothing WRITES these any more — the current telemetry is `runs/*/events.jsonl`
+  // — but they still exist on disk in the park (424 KB in one project), and
+  // "no longer read" is not "no longer there". Dropping them from this table
+  // would let them fall through to the `project` default, and doctor would start
+  // telling those projects to commit their own telemetry.
+  "activations.jsonl": "observed",
+  "outcomes.jsonl": "observed",
+  "usage.log": "observed",
+  // The pre-rename name of `status.json`. Classified for the same reason: it is
+  // on disk in the park, and forgetting it here would make doctor ask projects
+  // to commit it. `LEGACY_RENAMES` sends it to its new name on migration.
+  "state.json": "observed"
+});
+var LEGACY_RENAMES = Object.freeze({
+  "state.json": "status.json"
+});
+var RETIRED_ENTRIES = Object.freeze([
+  "activations.jsonl",
+  "outcomes.jsonl",
+  "usage.log"
+]);
+var MATERIALIZED_OWNERSHIP = Object.freeze({
+  // The project's own wiring: hand-editable, merged rather than regenerated.
+  ".claude/settings.json": "project",
+  // Regenerated by `init` from the harness assets.
+  ".claude/skills/": "derived",
+  ".claude/agents/": "derived",
+  ".claude/commands/": "derived",
+  ".agents/skills/": "derived",
+  ".codex/agents/": "derived",
+  ".void/hooks/": "derived",
+  ".void/installed/PHILOSOPHY.md": "derived",
+  ".codex/hooks.json": "derived"
+});
+var DERIVED_LOAD_BEARING = Object.freeze([
+  ".void/hooks/",
+  ".codex/hooks.json"
+]);
+var UNIT_ROOTS = Object.freeze([
+  ".claude/skills",
+  ".claude/agents",
+  ".claude/commands",
+  ".agents/skills",
+  ".codex/agents"
+]);
+var MACHINE_ENTRIES = Object.freeze(
+  Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "observed").sort()
+);
+var INSTALLED_ENTRIES = Object.freeze(
+  Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "derived").filter((entry) => !DERIVED_LOAD_BEARING.includes(`${VOID_DIR}/${entry}/`)).sort()
+);
+function voidDir(root) {
+  return join6(root, VOID_DIR);
+}
+function voidMachineDir(root) {
+  return join6(root, VOID_DIR, VOID_MACHINE_DIR);
+}
+function previousMachinePath(root, ...segments) {
+  return join6(root, VOID_DIR, VOID_PREVIOUS_MACHINE_DIR, ...segments);
+}
+function voidMachinePath(root, ...segments) {
+  return join6(voidMachineDir(root), ...segments);
+}
+function legacyVoidPath(root, ...segments) {
+  return join6(voidDir(root), ...segments);
+}
+function voidReadPath(root, ...segments) {
+  const candidates = [
+    voidMachinePath(root, ...segments),
+    previousMachinePath(root, ...segments),
+    legacyVoidPath(root, ...segments)
+  ];
+  return candidates.find((candidate) => existsSync4(candidate)) ?? candidates[0];
+}
+
+// src/journal.ts
+var MISSION_DIRECTORY = /^mis_[A-Za-z0-9_-]{8,100}$/;
+var MAX_MISSION_LOGS = 1e4;
+var MAX_JOURNAL_BYTES = 64 * 1024 * 1024;
+function regularFile(path) {
+  try {
+    const info = lstatSync(path);
+    return info.isFile() && !info.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+function missionEntries(runs) {
+  try {
+    const info = lstatSync(runs);
+    if (!info.isDirectory() || info.isSymbolicLink()) return [];
+    return readdirSync(runs, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && MISSION_DIRECTORY.test(entry.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, MAX_MISSION_LOGS);
+  } catch {
+    return [];
+  }
+}
+function journalFiles(root) {
+  const locations = [voidMachinePath(root, "runs"), legacyVoidPath(root, "runs")].filter((directory, index, all) => all.indexOf(directory) === index);
+  const files = [];
+  for (const runs of locations) {
+    for (const entry of missionEntries(runs)) {
+      const path = join7(runs, entry.name, "events.jsonl");
+      if (!regularFile(path)) continue;
+      try {
+        const info = statSync2(path);
+        files.push({ path, modifiedMs: info.mtimeMs, bytes: info.size });
+      } catch {
+      }
+    }
+  }
+  return files;
+}
+function readMissionJournals(root, options = {}) {
+  const ceiling = options.maxBytes ?? MAX_JOURNAL_BYTES;
+  let files = journalFiles(root);
+  if (options.recentMissions !== void 0) {
+    files = [...files].sort((a, b) => b.modifiedMs - a.modifiedMs).slice(0, Math.max(0, options.recentMissions));
+  }
+  const parts = [];
+  let bytes = 0;
+  for (const file of [...files].sort((a, b) => a.modifiedMs - b.modifiedMs)) {
+    if (file.bytes > ceiling || bytes + file.bytes > ceiling) break;
+    try {
+      parts.push(readFileSync6(file.path, "utf8"));
+      bytes += file.bytes;
+    } catch {
+    }
+  }
+  return parts.join("\n");
+}
+function journalFingerprint(root) {
+  let bytes = 0;
+  let newest = 0;
+  for (const file of journalFiles(root)) {
+    bytes += file.bytes;
+    if (file.modifiedMs > newest) newest = file.modifiedMs;
+  }
+  return `${Math.round(newest)}:${bytes}`;
+}
+
+// src/retired-skills.ts
+var RETIRED_SKILLS = {
+  "accessibility-first": "void-accessibility",
+  "adr-workflow": "void-decide",
+  "autonomous-backlog-loop": "void-autopilot",
+  "backlog-autopilot": "void-autopilot",
+  "backlog-batch": "void-autopilot",
+  brainstorming: "void-brainstorm",
+  "capture-rule": "void-learn",
+  "claude-md-authoring": "void-claude-md",
+  compounding: "void-learn",
+  "context-management": "void-context",
+  "harness-evolution": "void-learn",
+  "learning-capture": "void-learn",
+  "migrations-safety": "void-migrations",
+  refactoring: "void-refactor",
+  "session-handoff": "void-checkpoint",
+  "systematic-debugging": "void-debug",
+  "ticket-runner": "void-implement",
+  "ticket-writer": "void-ticket",
+  "verification-before-completion": "void-verify",
+  "void-backlog-loop": "void-autopilot",
+  "void-feedback": "void-learn",
+  "writing-plans": "void-plan",
+  // Every skill this harness ships gained the `void-` prefix. A project installed
+  // before that carries journals full of the bare names, and someone who learnt
+  // `/tdd` will type it again: both must land on an answer rather than on silence.
+  accessibility: "void-accessibility",
+  "accessibility-check": "void-accessibility-check",
+  "api-and-interface-design": "void-api-and-interface-design",
+  "async-safety": "void-async-safety",
+  autopilot: "void-autopilot",
+  "background-job-pattern": "void-background-job-pattern",
+  brainstorm: "void-brainstorm",
+  "cache-component-pattern": "void-cache-component-pattern",
+  checkpoint: "void-checkpoint",
+  "claude-md": "void-claude-md",
+  "client-vs-server-component": "void-client-vs-server-component",
+  "code-review": "void-code-review",
+  "commit-discipline": "void-commit-discipline",
+  context: "void-context",
+  debug: "void-debug",
+  decide: "void-decide",
+  "dependency-direction": "void-dependency-direction",
+  "devex-audit": "void-devex-audit",
+  "domain-driven-design": "void-domain-driven-design",
+  "drizzle-migration-safe": "void-drizzle-migration-safe",
+  "eas-build-profile": "void-eas-build-profile",
+  "env-validation": "void-env-validation",
+  "expo-config-plugins": "void-expo-config-plugins",
+  "expo-router-pattern": "void-expo-router-pattern",
+  "form-pattern": "void-form-pattern",
+  "frontend-design": "void-frontend-design",
+  functional: "void-functional",
+  "hexagonal-architecture": "void-hexagonal-architecture",
+  implement: "void-implement",
+  "install-prompt-ux": "void-install-prompt-ux",
+  "instrumentation-setup": "void-instrumentation-setup",
+  learn: "void-learn",
+  "llm-cost-discipline": "void-llm-cost-discipline",
+  "loading-error-boundaries": "void-loading-error-boundaries",
+  "make-pdf": "void-make-pdf",
+  "manifest-checklist": "void-manifest-checklist",
+  merge: "void-merge",
+  migrations: "void-migrations",
+  observability: "void-observability",
+  "offline-first-mutation": "void-offline-first-mutation",
+  "ota-update-strategy": "void-ota-update-strategy",
+  "package-extraction": "void-package-extraction",
+  "parallel-routes-slots": "void-parallel-routes-slots",
+  plan: "void-plan",
+  "plan-review": "void-plan-review",
+  qa: "void-qa",
+  "rate-limit-strategy": "void-rate-limit-strategy",
+  refactor: "void-refactor",
+  retrospective: "void-retrospective",
+  "route-group-decision": "void-route-group-decision",
+  "security-audit": "void-security-audit",
+  "security-guidance": "void-security-guidance",
+  "server-action": "void-server-action",
+  "service-package": "void-service-package",
+  "service-worker-strategy": "void-service-worker-strategy",
+  "source-driven-development": "void-source-driven-development",
+  "state-architecture": "void-state-architecture",
+  tdd: "void-tdd",
+  testing: "void-testing",
+  "testing-server-modules": "void-testing-server-modules",
+  ticket: "void-ticket",
+  "turbo-pipeline-tuning": "void-turbo-pipeline-tuning",
+  "typescript-strict": "void-typescript-strict",
+  "ui-review": "void-ui-review",
+  verify: "void-verify",
+  "webhook-handler-pattern": "void-webhook-handler-pattern"
+};
+function wasEverOurs(name) {
+  return Object.hasOwn(RETIRED_SKILLS, name);
+}
+
+// src/invocation.ts
+var SKILL_RUNTIME_DIRS = [".claude", ".agents"];
+function bareName(raw) {
+  const colon = raw.lastIndexOf(":");
+  return colon >= 0 ? raw.slice(colon + 1) : raw;
+}
+function installedSkillNames(root) {
+  const names = /* @__PURE__ */ new Set();
+  for (const runtime3 of SKILL_RUNTIME_DIRS) {
+    const skills = join8(root, runtime3, "skills");
+    let entries;
+    try {
+      entries = readdirSync2(skills, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (existsSync5(join8(skills, entry.name, "SKILL.md"))) names.add(entry.name);
+    }
+  }
+  return names;
+}
+function eachEvent(body, visit) {
+  for (const line of body.split("\n")) {
+    if (line === "") continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null) continue;
+    const record8 = parsed;
+    const payload = record8["payload"];
+    const category = typeof payload === "object" && payload !== null ? payload["category"] : void 0;
+    visit({
+      kind: typeof record8["kind"] === "string" ? record8["kind"] : "",
+      missionId: typeof record8["missionId"] === "string" ? record8["missionId"] : "",
+      category: typeof category === "string" ? category : "",
+      subject: typeof record8["subject"] === "string" ? record8["subject"] : "",
+      ts: typeof record8["ts"] === "string" ? record8["ts"] : ""
+    });
+  }
+}
+var LIVE_WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
+function newestMission(body, nowMs) {
+  let latest = "";
+  let mission = "";
+  eachEvent(body, (event) => {
+    if (event.kind !== "runtime.tool.started") return;
+    if (nowMs !== void 0) {
+      const at = Date.parse(event.ts);
+      if (!Number.isNaN(at) && at < nowMs - LIVE_WINDOW_MS) return;
+    }
+    if (event.ts > latest) {
+      latest = event.ts;
+      mission = event.missionId;
+    }
+  });
+  return mission;
+}
+function recordedSkillNames(body, nowMs) {
+  const names = [];
+  const floor = nowMs === void 0 ? void 0 : nowMs - LIVE_WINDOW_MS;
+  eachEvent(body, (event) => {
+    if (event.kind !== "runtime.tool.started" || event.category !== "skill") return;
+    if (!event.subject.startsWith("skill:")) return;
+    if (floor !== void 0) {
+      const at = Date.parse(event.ts);
+      if (!Number.isNaN(at) && at < floor) return;
+    }
+    names.push({ name: bareName(event.subject.slice("skill:".length)), missionId: event.missionId });
+  });
+  return names;
+}
+function replacementFor(name) {
+  return RETIRED_SKILLS[name];
+}
+function resolutionVerdict(body, installed, options = {}) {
+  const recorded = recordedSkillNames(body, options.nowMs);
+  const ours = (entry) => !installed.has(entry.name) && wasEverOurs(entry.name);
+  const retired = [...new Set(recorded.filter(ours).map((entry) => entry.name))].sort();
+  const newest = newestMission(body, options.nowMs);
+  const unresolved = [
+    ...new Set(recorded.filter((entry) => ours(entry) && entry.missionId === newest).map((entry) => entry.name))
+  ].sort();
+  return { ok: unresolved.length === 0, unresolved, retired };
+}
+function withSuccessor(name) {
+  const replacement = replacementFor(name);
+  return replacement === void 0 ? name : `${name} -> ${replacement}`;
+}
+var MAX_NAMED = 5;
+function invocationAlert(resolution, liveness) {
+  if (resolution.ok && liveness.ok) return void 0;
+  const lines = ["void-harness, invocation surface:"];
+  if (!resolution.ok) {
+    const named = resolution.unresolved.slice(0, MAX_NAMED).map(withSuccessor).join(", ");
+    const rest = resolution.unresolved.length - MAX_NAMED;
+    const tail = rest > 0 ? `, and ${rest} more` : "";
+    lines.push(
+      `  ${resolution.unresolved.length} skill invocation(s) in this run name a skill that no longer exists: ${named}${tail}`
+    );
+  }
+  if (!liveness.ok) {
+    lines.push(
+      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`
+    );
+  }
+  lines.push("  run `void-harness doctor` for the detail");
+  return lines.join("\n");
+}
+var WORKING_MISSION_CALLS = 20;
+var LIVENESS_WINDOW = 3;
+function livenessVerdict(body) {
+  const tallies = /* @__PURE__ */ new Map();
+  eachEvent(body, (event) => {
+    if (event.kind !== "runtime.tool.started" || event.missionId === "") return;
+    const tally = tallies.get(event.missionId) ?? { toolCalls: 0, skillCalls: 0, lastTs: "" };
+    tally.toolCalls += 1;
+    if (event.category === "skill") tally.skillCalls += 1;
+    if (event.ts > tally.lastTs) tally.lastTs = event.ts;
+    tallies.set(event.missionId, tally);
+  });
+  const judged = [...tallies.values()].filter((tally) => tally.toolCalls >= WORKING_MISSION_CALLS).sort((a, b) => a.lastTs < b.lastTs ? 1 : a.lastTs > b.lastTs ? -1 : 0).slice(0, LIVENESS_WINDOW);
+  const toolCalls = judged.reduce((total, tally) => total + tally.toolCalls, 0);
+  const skillCalls = judged.reduce((total, tally) => total + tally.skillCalls, 0);
+  const ok = judged.length < LIVENESS_WINDOW || judged.some((tally) => tally.skillCalls > 0);
+  return { ok, missions: judged.length, toolCalls, skillCalls };
+}
+var REFRESH_MISSIONS = 20;
+function cachePath(root) {
+  return voidMachinePath(root, "invocation.json");
+}
+function cachedInvocationAlert(root) {
+  try {
+    const parsed = JSON.parse(readFileSync7(cachePath(root), "utf8"));
+    if (typeof parsed !== "object" || parsed === null) return void 0;
+    const alert = parsed["alert"];
+    return typeof alert === "string" && alert !== "" ? alert : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function refreshInvocationVerdict(root) {
+  try {
+    const fingerprint = journalFingerprint(root);
+    const path = cachePath(root);
+    try {
+      const previous = JSON.parse(readFileSync7(path, "utf8"));
+      if (typeof previous === "object" && previous !== null && previous["fingerprint"] === fingerprint) return;
+    } catch {
+    }
+    const journals = readMissionJournals(root, { recentMissions: REFRESH_MISSIONS });
+    const alert = invocationAlert(
+      resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
+      livenessVerdict(journals)
+    );
+    const entry = alert === void 0 ? { fingerprint } : { fingerprint, alert };
+    mkdirSync2(dirname4(path), { recursive: true });
+    const temporary = `${path}.${process.pid}.tmp`;
+    writeFileSync2(temporary, `${JSON.stringify(entry)}
+`);
+    renameSync2(temporary, path);
+  } catch {
+  }
+}
+
 // src/lifecycle/checkpoint-audit.ts
 var DAY_MS = 864e5;
 var STALE_DAYS = 7;
@@ -1676,6 +1564,23 @@ function auditCheckpoint(input) {
   return reasons.length === 0 ? { status: "ok", reasons } : { status: "degraded", reasons };
 }
 
+// src/lifecycle/context.ts
+function sessionStartOutput(version, notice, invocationAlert2, resumeContext) {
+  const installed = version.trim() === "" ? "unknown" : version.trim();
+  const base = `void-harness ${installed} is active. Non-negotiable floor: never edit secrets, keys or lockfiles; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`void-harness doctor\` if runtime health is uncertain.`;
+  const suffix = notice === void 0 || notice.trim() === "" ? "" : ` ${notice.trim()}`;
+  const alert = invocationAlert2 === void 0 || invocationAlert2.trim() === "" ? "" : `
+${invocationAlert2.trim()}`;
+  const resume = resumeContext === void 0 || resumeContext.trim() === "" ? "" : `
+${resumeContext.trimEnd()}`;
+  return {
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: `${base}${suffix}${alert}${resume}`
+    }
+  };
+}
+
 // src/lifecycle/context-continuity-executor.ts
 import { createHash as createHash2 } from "node:crypto";
 import {
@@ -1690,7 +1595,7 @@ import {
   unlinkSync,
   writeFileSync as writeFileSync3
 } from "node:fs";
-import { dirname as dirname5, join as join11 } from "node:path";
+import { dirname as dirname5, isAbsolute as isAbsolute3, join as join10, relative as relative3, resolve as resolve3 } from "node:path";
 
 // ../mission-engine/dist/session/checkpoint.js
 import { createHash } from "node:crypto";
@@ -1773,7 +1678,7 @@ function pathList2(block2, heading) {
   const paths = section.split(/\r?\n/).map((line) => /^- (.+)$/.exec(line)?.[1]).filter((path) => path !== void 0);
   if (paths.length > MAX_ITEMS)
     return void 0;
-  if (paths.some((path) => path.length > MAX_PATH || /[\u0000-\u001f]/.test(path)))
+  if (paths.some((path) => path.length > MAX_PATH || [...path].some((character) => character.charCodeAt(0) < 32)))
     return void 0;
   return paths;
 }
@@ -1803,7 +1708,8 @@ function mechanicalScalars(block2, required) {
   const lastUsedTokens = integerScalar(block2, "last_used_tokens");
   const readFilesOverflow = integerScalar(block2, "read_files_overflow");
   const modifiedFilesOverflow = integerScalar(block2, "modified_files_overflow");
-  if (nudgeEmitted === void 0 || clearPending === void 0 || transcriptCursorBytes === void 0 || lastMeasurementAtMs === void 0 || lastUsedTokens === void 0 || readFilesOverflow === void 0 || modifiedFilesOverflow === void 0)
+  const lastResumeSource = scalar(block2, "last_resume_source");
+  if (nudgeEmitted === void 0 || clearPending === void 0 || transcriptCursorBytes === void 0 || lastMeasurementAtMs === void 0 || lastUsedTokens === void 0 || readFilesOverflow === void 0 || modifiedFilesOverflow === void 0 || !isMechanicalResumeSource(lastResumeSource))
     return void 0;
   return {
     schemaVersion: 1,
@@ -1814,8 +1720,12 @@ function mechanicalScalars(block2, required) {
     lastUsedTokens,
     readFilesOverflow,
     modifiedFilesOverflow,
-    clearPending
+    clearPending,
+    lastResumeSource
   };
+}
+function isMechanicalResumeSource(value) {
+  return value === "none" || value === "startup" || value === "resume" || value === "clear" || value === "compact" || value === "fork";
 }
 function parseMechanicalContextBlock(raw) {
   const bounds = mechanicalBounds(raw);
@@ -1848,6 +1758,7 @@ function renderMechanicalContextBlock(state) {
     `read_files_overflow: ${String(state.readFilesOverflow)}`,
     `modified_files_overflow: ${String(state.modifiedFilesOverflow)}`,
     `clear_pending: ${String(state.clearPending)}`,
+    `last_resume_source: ${state.lastResumeSource}`,
     "```",
     "",
     "### Read files",
@@ -1859,6 +1770,63 @@ function renderMechanicalContextBlock(state) {
     renderPaths(state.modifiedFiles),
     MECHANICAL_END
   ].join("\n");
+}
+function mergeRecentPaths(current, overflow, observed) {
+  if (observed === void 0 || observed.length === 0) {
+    return { paths: current, overflow, changed: false };
+  }
+  const uniqueObserved = [...new Set(observed)];
+  const merged = [
+    ...current.filter((path) => !uniqueObserved.includes(path)),
+    ...uniqueObserved
+  ];
+  const displaced = Math.max(0, merged.length - MAX_ITEMS);
+  const paths = merged.slice(displaced);
+  const changed = displaced > 0 || paths.length !== current.length || paths.some((path, index) => path !== current[index]);
+  return {
+    paths: changed ? paths : current,
+    overflow: overflow + displaced,
+    changed
+  };
+}
+function advanceMechanicalContext(state, observation) {
+  if (observation.objectiveHash !== void 0 && observation.objectiveHash !== state.objectiveHash) {
+    const revision = state.workRevision + 1;
+    return {
+      ...state,
+      objectiveHash: observation.objectiveHash,
+      workRevision: revision,
+      semanticRevision: revision,
+      nudgeEmitted: false,
+      readFiles: [],
+      modifiedFiles: [],
+      readFilesOverflow: 0,
+      modifiedFilesOverflow: 0,
+      clearPending: false
+    };
+  }
+  const reads = mergeRecentPaths(state.readFiles, state.readFilesOverflow, observation.readFiles);
+  const modifications = mergeRecentPaths(state.modifiedFiles, state.modifiedFilesOverflow, observation.modifiedFiles);
+  const tokensChanged = observation.usedTokens !== void 0 && observation.usedTokens !== state.lastUsedTokens;
+  const sourceChanged = observation.resumeSource !== void 0 && observation.resumeSource !== state.lastResumeSource;
+  const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
+  const workRevision = state.workRevision + (workChanged ? 1 : 0);
+  const reconcile = observation.semanticCheckpointWritten === true;
+  if (!workChanged && !reconcile)
+    return state;
+  return {
+    ...state,
+    workRevision,
+    semanticRevision: reconcile ? workRevision : state.semanticRevision,
+    nudgeEmitted: observation.resumeSource === "clear" || observation.resumeSource === "compact" ? false : state.nudgeEmitted,
+    lastUsedTokens: observation.usedTokens ?? state.lastUsedTokens,
+    readFiles: reads.paths,
+    modifiedFiles: modifications.paths,
+    readFilesOverflow: reads.overflow,
+    modifiedFilesOverflow: modifications.overflow,
+    clearPending: reconcile ? false : observation.resumeSource === "clear" || state.clearPending,
+    lastResumeSource: observation.resumeSource ?? state.lastResumeSource
+  };
 }
 function mergeMechanicalContextBlock(raw, state) {
   const bounds = mechanicalBounds(raw);
@@ -2118,6 +2086,9 @@ function composeResumeBundle(input) {
   };
 }
 function checkpointContext(checkpoint) {
+  const mechanical = checkpoint.mechanicalContext;
+  const readOverflow = mechanical === void 0 || mechanical.readFilesOverflow === 0 ? "" : ` (+${String(mechanical.readFilesOverflow)} older)`;
+  const modifiedOverflow = mechanical === void 0 || mechanical.modifiedFilesOverflow === 0 ? "" : ` (+${String(mechanical.modifiedFilesOverflow)} older)`;
   return [
     checkpoint.date === void 0 ? void 0 : `Checkpoint date: ${checkpoint.date}`,
     checkpoint.objective === void 0 ? void 0 : `Objective: ${checkpoint.objective}`,
@@ -2126,7 +2097,9 @@ function checkpointContext(checkpoint) {
     checkpoint.nextAction === void 0 ? void 0 : `Next action: ${checkpoint.nextAction}`,
     checkpoint.openLoops.length === 0 ? void 0 : `Open loops: ${checkpoint.openLoops.join("; ")}`,
     checkpoint.deadEnds.length === 0 ? void 0 : `Dead ends: ${checkpoint.deadEnds.join("; ")}`,
-    checkpoint.assumptions.length === 0 ? void 0 : `Unverified assumptions: ${checkpoint.assumptions.join("; ")}`
+    checkpoint.assumptions.length === 0 ? void 0 : `Unverified assumptions: ${checkpoint.assumptions.join("; ")}`,
+    mechanical === void 0 || mechanical.readFiles.length === 0 ? void 0 : `Read files: ${mechanical.readFiles.join(", ")}${readOverflow}`,
+    mechanical === void 0 || mechanical.modifiedFiles.length === 0 ? void 0 : `Modified files: ${mechanical.modifiedFiles.join(", ")}${modifiedOverflow}`
   ].filter((line) => line !== void 0);
 }
 function boundContext(text2) {
@@ -2166,8 +2139,74 @@ function renderResumeContext(bundle) {
 `);
 }
 
+// src/lifecycle/executor-shared.ts
+import {
+  accessSync,
+  constants,
+  lstatSync as lstatSync2,
+  readFileSync as readFileSync8,
+  realpathSync as realpathSync2
+} from "node:fs";
+import { delimiter, isAbsolute as isAbsolute2, join as join9, relative as relative2 } from "node:path";
+function record3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
+}
+function boundedInteger(value, fallback, min, max) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+function within(root, target) {
+  const rel = relative2(root, target);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute2(rel);
+}
+function executable(path) {
+  try {
+    accessSync(path, process.platform === "win32" ? constants.F_OK : constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function findExecutable(name, root, env) {
+  if ((isAbsolute2(name) || name.includes("/") || name.includes("\\")) && executable(name)) {
+    return name;
+  }
+  const suffixes = process.platform === "win32" ? ["", ".cmd", ".exe", ".bat"] : [""];
+  const local = join9(root, "node_modules", ".bin", name);
+  for (const suffix of suffixes) {
+    if (executable(`${local}${suffix}`)) return `${local}${suffix}`;
+  }
+  for (const directory of (env["PATH"] ?? "").split(delimiter)) {
+    if (directory === "") continue;
+    for (const suffix of suffixes) {
+      const candidate = join9(directory, `${name}${suffix}`);
+      if (executable(candidate)) return candidate;
+    }
+  }
+  return void 0;
+}
+function safeExistingFiles(paths, root) {
+  const canonicalRoot = realpathSync2(root);
+  return paths.filter((path) => {
+    try {
+      const info = lstatSync2(path);
+      if (!info.isFile() || info.isSymbolicLink()) return false;
+      return within(canonicalRoot, realpathSync2(path));
+    } catch {
+      return false;
+    }
+  });
+}
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync8(path, "utf8"));
+  } catch {
+    return void 0;
+  }
+}
+
 // src/lifecycle/context-continuity-executor.ts
-var CHECKPOINT = join11(".void", "machine", "checkpoint.md");
+var CHECKPOINT = join10(".void", "machine", "checkpoint.md");
 var MAX_CHECKPOINT_BYTES = 5e5;
 var LOCK_STALE_MS = 1e3;
 var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash2("sha256").update("").digest("hex")}`;
@@ -2197,7 +2236,8 @@ function initialState(raw) {
     modifiedFiles: [],
     readFilesOverflow: 0,
     modifiedFilesOverflow: 0,
-    clearPending: false
+    clearPending: false,
+    lastResumeSource: "none"
   };
 }
 function acquireLock(path, now) {
@@ -2229,7 +2269,7 @@ function atomicCheckpointWrite(path, content, now) {
   const lock = `${path}.lock`;
   const descriptor = acquireLock(lock, now);
   if (descriptor === void 0) return false;
-  const temporary = join11(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+  const temporary = join10(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
   try {
     writeFileSync3(temporary, content, { encoding: "utf8", flag: "wx" });
     renameSync3(temporary, path);
@@ -2245,7 +2285,7 @@ function atomicCheckpointWrite(path, content, now) {
   }
 }
 function sealPreCompact(root, now) {
-  const path = join11(root, CHECKPOINT);
+  const path = join10(root, CHECKPOINT);
   const raw = rawCheckpoint(path);
   if (raw === void 0) {
     return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
@@ -2254,10 +2294,11 @@ function sealPreCompact(root, now) {
   if (block2.status === "invalid") {
     return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
   }
-  const merged = mergeMechanicalContextBlock(
-    raw,
-    block2.status === "valid" ? block2.state : initialState(raw)
-  );
+  const current = block2.status === "valid" ? block2.state : initialState(raw);
+  const state = advanceMechanicalContext(current, {
+    objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective)
+  });
+  const merged = mergeMechanicalContextBlock(raw, state);
   if (!merged.ok) {
     return { status: "degraded", details: { reason: merged.error } };
   }
@@ -2266,6 +2307,69 @@ function sealPreCompact(root, now) {
   }
   return { status: "ok", details: { sealed: true } };
 }
+function successfulToolUse(input) {
+  const response = record3(input["tool_response"]) ?? record3(input["tool_result"]);
+  if (response?.["is_error"] === true || response?.["success"] === false) return false;
+  return input["error"] === void 0 && input["tool_error"] === void 0;
+}
+function boundedProjectPath(root, candidate) {
+  if (candidate === "" || candidate.length > 500 || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
+  const target = isAbsolute3(candidate) ? resolve3(candidate) : resolve3(root, candidate);
+  const local = relative3(resolve3(root), target);
+  if (local === "" || local.startsWith("..") || isAbsolute3(local)) return void 0;
+  return local.split("\\").join("/");
+}
+function toolPaths(call, root) {
+  const isModification = call.tool === "Edit" || call.tool === "Write" || call.tool === "apply_patch";
+  const isRead = call.tool === "Read" || call.tool === "read_file" || call.tool === "view_image";
+  if (!isModification && !isRead) return { readFiles: [], modifiedFiles: [] };
+  const paths = call.edits.map((edit) => boundedProjectPath(root, edit.path)).filter((path) => path !== void 0 && path !== CHECKPOINT);
+  return isRead ? { readFiles: paths, modifiedFiles: [] } : { readFiles: [], modifiedFiles: paths };
+}
+function evolveCheckpoint(root, now, observation) {
+  const path = join10(root, CHECKPOINT);
+  const raw = rawCheckpoint(path);
+  if (raw === void 0) {
+    return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
+  }
+  const block2 = parseMechanicalContextBlock(raw);
+  if (block2.status === "invalid") {
+    return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
+  }
+  const current = block2.status === "valid" ? block2.state : initialState(raw);
+  const next = advanceMechanicalContext(current, observation);
+  if (next === current && block2.status === "valid") {
+    return { status: "skipped", details: { reason: "duplicate-observation" } };
+  }
+  const merged = mergeMechanicalContextBlock(raw, next);
+  if (!merged.ok) return { status: "degraded", details: { reason: merged.error } };
+  if (!atomicCheckpointWrite(path, merged.value, now)) {
+    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
+  }
+  return { status: "ok", details: { advanced: next.workRevision !== current.workRevision } };
+}
+function observePostToolUse(input, root, now) {
+  if (!successfulToolUse(input)) {
+    return { status: "skipped", details: { reason: "tool-use-failed" } };
+  }
+  try {
+    const call = normalizeToolCall(input);
+    const paths = toolPaths(call, root);
+    const checkpointWrite = (call.tool === "Edit" || call.tool === "Write" || call.tool === "apply_patch") && call.edits.some(
+      (edit) => boundedProjectPath(root, edit.path) === CHECKPOINT
+    );
+    const raw = checkpointWrite ? rawCheckpoint(join10(root, CHECKPOINT)) : void 0;
+    const objectiveHash = raw === void 0 ? void 0 : hashCheckpointObjective(parseCheckpoint(raw).objective);
+    return evolveCheckpoint(root, now, {
+      readFiles: paths.readFiles,
+      modifiedFiles: paths.modifiedFiles,
+      ...objectiveHash === void 0 ? {} : { objectiveHash },
+      ...checkpointWrite ? { semanticCheckpointWritten: true } : {}
+    });
+  } catch {
+    return { status: "degraded", details: { reason: "invalid-tool-input" } };
+  }
+}
 function executeContextContinuity(rawInput, root, _runtime, now) {
   const input = record3(rawInput);
   if (input === void 0) {
@@ -2273,7 +2377,41 @@ function executeContextContinuity(rawInput, root, _runtime, now) {
   }
   const event = input["hook_event_name"];
   if (event === "PreCompact") return sealPreCompact(root, now);
+  if (event === "PostToolUse") return observePostToolUse(input, root, now);
+  if (event === "SessionStart") {
+    const source = input["source"];
+    if (source === "startup" || source === "resume" || source === "clear" || source === "compact" || source === "fork") {
+      return evolveCheckpoint(root, now, { resumeSource: source });
+    }
+  }
   return { status: "skipped", details: { reason: "event-not-actionable" } };
+}
+
+// src/lifecycle/context-executor.ts
+import { join as join11 } from "node:path";
+var VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
+function readVersion(path) {
+  const version = record3(readJson(path))?.["version"];
+  return typeof version === "string" && VERSION_SHAPE.test(version) ? version : void 0;
+}
+function resolveInstall(root, env) {
+  const explicit = env["VOID_HARNESS_VERSION"];
+  if (explicit !== void 0 && VERSION_SHAPE.test(explicit)) {
+    return { version: explicit, source: void 0 };
+  }
+  const pluginRoot = env["CLAUDE_PLUGIN_ROOT"];
+  if (pluginRoot !== void 0) {
+    const version2 = readVersion(join11(pluginRoot, ".claude-plugin", "plugin.json"));
+    if (version2 !== void 0) return { version: version2, source: "marketplace" };
+  }
+  const receipt = record3(readJson(voidReadPath(root, "receipts", "install-v1.json")));
+  const version = receipt?.["version"];
+  if (typeof version === "string" && VERSION_SHAPE.test(version)) {
+    const declared = receipt?.["source"];
+    const source = declared === "local" || declared === "marketplace" ? declared : void 0;
+    return { version, source };
+  }
+  return { version: "unknown", source: void 0 };
 }
 
 // src/lifecycle/format-executor.ts
@@ -2281,20 +2419,20 @@ import { spawnSync } from "node:child_process";
 
 // src/lifecycle/format.ts
 import {
-  isAbsolute as isAbsolute3,
-  relative as relative3,
-  resolve as resolve3
+  isAbsolute as isAbsolute4,
+  relative as relative4,
+  resolve as resolve4
 } from "node:path";
 var FORMATTABLE = /\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|css)$/;
 function within2(root, target) {
-  const rel = relative3(root, target);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute3(rel);
+  const rel = relative4(root, target);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute4(rel);
 }
 function formatCandidates(touchedPaths, projectRoot2) {
-  const root = resolve3(projectRoot2);
+  const root = resolve4(projectRoot2);
   const found = /* @__PURE__ */ new Set();
   for (const touchedPath of touchedPaths) {
-    const target = resolve3(root, touchedPath);
+    const target = resolve4(root, touchedPath);
     if (touchedPath.trim() !== "" && FORMATTABLE.test(touchedPath.replaceAll("\\", "/")) && within2(root, target)) {
       found.add(target);
     }
@@ -2553,7 +2691,7 @@ function programFrom(raw, legacy) {
   };
 }
 function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative10) => existsSync7(join12(root, relative10)));
+  const present = PROGRAM_PATHS.filter((relative11) => existsSync7(join12(root, relative11)));
   if (present.length === 0) return { program: void 0 };
   if (present.length > 1) {
     return {
@@ -2561,11 +2699,11 @@ function observeProgram(root) {
       programError: `multiple program descriptors: ${present.join(", ")}`
     };
   }
-  const relative9 = present[0];
-  if (relative9 === void 0) return { program: void 0 };
-  const raw = readBounded(join12(root, relative9));
-  const program = raw === void 0 ? void 0 : programFrom(raw, relative9 !== PROGRAM_PATHS[0]);
-  return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative9}` } : { program };
+  const relative10 = present[0];
+  if (relative10 === void 0) return { program: void 0 };
+  const raw = readBounded(join12(root, relative10));
+  const program = raw === void 0 ? void 0 : programFrom(raw, relative10 !== PROGRAM_PATHS[0]);
+  return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative10}` } : { program };
 }
 function git(root, args) {
   try {
@@ -2590,8 +2728,8 @@ function gitObservation(root) {
   };
 }
 function checkpointObservation(root) {
-  for (const relative9 of CHECKPOINT_PATHS) {
-    const path = join12(root, relative9);
+  for (const relative10 of CHECKPOINT_PATHS) {
+    const path = join12(root, relative10);
     const raw = readBounded(path);
     if (raw === void 0) continue;
     try {
@@ -2663,7 +2801,7 @@ import {
   realpathSync as realpathSync3,
   writeFileSync as writeFileSync4
 } from "node:fs";
-import { join as join13, relative as relative4 } from "node:path";
+import { join as join13, relative as relative5 } from "node:path";
 
 // src/lifecycle/trim.ts
 function record4(value) {
@@ -2772,7 +2910,7 @@ function executeTrim(rawInput, root, env) {
   const hash = createHash3("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
   const file = join13(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
-  const spillPath = relative4(realpathSync3(root), file).replaceAll("\\", "/");
+  const spillPath = relative5(realpathSync3(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
     thresholdBytes,
@@ -2814,10 +2952,10 @@ import { spawnSync as spawnSync3 } from "node:child_process";
 // src/lifecycle/typecheck.ts
 import {
   dirname as dirname6,
-  isAbsolute as isAbsolute4,
+  isAbsolute as isAbsolute5,
   join as join14,
-  relative as relative5,
-  resolve as resolve4
+  relative as relative6,
+  resolve as resolve5
 } from "node:path";
 function record5(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
@@ -2905,15 +3043,15 @@ function configuredTypecheck(value) {
   return {};
 }
 function within3(root, target) {
-  const rel = relative5(root, target);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute4(rel);
+  const rel = relative6(root, target);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute5(rel);
 }
 function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
-  const root = resolve4(projectRoot2);
+  const root = resolve5(projectRoot2);
   const found = /* @__PURE__ */ new Set();
   for (const changedPath of changedPaths) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
-    const target = resolve4(root, changedPath);
+    const target = resolve5(root, changedPath);
     if (!within3(root, target)) continue;
     let current = dirname6(target);
     while (within3(root, current)) {
@@ -3060,22 +3198,22 @@ Resolve before claiming done. This never blocks.
 
 // src/record.ts
 import { homedir } from "node:os";
-import { resolve as resolve8 } from "node:path";
+import { resolve as resolve9 } from "node:path";
 
 // src/project-registry.ts
 import { createHash as createHash4 } from "node:crypto";
 import { lstat, mkdir, open, readFile, realpath } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join16, relative as relative6, resolve as resolve5 } from "node:path";
+import { isAbsolute as isAbsolute6, join as join16, relative as relative7, resolve as resolve6 } from "node:path";
 function code(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
 }
 function within4(root, target) {
-  const rel = relative6(root, target);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute5(rel);
+  const rel = relative7(root, target);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute6(rel);
 }
 async function registerProjectRoot(root, globalDir) {
-  const canonicalRoot = await realpath(resolve5(root));
-  const base = resolve5(globalDir);
+  const canonicalRoot = await realpath(resolve6(root));
+  const base = resolve6(globalDir);
   await mkdir(base, { recursive: true, mode: 448 });
   const canonicalBase = await realpath(base);
   const projects = join16(base, "projects");
@@ -3115,9 +3253,9 @@ import { createHash as createHash5 } from "node:crypto";
 import {
   basename as basename4,
   extname,
-  isAbsolute as isAbsolute6,
-  relative as relative7,
-  resolve as resolve6
+  isAbsolute as isAbsolute7,
+  relative as relative8,
+  resolve as resolve7
 } from "node:path";
 var MISSION_ID = /^mis_[A-Za-z0-9_-]{8,100}$/;
 function record6(value) {
@@ -3163,7 +3301,7 @@ function nameFor(tool, category, input) {
   return tool || "unknown";
 }
 function safePaths(input, root) {
-  const absoluteRoot = resolve6(root);
+  const absoluteRoot = resolve7(root);
   const candidates = [
     input["file_path"],
     input["path"],
@@ -3172,12 +3310,12 @@ function safePaths(input, root) {
   const paths = [];
   for (const candidate of candidates) {
     if (typeof candidate !== "string" || candidate.length > 2e3) continue;
-    if (!isAbsolute6(candidate)) {
+    if (!isAbsolute7(candidate)) {
       if (!candidate.startsWith("..")) paths.push(candidate.slice(0, 500));
       continue;
     }
-    const rel = relative7(absoluteRoot, resolve6(candidate));
-    if (rel !== "" && !rel.startsWith("..") && !isAbsolute6(rel)) {
+    const rel = relative8(absoluteRoot, resolve7(candidate));
+    if (rel !== "" && !rel.startsWith("..") && !isAbsolute7(rel)) {
       paths.push(rel.slice(0, 500));
     }
   }
@@ -3231,7 +3369,7 @@ function deriveMissionId(explicit, runtime3, runtimeSessionId, root) {
     }
     return explicit;
   }
-  const opaque = createHash5("sha256").update(`${runtime3}\0${runtimeSessionId || "unknown"}\0${resolve6(root)}`).digest("hex").slice(0, 32);
+  const opaque = createHash5("sha256").update(`${runtime3}\0${runtimeSessionId || "unknown"}\0${resolve7(root)}`).digest("hex").slice(0, 32);
   return `mis_${opaque}`;
 }
 
@@ -3252,10 +3390,10 @@ import {
 } from "node:fs/promises";
 import {
   dirname as dirname7,
-  isAbsolute as isAbsolute7,
+  isAbsolute as isAbsolute8,
   join as join17,
-  relative as relative8,
-  resolve as resolve7
+  relative as relative9,
+  resolve as resolve8
 } from "node:path";
 
 // ../mission-engine/dist/events/schema.js
@@ -3509,8 +3647,8 @@ function code2(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
 }
 function within5(root, target) {
-  const rel = relative8(root, target);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute7(rel);
+  const rel = relative9(root, target);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute8(rel);
 }
 async function exists(path) {
   try {
@@ -3525,7 +3663,7 @@ async function safeRunDirectory(root, missionId) {
   if (!MISSION_ID3.test(missionId)) {
     throw new Error("HOOK_INVALID_MISSION_ID: expected mis_<opaque-id>");
   }
-  const absoluteRoot = resolve7(root);
+  const absoluteRoot = resolve8(root);
   const canonicalRoot = await realpath2(absoluteRoot);
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;
@@ -3779,7 +3917,7 @@ async function recordRuntimeEvent(options) {
   });
   await registerProjectRoot(
     options.root,
-    options.globalDir ?? resolve8(homedir(), ".void")
+    options.globalDir ?? resolve9(homedir(), ".void")
   ).catch(() => {
   });
   return event;
@@ -3815,7 +3953,7 @@ async function recordHookEvent(options) {
   });
   await registerProjectRoot(
     options.root,
-    options.globalDir ?? resolve8(homedir(), ".void")
+    options.globalDir ?? resolve9(homedir(), ".void")
   ).catch(() => {
   });
   return event;
@@ -3833,7 +3971,7 @@ async function recordRuntimeEventFromCli(raw, argv, env) {
     runtime: runtime(argv[3] ?? env["VOID_AGENT_RUNTIME"]),
     phase: phase(argv[2]),
     rawInput: raw,
-    globalDir: env["VOID_GLOBAL_DIR"] ?? resolve8(homedir(), ".void"),
+    globalDir: env["VOID_GLOBAL_DIR"] ?? resolve9(homedir(), ".void"),
     ...env["VOID_MISSION_ID"] === void 0 ? {} : { missionId: env["VOID_MISSION_ID"] }
   });
 }
@@ -3905,14 +4043,17 @@ async function runLifecycle(input) {
   const root = projectRoot();
   const rawInput = optionalPayload(input);
   if (hook === "context" || hook === "context-continuity") {
-    const continuity = hook === "context-continuity" ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now()) : { status: "ok", details: {} };
-    const execution2 = continuity;
+    const inputRecord = record3(rawInput);
+    const event = inputRecord?.["hook_event_name"];
+    if (hook === "context-continuity" && event !== "SessionStart") {
+      const execution3 = executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now());
+      await observeHook(hook, execution3, rawInput ?? {}, agentRuntime, root);
+      return;
+    }
     const install = resolveInstall(root, process.env);
     const cached = readFreshnessCache(process.env, Date.now());
     const notice = cached === void 0 ? void 0 : freshnessNotice(compareFreshness(install.version, cached.latest), install.source);
     const alert = cachedInvocationAlert(root);
-    const inputRecord = record3(rawInput);
-    const event = inputRecord?.["hook_event_name"];
     if (event === "SessionStart" || hook === "context") {
       const source = inputRecord?.["source"];
       const resume = observeResume(root, Date.now(), {
@@ -3923,6 +4064,7 @@ async function runLifecycle(input) {
 `
       );
     }
+    const execution2 = hook === "context-continuity" ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now()) : { status: "ok", details: {} };
     await refreshFreshnessInBackground(install.version);
     refreshInvocationVerdict(root);
     await observeHook(hook, execution2, rawInput ?? {}, agentRuntime, root);

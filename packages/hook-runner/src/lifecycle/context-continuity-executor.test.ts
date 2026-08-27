@@ -415,6 +415,16 @@ describe('executeContextContinuity cumulative state', () => {
     if (reconciled.status !== 'valid') return;
     expect(reconciled.state.semanticRevision).toBe(reconciled.state.workRevision);
     expect(reconciled.state.clearPending).toBe(false);
+
+    executeContextContinuity({
+      hook_event_name: 'SessionStart',
+      source: 'clear',
+    }, root, 'codex', 4_000);
+    const clearedAgain = mechanicalState(root);
+    expect(clearedAgain.status).toBe('valid');
+    if (clearedAgain.status !== 'valid') return;
+    expect(clearedAgain.state.clearPending).toBe(true);
+    expect(clearedAgain.state.semanticRevision).toBeLessThan(clearedAgain.state.workRevision);
   });
 
   it('does not reconcile a failed semantic checkpoint write', () => {
@@ -523,6 +533,36 @@ describe('executeContextContinuity transcript threshold', () => {
     if (parsed.status !== 'valid') return;
     expect(parsed.state.lastUsedTokens).toBe(500);
     expect(parsed.state.nudgeEmitted).toBe(true);
+  });
+
+  it('rearms a nudge after successive compact cycles with the same source', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nRepeat compact cycles.\n');
+    writeFileSync(transcript(root), `${usageLine(500)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+    executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 2_000);
+    executeContextContinuity({
+      hook_event_name: 'SessionStart',
+      source: 'compact',
+    }, root, 'claude', 3_000);
+    appendFileSync(transcript(root), `${usageLine(700)}\n`);
+    const secondNudge = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 9_000);
+    expect(secondNudge.output?.hookSpecificOutput.additionalContext).toMatch(/void-checkpoint/i);
+
+    executeContextContinuity({
+      hook_event_name: 'SessionStart',
+      source: 'compact',
+    }, root, 'claude', 10_000);
+    const rearmed = mechanicalState(root);
+    expect(rearmed.status).toBe('valid');
+    if (rearmed.status !== 'valid') return;
+    expect(rearmed.state.nudgeEmitted).toBe(false);
   });
 
   it('records usage but emits no percentage or nudge without a known window', () => {

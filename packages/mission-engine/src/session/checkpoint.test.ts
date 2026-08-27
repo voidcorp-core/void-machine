@@ -300,11 +300,19 @@ describe('advanceMechanicalContext', () => {
       lastResumeSource: 'clear',
     });
     expect(advanceMechanicalContext(cleared, { resumeSource: 'clear' })).toEqual(cleared);
-    expect(advanceMechanicalContext(cleared, { semanticCheckpointWritten: true })).toMatchObject({
+    const reconciled = advanceMechanicalContext(cleared, { semanticCheckpointWritten: true });
+    expect(reconciled).toMatchObject({
       workRevision: cleared.workRevision,
       semanticRevision: cleared.workRevision,
       clearPending: false,
     });
+    const clearedAgain = advanceMechanicalContext(reconciled, { resumeSource: 'clear' });
+    expect(clearedAgain).toMatchObject({
+      workRevision: reconciled.workRevision + 1,
+      clearPending: true,
+      lastResumeSource: 'clear',
+    });
+    expect(advanceMechanicalContext(clearedAgain, { resumeSource: 'clear' })).toEqual(clearedAgain);
   });
 });
 
@@ -385,5 +393,16 @@ describe('evaluateContextMeasurement', () => {
     });
 
     expect(nextCycle.emitNudge).toBe(true);
+    const compactedAgain = advanceMechanicalContext(nextCycle.state, {
+      resumeSource: 'compact',
+    });
+    expect(compactedAgain).toMatchObject({
+      workRevision: nextCycle.state.workRevision + 1,
+      nudgeEmitted: false,
+      lastResumeSource: 'compact',
+    });
+    expect(advanceMechanicalContext(compactedAgain, { resumeSource: 'compact' })).toEqual(
+      compactedAgain,
+    );
   });
 });

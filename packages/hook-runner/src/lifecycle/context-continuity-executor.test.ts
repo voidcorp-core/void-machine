@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
@@ -11,12 +19,30 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function project(): string {
+function project(config: unknown = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'void-context-continuity-'));
   roots.push(root);
   mkdirSync(join(root, '.void', 'machine'), { recursive: true });
-  writeFileSync(join(root, '.void', 'config.json'), '{}\n');
+  writeFileSync(join(root, '.void', 'config.json'), `${JSON.stringify(config)}\n`);
   return root;
+}
+
+function usageLine(usedTokens: number): string {
+  return JSON.stringify({
+    type: 'assistant',
+    message: {
+      usage: {
+        input_tokens: Math.max(0, usedTokens - 30),
+        output_tokens: 10,
+        cache_read_input_tokens: 10,
+        cache_creation_input_tokens: 10,
+      },
+    },
+  });
+}
+
+function transcript(root: string): string {
+  return join(root, 'transcript.jsonl');
 }
 
 function checkpoint(root: string): string {
@@ -186,5 +212,164 @@ describe('executeContextContinuity cumulative state', () => {
     }, root, 'claude', 3_000);
 
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(before);
+  });
+});
+
+describe('executeContextContinuity transcript threshold', () => {
+  it('uses the last complete usage entry and emits one nudge at the default threshold', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nMeasure context.\n');
+    writeFileSync(transcript(root), `${usageLine(300)}\n${usageLine(500)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    const first = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 2_000);
+    const duplicate = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 2_000);
+
+    expect(first.output?.hookSpecificOutput.additionalContext).toMatch(/void-checkpoint/i);
+    expect(duplicate.output).toBe(undefined);
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(500);
+    expect(parsed.state.nudgeEmitted).toBe(true);
+  });
+
+  it('records usage but emits no percentage or nudge without a known window', () => {
+    const root = project();
+    writeFileSync(checkpoint(root), '## Objective\n\nUnknown window.\n');
+    writeFileSync(transcript(root), `${usageLine(900)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'codex', 1_000);
+
+    const result = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'codex', 2_000);
+
+    expect(result.output).toBe(undefined);
+    expect(JSON.stringify(result.details)).not.toContain('%');
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(900);
+  });
+
+  it('waits for a complete line, skips malformed input, and resumes after truncation', () => {
+    const root = project({ context: { windowTokens: 10_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nTolerate transcript lag.\n');
+    writeFileSync(transcript(root), `{malformed}\n${usageLine(123)}`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 2_000);
+    let parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(0);
+
+    appendFileSync(transcript(root), '\n');
+    executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 3_000);
+    parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(123);
+
+    writeFileSync(transcript(root), `${usageLine(42)}\n`);
+    executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 4_000);
+    parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(42);
+  });
+
+  it('bounds an oversized delta and keeps the final complete usage observation', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nBound transcript reads.\n');
+    writeFileSync(transcript(root), `${'x'.repeat(1_100_000)}\n${usageLine(600)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'codex', 1_000);
+
+    const result = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'codex', 2_000);
+
+    expect(result.details.transcriptSkippedBytes).toBeGreaterThan(0);
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(600);
+    expect(parsed.state.transcriptCursorBytes).toBeGreaterThan(1_000_000);
+  });
+
+  it('respects the PostToolUse cooldown while still merging paths', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nBound hot-path reads.\n');
+    writeFileSync(transcript(root), `${usageLine(100)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      transcript_path: transcript(root),
+      tool_name: 'Read',
+      tool_input: { file_path: 'src/first.ts' },
+      tool_response: { success: true },
+    }, root, 'claude', 10_000);
+    appendFileSync(transcript(root), `${usageLine(700)}\n`);
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      transcript_path: transcript(root),
+      tool_name: 'Edit',
+      tool_input: { file_path: 'src/second.ts', new_string: 'changed' },
+      tool_response: { success: true },
+    }, root, 'claude', 12_000);
+
+    let parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(100);
+    expect(parsed.state.modifiedFiles).toContain('src/second.ts');
+
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      transcript_path: transcript(root),
+      tool_name: 'Read',
+      tool_input: { file_path: 'src/third.ts' },
+      tool_response: { success: true },
+    }, root, 'claude', 16_000);
+    parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(700);
+  });
+
+  it('lets PreCompact ignore the cooldown for its final measurement', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    writeFileSync(checkpoint(root), '## Objective\n\nMeasure before compaction.\n');
+    writeFileSync(transcript(root), `${usageLine(100)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'codex', 1_000);
+    appendFileSync(transcript(root), `${usageLine(800)}\n`);
+
+    executeContextContinuity({
+      hook_event_name: 'PreCompact',
+      transcript_path: transcript(root),
+    }, root, 'codex', 2_000);
+
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(800);
   });
 });

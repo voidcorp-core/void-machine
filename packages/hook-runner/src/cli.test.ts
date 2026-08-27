@@ -199,6 +199,56 @@ describe('lifecycle context', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('injects a threshold nudge without replacing the submitted prompt', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-continuity-nudge-'));
+    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
+    writeFileSync(
+      join(root, '.void', 'config.json'),
+      '{"context":{"windowTokens":1000,"checkpointThresholdPercent":50}}\n',
+    );
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nNudge once.\n');
+    const transcript = join(root, 'transcript.jsonl');
+    writeFileSync(transcript, `${JSON.stringify({
+      message: {
+        usage: {
+          input_tokens: 470,
+          output_tokens: 10,
+          cache_read_input_tokens: 10,
+          cache_creation_input_tokens: 10,
+        },
+      },
+    })}\n`);
+
+    try {
+      spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
+        input: JSON.stringify({ hook_event_name: 'PreCompact' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      const result = spawnSync(
+        process.execPath,
+        [hook, 'lifecycle', 'context-continuity', 'codex'],
+        {
+          input: JSON.stringify({
+            hook_event_name: 'UserPromptSubmit',
+            transcript_path: transcript,
+            prompt: 'continue the implementation',
+          }),
+          encoding: 'utf8',
+          env: { ...process.env, VOID_PROJECT_ROOT: root },
+        },
+      );
+
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout ?? '{}').hookSpecificOutput.additionalContext).toMatch(
+        /void-checkpoint/i,
+      );
+      expect(result.stdout).not.toContain('continue the implementation');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('session close lifecycle', () => {

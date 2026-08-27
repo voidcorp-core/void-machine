@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { packsCoherenceIssues, validateConfig } from './config-schema.js';
+import { configSchema, packsCoherenceIssues, validateConfig } from './config-schema.js';
 
 const VALID = {
   core: '^0.14.0',
@@ -78,6 +78,35 @@ describe('validateConfig', () => {
     expect(validateConfig({ core: '~1.2.3' }).ok).toBe(true);
     expect(validateConfig({ core: '1.2.3' }).ok).toBe(true);
     expect(validateConfig({ core: '1.2.3-beta.1' }).ok).toBe(true);
+  });
+});
+
+describe('context continuity config', () => {
+  it('keeps old configs valid and defaults the threshold only inside context config', () => {
+    expect(configSchema.parse({})).not.toHaveProperty('context');
+    expect(configSchema.parse({ context: { windowTokens: 200_000 } })).toMatchObject({
+      context: { windowTokens: 200_000, checkpointThresholdPercent: 50 },
+    });
+  });
+
+  it.each([40, 50, 60])('accepts the bounded %i percent threshold', (threshold) => {
+    expect(validateConfig({
+      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
+    }).ok).toBe(true);
+  });
+
+  it.each([0, -1, 1.5])('rejects the invalid window size %s without clamping', (windowTokens) => {
+    const result = validateConfig({ context: { windowTokens } });
+    expect(result.ok).toBe(false);
+    expect(result.issues.join(' ')).toContain('context.windowTokens');
+  });
+
+  it.each([39, 61, 49.5])('rejects the out-of-bounds threshold %s without clamping', (threshold) => {
+    const result = validateConfig({
+      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.issues.join(' ')).toContain('context.checkpointThresholdPercent');
   });
 });
 

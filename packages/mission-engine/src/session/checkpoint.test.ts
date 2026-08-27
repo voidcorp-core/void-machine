@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   type MechanicalContextState,
+  advanceMechanicalContext,
+  evaluateContextMeasurement,
   mergeMechanicalContextBlock,
   parseCheckpoint,
   parseMechanicalContextBlock,
@@ -302,5 +304,85 @@ describe('advanceMechanicalContext', () => {
       semanticRevision: cleared.workRevision,
       clearPending: false,
     });
+  });
+});
+
+describe('evaluateContextMeasurement', () => {
+  const behind = { ...MECHANICAL, semanticRevision: MECHANICAL.workRevision - 1 };
+
+  it.each([
+    [499, false],
+    [500, true],
+    [700, true],
+  ] as const)('emits at and above the configured threshold: %i', (usedTokens, emitNudge) => {
+    const result = evaluateContextMeasurement(behind, {
+      usedTokens,
+      measuredAtMs: 1_000,
+      windowTokens: 1_000,
+      thresholdPercent: 50,
+    });
+
+    expect(result.emitNudge).toBe(emitNudge);
+    expect(result.usagePercent).toBe(usedTokens / 10);
+  });
+
+  it('records tokens without inventing a percentage when the window is unknown', () => {
+    const result = evaluateContextMeasurement(behind, {
+      usedTokens: 900,
+      measuredAtMs: 1_000,
+      thresholdPercent: 50,
+    });
+
+    expect(result.state.lastUsedTokens).toBe(900);
+    expect(result.usagePercent).toBe(undefined);
+    expect(result.emitNudge).toBe(false);
+  });
+
+  it('emits once for a cycle and a duplicate observation advances no work revision', () => {
+    const first = evaluateContextMeasurement(behind, {
+      usedTokens: 700,
+      measuredAtMs: 1_000,
+      windowTokens: 1_000,
+      thresholdPercent: 50,
+    });
+    const duplicate = evaluateContextMeasurement(first.state, {
+      usedTokens: 700,
+      measuredAtMs: 1_000,
+      windowTokens: 1_000,
+      thresholdPercent: 50,
+    });
+
+    expect(first.emitNudge).toBe(true);
+    expect(duplicate.emitNudge).toBe(false);
+    expect(duplicate.state).toEqual(first.state);
+  });
+
+  it('does not nudge a semantic checkpoint that already covers the observation', () => {
+    const result = evaluateContextMeasurement(MECHANICAL, {
+      usedTokens: MECHANICAL.lastUsedTokens,
+      measuredAtMs: 1_000,
+      windowTokens: 1,
+      thresholdPercent: 50,
+    });
+
+    expect(result.emitNudge).toBe(false);
+  });
+
+  it('can emit again after compact rearms the cycle', () => {
+    const emitted = evaluateContextMeasurement(behind, {
+      usedTokens: 700,
+      measuredAtMs: 1_000,
+      windowTokens: 1_000,
+      thresholdPercent: 50,
+    });
+    const compacted = advanceMechanicalContext(emitted.state, { resumeSource: 'compact' });
+    const nextCycle = evaluateContextMeasurement(compacted, {
+      usedTokens: 800,
+      measuredAtMs: 2_000,
+      windowTokens: 1_000,
+      thresholdPercent: 50,
+    });
+
+    expect(nextCycle.emitNudge).toBe(true);
   });
 });

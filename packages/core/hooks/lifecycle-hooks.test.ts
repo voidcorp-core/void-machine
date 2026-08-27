@@ -39,7 +39,9 @@ describe.each([
   });
 
   it('reminds explicit closes at UserPromptSubmit without replacing the prompt', () => {
-    expect(commands(source, 'UserPromptSubmit').join('\n')).toContain('lifecycle checkpoint-reminder');
+    const command = commands(source, 'UserPromptSubmit').join('\n');
+    expect(command).toContain('lifecycle context-continuity');
+    expect(command).toContain('lifecycle checkpoint-reminder');
   });
 
   it('audits at SessionEnd instead of synthesising a checkpoint', () => {

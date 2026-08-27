@@ -253,6 +253,7 @@ describe('lifecycle context', () => {
     utimesSync(lock, new Date(0), new Date(0));
 
     try {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_100));
       const contenders = ['src/first.ts', 'src/second.ts'].map((path) => stageLifecycle(root, {
           hook_event_name: 'PostToolUse',
           session_id: 'concurrent-context',

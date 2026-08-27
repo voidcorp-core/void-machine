@@ -1587,10 +1587,10 @@ import {
   closeSync as closeSync2,
   constants as constants2,
   fstatSync,
+  linkSync,
   lstatSync as lstatSync3,
   mkdirSync as mkdirSync3,
   openSync as openSync2,
-  readFileSync as readFileSync9,
   readSync as readSync2,
   realpathSync as realpathSync3,
   renameSync as renameSync3,
@@ -2287,7 +2287,7 @@ function rawCheckpoint(path) {
     );
     const opened = fstatSync(descriptor);
     if (!opened.isFile() || opened.size > MAX_CHECKPOINT_BYTES) return void 0;
-    return readFileSync9(descriptor, "utf8");
+    return readBoundedDescriptor(descriptor, MAX_CHECKPOINT_BYTES);
   } catch (error) {
     return errorCode(error) === "ENOENT" ? "" : void 0;
   } finally {
@@ -2316,6 +2316,22 @@ function initialState(raw) {
     lastResumeSource: "none"
   };
 }
+function sameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+function unlinkOwnedPath(path, owner) {
+  try {
+    const current = lstatSync3(path);
+    if (current.isSymbolicLink() || !sameFile(current, owner)) return false;
+    unlinkSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function staleFile(info, now) {
+  return now - Math.max(info.mtimeMs, info.ctimeMs) >= LOCK_STALE_MS;
+}
 function openExclusive(path) {
   try {
     const descriptor = openSync2(
@@ -2333,38 +2349,39 @@ function releaseLock(path, lock) {
   try {
     closeSync2(lock.descriptor);
   } finally {
-    try {
-      const info = lstatSync3(path);
-      if (!info.isSymbolicLink() && info.dev === lock.dev && info.ino === lock.ino) {
-        unlinkSync(path);
-      }
-    } catch {
-    }
+    unlinkOwnedPath(path, lock);
   }
 }
 function acquireLock(path, now) {
   const direct = openExclusive(path);
   if (direct !== void 0) return direct;
+  let observed;
   try {
-    const info = lstatSync3(path);
-    if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
+    observed = lstatSync3(path);
+    if (!observed.isFile() || observed.isSymbolicLink() || !staleFile(observed, now)) {
       return void 0;
     }
   } catch {
     return void 0;
   }
   const recoveryPath = `${path}.recovery`;
-  const recovery = openExclusive(recoveryPath);
-  if (recovery === void 0) return void 0;
   try {
+    const recovery = lstatSync3(recoveryPath);
+    if (!recovery.isFile() || recovery.isSymbolicLink() || !staleFile(recovery, now) || !unlinkOwnedPath(recoveryPath, recovery)) return void 0;
+  } catch (error) {
+    if (errorCode(error) !== "ENOENT") return void 0;
+  }
+  try {
+    linkSync(path, recoveryPath);
     const current = lstatSync3(path);
-    if (!current.isFile() || current.isSymbolicLink() || now - current.mtimeMs < LOCK_STALE_MS) return void 0;
-    unlinkSync(path);
+    const recovery = lstatSync3(recoveryPath);
+    if (!sameFile(current, observed) || !sameFile(recovery, observed)) return void 0;
+    if (!unlinkOwnedPath(path, observed)) return void 0;
     return openExclusive(path);
   } catch {
     return void 0;
   } finally {
-    releaseLock(recoveryPath, recovery);
+    unlinkOwnedPath(recoveryPath, observed);
   }
 }
 function safeMachineDirectory(root) {
@@ -2553,6 +2570,16 @@ function openBoundedRegularFile(path, maxBytes, allowedRoots) {
     return void 0;
   }
 }
+function readBoundedDescriptor(descriptor, maxBytes) {
+  const bytes = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const count = readSync2(descriptor, bytes, offset, bytes.length - offset, offset);
+    if (count === 0) break;
+    offset += count;
+  }
+  return offset > maxBytes ? void 0 : bytes.subarray(0, offset).toString("utf8");
+}
 function finiteToken(value) {
   if (value === void 0) return 0;
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
@@ -2658,7 +2685,8 @@ function contextConfig(root) {
     );
     if (opened === void 0) return void 0;
     descriptor = opened.descriptor;
-    return JSON.parse(readFileSync9(descriptor, "utf8"));
+    const raw = readBoundedDescriptor(descriptor, MAX_CONFIG_BYTES);
+    return raw === void 0 ? void 0 : JSON.parse(raw);
   } catch {
     return void 0;
   } finally {
@@ -3096,7 +3124,7 @@ import { execFileSync } from "node:child_process";
 import {
   existsSync as existsSync6,
   lstatSync as lstatSync4,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync9,
   statSync as statSync4
 } from "node:fs";
 import { basename as basename4, join as join12 } from "node:path";
@@ -3116,7 +3144,7 @@ function readBounded(path) {
   try {
     const info = lstatSync4(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_READ_BYTES) return void 0;
-    return readFileSync10(path, "utf8");
+    return readFileSync9(path, "utf8");
   } catch {
     return void 0;
   }

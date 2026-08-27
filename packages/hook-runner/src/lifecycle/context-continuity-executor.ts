@@ -3,10 +3,10 @@ import {
   closeSync,
   constants,
   fstatSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
   readSync,
   realpathSync,
   renameSync,
@@ -66,7 +66,7 @@ function rawCheckpoint(path: string): string | undefined {
     );
     const opened = fstatSync(descriptor);
     if (!opened.isFile() || opened.size > MAX_CHECKPOINT_BYTES) return undefined;
-    return readFileSync(descriptor, 'utf8');
+    return readBoundedDescriptor(descriptor, MAX_CHECKPOINT_BYTES);
   } catch (error) {
     return errorCode(error) === 'ENOENT' ? '' : undefined;
   } finally {
@@ -103,6 +103,30 @@ interface HeldLock {
   readonly ino: number;
 }
 
+interface FileIdentity {
+  readonly dev: number;
+  readonly ino: number;
+}
+
+function sameFile(left: FileIdentity, right: FileIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function unlinkOwnedPath(path: string, owner: FileIdentity): boolean {
+  try {
+    const current = lstatSync(path);
+    if (current.isSymbolicLink() || !sameFile(current, owner)) return false;
+    unlinkSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function staleFile(info: { readonly mtimeMs: number; readonly ctimeMs: number }, now: number): boolean {
+  return now - Math.max(info.mtimeMs, info.ctimeMs) >= LOCK_STALE_MS;
+}
+
 function openExclusive(path: string): HeldLock | undefined {
   try {
     const descriptor = openSync(
@@ -122,23 +146,17 @@ function releaseLock(path: string, lock: HeldLock): void {
   try {
     closeSync(lock.descriptor);
   } finally {
-    try {
-      const info = lstatSync(path);
-      if (!info.isSymbolicLink() && info.dev === lock.dev && info.ino === lock.ino) {
-        unlinkSync(path);
-      }
-    } catch {
-      // A missing stale lock is harmless after the checkpoint decision finished.
-    }
+    unlinkOwnedPath(path, lock);
   }
 }
 
 function acquireLock(path: string, now: number): HeldLock | undefined {
   const direct = openExclusive(path);
   if (direct !== undefined) return direct;
+  let observed: ReturnType<typeof lstatSync>;
   try {
-    const info = lstatSync(path);
-    if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
+    observed = lstatSync(path);
+    if (!observed.isFile() || observed.isSymbolicLink() || !staleFile(observed, now)) {
       return undefined;
     }
   } catch {
@@ -146,21 +164,29 @@ function acquireLock(path: string, now: number): HeldLock | undefined {
   }
 
   const recoveryPath = `${path}.recovery`;
-  const recovery = openExclusive(recoveryPath);
-  if (recovery === undefined) return undefined;
   try {
-    const current = lstatSync(path);
+    const recovery = lstatSync(recoveryPath);
     if (
-      !current.isFile()
-      || current.isSymbolicLink()
-      || now - current.mtimeMs < LOCK_STALE_MS
+      !recovery.isFile()
+      || recovery.isSymbolicLink()
+      || !staleFile(recovery, now)
+      || !unlinkOwnedPath(recoveryPath, recovery)
     ) return undefined;
-    unlinkSync(path);
+  } catch (error) {
+    if (errorCode(error) !== 'ENOENT') return undefined;
+  }
+
+  try {
+    linkSync(path, recoveryPath);
+    const current = lstatSync(path);
+    const recovery = lstatSync(recoveryPath);
+    if (!sameFile(current, observed) || !sameFile(recovery, observed)) return undefined;
+    if (!unlinkOwnedPath(path, observed)) return undefined;
     return openExclusive(path);
   } catch {
     return undefined;
   } finally {
-    releaseLock(recoveryPath, recovery);
+    unlinkOwnedPath(recoveryPath, observed);
   }
 }
 
@@ -421,6 +447,20 @@ function openBoundedRegularFile(
   }
 }
 
+export function readBoundedDescriptor(
+  descriptor: number,
+  maxBytes: number,
+): string | undefined {
+  const bytes = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const count = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+    if (count === 0) break;
+    offset += count;
+  }
+  return offset > maxBytes ? undefined : bytes.subarray(0, offset).toString('utf8');
+}
+
 function finiteToken(value: unknown): number | undefined {
   if (value === undefined) return 0;
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -556,7 +596,8 @@ function contextConfig(root: string): unknown {
     );
     if (opened === undefined) return undefined;
     descriptor = opened.descriptor;
-    return JSON.parse(readFileSync(descriptor, 'utf8'));
+    const raw = readBoundedDescriptor(descriptor, MAX_CONFIG_BYTES);
+    return raw === undefined ? undefined : JSON.parse(raw);
   } catch {
     return undefined;
   } finally {

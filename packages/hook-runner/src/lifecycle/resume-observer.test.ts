@@ -113,6 +113,7 @@ describe('observeResume', () => {
       readFilesOverflow: 0,
       modifiedFilesOverflow: 0,
       clearPending: false,
+      lastResumeSource: 'none',
     };
     const merged = mergeMechanicalContextBlock('## Objective\n\nResume me.\n', state);
     if (!merged.ok) throw new Error(merged.error);

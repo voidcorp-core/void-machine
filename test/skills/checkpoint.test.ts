@@ -93,7 +93,13 @@ describe('what it refuses to become', () => {
   it('keeps lifecycle hooks advisory and reserves semantic writing for the skill', () => {
     expect(flat(body(SKILL))).toMatch(/UserPromptSubmit[\s\S]{0,160}remind/i);
     expect(flat(body(SKILL))).toMatch(/SessionEnd[\s\S]{0,160}audit/i);
-    expect(flat(body(SKILL))).toMatch(/hooks? never write/i);
+    expect(flat(body(SKILL))).toMatch(/PreCompact[\s\S]{0,240}mechanical/i);
+    expect(flat(body(SKILL))).toMatch(/never[\s\S]{0,120}(dead ends|assumptions|next action)/i);
+  });
+
+  it('preserves the delimited mechanical block verbatim on every semantic rewrite', () => {
+    expect(flat(body(SKILL))).toMatch(/preserve[\s\S]{0,160}context-continuity:begin/i);
+    expect(flat(body(SKILL))).toMatch(/exactly one[\s\S]{0,160}block/i);
   });
 
   it('keeps closing a session apart from completing a unit of work', () => {

@@ -59,6 +59,7 @@ function mechanical(over: Partial<MechanicalContextState> = {}): MechanicalConte
     readFilesOverflow: 0,
     modifiedFilesOverflow: 0,
     clearPending: false,
+    lastResumeSource: 'none',
     ...over,
   };
 }
@@ -143,6 +144,16 @@ describe('composeResumeBundle', () => {
       reasons: ['semantic-revision-behind'],
     });
   });
+
+  it('forces clear degraded until the semantic checkpoint catches up', () => {
+    const checkpoint = checkpointWithMechanical(mechanical());
+    const cleared = composeResumeBundle(input({ checkpoint, resumeSource: 'clear' }));
+
+    expect(cleared.continuity).toEqual({
+      status: 'degraded',
+      reasons: ['clear-not-reconciled'],
+    });
+  });
 });
 
 describe('renderResumeContext', () => {
@@ -181,5 +192,17 @@ describe('renderResumeContext', () => {
     expect(context).toContain('Context continuity: degraded');
     expect(context).toContain('semantic revision is behind mechanical work');
     expect(context).toContain('Reconstruct context before any mutation.');
+  });
+
+  it('renders the bounded cumulative read and modified working sets', () => {
+    const checkpoint = checkpointWithMechanical(mechanical({
+      readFiles: ['src/read.ts'],
+      modifiedFiles: ['src/changed.ts'],
+      readFilesOverflow: 2,
+    }));
+    const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
+
+    expect(context).toContain('Read files: src/read.ts (+2 older)');
+    expect(context).toContain('Modified files: src/changed.ts');
   });
 });

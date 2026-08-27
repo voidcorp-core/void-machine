@@ -34,6 +34,10 @@ describe.each([
     expect(commands(source, 'PreCompact').join('\n')).toContain('lifecycle context-continuity');
   });
 
+  it('tracks the cumulative working set after tool use', () => {
+    expect(commands(source, 'PostToolUse').join('\n')).toContain('lifecycle context-continuity');
+  });
+
   it('reminds explicit closes at UserPromptSubmit without replacing the prompt', () => {
     expect(commands(source, 'UserPromptSubmit').join('\n')).toContain('lifecycle checkpoint-reminder');
   });

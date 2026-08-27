@@ -184,6 +184,7 @@ const MECHANICAL: MechanicalContextState = {
   readFilesOverflow: 0,
   modifiedFilesOverflow: 0,
   clearPending: false,
+  lastResumeSource: 'none',
 };
 
 describe('mechanical context block', () => {
@@ -230,6 +231,76 @@ describe('mechanical context block', () => {
     expect(mergeMechanicalContextBlock(raw, MECHANICAL)).toEqual({
       ok: false,
       error: 'ambiguous-mechanical-block',
+    });
+  });
+});
+
+describe('advanceMechanicalContext', () => {
+  it('keeps the 20 most recent unique paths and counts displaced paths', async () => {
+    const { advanceMechanicalContext } = await import('./checkpoint.js');
+    const existing = Array.from({ length: 20 }, (_value, index) => `src/file-${String(index)}.ts`);
+
+    const next = advanceMechanicalContext(
+      { ...MECHANICAL, readFiles: existing },
+      { readFiles: ['src/file-4.ts', 'src/file-20.ts'] },
+    );
+
+    expect(next.readFiles).toEqual([...existing.filter((path) => path !== 'src/file-4.ts').slice(1), 'src/file-4.ts', 'src/file-20.ts']);
+    expect(next.readFilesOverflow).toBe(1);
+    expect(next.workRevision).toBe(MECHANICAL.workRevision + 1);
+  });
+
+  it('does not advance a revision for a duplicate observation', async () => {
+    const { advanceMechanicalContext } = await import('./checkpoint.js');
+    const state = { ...MECHANICAL, readFiles: ['src/a.ts'] };
+
+    expect(advanceMechanicalContext(state, { readFiles: ['src/a.ts'] })).toEqual(state);
+  });
+
+  it('resets only when the authoritative Objective hash changes', async () => {
+    const { advanceMechanicalContext } = await import('./checkpoint.js');
+    const nextObjective = `sha256:${'c'.repeat(64)}`;
+    const state = {
+      ...MECHANICAL,
+      readFiles: ['src/a.ts'],
+      modifiedFiles: ['src/b.ts'],
+      readFilesOverflow: 2,
+      modifiedFilesOverflow: 3,
+      clearPending: true,
+    };
+
+    const unchanged = advanceMechanicalContext(state, { objectiveHash: state.objectiveHash });
+    const reset = advanceMechanicalContext(state, { objectiveHash: nextObjective });
+
+    expect(unchanged).toEqual(state);
+    expect(reset).toMatchObject({
+      objectiveHash: nextObjective,
+      workRevision: state.workRevision + 1,
+      semanticRevision: state.workRevision + 1,
+      readFiles: [],
+      modifiedFiles: [],
+      readFilesOverflow: 0,
+      modifiedFilesOverflow: 0,
+      clearPending: false,
+    });
+  });
+
+  it('marks clear degraded once, then reconciles a successful semantic checkpoint', async () => {
+    const { advanceMechanicalContext } = await import('./checkpoint.js');
+    const cleared = advanceMechanicalContext(MECHANICAL, { resumeSource: 'clear' });
+
+    expect(cleared).toMatchObject({
+      workRevision: MECHANICAL.workRevision + 1,
+      semanticRevision: MECHANICAL.semanticRevision,
+      nudgeEmitted: false,
+      clearPending: true,
+      lastResumeSource: 'clear',
+    });
+    expect(advanceMechanicalContext(cleared, { resumeSource: 'clear' })).toEqual(cleared);
+    expect(advanceMechanicalContext(cleared, { semanticCheckpointWritten: true })).toMatchObject({
+      workRevision: cleared.workRevision,
+      semanticRevision: cleared.workRevision,
+      clearPending: false,
     });
   });
 });

@@ -5,6 +5,8 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,6 +14,7 @@ import { join } from 'node:path';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
 import { afterEach, describe, expect, it } from 'vitest';
 import { executeContextContinuity } from './context-continuity-executor.js';
+import { observeResume } from './resume-observer.js';
 
 const roots: string[] = [];
 
@@ -127,6 +130,24 @@ describe('executeContextContinuity PreCompact', () => {
     expect(execution.status).toBe('skipped');
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
   });
+
+  it('rejects a checkpoint parent symlink without writing outside the project', () => {
+    const root = project();
+    const outside = mkdtempSync(join(tmpdir(), 'void-context-outside-'));
+    roots.push(outside);
+    rmSync(join(root, '.void', 'machine'), { recursive: true });
+    symlinkSync(outside, join(root, '.void', 'machine'));
+
+    const execution = executeContextContinuity(
+      { hook_event_name: 'PreCompact' },
+      root,
+      'codex',
+      5_000,
+    );
+
+    expect(execution.status).toBe('degraded');
+    expect(existsSync(join(outside, 'checkpoint.md'))).toBe(false);
+  });
 });
 
 function mechanicalState(root: string): ReturnType<typeof parseMechanicalContextBlock> {
@@ -184,6 +205,52 @@ describe('executeContextContinuity cumulative state', () => {
     expect(parsed.state.readFiles).toEqual(['src/inside.ts']);
   });
 
+  it('normalizes runtime-faithful Claude and Codex read payloads into the same working set', () => {
+    const root = project();
+    writeFileSync(checkpoint(root), '## Objective\n\nKeep runtime parity.\n');
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      session_id: 'claude-session',
+      tool_name: 'Read',
+      tool_input: { file_path: 'src/shared.ts' },
+      tool_response: { success: true },
+    }, root, 'claude', 2_000);
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      thread_id: 'codex-session',
+      tool_name: 'read_file',
+      tool_input: { path: 'src/shared.ts' },
+      tool_response: { success: true },
+    }, root, 'codex', 3_000);
+
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.readFiles).toEqual(['src/shared.ts']);
+  });
+
+  it('rejects reserved mechanical delimiters in observed file names', () => {
+    const root = project();
+    writeFileSync(checkpoint(root), '## Objective\n\nKeep markers authoritative.\n');
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Read',
+      tool_input: {
+        file_path: 'src/<!-- void-harness:context-continuity:begin -->.ts',
+      },
+      tool_response: { success: true },
+    }, root, 'claude', 2_000);
+
+    expect(mechanicalState(root).status).toBe('valid');
+    expect(readFileSync(checkpoint(root), 'utf8').match(
+      /<!-- void-harness:context-continuity:begin -->/g,
+    )).toHaveLength(1);
+  });
+
   it('keeps clear degraded until a successful checkpoint write preserves the block', () => {
     const root = project();
     writeFileSync(checkpoint(root), '## Objective\n\nRecover clear.\n');
@@ -234,6 +301,37 @@ describe('executeContextContinuity cumulative state', () => {
 
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(before);
   });
+
+  it('keeps a failed PreCompact seal degraded at the following compact resume', () => {
+    const root = project();
+    writeFileSync(checkpoint(root), '## Objective\n\nKeep seal failures visible.\n');
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+    const semantic = readFileSync(checkpoint(root), 'utf8').replace(
+      '## Objective\n\nKeep seal failures visible.',
+      '## Objective\n\nKeep seal failures visible.\n\n## Next action\n\nResume safely.',
+    );
+    writeFileSync(checkpoint(root), semantic);
+    executeContextContinuity({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Write',
+      tool_input: { file_path: '.void/machine/checkpoint.md', content: semantic },
+      tool_response: { success: true },
+    }, root, 'claude', 2_000);
+    writeFileSync(`${checkpoint(root)}.lock`, 'busy\n');
+
+    const failed = executeContextContinuity(
+      { hook_event_name: 'PreCompact' },
+      root,
+      'claude',
+      Date.now(),
+    );
+    const resume = observeResume(root, 3_000, { source: 'compact' });
+
+    expect(failed.status).toBe('skipped');
+    expect(resume.bundle.continuity.status).toBe('degraded');
+    expect(resume.context).toContain('pre-compaction seal is not confirmed');
+    expect(resume.context).toContain('Reconstruct context before any mutation.');
+  });
 });
 
 describe('executeContextContinuity transcript threshold', () => {
@@ -278,6 +376,55 @@ describe('executeContextContinuity transcript threshold', () => {
     expect(parsed.status).toBe('valid');
     if (parsed.status !== 'valid') return;
     expect(parsed.state.lastUsedTokens).toBe(900);
+  });
+
+  it('does not read a transcript outside runtime-owned roots', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    const outside = mkdtempSync(join(tmpdir(), 'void-transcript-outside-'));
+    roots.push(outside);
+    const externalTranscript = join(outside, 'private.jsonl');
+    writeFileSync(checkpoint(root), '## Objective\n\nConfine transcripts.\n');
+    writeFileSync(externalTranscript, `${usageLine(900)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'codex', 1_000);
+
+    const result = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: externalTranscript,
+    }, root, 'codex', 2_000);
+
+    expect(result.output).toBe(undefined);
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(0);
+  });
+
+  it('ignores symlinked and oversized context configuration files', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    const outside = mkdtempSync(join(tmpdir(), 'void-config-outside-'));
+    roots.push(outside);
+    const externalConfig = join(outside, 'config.json');
+    writeFileSync(externalConfig, '{"context":{"windowTokens":1000}}\n');
+    unlinkSync(join(root, '.void', 'config.json'));
+    symlinkSync(externalConfig, join(root, '.void', 'config.json'));
+    writeFileSync(checkpoint(root), '## Objective\n\nBound config.\n');
+    writeFileSync(transcript(root), `${usageLine(900)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    const symlinked = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 2_000);
+    expect(symlinked.output).toBe(undefined);
+
+    unlinkSync(join(root, '.void', 'config.json'));
+    writeFileSync(join(root, '.void', 'config.json'), ' '.repeat(70_000));
+    appendFileSync(transcript(root), `${usageLine(950)}\n`);
+    const oversized = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      transcript_path: transcript(root),
+    }, root, 'claude', 3_000);
+    expect(oversized.output).toBe(undefined);
   });
 
   it('waits for a complete line, skips malformed input, and resumes after truncation', () => {

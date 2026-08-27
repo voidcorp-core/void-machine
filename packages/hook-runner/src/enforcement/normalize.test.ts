@@ -3,6 +3,17 @@ import { normalizeToolCall } from './normalize.js';
 import { protectedFile } from '../rules/protected-file.js';
 
 describe('normalizeToolCall', () => {
+  it.each([
+    ['Read', 'file_path', 'src/claude.ts'],
+    ['read_file', 'path', 'src/codex.ts'],
+    ['view_image', 'path', 'assets/codex.png'],
+  ])('normalizes the %s %s read path', (tool, field, path) => {
+    expect(normalizeToolCall({
+      tool_name: tool,
+      tool_input: { [field]: path },
+    }).edits).toEqual([{ path, addedContent: '' }]);
+  });
+
   it('normalizes Claude Edit and Write content', () => {
     expect(normalizeToolCall({
       tool_name: 'Edit',

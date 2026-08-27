@@ -167,12 +167,43 @@ describe('renderResumeContext', () => {
     expect(context).not.toMatch(/Recent decisions|remote state|git diff/i);
   });
 
-  it('is silent when neither a program nor a useful checkpoint exists', () => {
+  it('keeps degraded recovery visible when neither a program nor a useful checkpoint exists', () => {
     const bundle = composeResumeBundle(
       input({ program: undefined, checkpoint: parseCheckpoint('# empty\n') }),
     );
 
-    expect(renderResumeContext(bundle)).toBe('');
+    expect(renderResumeContext(bundle)).toContain('Context continuity: degraded');
+    expect(renderResumeContext(bundle)).toContain('Reconstruct context before any mutation.');
+  });
+
+  it('never truncates degraded reasons or the reconstruction instruction', () => {
+    const checkpoint = checkpointWithMechanical(mechanical({
+      semanticRevision: 2,
+      readFiles: Array.from({ length: 20 }, (_, index) => `src/${String(index)}-${'x'.repeat(180)}.ts`),
+      modifiedFiles: Array.from(
+        { length: 20 },
+        (_, index) => `src/${String(index)}-${'y'.repeat(180)}.ts`,
+      ),
+    }));
+
+    const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
+
+    expect(context.length).toBeLessThanOrEqual(4_000);
+    expect(context).toContain('Context continuity: degraded');
+    expect(context).toContain('semantic revision is behind mechanical work');
+    expect(context).toContain('Reconstruct context before any mutation.');
+  });
+
+  it('renders a clear reconstruction even when the checkpoint is absent', () => {
+    const context = renderResumeContext(composeResumeBundle(input({
+      checkpoint: undefined,
+      program: undefined,
+      resumeSource: 'clear',
+    })));
+
+    expect(context).toContain('Context continuity: degraded');
+    expect(context).toContain('the last clear is not reconciled');
+    expect(context).toContain('Reconstruct context before any mutation.');
   });
 
   it('stays within the hook context budget', () => {

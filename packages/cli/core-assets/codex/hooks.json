@@ -119,6 +119,11 @@
     "UserPromptSubmit": [
       {
         "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex" }
+        ]
+      },
+      {
+        "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-reminder codex" }
         ]
       }

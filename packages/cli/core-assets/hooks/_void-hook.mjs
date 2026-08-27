@@ -1590,6 +1590,7 @@ import {
   mkdirSync as mkdirSync3,
   openSync as openSync2,
   readFileSync as readFileSync9,
+  readSync as readSync2,
   renameSync as renameSync3,
   statSync as statSync3,
   unlinkSync,
@@ -1826,6 +1827,30 @@ function advanceMechanicalContext(state, observation) {
     modifiedFilesOverflow: modifications.overflow,
     clearPending: reconcile ? false : observation.resumeSource === "clear" || state.clearPending,
     lastResumeSource: observation.resumeSource ?? state.lastResumeSource
+  };
+}
+function evaluateContextMeasurement(state, measurement) {
+  const usedTokens = Number.isSafeInteger(measurement.usedTokens) && measurement.usedTokens >= 0 ? measurement.usedTokens : state.lastUsedTokens;
+  const tokensChanged = usedTokens !== state.lastUsedTokens;
+  const windowKnown = Number.isSafeInteger(measurement.windowTokens) && (measurement.windowTokens ?? 0) > 0;
+  const thresholdValid = Number.isSafeInteger(measurement.thresholdPercent) && measurement.thresholdPercent >= 40 && measurement.thresholdPercent <= 60;
+  const usagePercent = windowKnown ? usedTokens / (measurement.windowTokens ?? 1) * 100 : void 0;
+  const revisionAfterTokens = state.workRevision + (tokensChanged ? 1 : 0);
+  const emitNudge = usagePercent !== void 0 && thresholdValid && usagePercent >= measurement.thresholdPercent && !state.nudgeEmitted && state.semanticRevision < revisionAfterTokens;
+  const workChanged = tokensChanged || emitNudge;
+  const measuredAtMs = Number.isSafeInteger(measurement.measuredAtMs) && measurement.measuredAtMs >= 0 ? measurement.measuredAtMs : state.lastMeasurementAtMs;
+  const changed = workChanged || measuredAtMs !== state.lastMeasurementAtMs;
+  const next = changed ? {
+    ...state,
+    workRevision: state.workRevision + (workChanged ? 1 : 0),
+    nudgeEmitted: state.nudgeEmitted || emitNudge,
+    lastMeasurementAtMs: measuredAtMs,
+    lastUsedTokens: usedTokens
+  } : state;
+  return {
+    state: next,
+    emitNudge,
+    ...usagePercent === void 0 ? {} : { usagePercent }
   };
 }
 function mergeMechanicalContextBlock(raw, state) {
@@ -2209,6 +2234,8 @@ function readJson(path) {
 var CHECKPOINT = join10(".void", "machine", "checkpoint.md");
 var MAX_CHECKPOINT_BYTES = 5e5;
 var LOCK_STALE_MS = 1e3;
+var POST_TOOL_MEASUREMENT_COOLDOWN_MS = 5e3;
+var MAX_TRANSCRIPT_BYTES = 1048576;
 var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash2("sha256").update("").digest("hex")}`;
 function rawCheckpoint(path) {
   try {
@@ -2284,7 +2311,153 @@ function atomicCheckpointWrite(path, content, now) {
     releaseLock(lock, descriptor);
   }
 }
-function sealPreCompact(root, now) {
+function finiteToken(value) {
+  if (value === void 0) return 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
+}
+function usageFromLine(line) {
+  try {
+    const parsed = record3(JSON.parse(line));
+    const usage = record3(record3(parsed?.["message"])?.["usage"]);
+    if (usage === void 0) return { status: "none" };
+    const input = finiteToken(usage["input_tokens"]);
+    const output = finiteToken(usage["output_tokens"]);
+    const cacheRead = finiteToken(usage["cache_read_input_tokens"]);
+    const cacheCreation = finiteToken(usage["cache_creation_input_tokens"]);
+    return input === void 0 || output === void 0 || cacheRead === void 0 || cacheCreation === void 0 ? { status: "invalid" } : { status: "usage", usedTokens: input + output + cacheRead + cacheCreation };
+  } catch {
+    return { status: "invalid" };
+  }
+}
+function observeTranscript(path, state) {
+  if (path === "" || path.length > 4096 || path.includes("\0") || !isAbsolute3(path)) {
+    return void 0;
+  }
+  let descriptor;
+  try {
+    const info = lstatSync3(path);
+    if (!info.isFile() || info.isSymbolicLink()) return void 0;
+    const fingerprint = `sha256:${createHash2("sha256").update(path).digest("hex")}`;
+    const sameTranscript = fingerprint === state.transcriptFingerprint;
+    const previousCursor = sameTranscript && info.size >= state.transcriptCursorBytes ? state.transcriptCursorBytes : 0;
+    const available = Math.max(0, info.size - previousCursor);
+    if (available === 0) return void 0;
+    const readStart = available > MAX_TRANSCRIPT_BYTES ? info.size - MAX_TRANSCRIPT_BYTES : previousCursor;
+    const requested = Math.min(MAX_TRANSCRIPT_BYTES, info.size - readStart);
+    const bytes = Buffer.alloc(requested);
+    descriptor = openSync2(path, "r");
+    const bytesRead = readSync2(descriptor, bytes, 0, requested, readStart);
+    const bounded = bytes.subarray(0, bytesRead);
+    let contentStart = 0;
+    let skippedBytes = Math.max(0, readStart - previousCursor);
+    if (readStart > previousCursor) {
+      const firstNewline = bounded.indexOf(10);
+      if (firstNewline < 0) {
+        return {
+          fingerprint,
+          cursorBytes: readStart + bytesRead,
+          skippedBytes: skippedBytes + bytesRead,
+          skippedLines: 1
+        };
+      }
+      contentStart = firstNewline + 1;
+      skippedBytes += contentStart;
+    }
+    const lastNewline = bounded.lastIndexOf(10);
+    if (lastNewline < contentStart) {
+      return {
+        fingerprint,
+        cursorBytes: previousCursor,
+        skippedBytes,
+        skippedLines: 0
+      };
+    }
+    const complete = bounded.subarray(contentStart, lastNewline).toString("utf8");
+    let usedTokens;
+    let skippedLines = 0;
+    for (const line of complete.split("\n")) {
+      if (line.trim() === "") continue;
+      const usage = usageFromLine(line);
+      if (usage.status === "invalid") {
+        skippedLines += 1;
+      } else if (usage.status === "usage") {
+        usedTokens = usage.usedTokens;
+      }
+    }
+    return {
+      fingerprint,
+      cursorBytes: readStart + lastNewline + 1,
+      ...usedTokens === void 0 ? {} : { usedTokens },
+      skippedBytes,
+      skippedLines
+    };
+  } catch {
+    return void 0;
+  } finally {
+    if (descriptor !== void 0) closeSync2(descriptor);
+  }
+}
+function thresholdConfig(root) {
+  const config = record3(readJson(join10(root, ".void", "config.json")));
+  const context = record3(config?.["context"]);
+  const window = context?.["windowTokens"];
+  const threshold = context?.["checkpointThresholdPercent"];
+  const windowTokens = Number.isSafeInteger(window) && Number(window) > 0 ? Number(window) : void 0;
+  const thresholdPercent = threshold === void 0 ? 50 : Number.isSafeInteger(threshold) && Number(threshold) >= 40 && Number(threshold) <= 60 ? Number(threshold) : 0;
+  return {
+    ...windowTokens === void 0 ? {} : { windowTokens },
+    thresholdPercent
+  };
+}
+function measureContext(state, input, root, event, now) {
+  if (event === "PostToolUse" && now - state.lastMeasurementAtMs < POST_TOOL_MEASUREMENT_COOLDOWN_MS) {
+    return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
+  }
+  const path = input["transcript_path"];
+  if (typeof path !== "string") {
+    return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
+  }
+  const observed = observeTranscript(path, state);
+  if (observed === void 0) {
+    return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
+  }
+  const cursorState = observed.fingerprint === state.transcriptFingerprint && observed.cursorBytes === state.transcriptCursorBytes ? state : {
+    ...state,
+    transcriptFingerprint: observed.fingerprint,
+    transcriptCursorBytes: observed.cursorBytes
+  };
+  if (observed.usedTokens === void 0) {
+    return {
+      state: cursorState,
+      emitNudge: false,
+      skippedBytes: observed.skippedBytes,
+      skippedLines: observed.skippedLines
+    };
+  }
+  const config = thresholdConfig(root);
+  const decision = evaluateContextMeasurement(cursorState, {
+    usedTokens: observed.usedTokens,
+    measuredAtMs: now,
+    thresholdPercent: config.thresholdPercent,
+    ...config.windowTokens === void 0 ? {} : { windowTokens: config.windowTokens }
+  });
+  return {
+    state: decision.state,
+    emitNudge: decision.emitNudge,
+    ...decision.usagePercent === void 0 ? {} : { usagePercent: decision.usagePercent },
+    skippedBytes: observed.skippedBytes,
+    skippedLines: observed.skippedLines
+  };
+}
+function nudgeOutput(event, thresholdPercent) {
+  return {
+    hookSpecificOutput: {
+      hookEventName: event,
+      additionalContext: `Context usage reached the configured ${String(thresholdPercent)}% checkpoint threshold. Invoke \`void-checkpoint\` before continuing a long branch of work.`
+    }
+  };
+}
+function sealPreCompact(input, root, now) {
   const path = join10(root, CHECKPOINT);
   const raw = rawCheckpoint(path);
   if (raw === void 0) {
@@ -2295,9 +2468,11 @@ function sealPreCompact(root, now) {
     return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
   }
   const current = block2.status === "valid" ? block2.state : initialState(raw);
-  const state = advanceMechanicalContext(current, {
+  const advanced = advanceMechanicalContext(current, {
     objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective)
   });
+  const measurement = measureContext(advanced, input, root, "PreCompact", now);
+  const state = measurement.state;
   const merged = mergeMechanicalContextBlock(raw, state);
   if (!merged.ok) {
     return { status: "degraded", details: { reason: merged.error } };
@@ -2305,7 +2480,14 @@ function sealPreCompact(root, now) {
   if (!atomicCheckpointWrite(path, merged.value, now)) {
     return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
   }
-  return { status: "ok", details: { sealed: true } };
+  return {
+    status: "ok",
+    details: {
+      sealed: true,
+      transcriptSkippedBytes: measurement.skippedBytes,
+      transcriptSkippedLines: measurement.skippedLines
+    }
+  };
 }
 function successfulToolUse(input) {
   const response = record3(input["tool_response"]) ?? record3(input["tool_result"]);
@@ -2326,7 +2508,7 @@ function toolPaths(call, root) {
   const paths = call.edits.map((edit) => boundedProjectPath(root, edit.path)).filter((path) => path !== void 0 && path !== CHECKPOINT);
   return isRead ? { readFiles: paths, modifiedFiles: [] } : { readFiles: [], modifiedFiles: paths };
 }
-function evolveCheckpoint(root, now, observation) {
+function evolveCheckpoint(root, now, observation, input, event) {
   const path = join10(root, CHECKPOINT);
   const raw = rawCheckpoint(path);
   if (raw === void 0) {
@@ -2337,7 +2519,13 @@ function evolveCheckpoint(root, now, observation) {
     return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
   }
   const current = block2.status === "valid" ? block2.state : initialState(raw);
-  const next = advanceMechanicalContext(current, observation);
+  const reconcile = observation.semanticCheckpointWritten === true;
+  const advanced = advanceMechanicalContext(current, {
+    ...observation,
+    semanticCheckpointWritten: false
+  });
+  const measurement = input === void 0 || event === void 0 ? { state: advanced, emitNudge: false, skippedBytes: 0, skippedLines: 0 } : measureContext(advanced, input, root, event, now);
+  const next = reconcile ? advanceMechanicalContext(measurement.state, { semanticCheckpointWritten: true }) : measurement.state;
   if (next === current && block2.status === "valid") {
     return { status: "skipped", details: { reason: "duplicate-observation" } };
   }
@@ -2346,7 +2534,15 @@ function evolveCheckpoint(root, now, observation) {
   if (!atomicCheckpointWrite(path, merged.value, now)) {
     return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
   }
-  return { status: "ok", details: { advanced: next.workRevision !== current.workRevision } };
+  return {
+    status: "ok",
+    details: {
+      advanced: next.workRevision !== current.workRevision,
+      transcriptSkippedBytes: measurement.skippedBytes,
+      transcriptSkippedLines: measurement.skippedLines
+    },
+    ...measurement.emitNudge && event !== void 0 ? { output: nudgeOutput(event, thresholdConfig(root).thresholdPercent) } : {}
+  };
 }
 function observePostToolUse(input, root, now) {
   if (!successfulToolUse(input)) {
@@ -2365,7 +2561,7 @@ function observePostToolUse(input, root, now) {
       modifiedFiles: paths.modifiedFiles,
       ...objectiveHash === void 0 ? {} : { objectiveHash },
       ...checkpointWrite ? { semanticCheckpointWritten: true } : {}
-    });
+    }, checkpointWrite ? void 0 : input, checkpointWrite ? void 0 : "PostToolUse");
   } catch {
     return { status: "degraded", details: { reason: "invalid-tool-input" } };
   }
@@ -2376,8 +2572,11 @@ function executeContextContinuity(rawInput, root, _runtime, now) {
     return { status: "degraded", details: { reason: "invalid-hook-input" } };
   }
   const event = input["hook_event_name"];
-  if (event === "PreCompact") return sealPreCompact(root, now);
+  if (event === "PreCompact") return sealPreCompact(input, root, now);
   if (event === "PostToolUse") return observePostToolUse(input, root, now);
+  if (event === "UserPromptSubmit") {
+    return evolveCheckpoint(root, now, {}, input, "UserPromptSubmit");
+  }
   if (event === "SessionStart") {
     const source = input["source"];
     if (source === "startup" || source === "resume" || source === "clear" || source === "compact" || source === "fork") {
@@ -4047,6 +4246,10 @@ async function runLifecycle(input) {
     const event = inputRecord?.["hook_event_name"];
     if (hook === "context-continuity" && event !== "SessionStart") {
       const execution3 = executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now());
+      if (execution3.output !== void 0) {
+        process.stdout.write(`${JSON.stringify(execution3.output)}
+`);
+      }
       await observeHook(hook, execution3, rawInput ?? {}, agentRuntime, root);
       return;
     }

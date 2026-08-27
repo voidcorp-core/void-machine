@@ -20,6 +20,7 @@
     "cli": "pnpm build:cli >/dev/null && node packages/cli/bin/void-harness.mjs",
     "benchmark:project": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph/run.mjs",
     "benchmark:query": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph-query/run.mjs",
+    "benchmark:hooks": "pnpm hooks:build && pnpm --filter @voidcorp/hook-runner benchmark",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome lint --max-diagnostics=none",

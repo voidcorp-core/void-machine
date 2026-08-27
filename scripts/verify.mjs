@@ -53,6 +53,7 @@ export const STEPS = [
   { name: 'publish safety', run: ['pnpm', 'check:publish'] },
   { name: 'build', run: ['pnpm', 'build'], slow: true },
   { name: 'project graph benchmark', run: ['pnpm', 'benchmark:project'], slow: true },
+  { name: 'context continuity benchmark', run: ['pnpm', 'benchmark:hooks'], slow: true },
   {
     name: 'self-host release gate',
     run: ['node', 'packages/cli/bin/void-harness.mjs', 'self-host', 'sync', '--mode', 'release-gate'],

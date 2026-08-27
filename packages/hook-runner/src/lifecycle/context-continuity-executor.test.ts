@@ -106,6 +106,27 @@ describe('executeContextContinuity PreCompact', () => {
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(before);
     expect(existsSync(`${checkpoint(root)}.lock`)).toBe(true);
   });
+
+  it('leaves the old checkpoint intact when the atomic temporary write fails', () => {
+    const root = project();
+    const raw = '## Objective\n\nKeep the previous authority.\n';
+    const now = 4_000;
+    writeFileSync(checkpoint(root), raw);
+    writeFileSync(
+      join(root, '.void', 'machine', `.checkpoint-${String(process.pid)}-${String(now)}.tmp`),
+      'collision',
+    );
+
+    const execution = executeContextContinuity(
+      { hook_event_name: 'PreCompact' },
+      root,
+      'codex',
+      now,
+    );
+
+    expect(execution.status).toBe('skipped');
+    expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
+  });
 });
 
 function mechanicalState(root: string): ReturnType<typeof parseMechanicalContextBlock> {
@@ -306,7 +327,7 @@ describe('executeContextContinuity transcript threshold', () => {
       transcript_path: transcript(root),
     }, root, 'codex', 2_000);
 
-    expect(result.details.transcriptSkippedBytes).toBeGreaterThan(0);
+    expect(result.details['transcriptSkippedBytes']).toBeGreaterThan(0);
     const parsed = mechanicalState(root);
     expect(parsed.status).toBe('valid');
     if (parsed.status !== 'valid') return;

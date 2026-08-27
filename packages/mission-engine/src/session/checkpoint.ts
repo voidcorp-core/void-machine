@@ -50,6 +50,19 @@ export interface MechanicalContextObservation {
   readonly semanticCheckpointWritten?: boolean;
 }
 
+export interface ContextMeasurement {
+  readonly usedTokens: number;
+  readonly measuredAtMs: number;
+  readonly windowTokens?: number;
+  readonly thresholdPercent: number;
+}
+
+export interface ContextMeasurementDecision {
+  readonly state: MechanicalContextState;
+  readonly emitNudge: boolean;
+  readonly usagePercent?: number;
+}
+
 export type MechanicalContextBlock =
   | { readonly status: 'absent' }
   | { readonly status: 'invalid'; readonly reason: 'ambiguous' | 'malformed' }
@@ -395,6 +408,51 @@ export function advanceMechanicalContext(
       ? false
       : observation.resumeSource === 'clear' || state.clearPending,
     lastResumeSource: observation.resumeSource ?? state.lastResumeSource,
+  };
+}
+
+/** Decide one threshold observation without guessing an unknown context window. */
+export function evaluateContextMeasurement(
+  state: MechanicalContextState,
+  measurement: ContextMeasurement,
+): ContextMeasurementDecision {
+  const usedTokens = Number.isSafeInteger(measurement.usedTokens) && measurement.usedTokens >= 0
+    ? measurement.usedTokens
+    : state.lastUsedTokens;
+  const tokensChanged = usedTokens !== state.lastUsedTokens;
+  const windowKnown = Number.isSafeInteger(measurement.windowTokens)
+    && (measurement.windowTokens ?? 0) > 0;
+  const thresholdValid = Number.isSafeInteger(measurement.thresholdPercent)
+    && measurement.thresholdPercent >= 40
+    && measurement.thresholdPercent <= 60;
+  const usagePercent = windowKnown
+    ? (usedTokens / (measurement.windowTokens ?? 1)) * 100
+    : undefined;
+  const revisionAfterTokens = state.workRevision + (tokensChanged ? 1 : 0);
+  const emitNudge = usagePercent !== undefined
+    && thresholdValid
+    && usagePercent >= measurement.thresholdPercent
+    && !state.nudgeEmitted
+    && state.semanticRevision < revisionAfterTokens;
+  const workChanged = tokensChanged || emitNudge;
+  const measuredAtMs = Number.isSafeInteger(measurement.measuredAtMs)
+    && measurement.measuredAtMs >= 0
+    ? measurement.measuredAtMs
+    : state.lastMeasurementAtMs;
+  const changed = workChanged || measuredAtMs !== state.lastMeasurementAtMs;
+  const next = changed
+    ? {
+        ...state,
+        workRevision: state.workRevision + (workChanged ? 1 : 0),
+        nudgeEmitted: state.nudgeEmitted || emitNudge,
+        lastMeasurementAtMs: measuredAtMs,
+        lastUsedTokens: usedTokens,
+      }
+    : state;
+  return {
+    state: next,
+    emitNudge,
+    ...(usagePercent === undefined ? {} : { usagePercent }),
   };
 }
 

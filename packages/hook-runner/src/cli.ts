@@ -141,6 +141,9 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
     const event = inputRecord?.['hook_event_name'];
     if (hook === 'context-continuity' && event !== 'SessionStart') {
       const execution = executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now());
+      if (execution.output !== undefined) {
+        process.stdout.write(`${JSON.stringify(execution.output)}\n`);
+      }
       await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
       return;
     }

@@ -61,6 +61,12 @@ export const configSchema = z.object({
   paths: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
   commands: z.record(z.string(), command).optional(),
   modes: z.record(z.string(), z.string()).optional(),
+  context: z
+    .object({
+      windowTokens: z.number().int().positive().optional(),
+      checkpointThresholdPercent: z.number().int().min(40).max(60).default(50),
+    })
+    .optional(),
 });
 
 export type VoidConfig = z.infer<typeof configSchema>;

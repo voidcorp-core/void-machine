@@ -10,6 +10,7 @@ import {
   composeResumeBundle,
   parseCheckpoint,
   type ResumeBundle,
+  type ResumeBundleInput,
   type ResumeProgramInput,
   renderResumeContext,
 } from '@voidcorp/mission-engine/session';
@@ -166,7 +167,11 @@ function checkpointObservation(root: string): {
   return {};
 }
 
-export function observeResume(root: string, now: number): ResumeObservation {
+export function observeResume(
+  root: string,
+  now: number,
+  options: { readonly source?: ResumeBundleInput['resumeSource'] } = {},
+): ResumeObservation {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
     project: { name: basename(root), path: root },
@@ -177,6 +182,7 @@ export function observeResume(root: string, now: number): ResumeObservation {
     ...(checkpoint.checkpointWrittenAt === undefined
       ? {}
       : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }),
+    ...(options.source === undefined ? {} : { resumeSource: options.source }),
   });
   return {
     bundle,

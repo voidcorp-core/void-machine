@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:4205f6b2bde2a6367dc868896ba8286dd7e618cd6a494ff0e99532430dd34238"
+    "rootHash": "sha256:b4423d36d909062a835ab26804790302e92c8dd6cc4e8181a8c9996314895fdc"
   },
   "nodes": [
     {
@@ -1224,7 +1224,7 @@
           "name": "sessionstart-context",
           "pack": null,
           "source": "packages/core/hooks/sessionstart-context.sh",
-          "staticTokens": 84,
+          "staticTokens": 87,
           "type": "hook"
         }
       },

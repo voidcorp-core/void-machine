@@ -87,7 +87,10 @@ describe('composeResumeBundle', () => {
       progress: { provider: 'jira', scope: 'ACME/KNOW' },
     });
     expect(bundle.checkpoint?.nextAction).toBe('Wire the CLI.');
-    expect(bundle.gaps).toEqual([]);
+    expect(bundle.gaps).toContainEqual({
+      reason: 'mechanical-block-absent',
+      detail: 'the mechanical context block is absent',
+    });
   });
 
   it('names an absent or invalid program without hiding a useful checkpoint', () => {

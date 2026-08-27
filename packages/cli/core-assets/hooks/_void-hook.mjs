@@ -1676,6 +1676,606 @@ function auditCheckpoint(input) {
   return reasons.length === 0 ? { status: "ok", reasons } : { status: "degraded", reasons };
 }
 
+// src/lifecycle/context-continuity-executor.ts
+import { createHash as createHash2 } from "node:crypto";
+import {
+  closeSync as closeSync2,
+  existsSync as existsSync6,
+  lstatSync as lstatSync3,
+  mkdirSync as mkdirSync3,
+  openSync as openSync2,
+  readFileSync as readFileSync9,
+  renameSync as renameSync3,
+  statSync as statSync3,
+  unlinkSync,
+  writeFileSync as writeFileSync3
+} from "node:fs";
+import { dirname as dirname5, join as join11 } from "node:path";
+
+// ../mission-engine/dist/session/checkpoint.js
+import { createHash } from "node:crypto";
+var PROSE_SECTIONS = {
+  objective: "objective",
+  position: "position",
+  state: "state",
+  "where you are": "state",
+  "next action": "nextAction",
+  next: "nextAction"
+};
+var LIST_SECTIONS = {
+  "open loops": "openLoops",
+  open: "openLoops",
+  "dead ends": "deadEnds",
+  assumptions: "assumptions",
+  "working set": "workingSet",
+  files: "workingSet"
+};
+var MAX_INPUT = 5e5;
+var MAX_LINE = 200;
+var MAX_ITEMS = 20;
+var MAX_PATH = 500;
+var MECHANICAL_BEGIN = "<!-- void-harness:context-continuity:begin -->";
+var MECHANICAL_END = "<!-- void-harness:context-continuity:end -->";
+function hashCheckpointObjective(objective) {
+  return `sha256:${createHash("sha256").update(objective?.trim() ?? "").digest("hex")}`;
+}
+function markerPositions(raw, marker) {
+  const positions = [];
+  let cursor = 0;
+  while (cursor <= raw.length) {
+    const found = raw.indexOf(marker, cursor);
+    if (found < 0)
+      break;
+    positions.push(found);
+    cursor = found + marker.length;
+  }
+  return positions;
+}
+function mechanicalBounds(raw) {
+  const begins = markerPositions(raw, MECHANICAL_BEGIN);
+  const ends = markerPositions(raw, MECHANICAL_END);
+  if (begins.length === 0 && ends.length === 0)
+    return { status: "absent" };
+  const begin = begins[0];
+  const end = ends[0];
+  if (begins.length !== 1 || ends.length !== 1 || begin === void 0 || end === void 0) {
+    return { status: "invalid" };
+  }
+  if (end <= begin)
+    return { status: "invalid" };
+  return { status: "valid", begin, end: end + MECHANICAL_END.length };
+}
+function semanticMarkdown(raw) {
+  const bounds = mechanicalBounds(raw);
+  return bounds.status === "valid" ? `${raw.slice(0, bounds.begin)}${raw.slice(bounds.end)}` : raw;
+}
+function scalar(block2, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}:\\s*(.*?)\\s*$`, "m").exec(block2)?.[1];
+}
+function integerScalar(block2, key) {
+  const value = Number(scalar(block2, key));
+  return Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function booleanScalar(block2, key) {
+  const value = scalar(block2, key);
+  if (value === "true")
+    return true;
+  if (value === "false")
+    return false;
+  return void 0;
+}
+function pathList2(block2, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const section = new RegExp(`^### ${escaped}\\s*$([\\s\\S]*?)(?=^### |(?![\\s\\S]))`, "m").exec(block2)?.[1];
+  if (section === void 0)
+    return void 0;
+  const paths = section.split(/\r?\n/).map((line) => /^- (.+)$/.exec(line)?.[1]).filter((path) => path !== void 0);
+  if (paths.length > MAX_ITEMS)
+    return void 0;
+  if (paths.some((path) => path.length > MAX_PATH || /[\u0000-\u001f]/.test(path)))
+    return void 0;
+  return paths;
+}
+function stateFromMechanicalBody(block2) {
+  const objectiveHash = scalar(block2, "objective_hash");
+  const transcriptFingerprint = scalar(block2, "transcript_fingerprint");
+  const workRevision = integerScalar(block2, "work_revision");
+  const semanticRevision = integerScalar(block2, "semantic_revision");
+  const readFiles = pathList2(block2, "Read files");
+  const modifiedFiles = pathList2(block2, "Modified files");
+  if (scalar(block2, "schema_version") !== "1" || objectiveHash === void 0 || !/^sha256:[a-f0-9]{64}$/.test(objectiveHash) || transcriptFingerprint === void 0 || !/^sha256:[a-f0-9]{64}$/.test(transcriptFingerprint) || workRevision === void 0 || semanticRevision === void 0 || semanticRevision > workRevision || readFiles === void 0 || modifiedFiles === void 0)
+    return void 0;
+  return mechanicalScalars(block2, {
+    objectiveHash,
+    transcriptFingerprint,
+    workRevision,
+    semanticRevision,
+    readFiles,
+    modifiedFiles
+  });
+}
+function mechanicalScalars(block2, required) {
+  const nudgeEmitted = booleanScalar(block2, "nudge_emitted");
+  const clearPending = booleanScalar(block2, "clear_pending");
+  const transcriptCursorBytes = integerScalar(block2, "transcript_cursor_bytes");
+  const lastMeasurementAtMs = integerScalar(block2, "last_measurement_at_ms");
+  const lastUsedTokens = integerScalar(block2, "last_used_tokens");
+  const readFilesOverflow = integerScalar(block2, "read_files_overflow");
+  const modifiedFilesOverflow = integerScalar(block2, "modified_files_overflow");
+  if (nudgeEmitted === void 0 || clearPending === void 0 || transcriptCursorBytes === void 0 || lastMeasurementAtMs === void 0 || lastUsedTokens === void 0 || readFilesOverflow === void 0 || modifiedFilesOverflow === void 0)
+    return void 0;
+  return {
+    schemaVersion: 1,
+    ...required,
+    nudgeEmitted,
+    transcriptCursorBytes,
+    lastMeasurementAtMs,
+    lastUsedTokens,
+    readFilesOverflow,
+    modifiedFilesOverflow,
+    clearPending
+  };
+}
+function parseMechanicalContextBlock(raw) {
+  const bounds = mechanicalBounds(raw);
+  if (bounds.status === "absent")
+    return { status: "absent" };
+  if (bounds.status === "invalid")
+    return { status: "invalid", reason: "ambiguous" };
+  const body = raw.slice(bounds.begin + MECHANICAL_BEGIN.length, bounds.end - MECHANICAL_END.length);
+  const state = stateFromMechanicalBody(body);
+  return state === void 0 ? { status: "invalid", reason: "malformed" } : { status: "valid", state };
+}
+function renderPaths(paths) {
+  return paths.map((path) => `- ${path}`).join("\n");
+}
+function renderMechanicalContextBlock(state) {
+  return [
+    MECHANICAL_BEGIN,
+    "## Mechanical context",
+    "",
+    "```yaml",
+    "schema_version: 1",
+    `objective_hash: ${state.objectiveHash}`,
+    `work_revision: ${String(state.workRevision)}`,
+    `semantic_revision: ${String(state.semanticRevision)}`,
+    `nudge_emitted: ${String(state.nudgeEmitted)}`,
+    `transcript_fingerprint: ${state.transcriptFingerprint}`,
+    `transcript_cursor_bytes: ${String(state.transcriptCursorBytes)}`,
+    `last_measurement_at_ms: ${String(state.lastMeasurementAtMs)}`,
+    `last_used_tokens: ${String(state.lastUsedTokens)}`,
+    `read_files_overflow: ${String(state.readFilesOverflow)}`,
+    `modified_files_overflow: ${String(state.modifiedFilesOverflow)}`,
+    `clear_pending: ${String(state.clearPending)}`,
+    "```",
+    "",
+    "### Read files",
+    "",
+    renderPaths(state.readFiles),
+    "",
+    "### Modified files",
+    "",
+    renderPaths(state.modifiedFiles),
+    MECHANICAL_END
+  ].join("\n");
+}
+function mergeMechanicalContextBlock(raw, state) {
+  const bounds = mechanicalBounds(raw);
+  if (bounds.status === "invalid")
+    return { ok: false, error: "ambiguous-mechanical-block" };
+  const block2 = renderMechanicalContextBlock(state);
+  if (bounds.status === "absent") {
+    const separator = raw === "" || raw.endsWith("\n\n") ? "" : raw.endsWith("\n") ? "\n" : "\n\n";
+    return { ok: true, value: `${raw}${separator}${block2}
+` };
+  }
+  return {
+    ok: true,
+    value: `${raw.slice(0, bounds.begin)}${block2}${raw.slice(bounds.end)}`
+  };
+}
+function clamp(text2) {
+  const flat = [...text2].filter((ch) => {
+    const point = ch.codePointAt(0) ?? 0;
+    return point >= 32 || ch === "\n" || ch === "	";
+  }).join("").trim();
+  return flat.length <= MAX_LINE ? flat : `${flat.slice(0, MAX_LINE - 1)}\u2026`;
+}
+function frontmatterField(raw, key) {
+  const block2 = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
+  if (block2 === void 0)
+    return void 0;
+  for (const line of block2.split(/\r?\n/)) {
+    const separator = line.indexOf(":");
+    if (separator < 1)
+      continue;
+    if (line.slice(0, separator).trim().toLowerCase() !== key)
+      continue;
+    const value = line.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+    return value === "" ? void 0 : clamp(value);
+  }
+  return void 0;
+}
+function bodyOf(raw) {
+  return /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n([\s\S]*))?$/.exec(raw)?.[1] ?? raw;
+}
+function sectionsOf(body) {
+  const found = [];
+  for (const line of body.split(/\r?\n/)) {
+    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line) ?? void 0;
+    if (heading !== void 0) {
+      found.push({ title: (heading[1] ?? "").toLowerCase().replace(/\s+/g, " ").trim(), lines: [] });
+      continue;
+    }
+    found[found.length - 1]?.lines.push(line);
+  }
+  return found;
+}
+function prose(lines) {
+  const text2 = lines.join("\n").trim();
+  return text2 === "" ? void 0 : text2;
+}
+function bullets(lines) {
+  const items = [];
+  let open3 = false;
+  for (const line of lines) {
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line)?.[1];
+    if (bullet !== void 0) {
+      items.push(bullet);
+      open3 = true;
+      continue;
+    }
+    if (line.trim() === "") {
+      open3 = false;
+      continue;
+    }
+    if (open3 && items.length > 0) {
+      items[items.length - 1] = `${items[items.length - 1] ?? ""} ${line.trim()}`;
+    }
+  }
+  return items.map((item) => clamp(item)).filter((item) => item !== "").slice(0, MAX_ITEMS);
+}
+function parseCheckpoint(raw) {
+  const bounded = raw.length > MAX_INPUT ? raw.slice(0, MAX_INPUT) : raw;
+  const mechanical = parseMechanicalContextBlock(bounded);
+  const semantic = semanticMarkdown(bounded);
+  const proseFields = {};
+  const listFields = {
+    openLoops: [],
+    deadEnds: [],
+    assumptions: [],
+    workingSet: []
+  };
+  for (const section of sectionsOf(bodyOf(semantic))) {
+    const proseKey = PROSE_SECTIONS[section.title];
+    if (proseKey !== void 0) {
+      const text2 = prose(section.lines);
+      if (text2 !== void 0)
+        proseFields[proseKey] = text2;
+      continue;
+    }
+    const listKey = LIST_SECTIONS[section.title];
+    if (listKey !== void 0)
+      listFields[listKey] = bullets(section.lines);
+  }
+  const objective = proseFields["objective"];
+  const nextAction = proseFields["nextAction"];
+  const resumeSource = objective ?? nextAction;
+  const resumeLine = resumeSource === void 0 ? void 0 : clamp(resumeSource.split("\n")[0] ?? "");
+  const branch = frontmatterField(bounded, "branch");
+  const head = frontmatterField(bounded, "head");
+  const date = frontmatterField(bounded, "date");
+  const isEmpty = objective === void 0 && nextAction === void 0 && proseFields["state"] === void 0 && proseFields["position"] === void 0 && Object.values(listFields).every((items) => items.length === 0) && mechanical.status !== "valid";
+  return {
+    ...objective === void 0 ? {} : { objective },
+    ...proseFields["position"] === void 0 ? {} : { position: proseFields["position"] },
+    ...proseFields["state"] === void 0 ? {} : { state: proseFields["state"] },
+    ...nextAction === void 0 ? {} : { nextAction },
+    openLoops: listFields["openLoops"] ?? [],
+    deadEnds: listFields["deadEnds"] ?? [],
+    assumptions: listFields["assumptions"] ?? [],
+    workingSet: listFields["workingSet"] ?? [],
+    ...branch === void 0 ? {} : { branch },
+    ...head === void 0 ? {} : { head },
+    ...date === void 0 ? {} : { date },
+    ...resumeLine === void 0 || resumeLine === "" ? {} : { resumeLine },
+    ...mechanical.status === "valid" ? { mechanicalContext: mechanical.state } : {},
+    mechanicalBlockStatus: mechanical.status,
+    isEmpty
+  };
+}
+
+// ../mission-engine/dist/session/resume.js
+var DAY_MS2 = 864e5;
+var STALE_DAYS2 = 7;
+var CONTEXT_CHARS_MAX = 4e3;
+function summarizeProgram(descriptor) {
+  return {
+    status: descriptor.status,
+    program: descriptor.program,
+    plan: descriptor.plan,
+    spec: descriptor.spec,
+    ...descriptor.progress === void 0 ? {} : {
+      progress: {
+        provider: descriptor.progress.provider,
+        scope: descriptor.progress.scope
+      }
+    }
+  };
+}
+function programGap(input) {
+  if (input.programError !== void 0) {
+    return { reason: "program-invalid", detail: input.programError };
+  }
+  if (input.program === void 0) {
+    return {
+      reason: "program-absent",
+      detail: "no .void/program.md; resume can still use a local checkpoint and Git"
+    };
+  }
+  return void 0;
+}
+function checkpointGap(input) {
+  if (input.checkpoint === void 0) {
+    return {
+      reason: "checkpoint-absent",
+      detail: "no .void/machine/checkpoint.md; invoke void-checkpoint before ending a session"
+    };
+  }
+  if (input.checkpoint.isEmpty) {
+    return {
+      reason: "checkpoint-empty",
+      detail: "the checkpoint exists but carries no recognised session residue"
+    };
+  }
+  if (input.checkpointWrittenAt === void 0)
+    return void 0;
+  const ageDays = Math.max(0, Math.floor((input.now - input.checkpointWrittenAt) / DAY_MS2));
+  return ageDays > STALE_DAYS2 ? {
+    reason: "checkpoint-stale",
+    detail: `the checkpoint is ${String(ageDays)} days old`
+  } : void 0;
+}
+function treeGaps(input) {
+  const gaps = [];
+  const checkpoint = input.checkpoint;
+  if (checkpoint?.branch !== void 0 && input.git.branch !== void 0 && checkpoint.branch !== input.git.branch) {
+    gaps.push({
+      reason: "checkpoint-branch-moved",
+      detail: `checkpoint branch ${checkpoint.branch}; current branch ${input.git.branch}`
+    });
+  }
+  if (checkpoint?.head !== void 0 && input.git.head !== void 0 && checkpoint.head !== input.git.head) {
+    gaps.push({
+      reason: "checkpoint-head-moved",
+      detail: `checkpoint HEAD ${checkpoint.head}; current HEAD ${input.git.head}`
+    });
+  }
+  return gaps;
+}
+function continuityFor(input) {
+  if (input.resumeSource === "clear") {
+    return { status: "degraded", reasons: ["clear-not-reconciled"] };
+  }
+  const checkpoint = input.checkpoint;
+  if (checkpoint?.mechanicalBlockStatus === "invalid") {
+    return { status: "degraded", reasons: ["mechanical-block-invalid"] };
+  }
+  const mechanical = checkpoint?.mechanicalContext;
+  if (mechanical === void 0) {
+    return { status: "degraded", reasons: ["mechanical-block-absent"] };
+  }
+  const reasons = [];
+  if (mechanical.semanticRevision < mechanical.workRevision) {
+    reasons.push("semantic-revision-behind");
+  }
+  if (mechanical.clearPending)
+    reasons.push("clear-not-reconciled");
+  return reasons.length === 0 ? { status: "complete", reasons } : { status: "degraded", reasons };
+}
+function continuityGaps(continuity) {
+  return continuity.reasons.map((reason) => {
+    switch (reason) {
+      case "mechanical-block-absent":
+        return { reason, detail: "the mechanical context block is absent" };
+      case "mechanical-block-invalid":
+        return { reason, detail: "the mechanical context block is ambiguous or malformed" };
+      case "semantic-revision-behind":
+        return {
+          reason: "checkpoint-semantic-stale",
+          detail: "the semantic revision is behind mechanical work"
+        };
+      case "clear-not-reconciled":
+        return { reason: "clear-unreconciled", detail: "the last clear is not reconciled" };
+      default: {
+        const exhaustive = reason;
+        return exhaustive;
+      }
+    }
+  });
+}
+function composeResumeBundle(input) {
+  const continuity = continuityFor(input);
+  const gaps = [
+    programGap(input),
+    checkpointGap(input),
+    ...treeGaps(input),
+    ...continuityGaps(continuity)
+  ].filter((gap) => gap !== void 0);
+  return {
+    schemaVersion: 1,
+    project: input.project,
+    ...input.program === void 0 ? {} : { program: summarizeProgram(input.program) },
+    ...input.checkpoint === void 0 ? {} : { checkpoint: input.checkpoint },
+    git: {
+      ...input.git.branch === void 0 ? {} : { branch: input.git.branch },
+      ...input.git.head === void 0 ? {} : { head: input.git.head },
+      dirtyFiles: input.git.dirtyFiles
+    },
+    gaps,
+    continuity
+  };
+}
+function checkpointContext(checkpoint) {
+  return [
+    checkpoint.date === void 0 ? void 0 : `Checkpoint date: ${checkpoint.date}`,
+    checkpoint.objective === void 0 ? void 0 : `Objective: ${checkpoint.objective}`,
+    checkpoint.position === void 0 ? void 0 : `Position: ${checkpoint.position}`,
+    checkpoint.state === void 0 ? void 0 : `State: ${checkpoint.state}`,
+    checkpoint.nextAction === void 0 ? void 0 : `Next action: ${checkpoint.nextAction}`,
+    checkpoint.openLoops.length === 0 ? void 0 : `Open loops: ${checkpoint.openLoops.join("; ")}`,
+    checkpoint.deadEnds.length === 0 ? void 0 : `Dead ends: ${checkpoint.deadEnds.join("; ")}`,
+    checkpoint.assumptions.length === 0 ? void 0 : `Unverified assumptions: ${checkpoint.assumptions.join("; ")}`
+  ].filter((line) => line !== void 0);
+}
+function boundContext(text2) {
+  if (text2.length <= CONTEXT_CHARS_MAX)
+    return text2;
+  return `${text2.slice(0, CONTEXT_CHARS_MAX - 1)}\u2026`;
+}
+function renderResumeContext(bundle) {
+  const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
+  if (bundle.program === void 0 && !usefulCheckpoint)
+    return "";
+  const lines = ["[void-harness resume]", `Project: ${bundle.project.name}`];
+  if (bundle.git.branch !== void 0)
+    lines.push(`Branch: ${bundle.git.branch}`);
+  if (bundle.git.head !== void 0)
+    lines.push(`HEAD: ${bundle.git.head}`);
+  if (bundle.git.dirtyFiles > 0)
+    lines.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
+  if (bundle.program !== void 0) {
+    lines.push(`Program: ${bundle.program.program}`);
+    lines.push(`Plan: ${bundle.program.plan}`);
+    lines.push(`Spec: ${bundle.program.spec}`);
+    if (bundle.program.progress !== void 0) {
+      lines.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
+    }
+  }
+  if (usefulCheckpoint && bundle.checkpoint !== void 0) {
+    lines.push(...checkpointContext(bundle.checkpoint));
+  }
+  lines.push(`Context continuity: ${bundle.continuity.status}`);
+  if (bundle.continuity.status === "degraded") {
+    lines.push("Reconstruct context before any mutation.");
+  }
+  for (const gap of bundle.gaps)
+    lines.push(`Gap: ${gap.detail}`);
+  return boundContext(`${lines.join("\n")}
+`);
+}
+
+// src/lifecycle/context-continuity-executor.ts
+var CHECKPOINT = join11(".void", "machine", "checkpoint.md");
+var MAX_CHECKPOINT_BYTES = 5e5;
+var LOCK_STALE_MS = 1e3;
+var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash2("sha256").update("").digest("hex")}`;
+function rawCheckpoint(path) {
+  try {
+    const info = lstatSync3(path);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_CHECKPOINT_BYTES) return void 0;
+    return readFileSync9(path, "utf8");
+  } catch {
+    return existsSync6(path) ? void 0 : "";
+  }
+}
+function initialState(raw) {
+  const parsed = parseCheckpoint(raw);
+  const hasSemantic = parsed.objective !== void 0 || parsed.nextAction !== void 0;
+  return {
+    schemaVersion: 1,
+    objectiveHash: hashCheckpointObjective(parsed.objective),
+    workRevision: 1,
+    semanticRevision: hasSemantic ? 1 : 0,
+    nudgeEmitted: false,
+    transcriptFingerprint: EMPTY_TRANSCRIPT_HASH,
+    transcriptCursorBytes: 0,
+    lastMeasurementAtMs: 0,
+    lastUsedTokens: 0,
+    readFiles: [],
+    modifiedFiles: [],
+    readFilesOverflow: 0,
+    modifiedFilesOverflow: 0,
+    clearPending: false
+  };
+}
+function acquireLock(path, now) {
+  try {
+    return openSync2(path, "wx");
+  } catch {
+    try {
+      if (now - statSync3(path).mtimeMs < LOCK_STALE_MS) return void 0;
+      unlinkSync(path);
+      return openSync2(path, "wx");
+    } catch {
+      return void 0;
+    }
+  }
+}
+function releaseLock(path, descriptor) {
+  try {
+    closeSync2(descriptor);
+  } finally {
+    try {
+      unlinkSync(path);
+    } catch {
+    }
+  }
+}
+function atomicCheckpointWrite(path, content, now) {
+  const directory = dirname5(path);
+  mkdirSync3(directory, { recursive: true });
+  const lock = `${path}.lock`;
+  const descriptor = acquireLock(lock, now);
+  if (descriptor === void 0) return false;
+  const temporary = join11(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+  try {
+    writeFileSync3(temporary, content, { encoding: "utf8", flag: "wx" });
+    renameSync3(temporary, path);
+    return true;
+  } catch {
+    try {
+      unlinkSync(temporary);
+    } catch {
+    }
+    return false;
+  } finally {
+    releaseLock(lock, descriptor);
+  }
+}
+function sealPreCompact(root, now) {
+  const path = join11(root, CHECKPOINT);
+  const raw = rawCheckpoint(path);
+  if (raw === void 0) {
+    return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
+  }
+  const block2 = parseMechanicalContextBlock(raw);
+  if (block2.status === "invalid") {
+    return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
+  }
+  const merged = mergeMechanicalContextBlock(
+    raw,
+    block2.status === "valid" ? block2.state : initialState(raw)
+  );
+  if (!merged.ok) {
+    return { status: "degraded", details: { reason: merged.error } };
+  }
+  if (!atomicCheckpointWrite(path, merged.value, now)) {
+    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
+  }
+  return { status: "ok", details: { sealed: true } };
+}
+function executeContextContinuity(rawInput, root, _runtime, now) {
+  const input = record3(rawInput);
+  if (input === void 0) {
+    return { status: "degraded", details: { reason: "invalid-hook-input" } };
+  }
+  const event = input["hook_event_name"];
+  if (event === "PreCompact") return sealPreCompact(root, now);
+  return { status: "skipped", details: { reason: "event-not-actionable" } };
+}
+
 // src/lifecycle/format-executor.ts
 import { spawnSync } from "node:child_process";
 
@@ -1880,286 +2480,29 @@ function executeLargeChange(root, env) {
 // src/lifecycle/resume-observer.ts
 import { execFileSync } from "node:child_process";
 import {
-  existsSync as existsSync6,
-  lstatSync as lstatSync3,
-  readFileSync as readFileSync9,
-  statSync as statSync3
+  existsSync as existsSync7,
+  lstatSync as lstatSync4,
+  readFileSync as readFileSync10,
+  statSync as statSync4
 } from "node:fs";
-import { basename as basename3, join as join11 } from "node:path";
-
-// ../mission-engine/dist/session/checkpoint.js
-var PROSE_SECTIONS = {
-  objective: "objective",
-  position: "position",
-  state: "state",
-  "where you are": "state",
-  "next action": "nextAction",
-  next: "nextAction"
-};
-var LIST_SECTIONS = {
-  "open loops": "openLoops",
-  open: "openLoops",
-  "dead ends": "deadEnds",
-  assumptions: "assumptions",
-  "working set": "workingSet",
-  files: "workingSet"
-};
-var MAX_INPUT = 5e5;
-var MAX_LINE = 200;
-var MAX_ITEMS = 20;
-function clamp(text2) {
-  const flat = [...text2].filter((ch) => {
-    const point = ch.codePointAt(0) ?? 0;
-    return point >= 32 || ch === "\n" || ch === "	";
-  }).join("").trim();
-  return flat.length <= MAX_LINE ? flat : `${flat.slice(0, MAX_LINE - 1)}\u2026`;
-}
-function frontmatterField(raw, key) {
-  const block2 = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
-  if (block2 === void 0)
-    return void 0;
-  for (const line of block2.split(/\r?\n/)) {
-    const separator = line.indexOf(":");
-    if (separator < 1)
-      continue;
-    if (line.slice(0, separator).trim().toLowerCase() !== key)
-      continue;
-    const value = line.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
-    return value === "" ? void 0 : clamp(value);
-  }
-  return void 0;
-}
-function bodyOf(raw) {
-  return /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n([\s\S]*))?$/.exec(raw)?.[1] ?? raw;
-}
-function sectionsOf(body) {
-  const found = [];
-  for (const line of body.split(/\r?\n/)) {
-    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line) ?? void 0;
-    if (heading !== void 0) {
-      found.push({ title: (heading[1] ?? "").toLowerCase().replace(/\s+/g, " ").trim(), lines: [] });
-      continue;
-    }
-    found[found.length - 1]?.lines.push(line);
-  }
-  return found;
-}
-function prose(lines) {
-  const text2 = lines.join("\n").trim();
-  return text2 === "" ? void 0 : text2;
-}
-function bullets(lines) {
-  const items = [];
-  let open3 = false;
-  for (const line of lines) {
-    const bullet = /^\s*[-*]\s+(.*)$/.exec(line)?.[1];
-    if (bullet !== void 0) {
-      items.push(bullet);
-      open3 = true;
-      continue;
-    }
-    if (line.trim() === "") {
-      open3 = false;
-      continue;
-    }
-    if (open3 && items.length > 0) {
-      items[items.length - 1] = `${items[items.length - 1] ?? ""} ${line.trim()}`;
-    }
-  }
-  return items.map((item) => clamp(item)).filter((item) => item !== "").slice(0, MAX_ITEMS);
-}
-function parseCheckpoint(raw) {
-  const bounded = raw.length > MAX_INPUT ? raw.slice(0, MAX_INPUT) : raw;
-  const proseFields = {};
-  const listFields = {
-    openLoops: [],
-    deadEnds: [],
-    assumptions: [],
-    workingSet: []
-  };
-  for (const section of sectionsOf(bodyOf(bounded))) {
-    const proseKey = PROSE_SECTIONS[section.title];
-    if (proseKey !== void 0) {
-      const text2 = prose(section.lines);
-      if (text2 !== void 0)
-        proseFields[proseKey] = text2;
-      continue;
-    }
-    const listKey = LIST_SECTIONS[section.title];
-    if (listKey !== void 0)
-      listFields[listKey] = bullets(section.lines);
-  }
-  const objective = proseFields["objective"];
-  const nextAction = proseFields["nextAction"];
-  const resumeSource = objective ?? nextAction;
-  const resumeLine = resumeSource === void 0 ? void 0 : clamp(resumeSource.split("\n")[0] ?? "");
-  const branch = frontmatterField(bounded, "branch");
-  const head = frontmatterField(bounded, "head");
-  const date = frontmatterField(bounded, "date");
-  const isEmpty = objective === void 0 && nextAction === void 0 && proseFields["state"] === void 0 && proseFields["position"] === void 0 && Object.values(listFields).every((items) => items.length === 0);
-  return {
-    ...objective === void 0 ? {} : { objective },
-    ...proseFields["position"] === void 0 ? {} : { position: proseFields["position"] },
-    ...proseFields["state"] === void 0 ? {} : { state: proseFields["state"] },
-    ...nextAction === void 0 ? {} : { nextAction },
-    openLoops: listFields["openLoops"] ?? [],
-    deadEnds: listFields["deadEnds"] ?? [],
-    assumptions: listFields["assumptions"] ?? [],
-    workingSet: listFields["workingSet"] ?? [],
-    ...branch === void 0 ? {} : { branch },
-    ...head === void 0 ? {} : { head },
-    ...date === void 0 ? {} : { date },
-    ...resumeLine === void 0 || resumeLine === "" ? {} : { resumeLine },
-    isEmpty
-  };
-}
-
-// ../mission-engine/dist/session/resume.js
-var DAY_MS2 = 864e5;
-var STALE_DAYS2 = 7;
-var CONTEXT_CHARS_MAX = 4e3;
-function summarizeProgram(descriptor) {
-  return {
-    status: descriptor.status,
-    program: descriptor.program,
-    plan: descriptor.plan,
-    spec: descriptor.spec,
-    ...descriptor.progress === void 0 ? {} : {
-      progress: {
-        provider: descriptor.progress.provider,
-        scope: descriptor.progress.scope
-      }
-    }
-  };
-}
-function programGap(input) {
-  if (input.programError !== void 0) {
-    return { reason: "program-invalid", detail: input.programError };
-  }
-  if (input.program === void 0) {
-    return {
-      reason: "program-absent",
-      detail: "no .void/program.md; resume can still use a local checkpoint and Git"
-    };
-  }
-  return void 0;
-}
-function checkpointGap(input) {
-  if (input.checkpoint === void 0) {
-    return {
-      reason: "checkpoint-absent",
-      detail: "no .void/machine/checkpoint.md; invoke void-checkpoint before ending a session"
-    };
-  }
-  if (input.checkpoint.isEmpty) {
-    return {
-      reason: "checkpoint-empty",
-      detail: "the checkpoint exists but carries no recognised session residue"
-    };
-  }
-  if (input.checkpointWrittenAt === void 0)
-    return void 0;
-  const ageDays = Math.max(0, Math.floor((input.now - input.checkpointWrittenAt) / DAY_MS2));
-  return ageDays > STALE_DAYS2 ? {
-    reason: "checkpoint-stale",
-    detail: `the checkpoint is ${String(ageDays)} days old`
-  } : void 0;
-}
-function treeGaps(input) {
-  const gaps = [];
-  const checkpoint = input.checkpoint;
-  if (checkpoint?.branch !== void 0 && input.git.branch !== void 0 && checkpoint.branch !== input.git.branch) {
-    gaps.push({
-      reason: "checkpoint-branch-moved",
-      detail: `checkpoint branch ${checkpoint.branch}; current branch ${input.git.branch}`
-    });
-  }
-  if (checkpoint?.head !== void 0 && input.git.head !== void 0 && checkpoint.head !== input.git.head) {
-    gaps.push({
-      reason: "checkpoint-head-moved",
-      detail: `checkpoint HEAD ${checkpoint.head}; current HEAD ${input.git.head}`
-    });
-  }
-  return gaps;
-}
-function composeResumeBundle(input) {
-  const gaps = [programGap(input), checkpointGap(input), ...treeGaps(input)].filter((gap) => gap !== void 0);
-  return {
-    schemaVersion: 1,
-    project: input.project,
-    ...input.program === void 0 ? {} : { program: summarizeProgram(input.program) },
-    ...input.checkpoint === void 0 ? {} : { checkpoint: input.checkpoint },
-    git: {
-      ...input.git.branch === void 0 ? {} : { branch: input.git.branch },
-      ...input.git.head === void 0 ? {} : { head: input.git.head },
-      dirtyFiles: input.git.dirtyFiles
-    },
-    gaps
-  };
-}
-function checkpointContext(checkpoint) {
-  return [
-    checkpoint.date === void 0 ? void 0 : `Checkpoint date: ${checkpoint.date}`,
-    checkpoint.objective === void 0 ? void 0 : `Objective: ${checkpoint.objective}`,
-    checkpoint.position === void 0 ? void 0 : `Position: ${checkpoint.position}`,
-    checkpoint.state === void 0 ? void 0 : `State: ${checkpoint.state}`,
-    checkpoint.nextAction === void 0 ? void 0 : `Next action: ${checkpoint.nextAction}`,
-    checkpoint.openLoops.length === 0 ? void 0 : `Open loops: ${checkpoint.openLoops.join("; ")}`,
-    checkpoint.deadEnds.length === 0 ? void 0 : `Dead ends: ${checkpoint.deadEnds.join("; ")}`,
-    checkpoint.assumptions.length === 0 ? void 0 : `Unverified assumptions: ${checkpoint.assumptions.join("; ")}`
-  ].filter((line) => line !== void 0);
-}
-function boundContext(text2) {
-  if (text2.length <= CONTEXT_CHARS_MAX)
-    return text2;
-  return `${text2.slice(0, CONTEXT_CHARS_MAX - 1)}\u2026`;
-}
-function renderResumeContext(bundle) {
-  const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
-  if (bundle.program === void 0 && !usefulCheckpoint)
-    return "";
-  const lines = ["[void-harness resume]", `Project: ${bundle.project.name}`];
-  if (bundle.git.branch !== void 0)
-    lines.push(`Branch: ${bundle.git.branch}`);
-  if (bundle.git.head !== void 0)
-    lines.push(`HEAD: ${bundle.git.head}`);
-  if (bundle.git.dirtyFiles > 0)
-    lines.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
-  if (bundle.program !== void 0) {
-    lines.push(`Program: ${bundle.program.program}`);
-    lines.push(`Plan: ${bundle.program.plan}`);
-    lines.push(`Spec: ${bundle.program.spec}`);
-    if (bundle.program.progress !== void 0) {
-      lines.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
-    }
-  }
-  if (usefulCheckpoint && bundle.checkpoint !== void 0) {
-    lines.push(...checkpointContext(bundle.checkpoint));
-  }
-  for (const gap of bundle.gaps)
-    lines.push(`Gap: ${gap.detail}`);
-  return boundContext(`${lines.join("\n")}
-`);
-}
-
-// src/lifecycle/resume-observer.ts
+import { basename as basename3, join as join12 } from "node:path";
 var PROGRAM_PATHS = [
-  join11(".void", "program.md"),
-  join11(".void", "active.md"),
-  join11("plans", "ACTIVE.md")
+  join12(".void", "program.md"),
+  join12(".void", "active.md"),
+  join12("plans", "ACTIVE.md")
 ];
 var CHECKPOINT_PATHS = [
-  join11(".void", "machine", "checkpoint.md"),
-  join11(".void", "local", "checkpoint.md"),
-  join11(".void", "session", "current.md")
+  join12(".void", "machine", "checkpoint.md"),
+  join12(".void", "local", "checkpoint.md"),
+  join12(".void", "session", "current.md")
 ];
 var MAX_READ_BYTES = 5e5;
 var GIT_TIMEOUT_MS = 200;
 function readBounded(path) {
   try {
-    const info = lstatSync3(path);
+    const info = lstatSync4(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_READ_BYTES) return void 0;
-    return readFileSync9(path, "utf8");
+    return readFileSync10(path, "utf8");
   } catch {
     return void 0;
   }
@@ -2210,7 +2553,7 @@ function programFrom(raw, legacy) {
   };
 }
 function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative10) => existsSync6(join11(root, relative10)));
+  const present = PROGRAM_PATHS.filter((relative10) => existsSync7(join12(root, relative10)));
   if (present.length === 0) return { program: void 0 };
   if (present.length > 1) {
     return {
@@ -2220,7 +2563,7 @@ function observeProgram(root) {
   }
   const relative9 = present[0];
   if (relative9 === void 0) return { program: void 0 };
-  const raw = readBounded(join11(root, relative9));
+  const raw = readBounded(join12(root, relative9));
   const program = raw === void 0 ? void 0 : programFrom(raw, relative9 !== PROGRAM_PATHS[0]);
   return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative9}` } : { program };
 }
@@ -2248,18 +2591,18 @@ function gitObservation(root) {
 }
 function checkpointObservation(root) {
   for (const relative9 of CHECKPOINT_PATHS) {
-    const path = join11(root, relative9);
+    const path = join12(root, relative9);
     const raw = readBounded(path);
     if (raw === void 0) continue;
     try {
-      return { checkpoint: parseCheckpoint(raw), checkpointWrittenAt: statSync3(path).mtimeMs };
+      return { checkpoint: parseCheckpoint(raw), checkpointWrittenAt: statSync4(path).mtimeMs };
     } catch {
       return { checkpoint: parseCheckpoint(raw) };
     }
   }
   return {};
 }
-function observeResume(root, now) {
+function observeResume(root, now, options = {}) {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
     project: { name: basename3(root), path: root },
@@ -2267,7 +2610,8 @@ function observeResume(root, now) {
     git: gitObservation(root),
     ...observeProgram(root),
     checkpoint: checkpoint.checkpoint,
-    ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }
+    ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt },
+    ...options.source === void 0 ? {} : { resumeSource: options.source }
   });
   return {
     bundle,
@@ -2312,14 +2656,14 @@ function checkpointReminderOutput(prompt) {
 }
 
 // src/lifecycle/trim-executor.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 import {
-  lstatSync as lstatSync4,
-  mkdirSync as mkdirSync3,
+  lstatSync as lstatSync5,
+  mkdirSync as mkdirSync4,
   realpathSync as realpathSync3,
-  writeFileSync as writeFileSync3
+  writeFileSync as writeFileSync4
 } from "node:fs";
-import { join as join12, relative as relative4 } from "node:path";
+import { join as join13, relative as relative4 } from "node:path";
 
 // src/lifecycle/trim.ts
 function record4(value) {
@@ -2390,8 +2734,8 @@ function safeOutputDirectory(root) {
   try {
     const canonicalRoot = realpathSync3(root);
     const directory = voidMachinePath(root, "outputs");
-    mkdirSync3(directory, { recursive: true, mode: 448 });
-    const info = lstatSync4(directory);
+    mkdirSync4(directory, { recursive: true, mode: 448 });
+    const info = lstatSync5(directory);
     const canonicalDirectory = realpathSync3(directory);
     if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory)) {
       return void 0;
@@ -2425,9 +2769,9 @@ function executeTrim(rawInput, root, env) {
       details: { reason: "unsafe-output-directory" }
     };
   }
-  const hash = createHash("sha256").update(extracted.text).digest("hex").slice(0, 12);
+  const hash = createHash3("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
-  const file = join12(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
+  const file = join13(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
   const spillPath = relative4(realpathSync3(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
@@ -2438,7 +2782,7 @@ function executeTrim(rawInput, root, env) {
     return { status: "skipped", details: { reason: "below-threshold" } };
   }
   try {
-    writeFileSync3(file, plan.fullOutput, {
+    writeFileSync4(file, plan.fullOutput, {
       encoding: "utf8",
       flag: "wx",
       mode: 384
@@ -2463,15 +2807,15 @@ function executeTrim(rawInput, root, env) {
 }
 
 // src/lifecycle/typecheck-executor.ts
-import { existsSync as existsSync7 } from "node:fs";
-import { join as join14 } from "node:path";
+import { existsSync as existsSync8 } from "node:fs";
+import { join as join15 } from "node:path";
 import { spawnSync as spawnSync3 } from "node:child_process";
 
 // src/lifecycle/typecheck.ts
 import {
-  dirname as dirname5,
+  dirname as dirname6,
   isAbsolute as isAbsolute4,
-  join as join13,
+  join as join14,
   relative as relative5,
   resolve as resolve4
 } from "node:path";
@@ -2571,15 +2915,15 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
     const target = resolve4(root, changedPath);
     if (!within3(root, target)) continue;
-    let current = dirname5(target);
+    let current = dirname6(target);
     while (within3(root, current)) {
-      const config = join13(current, "tsconfig.json");
+      const config = join14(current, "tsconfig.json");
       if (hasFile(config)) {
         found.add(config);
         break;
       }
       if (current === root) break;
-      current = dirname5(current);
+      current = dirname6(current);
     }
   }
   return [...found];
@@ -2629,8 +2973,8 @@ function executeTypecheck(root, env) {
   if (changed.length === 0) {
     return { status: "skipped", details: { reason: "no-touched-typescript" } };
   }
-  const configs = nearestTsconfigs(changed, root, existsSync7);
-  const configured = configuredTypecheck(readJson(join14(root, ".void", "config.json")));
+  const configs = nearestTsconfigs(changed, root, existsSync8);
+  const configured = configuredTypecheck(readJson(join15(root, ".void", "config.json")));
   const configuredArgv = "argv" in configured ? configured.argv : void 0;
   const warning = "warning" in configured ? configured.warning : void 0;
   const fallback = findExecutable("tsc", root, env);
@@ -2719,9 +3063,9 @@ import { homedir } from "node:os";
 import { resolve as resolve8 } from "node:path";
 
 // src/project-registry.ts
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 import { lstat, mkdir, open, readFile, realpath } from "node:fs/promises";
-import { isAbsolute as isAbsolute5, join as join15, relative as relative6, resolve as resolve5 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join16, relative as relative6, resolve as resolve5 } from "node:path";
 function code(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
 }
@@ -2734,7 +3078,7 @@ async function registerProjectRoot(root, globalDir) {
   const base = resolve5(globalDir);
   await mkdir(base, { recursive: true, mode: 448 });
   const canonicalBase = await realpath(base);
-  const projects = join15(base, "projects");
+  const projects = join16(base, "projects");
   await mkdir(projects, { recursive: true, mode: 448 });
   const info = await lstat(projects);
   if (!info.isDirectory() || info.isSymbolicLink()) {
@@ -2744,8 +3088,8 @@ async function registerProjectRoot(root, globalDir) {
   if (!within4(canonicalBase, canonicalProjects)) {
     throw new Error("HOOK_REGISTRY_ESCAPE: projects resolves outside global dir");
   }
-  const slug = createHash2("sha256").update(canonicalRoot).digest("hex").slice(0, 32);
-  const pointer = join15(projects, `${slug}.path`);
+  const slug = createHash4("sha256").update(canonicalRoot).digest("hex").slice(0, 32);
+  const pointer = join16(projects, `${slug}.path`);
   try {
     const handle = await open(pointer, "wx", 384);
     try {
@@ -2767,7 +3111,7 @@ async function registerProjectRoot(root, globalDir) {
 }
 
 // src/runtime-input.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 import {
   basename as basename4,
   extname,
@@ -2887,7 +3231,7 @@ function deriveMissionId(explicit, runtime3, runtimeSessionId, root) {
     }
     return explicit;
   }
-  const opaque = createHash3("sha256").update(`${runtime3}\0${runtimeSessionId || "unknown"}\0${resolve6(root)}`).digest("hex").slice(0, 32);
+  const opaque = createHash5("sha256").update(`${runtime3}\0${runtimeSessionId || "unknown"}\0${resolve6(root)}`).digest("hex").slice(0, 32);
   return `mis_${opaque}`;
 }
 
@@ -2907,9 +3251,9 @@ import {
   unlink
 } from "node:fs/promises";
 import {
-  dirname as dirname6,
+  dirname as dirname7,
   isAbsolute as isAbsolute7,
-  join as join16,
+  join as join17,
   relative as relative8,
   resolve as resolve7
 } from "node:path";
@@ -3186,7 +3530,7 @@ async function safeRunDirectory(root, missionId) {
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;
   while (!await exists(ancestor)) {
-    const parent = dirname6(ancestor);
+    const parent = dirname7(ancestor);
     if (parent === ancestor) break;
     ancestor = parent;
   }
@@ -3216,7 +3560,7 @@ async function wait(ms) {
     setTimeout(resolveWait, ms);
   });
 }
-async function acquireLock(path, staleMs, attempts) {
+async function acquireLock2(path, staleMs, attempts) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const token = nodeRandomUUID();
     try {
@@ -3251,7 +3595,7 @@ async function acquireLock(path, staleMs, attempts) {
   }
   throw new Error("HOOK_LOCK_TIMEOUT: event sequencer remained busy");
 }
-async function releaseLock(lock) {
+async function releaseLock2(lock) {
   try {
     const raw = await readFile2(lock.path, "utf8");
     const parsed = JSON.parse(raw);
@@ -3341,15 +3685,15 @@ async function writeSequencedEventInternal(options) {
     throw new Error("HOOK_INVALID_EVENT_ID: expected evt_<opaque-id>");
   }
   const run = await safeRunDirectory(options.root, options.missionId);
-  const logPath = join16(run, "events.jsonl");
-  const statePath = join16(run, ".seq.state");
-  const lockPath = join16(run, ".seq.lock");
+  const logPath = join17(run, "events.jsonl");
+  const statePath = join17(run, ".seq.state");
+  const lockPath = join17(run, ".seq.lock");
   await Promise.all([
     rejectSymlink(logPath),
     rejectSymlink(statePath),
     rejectSymlink(lockPath)
   ]);
-  const lock = await acquireLock(
+  const lock = await acquireLock2(
     lockPath,
     options.lockStaleMs ?? DEFAULT_LOCK_STALE_MS,
     options.lockAttempts ?? DEFAULT_LOCK_ATTEMPTS
@@ -3404,7 +3748,7 @@ async function writeSequencedEventInternal(options) {
     );
     return Object.freeze({ event, appended: true });
   } finally {
-    await releaseLock(lock);
+    await releaseLock2(lock);
   }
 }
 async function writeSequencedEvent(options) {
@@ -3560,17 +3904,25 @@ async function runLifecycle(input) {
   const agentRuntime = runtime2(process.argv[4] ?? process.env["VOID_AGENT_RUNTIME"]);
   const root = projectRoot();
   const rawInput = optionalPayload(input);
-  if (hook === "context") {
-    const execution2 = { status: "ok", details: {} };
+  if (hook === "context" || hook === "context-continuity") {
+    const continuity = hook === "context-continuity" ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now()) : { status: "ok", details: {} };
+    const execution2 = continuity;
     const install = resolveInstall(root, process.env);
     const cached = readFreshnessCache(process.env, Date.now());
     const notice = cached === void 0 ? void 0 : freshnessNotice(compareFreshness(install.version, cached.latest), install.source);
     const alert = cachedInvocationAlert(root);
-    const resume = observeResume(root, Date.now());
-    process.stdout.write(
-      `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}
+    const inputRecord = record3(rawInput);
+    const event = inputRecord?.["hook_event_name"];
+    if (event === "SessionStart" || hook === "context") {
+      const source = inputRecord?.["source"];
+      const resume = observeResume(root, Date.now(), {
+        ...source === "startup" || source === "resume" || source === "clear" || source === "compact" || source === "fork" ? { source } : {}
+      });
+      process.stdout.write(
+        `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}
 `
-    );
+      );
+    }
     await refreshFreshnessInBackground(install.version);
     refreshInvocationVerdict(root);
     await observeHook(hook, execution2, rawInput ?? {}, agentRuntime, root);

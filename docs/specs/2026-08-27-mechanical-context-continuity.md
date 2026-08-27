@@ -346,17 +346,20 @@ l'autorité jusqu'à une écriture atomique réussie.
 
 ## Performance
 
-La fonctionnalité reprend le budget du hook runner :
+DEV-651 porte les budgets qu'il peut causalement garantir :
 
 - p95 inférieur à 75 ms à chaud ;
-- p95 inférieur à 150 ms à froid ;
-- overhead propre inférieur à 25 ms.
+- coût incrémental inférieur à 25 ms face au no-op du même bundle livré.
 
 Le benchmark lance 25 processus frais sur le bundle livré complet pour le froid et répète un
 scénario représentatif dans le même processus pour le chaud. Les processus frais mesurent aussi le
-même bundle en no-op et un processus Node nu. Les p95 muraux bruts ainsi que les deltas
-fonctionnalité/no-op et fonctionnalité/Node sont publiés ; le budget d'overhead s'applique au delta
-fonctionnalité/Node, sans retrancher le coût commun du bundle.
+même bundle en no-op et un processus Node nu. Chaque processus rapporte son uptime ; les p95
+bruts, les deltas fonctionnalité/no-op et fonctionnalité/Node, puis les latences murales observées
+par le parent comme diagnostic sont publiés. Les deltas sont appariés dans chaque itération avant
+le calcul du p95. Seul le delta fonctionnalité/no-op gate DEV-651.
+Les budgets globaux p95 froid inférieur à 150 ms et no-op/Node inférieur à 25 ms ne sont ni
+supprimés ni attribués à cette feature : la baseline préexistante qui les dépasse est suivie dans
+[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
 
 La lecture est incrémentale depuis `transcript_cursor_bytes` et ne dépasse jamais 1 048 576
 octets par invocation. Si le delta est plus grand, l'adaptateur lit sa fin à partir de la

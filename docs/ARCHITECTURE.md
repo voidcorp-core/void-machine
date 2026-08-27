@@ -220,6 +220,12 @@ revisions. A semantic rewrite invalidates the previous `sealed_work_revision`; o
 the next compact resume. See the decision
 [PreCompact may preserve mechanical checkpoint state](decisions-log/2026-08-27-precompact-preserves-mechanical-checkpoint-state--da9bb0a9-9c5a-46df-9459-27a583e92af2.md).
 
+The continuity benchmark executes the exact delivered hook bundle in 25 fresh processes and keeps
+bare Node, same-bundle no-op, and representative-event measurements separate. DEV-651 gates only
+the hot path and incremental feature-versus-no-op cost. The existing global cold-start and
+no-op-versus-Node budgets remain owned by
+[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+
 ### Source self-host boundary
 
 `void-harness self-host sync` is the only supported dogfood compiler for this

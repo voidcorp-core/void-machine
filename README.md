@@ -127,6 +127,13 @@ writes objective, progress, dead ends, assumptions, or a next action. A nudge as
 invoke `void-checkpoint`; it does not invoke the skill. A brutal `/clear` before a recent semantic
 checkpoint can therefore still require reconstruction.
 
+The reproducible performance check runs 25 fresh processes against the exact shipped hook bundle
+and publishes bare Node, same-bundle no-op, representative continuity, and their deltas. DEV-651
+gates the representative hot path below 75 ms p95 and its incremental cost over the same-bundle
+no-op below 25 ms p95. The unchanged shared-runner budgets, cold below 150 ms p95 and no-op over
+Node below 25 ms p95, are tracked in
+[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+
 ## What it does not do
 
 It does not make an agent good. It removes the failure modes that come from an

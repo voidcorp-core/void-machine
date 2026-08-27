@@ -352,10 +352,11 @@ La fonctionnalité reprend le budget du hook runner :
 - p95 inférieur à 150 ms à froid ;
 - overhead propre inférieur à 25 ms.
 
-Le benchmark répète le chargement du bundle complet pour le froid et un scénario représentatif
-pour le chaud. Pour l'overhead, de vrais processus rapportent leur temps CPU depuis le démarrage de
-Node : le p95 du bundle représentatif est comparé au p95 d'un processus Node nu. La latence murale
-observée par le parent est aussi publiée pour rendre visible le bruit d'ordonnancement externe.
+Le benchmark lance 25 processus frais sur le bundle livré complet pour le froid et répète un
+scénario représentatif dans le même processus pour le chaud. Les processus frais mesurent aussi le
+même bundle en no-op et un processus Node nu. Les p95 muraux bruts ainsi que les deltas
+fonctionnalité/no-op et fonctionnalité/Node sont publiés ; le budget d'overhead s'applique au delta
+fonctionnalité/Node, sans retrancher le coût commun du bundle.
 
 La lecture est incrémentale depuis `transcript_cursor_bytes` et ne dépasse jamais 1 048 576
 octets par invocation. Si le delta est plus grand, l'adaptateur lit sa fin à partir de la

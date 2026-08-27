@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
   appendFileSync,
-  copyFileSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -42,26 +41,21 @@ function usageLine(usedTokens) {
 
 function spawnMeasured(script, args, options = {}) {
   let result;
-  const wallMs = timed(() => {
+  const elapsed = timed(() => {
     result = spawnSync(process.execPath, [script, ...args], {
       encoding: 'utf8',
       ...options,
     });
   });
   if (result.status !== 0) throw new Error(`Benchmark child failed: ${result.stderr}`);
-  const processMs = Number(result.stdout.trim());
-  if (!Number.isFinite(processMs) || processMs < 0) {
-    throw new Error(`Benchmark child reported invalid process time: ${result.stdout}`);
-  }
-  return { processMs, wallMs };
+  return elapsed;
 }
 
 async function main() {
   const temporary = mkdtempSync(join(tmpdir(), 'context-continuity-benchmark-'));
   const project = join(temporary, 'project');
   const featureBundle = join(temporary, 'context-continuity.mjs');
-  const processBundle = join(temporary, 'context-continuity-process.cjs');
-  const processEntry = join(temporary, 'context-continuity-process-entry.mjs');
+  const shippedBundle = join(ROOT, 'packages', 'core', 'hooks', '_void-hook.mjs');
   const bareNode = join(temporary, 'node-startup.mjs');
   const checkpoint = join(project, '.void', 'machine', 'checkpoint.md');
   const transcript = join(project, 'transcript.jsonl');
@@ -72,11 +66,7 @@ async function main() {
   );
   writeFileSync(checkpoint, '## Objective\n\nBenchmark context continuity.\n');
   writeFileSync(transcript, usageLine(10_000));
-  writeFileSync(bareNode, [
-    'const usage = process.cpuUsage();',
-    'process.stdout.write(String((usage.user + usage.system) / 1_000));',
-    '',
-  ].join('\n'));
+  writeFileSync(bareNode, '');
   const executorSource = join(
     ROOT,
     'packages',
@@ -85,44 +75,16 @@ async function main() {
     'lifecycle',
     'context-continuity-executor.ts',
   );
-  writeFileSync(processEntry, [
-    `import { executeContextContinuity } from ${JSON.stringify(executorSource)};`,
-    "const root = process.env['VOID_BENCH_ROOT'] ?? '';",
-    "const transcript = process.env['VOID_BENCH_TRANSCRIPT'] ?? '';",
-    "const index = Number(process.env['VOID_BENCH_INDEX'] ?? '0');",
-    'executeContextContinuity({',
-    "  hook_event_name: 'UserPromptSubmit',",
-    "  session_id: 'context-continuity-benchmark',",
-    '  transcript_path: transcript,',
-    "}, root, 'codex', 10_000 + index * 5_001);",
-    'const usage = process.cpuUsage();',
-    'process.stdout.write(String((usage.user + usage.system) / 1_000));',
-    '',
-  ].join('\n'));
 
   try {
-    await Promise.all([
-      build({
-        entryPoints: [
-          executorSource,
-        ],
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        target: 'node22',
-        outfile: featureBundle,
-      }),
-      build({
-        entryPoints: [processEntry],
-        bundle: true,
-        platform: 'node',
-        // Cold ESM loading is measured above. CJS keeps this process comparison focused on
-        // continuity CPU rather than charging one runtime module-loader choice to the feature.
-        format: 'cjs',
-        target: 'node22',
-        outfile: processBundle,
-      }),
-    ]);
+    await build({
+      entryPoints: [executorSource],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node22',
+      outfile: featureBundle,
+    });
     const feature = await import(pathToFileURL(featureBundle).href);
     feature.executeContextContinuity(
       { hook_event_name: 'PreCompact', transcript_path: transcript },
@@ -147,68 +109,62 @@ async function main() {
         10_000 + hotIndex * 5_001,
       ));
     });
-    const cold = [];
-    for (let index = 0; index < RUNS; index += 1) {
-      const coldBundle = join(temporary, `context-continuity-cold-${String(index)}.mjs`);
-      copyFileSync(featureBundle, coldBundle);
-      appendFileSync(transcript, usageLine(20_000 + index));
-      const started = process.hrtime.bigint();
-      const coldFeature = await import(pathToFileURL(coldBundle).href);
-      coldFeature.executeContextContinuity(
-        {
-          hook_event_name: 'PostToolUse',
-          transcript_path: transcript,
-          tool_name: 'read_file',
-          tool_input: { path: `src/cold-${String(index)}.ts` },
-          tool_response: { success: true },
-        },
-        project,
-        'codex',
-        20_000 + index * 5_001,
-      );
-      cold.push(Number(process.hrtime.bigint() - started) / 1_000_000);
-    }
-
     const environment = {
       ...process.env,
-      VOID_BENCH_ROOT: project,
-      VOID_BENCH_TRANSCRIPT: transcript,
+      VOID_GLOBAL_DIR: join(project, '.void', 'global'),
+      VOID_PROJECT_ROOT: project,
     };
     const nodeStartup = [];
+    const bundleNoop = [];
     const processFeature = [];
-    const nodeStartupWall = [];
-    const processFeatureWall = [];
     for (let index = 0; index < RUNS; index += 1) {
       const nodeSample = spawnMeasured(bareNode, []);
-      appendFileSync(transcript, usageLine(30_000 + index));
-      const processSample = spawnMeasured(
-        processBundle,
-        [],
+      const noopSample = spawnMeasured(
+        shippedBundle,
+        ['lifecycle', 'context-continuity', 'codex'],
         {
-          env: { ...environment, VOID_BENCH_INDEX: String(index) },
+          env: environment,
+          input: JSON.stringify({ hook_event_name: 'Unknown' }),
         },
       );
-      nodeStartup.push(nodeSample.processMs);
-      processFeature.push(processSample.processMs);
-      nodeStartupWall.push(nodeSample.wallMs);
-      processFeatureWall.push(processSample.wallMs);
+      appendFileSync(transcript, usageLine(30_000 + index));
+      const processSample = spawnMeasured(
+        shippedBundle,
+        ['lifecycle', 'context-continuity', 'codex'],
+        {
+          env: environment,
+          input: JSON.stringify({
+            hook_event_name: 'PostToolUse',
+            session_id: 'context-continuity-benchmark',
+            transcript_path: transcript,
+            tool_name: 'read_file',
+            tool_input: { path: `src/process-${String(index)}.ts` },
+            tool_response: { success: true },
+          }),
+        },
+      );
+      nodeStartup.push(nodeSample);
+      bundleNoop.push(noopSample);
+      processFeature.push(processSample);
     }
 
     const nodeStartupP95Ms = percentile95(nodeStartup);
+    const bundleNoopP95Ms = percentile95(bundleNoop);
     const processFeatureP95Ms = percentile95(processFeature);
-    const processVsNodeP95Ms = percentile95(processFeature.map((sample, index) =>
-      Math.max(0, sample - (nodeStartup[index] ?? 0))));
-    const coldP95Ms = percentile95(cold);
+    const processVsNodeP95Ms = Math.max(0, processFeatureP95Ms - nodeStartupP95Ms);
+    const featureVsNoopP95Ms = Math.max(0, processFeatureP95Ms - bundleNoopP95Ms);
+    const coldP95Ms = processFeatureP95Ms;
     const hotP95Ms = percentile95(hot);
     const overheadP95Ms = processVsNodeP95Ms;
     const result = {
       coldP95Ms: Number(coldP95Ms.toFixed(2)),
       hotP95Ms: Number(hotP95Ms.toFixed(2)),
       overheadP95Ms: Number(overheadP95Ms.toFixed(2)),
-      processFeatureCpuP95Ms: Number(processFeatureP95Ms.toFixed(2)),
-      nodeStartupCpuP95Ms: Number(nodeStartupP95Ms.toFixed(2)),
-      processFeatureWallP95Ms: Number(percentile95(processFeatureWall).toFixed(2)),
-      nodeStartupWallP95Ms: Number(percentile95(nodeStartupWall).toFixed(2)),
+      processFeatureP95Ms: Number(processFeatureP95Ms.toFixed(2)),
+      bundleNoopP95Ms: Number(bundleNoopP95Ms.toFixed(2)),
+      nodeStartupP95Ms: Number(nodeStartupP95Ms.toFixed(2)),
+      featureVsNoopP95Ms: Number(featureVsNoopP95Ms.toFixed(2)),
+      featureVsNodeP95Ms: Number(processVsNodeP95Ms.toFixed(2)),
       budgetsMs: { coldP95: 150, hotP95: 75, overheadP95: 25 },
     };
     process.stdout.write(`${JSON.stringify(result)}\n`);

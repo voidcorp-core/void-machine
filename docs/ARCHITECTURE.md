@@ -202,7 +202,7 @@ payloads, reads at most 1,048,576 transcript bytes, confines project paths, and 
 under a no-wait lock through a same-directory temporary file and rename. Runtime manifests only
 map `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and `SessionStart` to that handler.
 The lock covers the complete read-modify-write decision. Stale takeover is serialized by a
-no-wait generated-claim election whose distinct orphan generations can age and be reclaimed, and
+no-wait claim chain whose generations are created exclusively and never ranked by timestamps, and
 checkpoint mutation stays anchored to an opened, verified machine directory while relative
 no-follow files are read and renamed. Transcript reads use no-follow bounded descriptors. Codex
 transcripts remain project-local; Claude may also use its

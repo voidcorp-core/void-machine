@@ -1587,10 +1587,10 @@ import {
   closeSync as closeSync2,
   constants as constants2,
   fstatSync,
-  linkSync,
   lstatSync as lstatSync3,
   mkdirSync as mkdirSync3,
   openSync as openSync2,
+  readdirSync as readdirSync3,
   readSync as readSync2,
   realpathSync as realpathSync3,
   renameSync as renameSync3,
@@ -1599,7 +1599,7 @@ import {
   writeSync
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename3, isAbsolute as isAbsolute3, join as join10, relative as relative3, resolve as resolve3 } from "node:path";
+import { basename as basename3, dirname as dirname5, isAbsolute as isAbsolute3, join as join10, relative as relative3, resolve as resolve3 } from "node:path";
 
 // ../mission-engine/dist/session/checkpoint.js
 import { createHash } from "node:crypto";
@@ -2273,6 +2273,7 @@ var MAX_CONFIG_BYTES = 65536;
 var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash2("sha256").update("").digest("hex")}`;
 var MECHANICAL_BEGIN2 = "<!-- void-harness:context-continuity:begin -->";
 var MECHANICAL_END2 = "<!-- void-harness:context-continuity:end -->";
+var recoveryClaimSequence = 0;
 function errorCode(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
 }
@@ -2353,6 +2354,9 @@ function releaseLock(path, lock) {
   }
 }
 function acquireLock(path, now) {
+  if (!clearLegacyRecovery(path, now)) return void 0;
+  const existingClaims = recoveryClaims(path, now);
+  if (existingClaims === void 0 || existingClaims.length > 0) return void 0;
   const direct = openExclusive(path);
   if (direct !== void 0) return direct;
   let observed;
@@ -2364,30 +2368,54 @@ function acquireLock(path, now) {
   } catch {
     return void 0;
   }
-  const recoveryPath = `${path}.recovery`;
-  try {
-    const recovery = lstatSync3(recoveryPath);
-    if (!recovery.isFile() || recovery.isSymbolicLink() || !staleFile(recovery, now) || !unlinkOwnedPath(recoveryPath, recovery)) return void 0;
-  } catch (error) {
-    if (errorCode(error) !== "ENOENT") return void 0;
-  }
-  return claimStaleLock(path, observed);
+  return claimStaleLock(path, observed, now);
 }
-function claimStaleLock(path, observed) {
+function clearLegacyRecovery(path, now) {
   const recoveryPath = `${path}.recovery`;
-  let claimed;
   try {
-    linkSync(path, recoveryPath);
-    const current = lstatSync3(path);
     const recovery = lstatSync3(recoveryPath);
-    claimed = recovery;
-    if (!sameFile(current, observed) || !sameFile(recovery, observed)) return void 0;
+    return recovery.isFile() && !recovery.isSymbolicLink() && staleFile(recovery, now) && unlinkOwnedPath(recoveryPath, recovery);
+  } catch (error) {
+    return errorCode(error) === "ENOENT";
+  }
+}
+function recoveryClaims(path, now, protectedPath) {
+  const directory = dirname5(path);
+  const prefix = `${basename3(path)}.recovery-`;
+  const claims = [];
+  try {
+    for (const name of readdirSync3(directory)) {
+      if (!name.startsWith(prefix)) continue;
+      const claimPath = join10(directory, name);
+      const info = lstatSync3(claimPath);
+      if (!info.isFile() || info.isSymbolicLink()) return void 0;
+      if (claimPath !== protectedPath && staleFile(info, now)) {
+        if (!unlinkOwnedPath(claimPath, info)) return void 0;
+        continue;
+      }
+      claims.push({ path: claimPath, dev: info.dev, ino: info.ino, ctimeMs: info.ctimeMs });
+    }
+    return claims.sort((left, right) => left.ctimeMs - right.ctimeMs || left.path.localeCompare(right.path));
+  } catch {
+    return void 0;
+  }
+}
+function claimStaleLock(path, observed, now) {
+  recoveryClaimSequence += 1;
+  const claimPath = `${path}.recovery-${String(now)}-${String(process.pid)}-${String(recoveryClaimSequence)}`;
+  const claim = openExclusive(claimPath);
+  if (claim === void 0) return void 0;
+  try {
+    const claims = recoveryClaims(path, now, claimPath);
+    if (claims === void 0 || claims[0]?.path !== claimPath) return void 0;
+    const current = lstatSync3(path);
+    if (!sameFile(current, observed)) return void 0;
     if (!unlinkOwnedPath(path, observed)) return void 0;
     return openExclusive(path);
   } catch {
     return void 0;
   } finally {
-    if (claimed !== void 0) unlinkOwnedPath(recoveryPath, claimed);
+    releaseLock(claimPath, claim);
   }
 }
 function safeMachineDirectory(root) {
@@ -3461,7 +3489,7 @@ import { spawnSync as spawnSync3 } from "node:child_process";
 
 // src/lifecycle/typecheck.ts
 import {
-  dirname as dirname5,
+  dirname as dirname6,
   isAbsolute as isAbsolute5,
   join as join14,
   relative as relative6,
@@ -3563,7 +3591,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
     const target = resolve5(root, changedPath);
     if (!within3(root, target)) continue;
-    let current = dirname5(target);
+    let current = dirname6(target);
     while (within3(root, current)) {
       const config = join14(current, "tsconfig.json");
       if (hasFile(config)) {
@@ -3571,7 +3599,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
         break;
       }
       if (current === root) break;
-      current = dirname5(current);
+      current = dirname6(current);
     }
   }
   return [...found];
@@ -3899,7 +3927,7 @@ import {
   unlink
 } from "node:fs/promises";
 import {
-  dirname as dirname6,
+  dirname as dirname7,
   isAbsolute as isAbsolute8,
   join as join17,
   relative as relative9,
@@ -4178,7 +4206,7 @@ async function safeRunDirectory(root, missionId) {
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;
   while (!await exists(ancestor)) {
-    const parent = dirname6(ancestor);
+    const parent = dirname7(ancestor);
     if (parent === ancestor) break;
     ancestor = parent;
   }

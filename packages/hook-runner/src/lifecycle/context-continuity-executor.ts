@@ -3,10 +3,10 @@ import {
   closeSync,
   constants,
   fstatSync,
-  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readSync,
   realpathSync,
   renameSync,
@@ -15,7 +15,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   advanceMechanicalContext,
   evaluateContextMeasurement,
@@ -37,6 +37,7 @@ const MAX_CONFIG_BYTES = 65_536;
 const EMPTY_TRANSCRIPT_HASH = `sha256:${createHash('sha256').update('').digest('hex')}`;
 const MECHANICAL_BEGIN = '<!-- void-harness:context-continuity:begin -->';
 const MECHANICAL_END = '<!-- void-harness:context-continuity:end -->';
+let recoveryClaimSequence = 0;
 
 export interface ContextContinuityExecution extends LifecycleExecution {
   readonly resumeContext?: string;
@@ -151,6 +152,9 @@ function releaseLock(path: string, lock: HeldLock): void {
 }
 
 function acquireLock(path: string, now: number): HeldLock | undefined {
+  if (!clearLegacyRecovery(path, now)) return undefined;
+  const existingClaims = recoveryClaims(path, now);
+  if (existingClaims === undefined || existingClaims.length > 0) return undefined;
   const direct = openExclusive(path);
   if (direct !== undefined) return direct;
   let observed: ReturnType<typeof lstatSync>;
@@ -163,40 +167,74 @@ function acquireLock(path: string, now: number): HeldLock | undefined {
     return undefined;
   }
 
+  return claimStaleLock(path, observed, now);
+}
+
+interface RecoveryClaim extends FileIdentity {
+  readonly path: string;
+  readonly ctimeMs: number;
+}
+
+function clearLegacyRecovery(path: string, now: number): boolean {
   const recoveryPath = `${path}.recovery`;
   try {
     const recovery = lstatSync(recoveryPath);
-    if (
-      !recovery.isFile()
-      || recovery.isSymbolicLink()
-      || !staleFile(recovery, now)
-      || !unlinkOwnedPath(recoveryPath, recovery)
-    ) return undefined;
+    return recovery.isFile()
+      && !recovery.isSymbolicLink()
+      && staleFile(recovery, now)
+      && unlinkOwnedPath(recoveryPath, recovery);
   } catch (error) {
-    if (errorCode(error) !== 'ENOENT') return undefined;
+    return errorCode(error) === 'ENOENT';
   }
+}
 
-  return claimStaleLock(path, observed);
+function recoveryClaims(
+  path: string,
+  now: number,
+  protectedPath?: string,
+): readonly RecoveryClaim[] | undefined {
+  const directory = dirname(path);
+  const prefix = `${basename(path)}.recovery-`;
+  const claims: RecoveryClaim[] = [];
+  try {
+    for (const name of readdirSync(directory)) {
+      if (!name.startsWith(prefix)) continue;
+      const claimPath = join(directory, name);
+      const info = lstatSync(claimPath);
+      if (!info.isFile() || info.isSymbolicLink()) return undefined;
+      if (claimPath !== protectedPath && staleFile(info, now)) {
+        if (!unlinkOwnedPath(claimPath, info)) return undefined;
+        continue;
+      }
+      claims.push({ path: claimPath, dev: info.dev, ino: info.ino, ctimeMs: info.ctimeMs });
+    }
+    return claims.sort((left, right) =>
+      left.ctimeMs - right.ctimeMs || left.path.localeCompare(right.path));
+  } catch {
+    return undefined;
+  }
 }
 
 export function claimStaleLock(
   path: string,
   observed: FileIdentity,
+  now: number,
 ): HeldLock | undefined {
-  const recoveryPath = `${path}.recovery`;
-  let claimed: FileIdentity | undefined;
+  recoveryClaimSequence += 1;
+  const claimPath = `${path}.recovery-${String(now)}-${String(process.pid)}-${String(recoveryClaimSequence)}`;
+  const claim = openExclusive(claimPath);
+  if (claim === undefined) return undefined;
   try {
-    linkSync(path, recoveryPath);
+    const claims = recoveryClaims(path, now, claimPath);
+    if (claims === undefined || claims[0]?.path !== claimPath) return undefined;
     const current = lstatSync(path);
-    const recovery = lstatSync(recoveryPath);
-    claimed = recovery;
-    if (!sameFile(current, observed) || !sameFile(recovery, observed)) return undefined;
+    if (!sameFile(current, observed)) return undefined;
     if (!unlinkOwnedPath(path, observed)) return undefined;
     return openExclusive(path);
   } catch {
     return undefined;
   } finally {
-    if (claimed !== undefined) unlinkOwnedPath(recoveryPath, claimed);
+    releaseLock(claimPath, claim);
   }
 }
 

@@ -56,12 +56,14 @@ export type ResumeGapReason =
   | 'mechanical-block-absent'
   | 'mechanical-block-invalid'
   | 'checkpoint-semantic-stale'
+  | 'precompact-seal-unconfirmed'
   | 'clear-unreconciled';
 
 export type ContinuityReason =
   | 'mechanical-block-absent'
   | 'mechanical-block-invalid'
   | 'semantic-revision-behind'
+  | 'precompact-seal-unconfirmed'
   | 'clear-not-reconciled';
 
 export interface ResumeGap {
@@ -185,6 +187,12 @@ function continuityFor(input: ResumeBundleInput): ResumeBundle['continuity'] {
   if (mechanical.semanticRevision < mechanical.workRevision) {
     reasons.push('semantic-revision-behind');
   }
+  if (
+    input.resumeSource === 'compact'
+    && mechanical.sealedWorkRevision !== mechanical.workRevision
+  ) {
+    reasons.push('precompact-seal-unconfirmed');
+  }
   if (mechanical.clearPending) reasons.push('clear-not-reconciled');
   return reasons.length === 0
     ? { status: 'complete', reasons }
@@ -202,6 +210,11 @@ function continuityGaps(continuity: ResumeBundle['continuity']): readonly Resume
         return {
           reason: 'checkpoint-semantic-stale',
           detail: 'the semantic revision is behind mechanical work',
+        };
+      case 'precompact-seal-unconfirmed':
+        return {
+          reason,
+          detail: 'the pre-compaction seal is not confirmed for the latest work revision',
         };
       case 'clear-not-reconciled':
         return { reason: 'clear-unreconciled', detail: 'the last clear is not reconciled' };
@@ -270,36 +283,69 @@ function checkpointContext(checkpoint: Checkpoint): readonly string[] {
   ].filter((line): line is string => line !== undefined);
 }
 
-function boundContext(text: string): string {
-  if (text.length <= CONTEXT_CHARS_MAX) return text;
-  return `${text.slice(0, CONTEXT_CHARS_MAX - 1)}…`;
+function boundedResumeLines(
+  required: readonly string[],
+  optional: readonly string[],
+): string {
+  const requiredText = required.join('\n');
+  const remaining = CONTEXT_CHARS_MAX - requiredText.length - 1;
+  if (remaining <= 0 || optional.length === 0) {
+    return `${requiredText.slice(0, CONTEXT_CHARS_MAX - 1)}\n`;
+  }
+  const optionalText = optional.join('\n');
+  const boundedOptional = optionalText.length <= remaining
+    ? optionalText
+    : `${optionalText.slice(0, Math.max(0, remaining - 3))}...`;
+  return `${requiredText}\n${boundedOptional}\n`.slice(0, CONTEXT_CHARS_MAX);
 }
 
 export function renderResumeContext(bundle: ResumeBundle): string {
   const usefulCheckpoint = bundle.checkpoint !== undefined && !bundle.checkpoint.isEmpty;
-  if (bundle.program === undefined && !usefulCheckpoint) return '';
+  if (
+    bundle.program === undefined
+    && !usefulCheckpoint
+    && bundle.continuity.status === 'complete'
+  ) return '';
 
-  const lines = ['[void-harness resume]', `Project: ${bundle.project.name}`];
-  if (bundle.git.branch !== undefined) lines.push(`Branch: ${bundle.git.branch}`);
-  if (bundle.git.head !== undefined) lines.push(`HEAD: ${bundle.git.head}`);
-  if (bundle.git.dirtyFiles > 0) lines.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
+  const continuityReasons = new Set<ResumeGapReason>([
+    'mechanical-block-absent',
+    'mechanical-block-invalid',
+    'checkpoint-semantic-stale',
+    'precompact-seal-unconfirmed',
+    'clear-unreconciled',
+  ]);
+  const required = [
+    '[void-harness resume]',
+    `Project: ${bundle.project.name}`,
+    `Context continuity: ${bundle.continuity.status}`,
+    ...(bundle.continuity.status === 'degraded'
+      ? ['Reconstruct context before any mutation.']
+      : []),
+    ...bundle.gaps
+      .filter((gap) => continuityReasons.has(gap.reason))
+      .map((gap) => `Gap: ${gap.detail}`),
+  ];
+  const optional: string[] = [];
+  if (bundle.git.branch !== undefined) optional.push(`Branch: ${bundle.git.branch}`);
+  if (bundle.git.head !== undefined) optional.push(`HEAD: ${bundle.git.head}`);
+  if (bundle.git.dirtyFiles > 0) optional.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
   if (bundle.program !== undefined) {
-    lines.push(`Program: ${bundle.program.program}`);
-    lines.push(`Plan: ${bundle.program.plan}`);
-    lines.push(`Spec: ${bundle.program.spec}`);
+    optional.push(`Program: ${bundle.program.program}`);
+    optional.push(`Plan: ${bundle.program.plan}`);
+    optional.push(`Spec: ${bundle.program.spec}`);
     if (bundle.program.progress !== undefined) {
-      lines.push(
+      optional.push(
         `Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`,
       );
     }
   }
   if (usefulCheckpoint && bundle.checkpoint !== undefined) {
-    lines.push(...checkpointContext(bundle.checkpoint));
+    optional.push(...checkpointContext(bundle.checkpoint));
   }
-  lines.push(`Context continuity: ${bundle.continuity.status}`);
-  if (bundle.continuity.status === 'degraded') {
-    lines.push('Reconstruct context before any mutation.');
-  }
-  for (const gap of bundle.gaps) lines.push(`Gap: ${gap.detail}`);
-  return boundContext(`${lines.join('\n')}\n`);
+  optional.push(
+    ...bundle.gaps
+      .filter((gap) => !continuityReasons.has(gap.reason))
+      .map((gap) => `Gap: ${gap.detail}`),
+  );
+  return boundedResumeLines(required, optional);
 }

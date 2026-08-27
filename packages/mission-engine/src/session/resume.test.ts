@@ -49,6 +49,7 @@ function mechanical(over: Partial<MechanicalContextState> = {}): MechanicalConte
     objectiveHash: `sha256:${'a'.repeat(64)}`,
     workRevision: 3,
     semanticRevision: 3,
+    sealedWorkRevision: 3,
     nudgeEmitted: false,
     transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
     transcriptCursorBytes: 0,

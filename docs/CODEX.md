@@ -98,9 +98,10 @@ Enforcement, formatting, session context, context continuity, advisory typecheck
 dependency-free beyond the Node runtime required by the CLI. No native Codex
 hook requires `jq`, Bash or an executable file bit.
 
-Context continuity has no Codex degradation. The runner records the latest complete usage counters
-and a bounded working set, seals their delimited checkpoint block at `PreCompact`, and composes the
-same complete/degraded `ResumeBundle` at `SessionStart`. Because neither runtime documents a
+Context continuity has no Codex degradation for the events and direct tool payloads both runtimes
+report. The runner records the latest complete usage counters and a bounded working set, seals
+their delimited checkpoint block at `PreCompact`, and composes the same complete/degraded
+`ResumeBundle` at `SessionStart`. Shell-mediated reads are not inferred. Because neither runtime documents a
 reliable window size, a threshold nudge requires explicit `context.windowTokens` configuration;
 model names are never mapped to guessed windows. The handler does not invoke `/clear`, `/compact`,
 or a semantic checkpoint.

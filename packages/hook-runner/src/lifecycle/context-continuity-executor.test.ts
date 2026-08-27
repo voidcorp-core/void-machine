@@ -317,6 +317,10 @@ describe('executeContextContinuity cumulative state', () => {
       tool_input: { file_path: '.void/machine/checkpoint.md', content: semantic },
       tool_response: { success: true },
     }, root, 'claude', 2_000);
+    const beforeFailure = mechanicalState(root);
+    expect(beforeFailure.status).toBe('valid');
+    if (beforeFailure.status !== 'valid') return;
+    expect(beforeFailure.state.sealedWorkRevision).toBe(0);
     writeFileSync(`${checkpoint(root)}.lock`, 'busy\n');
 
     const failed = executeContextContinuity(

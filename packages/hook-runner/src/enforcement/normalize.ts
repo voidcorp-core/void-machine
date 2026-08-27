@@ -71,7 +71,7 @@ export function normalizeToolCall(value: unknown): NormalizedToolCall {
   const input = record(raw['tool_input']) ?? {};
   const tool = safeString(raw['tool_name'], 'tool_name');
   const command = commandText(input['command']);
-  const file = safeString(input['file_path'], 'file_path');
+  const file = safeString(input['file_path'] ?? input['path'], 'file_path');
   let edits: NormalizedEdit[];
   if (file !== '') {
     edits = [{

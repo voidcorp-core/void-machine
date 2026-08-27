@@ -20,6 +20,7 @@ export interface MechanicalContextState {
   readonly objectiveHash: string;
   readonly workRevision: number;
   readonly semanticRevision: number;
+  readonly sealedWorkRevision: number;
   readonly nudgeEmitted: boolean;
   readonly transcriptFingerprint: string;
   readonly transcriptCursorBytes: number;
@@ -48,6 +49,7 @@ export interface MechanicalContextObservation {
   readonly usedTokens?: number;
   readonly resumeSource?: Exclude<MechanicalResumeSource, 'none'>;
   readonly semanticCheckpointWritten?: boolean;
+  readonly compactionSealed?: boolean;
 }
 
 export interface ContextMeasurement {
@@ -207,6 +209,7 @@ function stateFromMechanicalBody(block: string): MechanicalContextState | undefi
   const transcriptFingerprint = scalar(block, 'transcript_fingerprint');
   const workRevision = integerScalar(block, 'work_revision');
   const semanticRevision = integerScalar(block, 'semantic_revision');
+  const sealedWorkRevision = integerScalar(block, 'sealed_work_revision');
   const readFiles = pathList(block, 'Read files');
   const modifiedFiles = pathList(block, 'Modified files');
   if (
@@ -217,7 +220,9 @@ function stateFromMechanicalBody(block: string): MechanicalContextState | undefi
     || !/^sha256:[a-f0-9]{64}$/.test(transcriptFingerprint)
     || workRevision === undefined
     || semanticRevision === undefined
+    || sealedWorkRevision === undefined
     || semanticRevision > workRevision
+    || sealedWorkRevision > workRevision
     || readFiles === undefined
     || modifiedFiles === undefined
   ) return undefined;
@@ -226,6 +231,7 @@ function stateFromMechanicalBody(block: string): MechanicalContextState | undefi
     transcriptFingerprint,
     workRevision,
     semanticRevision,
+    sealedWorkRevision,
     readFiles,
     modifiedFiles,
   });
@@ -235,6 +241,7 @@ function mechanicalScalars(
   block: string,
   required: Pick<MechanicalContextState,
     | 'objectiveHash' | 'transcriptFingerprint' | 'workRevision' | 'semanticRevision'
+    | 'sealedWorkRevision'
     | 'readFiles' | 'modifiedFiles'>,
 ): MechanicalContextState | undefined {
   const nudgeEmitted = booleanScalar(block, 'nudge_emitted');
@@ -296,6 +303,7 @@ export function renderMechanicalContextBlock(state: MechanicalContextState): str
     `objective_hash: ${state.objectiveHash}`,
     `work_revision: ${String(state.workRevision)}`,
     `semantic_revision: ${String(state.semanticRevision)}`,
+    `sealed_work_revision: ${String(state.sealedWorkRevision)}`,
     `nudge_emitted: ${String(state.nudgeEmitted)}`,
     `transcript_fingerprint: ${state.transcriptFingerprint}`,
     `transcript_cursor_bytes: ${String(state.transcriptCursorBytes)}`,
@@ -364,6 +372,7 @@ export function advanceMechanicalContext(
       objectiveHash: observation.objectiveHash,
       workRevision: revision,
       semanticRevision: revision,
+      sealedWorkRevision: 0,
       nudgeEmitted: false,
       readFiles: [],
       modifiedFiles: [],
@@ -390,12 +399,19 @@ export function advanceMechanicalContext(
   const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
   const workRevision = state.workRevision + (workChanged ? 1 : 0);
   const reconcile = observation.semanticCheckpointWritten === true;
+  const sealChanged = observation.compactionSealed === true
+    && state.sealedWorkRevision !== workRevision;
 
-  if (!workChanged && !reconcile) return state;
+  if (!workChanged && !reconcile && !sealChanged) return state;
   return {
     ...state,
     workRevision,
     semanticRevision: reconcile ? workRevision : state.semanticRevision,
+    sealedWorkRevision: observation.compactionSealed === true
+      ? workRevision
+      : reconcile
+        ? 0
+        : state.sealedWorkRevision,
     nudgeEmitted: observation.resumeSource === 'clear' || observation.resumeSource === 'compact'
       ? false
       : state.nudgeEmitted,

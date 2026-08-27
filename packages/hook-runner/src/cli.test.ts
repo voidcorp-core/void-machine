@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -45,6 +45,33 @@ const write = (file: string, content: string): unknown => ({
   tool_name: 'Write',
   tool_input: { file_path: file, content },
 });
+
+function runLifecycleConcurrently(
+  root: string,
+  payload: unknown,
+): Promise<number | null> {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(
+      process.execPath,
+      [hook, 'lifecycle', 'context-continuity', 'codex'],
+      {
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+        stdio: ['pipe', 'ignore', 'pipe'],
+      },
+    );
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on('error', rejectRun);
+    child.on('close', (code) => {
+      if (code === 0) resolveRun(code);
+      else rejectRun(new Error(`concurrent hook failed (${String(code)}): ${stderr}`));
+    });
+    child.stdin.end(JSON.stringify(payload));
+  });
+}
 
 describe('enforce', () => {
   it('names the doctrine a refusal comes from, so the skill can be reached from the message', () => {
@@ -195,6 +222,55 @@ describe('lifecycle context', () => {
       expect(JSON.parse(resume.stdout ?? '{}').hookSpecificOutput.additionalContext).toContain(
         'Context continuity: complete',
       );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('serializes overlapping working-set observations without a stale overwrite', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-continuity-concurrent-'));
+    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
+    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
+    const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
+    writeFileSync(checkpoint, '## Objective\n\nSerialize observations.\n');
+
+    try {
+      spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
+        input: JSON.stringify({ hook_event_name: 'PreCompact' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      await Promise.all(['src/first.ts', 'src/second.ts'].map((path) => runLifecycleConcurrently(
+        root,
+        {
+          hook_event_name: 'PostToolUse',
+          session_id: 'concurrent-context',
+          tool_name: 'read_file',
+          tool_input: { path },
+          tool_response: { success: true },
+        },
+      )));
+
+      const paths = ['src/first.ts', 'src/second.ts'];
+      const concurrent = readFileSync(checkpoint, 'utf8');
+      expect(paths.filter((path) => concurrent.includes(path)).length).toBeGreaterThanOrEqual(1);
+      for (const path of paths.filter((candidate) => !concurrent.includes(candidate))) {
+        spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
+          input: JSON.stringify({
+            hook_event_name: 'PostToolUse',
+            session_id: 'concurrent-context',
+            tool_name: 'read_file',
+            tool_input: { path },
+            tool_response: { success: true },
+          }),
+          encoding: 'utf8',
+          env: { ...process.env, VOID_PROJECT_ROOT: root },
+        });
+      }
+      const recovered = readFileSync(checkpoint, 'utf8');
+      expect(recovered).toContain('src/first.ts');
+      expect(recovered).toContain('src/second.ts');
+      expect(recovered.match(/void-harness:context-continuity:begin/g)).toHaveLength(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

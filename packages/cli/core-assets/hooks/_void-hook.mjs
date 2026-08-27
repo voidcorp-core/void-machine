@@ -674,7 +674,7 @@ function normalizeToolCall(value) {
   const input = record(raw["tool_input"]) ?? {};
   const tool = safeString(raw["tool_name"], "tool_name");
   const command = commandText(input["command"]);
-  const file = safeString(input["file_path"], "file_path");
+  const file = safeString(input["file_path"] ?? input["path"], "file_path");
   let edits;
   if (file !== "") {
     edits = [{
@@ -1584,19 +1584,22 @@ ${resumeContext.trimEnd()}`;
 // src/lifecycle/context-continuity-executor.ts
 import { createHash as createHash2 } from "node:crypto";
 import {
+  constants as constants2,
   closeSync as closeSync2,
-  existsSync as existsSync6,
+  fstatSync,
   lstatSync as lstatSync3,
   mkdirSync as mkdirSync3,
   openSync as openSync2,
   readFileSync as readFileSync9,
   readSync as readSync2,
+  realpathSync as realpathSync3,
   renameSync as renameSync3,
   statSync as statSync3,
   unlinkSync,
-  writeFileSync as writeFileSync3
+  writeSync
 } from "node:fs";
-import { dirname as dirname5, isAbsolute as isAbsolute3, join as join10, relative as relative3, resolve as resolve3 } from "node:path";
+import { homedir } from "node:os";
+import { basename as basename3, isAbsolute as isAbsolute3, join as join10, relative as relative3, resolve as resolve3 } from "node:path";
 
 // ../mission-engine/dist/session/checkpoint.js
 import { createHash } from "node:crypto";
@@ -1688,15 +1691,17 @@ function stateFromMechanicalBody(block2) {
   const transcriptFingerprint = scalar(block2, "transcript_fingerprint");
   const workRevision = integerScalar(block2, "work_revision");
   const semanticRevision = integerScalar(block2, "semantic_revision");
+  const sealedWorkRevision = integerScalar(block2, "sealed_work_revision");
   const readFiles = pathList2(block2, "Read files");
   const modifiedFiles = pathList2(block2, "Modified files");
-  if (scalar(block2, "schema_version") !== "1" || objectiveHash === void 0 || !/^sha256:[a-f0-9]{64}$/.test(objectiveHash) || transcriptFingerprint === void 0 || !/^sha256:[a-f0-9]{64}$/.test(transcriptFingerprint) || workRevision === void 0 || semanticRevision === void 0 || semanticRevision > workRevision || readFiles === void 0 || modifiedFiles === void 0)
+  if (scalar(block2, "schema_version") !== "1" || objectiveHash === void 0 || !/^sha256:[a-f0-9]{64}$/.test(objectiveHash) || transcriptFingerprint === void 0 || !/^sha256:[a-f0-9]{64}$/.test(transcriptFingerprint) || workRevision === void 0 || semanticRevision === void 0 || sealedWorkRevision === void 0 || semanticRevision > workRevision || sealedWorkRevision > workRevision || readFiles === void 0 || modifiedFiles === void 0)
     return void 0;
   return mechanicalScalars(block2, {
     objectiveHash,
     transcriptFingerprint,
     workRevision,
     semanticRevision,
+    sealedWorkRevision,
     readFiles,
     modifiedFiles
   });
@@ -1751,6 +1756,7 @@ function renderMechanicalContextBlock(state) {
     `objective_hash: ${state.objectiveHash}`,
     `work_revision: ${String(state.workRevision)}`,
     `semantic_revision: ${String(state.semanticRevision)}`,
+    `sealed_work_revision: ${String(state.sealedWorkRevision)}`,
     `nudge_emitted: ${String(state.nudgeEmitted)}`,
     `transcript_fingerprint: ${state.transcriptFingerprint}`,
     `transcript_cursor_bytes: ${String(state.transcriptCursorBytes)}`,
@@ -1798,6 +1804,7 @@ function advanceMechanicalContext(state, observation) {
       objectiveHash: observation.objectiveHash,
       workRevision: revision,
       semanticRevision: revision,
+      sealedWorkRevision: 0,
       nudgeEmitted: false,
       readFiles: [],
       modifiedFiles: [],
@@ -1813,12 +1820,14 @@ function advanceMechanicalContext(state, observation) {
   const workChanged = reads.changed || modifications.changed || tokensChanged || sourceChanged;
   const workRevision = state.workRevision + (workChanged ? 1 : 0);
   const reconcile = observation.semanticCheckpointWritten === true;
-  if (!workChanged && !reconcile)
+  const sealChanged = observation.compactionSealed === true && state.sealedWorkRevision !== workRevision;
+  if (!workChanged && !reconcile && !sealChanged)
     return state;
   return {
     ...state,
     workRevision,
     semanticRevision: reconcile ? workRevision : state.semanticRevision,
+    sealedWorkRevision: observation.compactionSealed === true ? workRevision : reconcile ? 0 : state.sealedWorkRevision,
     nudgeEmitted: observation.resumeSource === "clear" || observation.resumeSource === "compact" ? false : state.nudgeEmitted,
     lastUsedTokens: observation.usedTokens ?? state.lastUsedTokens,
     readFiles: reads.paths,
@@ -2063,6 +2072,9 @@ function continuityFor(input) {
   if (mechanical.semanticRevision < mechanical.workRevision) {
     reasons.push("semantic-revision-behind");
   }
+  if (input.resumeSource === "compact" && mechanical.sealedWorkRevision !== mechanical.workRevision) {
+    reasons.push("precompact-seal-unconfirmed");
+  }
   if (mechanical.clearPending)
     reasons.push("clear-not-reconciled");
   return reasons.length === 0 ? { status: "complete", reasons } : { status: "degraded", reasons };
@@ -2078,6 +2090,11 @@ function continuityGaps(continuity) {
         return {
           reason: "checkpoint-semantic-stale",
           detail: "the semantic revision is behind mechanical work"
+        };
+      case "precompact-seal-unconfirmed":
+        return {
+          reason,
+          detail: "the pre-compaction seal is not confirmed for the latest work revision"
         };
       case "clear-not-reconciled":
         return { reason: "clear-unreconciled", detail: "the last clear is not reconciled" };
@@ -2127,41 +2144,57 @@ function checkpointContext(checkpoint) {
     mechanical === void 0 || mechanical.modifiedFiles.length === 0 ? void 0 : `Modified files: ${mechanical.modifiedFiles.join(", ")}${modifiedOverflow}`
   ].filter((line) => line !== void 0);
 }
-function boundContext(text2) {
-  if (text2.length <= CONTEXT_CHARS_MAX)
-    return text2;
-  return `${text2.slice(0, CONTEXT_CHARS_MAX - 1)}\u2026`;
+function boundedResumeLines(required, optional) {
+  const requiredText = required.join("\n");
+  const remaining = CONTEXT_CHARS_MAX - requiredText.length - 1;
+  if (remaining <= 0 || optional.length === 0) {
+    return `${requiredText.slice(0, CONTEXT_CHARS_MAX - 1)}
+`;
+  }
+  const optionalText = optional.join("\n");
+  const boundedOptional = optionalText.length <= remaining ? optionalText : `${optionalText.slice(0, Math.max(0, remaining - 3))}...`;
+  return `${requiredText}
+${boundedOptional}
+`.slice(0, CONTEXT_CHARS_MAX);
 }
 function renderResumeContext(bundle) {
   const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
-  if (bundle.program === void 0 && !usefulCheckpoint)
+  if (bundle.program === void 0 && !usefulCheckpoint && bundle.continuity.status === "complete")
     return "";
-  const lines = ["[void-harness resume]", `Project: ${bundle.project.name}`];
+  const continuityReasons = /* @__PURE__ */ new Set([
+    "mechanical-block-absent",
+    "mechanical-block-invalid",
+    "checkpoint-semantic-stale",
+    "precompact-seal-unconfirmed",
+    "clear-unreconciled"
+  ]);
+  const required = [
+    "[void-harness resume]",
+    `Project: ${bundle.project.name}`,
+    `Context continuity: ${bundle.continuity.status}`,
+    ...bundle.continuity.status === "degraded" ? ["Reconstruct context before any mutation."] : [],
+    ...bundle.gaps.filter((gap) => continuityReasons.has(gap.reason)).map((gap) => `Gap: ${gap.detail}`)
+  ];
+  const optional = [];
   if (bundle.git.branch !== void 0)
-    lines.push(`Branch: ${bundle.git.branch}`);
+    optional.push(`Branch: ${bundle.git.branch}`);
   if (bundle.git.head !== void 0)
-    lines.push(`HEAD: ${bundle.git.head}`);
+    optional.push(`HEAD: ${bundle.git.head}`);
   if (bundle.git.dirtyFiles > 0)
-    lines.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
+    optional.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
   if (bundle.program !== void 0) {
-    lines.push(`Program: ${bundle.program.program}`);
-    lines.push(`Plan: ${bundle.program.plan}`);
-    lines.push(`Spec: ${bundle.program.spec}`);
+    optional.push(`Program: ${bundle.program.program}`);
+    optional.push(`Plan: ${bundle.program.plan}`);
+    optional.push(`Spec: ${bundle.program.spec}`);
     if (bundle.program.progress !== void 0) {
-      lines.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
+      optional.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
     }
   }
   if (usefulCheckpoint && bundle.checkpoint !== void 0) {
-    lines.push(...checkpointContext(bundle.checkpoint));
+    optional.push(...checkpointContext(bundle.checkpoint));
   }
-  lines.push(`Context continuity: ${bundle.continuity.status}`);
-  if (bundle.continuity.status === "degraded") {
-    lines.push("Reconstruct context before any mutation.");
-  }
-  for (const gap of bundle.gaps)
-    lines.push(`Gap: ${gap.detail}`);
-  return boundContext(`${lines.join("\n")}
-`);
+  optional.push(...bundle.gaps.filter((gap) => !continuityReasons.has(gap.reason)).map((gap) => `Gap: ${gap.detail}`));
+  return boundedResumeLines(required, optional);
 }
 
 // src/lifecycle/executor-shared.ts
@@ -2236,14 +2269,29 @@ var MAX_CHECKPOINT_BYTES = 5e5;
 var LOCK_STALE_MS = 1e3;
 var POST_TOOL_MEASUREMENT_COOLDOWN_MS = 5e3;
 var MAX_TRANSCRIPT_BYTES = 1048576;
+var MAX_CONFIG_BYTES = 65536;
 var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash2("sha256").update("").digest("hex")}`;
+var MECHANICAL_BEGIN2 = "<!-- void-harness:context-continuity:begin -->";
+var MECHANICAL_END2 = "<!-- void-harness:context-continuity:end -->";
+function errorCode(error) {
+  return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
+}
 function rawCheckpoint(path) {
+  let descriptor;
   try {
     const info = lstatSync3(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_CHECKPOINT_BYTES) return void 0;
-    return readFileSync9(path, "utf8");
-  } catch {
-    return existsSync6(path) ? void 0 : "";
+    descriptor = openSync2(
+      path,
+      constants2.O_RDONLY | constants2.O_NONBLOCK | (constants2.O_NOFOLLOW ?? 0)
+    );
+    const opened = fstatSync(descriptor);
+    if (!opened.isFile() || opened.size > MAX_CHECKPOINT_BYTES) return void 0;
+    return readFileSync9(descriptor, "utf8");
+  } catch (error) {
+    return errorCode(error) === "ENOENT" ? "" : void 0;
+  } finally {
+    if (descriptor !== void 0) closeSync2(descriptor);
   }
 }
 function initialState(raw) {
@@ -2254,6 +2302,7 @@ function initialState(raw) {
     objectiveHash: hashCheckpointObjective(parsed.objective),
     workRevision: 1,
     semanticRevision: hasSemantic ? 1 : 0,
+    sealedWorkRevision: 0,
     nudgeEmitted: false,
     transcriptFingerprint: EMPTY_TRANSCRIPT_HASH,
     transcriptCursorBytes: 0,
@@ -2269,36 +2318,93 @@ function initialState(raw) {
 }
 function acquireLock(path, now) {
   try {
-    return openSync2(path, "wx");
+    const descriptor = openSync2(
+      path,
+      constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | (constants2.O_NOFOLLOW ?? 0),
+      384
+    );
+    const info = fstatSync(descriptor);
+    return { descriptor, dev: info.dev, ino: info.ino };
   } catch {
     try {
-      if (now - statSync3(path).mtimeMs < LOCK_STALE_MS) return void 0;
+      const info = lstatSync3(path);
+      if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
+        return void 0;
+      }
       unlinkSync(path);
-      return openSync2(path, "wx");
+      const descriptor = openSync2(
+        path,
+        constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | (constants2.O_NOFOLLOW ?? 0),
+        384
+      );
+      const opened = fstatSync(descriptor);
+      return { descriptor, dev: opened.dev, ino: opened.ino };
     } catch {
       return void 0;
     }
   }
 }
-function releaseLock(path, descriptor) {
+function releaseLock(path, lock) {
   try {
-    closeSync2(descriptor);
+    closeSync2(lock.descriptor);
   } finally {
     try {
-      unlinkSync(path);
+      const info = lstatSync3(path);
+      if (!info.isSymbolicLink() && info.dev === lock.dev && info.ino === lock.ino) {
+        unlinkSync(path);
+      }
     } catch {
     }
   }
 }
-function atomicCheckpointWrite(path, content, now) {
-  const directory = dirname5(path);
-  mkdirSync3(directory, { recursive: true });
-  const lock = `${path}.lock`;
-  const descriptor = acquireLock(lock, now);
-  if (descriptor === void 0) return false;
-  const temporary = join10(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+function safeMachineDirectory(root) {
   try {
-    writeFileSync3(temporary, content, { encoding: "utf8", flag: "wx" });
+    const canonicalRoot = realpathSync3(resolve3(root));
+    let cursor = canonicalRoot;
+    for (const segment of [".void", "machine"]) {
+      cursor = join10(cursor, segment);
+      try {
+        const existing = lstatSync3(cursor);
+        if (!existing.isDirectory() || existing.isSymbolicLink()) return void 0;
+      } catch (error) {
+        if (errorCode(error) !== "ENOENT") return void 0;
+        try {
+          mkdirSync3(cursor, { mode: 448 });
+        } catch (mkdirError) {
+          if (errorCode(mkdirError) !== "EEXIST") return void 0;
+        }
+        const created = lstatSync3(cursor);
+        if (!created.isDirectory() || created.isSymbolicLink()) return void 0;
+      }
+      const canonical = realpathSync3(cursor);
+      if (!within(canonicalRoot, canonical) || canonical !== cursor) return void 0;
+    }
+    return cursor;
+  } catch {
+    return void 0;
+  }
+}
+function sameSafeMachineDirectory(root, expected) {
+  return safeMachineDirectory(root) === expected;
+}
+function atomicCheckpointWrite(root, directory, path, content, now) {
+  const temporary = join10(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+  let descriptor;
+  try {
+    if (!sameSafeMachineDirectory(root, directory)) return false;
+    descriptor = openSync2(
+      temporary,
+      constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | (constants2.O_NOFOLLOW ?? 0),
+      384
+    );
+    const bytes = Buffer.from(content, "utf8");
+    let offset = 0;
+    while (offset < bytes.length) {
+      offset += writeSync(descriptor, bytes, offset, bytes.length - offset);
+    }
+    closeSync2(descriptor);
+    descriptor = void 0;
+    if (!sameSafeMachineDirectory(root, directory)) return false;
     renameSync3(temporary, path);
     return true;
   } catch {
@@ -2308,7 +2414,90 @@ function atomicCheckpointWrite(path, content, now) {
     }
     return false;
   } finally {
-    releaseLock(lock, descriptor);
+    if (descriptor !== void 0) closeSync2(descriptor);
+  }
+}
+function mutateCheckpoint(root, now, decide) {
+  const directory = safeMachineDirectory(root);
+  if (directory === void 0) {
+    return { status: "degraded", details: { reason: "unsafe-checkpoint-path" } };
+  }
+  const path = join10(directory, "checkpoint.md");
+  const lockPath = `${path}.lock`;
+  const lock = acquireLock(lockPath, now);
+  if (lock === void 0) {
+    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
+  }
+  try {
+    if (!sameSafeMachineDirectory(root, directory)) {
+      return { status: "degraded", details: { reason: "unsafe-checkpoint-path" } };
+    }
+    const raw = rawCheckpoint(path);
+    if (raw === void 0) {
+      return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
+    }
+    const mutation = decide(raw);
+    if (mutation.content === void 0) return mutation.execution;
+    if (!atomicCheckpointWrite(root, directory, path, mutation.content, now)) {
+      return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
+    }
+    return mutation.execution;
+  } finally {
+    releaseLock(lockPath, lock);
+  }
+}
+function canonicalDirectory(path) {
+  try {
+    const info = lstatSync3(path);
+    if (!info.isDirectory() || info.isSymbolicLink()) return void 0;
+    const canonical = realpathSync3(path);
+    return canonical === resolve3(path) ? canonical : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function encodedClaudeProject(root) {
+  return root.replace(/[^a-zA-Z0-9]/g, "-");
+}
+function transcriptRoots(root, runtime3) {
+  const canonicalRoot = realpathSync3(resolve3(root));
+  const candidates = [canonicalRoot];
+  if (runtime3 === "claude" || runtime3 === "unknown") {
+    candidates.push(
+      join10(homedir(), ".claude", "projects", encodedClaudeProject(canonicalRoot))
+    );
+  }
+  if (runtime3 === "codex" || runtime3 === "unknown") {
+    candidates.push(join10(homedir(), ".codex", "sessions"));
+  }
+  return candidates.map(canonicalDirectory).filter((path) => path !== void 0);
+}
+function runtimeSessionId(input) {
+  const value = input["session_id"] ?? input["sessionId"] ?? input["thread_id"] ?? input["threadId"];
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(value) ? value : void 0;
+}
+function openBoundedRegularFile(path, maxBytes, allowedRoots) {
+  let descriptor;
+  try {
+    const before = lstatSync3(path);
+    if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes) return void 0;
+    const canonicalPath = realpathSync3(path);
+    if (!allowedRoots.some((root) => within(root, canonicalPath))) return void 0;
+    descriptor = openSync2(
+      path,
+      constants2.O_RDONLY | constants2.O_NONBLOCK | (constants2.O_NOFOLLOW ?? 0)
+    );
+    const opened = fstatSync(descriptor);
+    const currentPath = realpathSync3(path);
+    const current = statSync3(currentPath);
+    if (!opened.isFile() || opened.size > maxBytes || currentPath !== canonicalPath || opened.dev !== current.dev || opened.ino !== current.ino || !allowedRoots.some((root) => within(root, currentPath))) {
+      closeSync2(descriptor);
+      return void 0;
+    }
+    return { descriptor, canonicalPath, size: opened.size };
+  } catch {
+    if (descriptor !== void 0) closeSync2(descriptor);
+    return void 0;
   }
 }
 function finiteToken(value) {
@@ -2329,23 +2518,31 @@ function usageFromLine(line) {
     return { status: "invalid" };
   }
 }
-function observeTranscript(path, state) {
+function observeTranscript(path, state, input, root, runtime3) {
   if (path === "" || path.length > 4096 || path.includes("\0") || !isAbsolute3(path)) {
     return void 0;
   }
   let descriptor;
   try {
-    const info = lstatSync3(path);
-    if (!info.isFile() || info.isSymbolicLink()) return void 0;
-    const fingerprint = `sha256:${createHash2("sha256").update(path).digest("hex")}`;
+    const roots = transcriptRoots(root, runtime3);
+    const opened = openBoundedRegularFile(path, Number.MAX_SAFE_INTEGER, roots);
+    if (opened === void 0) return void 0;
+    descriptor = opened.descriptor;
+    const canonicalRoot = realpathSync3(resolve3(root));
+    if (!within(canonicalRoot, opened.canonicalPath)) {
+      const sessionId = runtimeSessionId(input);
+      if (sessionId === void 0 || !basename3(opened.canonicalPath).includes(sessionId)) {
+        return void 0;
+      }
+    }
+    const fingerprint = `sha256:${createHash2("sha256").update(opened.canonicalPath).digest("hex")}`;
     const sameTranscript = fingerprint === state.transcriptFingerprint;
-    const previousCursor = sameTranscript && info.size >= state.transcriptCursorBytes ? state.transcriptCursorBytes : 0;
-    const available = Math.max(0, info.size - previousCursor);
+    const previousCursor = sameTranscript && opened.size >= state.transcriptCursorBytes ? state.transcriptCursorBytes : 0;
+    const available = Math.max(0, opened.size - previousCursor);
     if (available === 0) return void 0;
-    const readStart = available > MAX_TRANSCRIPT_BYTES ? info.size - MAX_TRANSCRIPT_BYTES : previousCursor;
-    const requested = Math.min(MAX_TRANSCRIPT_BYTES, info.size - readStart);
+    const readStart = available > MAX_TRANSCRIPT_BYTES ? opened.size - MAX_TRANSCRIPT_BYTES : previousCursor;
+    const requested = Math.min(MAX_TRANSCRIPT_BYTES, opened.size - readStart);
     const bytes = Buffer.alloc(requested);
-    descriptor = openSync2(path, "r");
     const bytesRead = readSync2(descriptor, bytes, 0, requested, readStart);
     const bounded = bytes.subarray(0, bytesRead);
     let contentStart = 0;
@@ -2397,8 +2594,26 @@ function observeTranscript(path, state) {
     if (descriptor !== void 0) closeSync2(descriptor);
   }
 }
+function contextConfig(root) {
+  let descriptor;
+  try {
+    const canonicalRoot = realpathSync3(resolve3(root));
+    const opened = openBoundedRegularFile(
+      join10(canonicalRoot, ".void", "config.json"),
+      MAX_CONFIG_BYTES,
+      [canonicalRoot]
+    );
+    if (opened === void 0) return void 0;
+    descriptor = opened.descriptor;
+    return JSON.parse(readFileSync9(descriptor, "utf8"));
+  } catch {
+    return void 0;
+  } finally {
+    if (descriptor !== void 0) closeSync2(descriptor);
+  }
+}
 function thresholdConfig(root) {
-  const config = record3(readJson(join10(root, ".void", "config.json")));
+  const config = record3(contextConfig(root));
   const context = record3(config?.["context"]);
   const window = context?.["windowTokens"];
   const threshold = context?.["checkpointThresholdPercent"];
@@ -2409,7 +2624,7 @@ function thresholdConfig(root) {
     thresholdPercent
   };
 }
-function measureContext(state, input, root, event, now) {
+function measureContext(state, input, root, event, runtime3, now) {
   if (event === "PostToolUse" && now - state.lastMeasurementAtMs < POST_TOOL_MEASUREMENT_COOLDOWN_MS) {
     return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
   }
@@ -2417,7 +2632,7 @@ function measureContext(state, input, root, event, now) {
   if (typeof path !== "string") {
     return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
   }
-  const observed = observeTranscript(path, state);
+  const observed = observeTranscript(path, state, input, root, runtime3);
   if (observed === void 0) {
     return { state, emitNudge: false, skippedBytes: 0, skippedLines: 0 };
   }
@@ -2457,37 +2672,41 @@ function nudgeOutput(event, thresholdPercent) {
     }
   };
 }
-function sealPreCompact(input, root, now) {
-  const path = join10(root, CHECKPOINT);
-  const raw = rawCheckpoint(path);
-  if (raw === void 0) {
-    return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
-  }
-  const block2 = parseMechanicalContextBlock(raw);
-  if (block2.status === "invalid") {
-    return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
-  }
-  const current = block2.status === "valid" ? block2.state : initialState(raw);
-  const advanced = advanceMechanicalContext(current, {
-    objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective)
-  });
-  const measurement = measureContext(advanced, input, root, "PreCompact", now);
-  const state = measurement.state;
-  const merged = mergeMechanicalContextBlock(raw, state);
-  if (!merged.ok) {
-    return { status: "degraded", details: { reason: merged.error } };
-  }
-  if (!atomicCheckpointWrite(path, merged.value, now)) {
-    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
-  }
-  return {
-    status: "ok",
-    details: {
-      sealed: true,
-      transcriptSkippedBytes: measurement.skippedBytes,
-      transcriptSkippedLines: measurement.skippedLines
+function sealPreCompact(input, root, runtime3, now) {
+  return mutateCheckpoint(root, now, (raw) => {
+    const block2 = parseMechanicalContextBlock(raw);
+    if (block2.status === "invalid") {
+      return {
+        execution: {
+          status: "degraded",
+          details: { reason: "mechanical-block-ambiguous" }
+        }
+      };
     }
-  };
+    const current = block2.status === "valid" ? block2.state : initialState(raw);
+    const advanced = advanceMechanicalContext(current, {
+      objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective)
+    });
+    const measurement = measureContext(advanced, input, root, "PreCompact", runtime3, now);
+    const sealed = advanceMechanicalContext(measurement.state, { compactionSealed: true });
+    const merged = mergeMechanicalContextBlock(raw, sealed);
+    if (!merged.ok) {
+      return {
+        execution: { status: "degraded", details: { reason: merged.error } }
+      };
+    }
+    return {
+      content: merged.value,
+      execution: {
+        status: "ok",
+        details: {
+          sealed: true,
+          transcriptSkippedBytes: measurement.skippedBytes,
+          transcriptSkippedLines: measurement.skippedLines
+        }
+      }
+    };
+  });
 }
 function successfulToolUse(input) {
   const response = record3(input["tool_response"]) ?? record3(input["tool_result"]);
@@ -2495,7 +2714,7 @@ function successfulToolUse(input) {
   return input["error"] === void 0 && input["tool_error"] === void 0;
 }
 function boundedProjectPath(root, candidate) {
-  if (candidate === "" || candidate.length > 500 || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
+  if (candidate === "" || candidate.length > 500 || candidate.includes(MECHANICAL_BEGIN2) || candidate.includes(MECHANICAL_END2) || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
   const target = isAbsolute3(candidate) ? resolve3(candidate) : resolve3(root, candidate);
   const local = relative3(resolve3(root), target);
   if (local === "" || local.startsWith("..") || isAbsolute3(local)) return void 0;
@@ -2508,43 +2727,50 @@ function toolPaths(call, root) {
   const paths = call.edits.map((edit) => boundedProjectPath(root, edit.path)).filter((path) => path !== void 0 && path !== CHECKPOINT);
   return isRead ? { readFiles: paths, modifiedFiles: [] } : { readFiles: [], modifiedFiles: paths };
 }
-function evolveCheckpoint(root, now, observation, input, event) {
-  const path = join10(root, CHECKPOINT);
-  const raw = rawCheckpoint(path);
-  if (raw === void 0) {
-    return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
-  }
-  const block2 = parseMechanicalContextBlock(raw);
-  if (block2.status === "invalid") {
-    return { status: "degraded", details: { reason: "mechanical-block-ambiguous" } };
-  }
-  const current = block2.status === "valid" ? block2.state : initialState(raw);
-  const reconcile = observation.semanticCheckpointWritten === true;
-  const advanced = advanceMechanicalContext(current, {
-    ...observation,
-    semanticCheckpointWritten: false
+function evolveCheckpoint(root, now, runtime3, observation, input, event) {
+  return mutateCheckpoint(root, now, (raw) => {
+    const block2 = parseMechanicalContextBlock(raw);
+    if (block2.status === "invalid") {
+      return {
+        execution: {
+          status: "degraded",
+          details: { reason: "mechanical-block-ambiguous" }
+        }
+      };
+    }
+    const current = block2.status === "valid" ? block2.state : initialState(raw);
+    const reconcile = observation.semanticCheckpointWritten === true;
+    const advanced = advanceMechanicalContext(current, {
+      ...observation,
+      ...reconcile ? { objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective) } : {},
+      semanticCheckpointWritten: false
+    });
+    const measurement = input === void 0 || event === void 0 ? { state: advanced, emitNudge: false, skippedBytes: 0, skippedLines: 0 } : measureContext(advanced, input, root, event, runtime3, now);
+    const next = reconcile ? advanceMechanicalContext(measurement.state, { semanticCheckpointWritten: true }) : measurement.state;
+    if (next === current && block2.status === "valid") {
+      return {
+        execution: { status: "skipped", details: { reason: "duplicate-observation" } }
+      };
+    }
+    const merged = mergeMechanicalContextBlock(raw, next);
+    if (!merged.ok) {
+      return { execution: { status: "degraded", details: { reason: merged.error } } };
+    }
+    return {
+      content: merged.value,
+      execution: {
+        status: "ok",
+        details: {
+          advanced: next.workRevision !== current.workRevision,
+          transcriptSkippedBytes: measurement.skippedBytes,
+          transcriptSkippedLines: measurement.skippedLines
+        },
+        ...measurement.emitNudge && event !== void 0 ? { output: nudgeOutput(event, thresholdConfig(root).thresholdPercent) } : {}
+      }
+    };
   });
-  const measurement = input === void 0 || event === void 0 ? { state: advanced, emitNudge: false, skippedBytes: 0, skippedLines: 0 } : measureContext(advanced, input, root, event, now);
-  const next = reconcile ? advanceMechanicalContext(measurement.state, { semanticCheckpointWritten: true }) : measurement.state;
-  if (next === current && block2.status === "valid") {
-    return { status: "skipped", details: { reason: "duplicate-observation" } };
-  }
-  const merged = mergeMechanicalContextBlock(raw, next);
-  if (!merged.ok) return { status: "degraded", details: { reason: merged.error } };
-  if (!atomicCheckpointWrite(path, merged.value, now)) {
-    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
-  }
-  return {
-    status: "ok",
-    details: {
-      advanced: next.workRevision !== current.workRevision,
-      transcriptSkippedBytes: measurement.skippedBytes,
-      transcriptSkippedLines: measurement.skippedLines
-    },
-    ...measurement.emitNudge && event !== void 0 ? { output: nudgeOutput(event, thresholdConfig(root).thresholdPercent) } : {}
-  };
 }
-function observePostToolUse(input, root, now) {
+function observePostToolUse(input, root, runtime3, now) {
   if (!successfulToolUse(input)) {
     return { status: "skipped", details: { reason: "tool-use-failed" } };
   }
@@ -2554,33 +2780,30 @@ function observePostToolUse(input, root, now) {
     const checkpointWrite = (call.tool === "Edit" || call.tool === "Write" || call.tool === "apply_patch") && call.edits.some(
       (edit) => boundedProjectPath(root, edit.path) === CHECKPOINT
     );
-    const raw = checkpointWrite ? rawCheckpoint(join10(root, CHECKPOINT)) : void 0;
-    const objectiveHash = raw === void 0 ? void 0 : hashCheckpointObjective(parseCheckpoint(raw).objective);
-    return evolveCheckpoint(root, now, {
+    return evolveCheckpoint(root, now, runtime3, {
       readFiles: paths.readFiles,
       modifiedFiles: paths.modifiedFiles,
-      ...objectiveHash === void 0 ? {} : { objectiveHash },
       ...checkpointWrite ? { semanticCheckpointWritten: true } : {}
     }, checkpointWrite ? void 0 : input, checkpointWrite ? void 0 : "PostToolUse");
   } catch {
     return { status: "degraded", details: { reason: "invalid-tool-input" } };
   }
 }
-function executeContextContinuity(rawInput, root, _runtime, now) {
+function executeContextContinuity(rawInput, root, runtime3, now) {
   const input = record3(rawInput);
   if (input === void 0) {
     return { status: "degraded", details: { reason: "invalid-hook-input" } };
   }
   const event = input["hook_event_name"];
-  if (event === "PreCompact") return sealPreCompact(input, root, now);
-  if (event === "PostToolUse") return observePostToolUse(input, root, now);
+  if (event === "PreCompact") return sealPreCompact(input, root, runtime3, now);
+  if (event === "PostToolUse") return observePostToolUse(input, root, runtime3, now);
   if (event === "UserPromptSubmit") {
-    return evolveCheckpoint(root, now, {}, input, "UserPromptSubmit");
+    return evolveCheckpoint(root, now, runtime3, {}, input, "UserPromptSubmit");
   }
   if (event === "SessionStart") {
     const source = input["source"];
     if (source === "startup" || source === "resume" || source === "clear" || source === "compact" || source === "fork") {
-      return evolveCheckpoint(root, now, { resumeSource: source });
+      return evolveCheckpoint(root, now, runtime3, { resumeSource: source });
     }
   }
   return { status: "skipped", details: { reason: "event-not-actionable" } };
@@ -2817,12 +3040,12 @@ function executeLargeChange(root, env) {
 // src/lifecycle/resume-observer.ts
 import { execFileSync } from "node:child_process";
 import {
-  existsSync as existsSync7,
+  existsSync as existsSync6,
   lstatSync as lstatSync4,
   readFileSync as readFileSync10,
   statSync as statSync4
 } from "node:fs";
-import { basename as basename3, join as join12 } from "node:path";
+import { basename as basename4, join as join12 } from "node:path";
 var PROGRAM_PATHS = [
   join12(".void", "program.md"),
   join12(".void", "active.md"),
@@ -2890,7 +3113,7 @@ function programFrom(raw, legacy) {
   };
 }
 function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative11) => existsSync7(join12(root, relative11)));
+  const present = PROGRAM_PATHS.filter((relative11) => existsSync6(join12(root, relative11)));
   if (present.length === 0) return { program: void 0 };
   if (present.length > 1) {
     return {
@@ -2942,7 +3165,7 @@ function checkpointObservation(root) {
 function observeResume(root, now, options = {}) {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
-    project: { name: basename3(root), path: root },
+    project: { name: basename4(root), path: root },
     now,
     git: gitObservation(root),
     ...observeProgram(root),
@@ -2997,8 +3220,8 @@ import { createHash as createHash3 } from "node:crypto";
 import {
   lstatSync as lstatSync5,
   mkdirSync as mkdirSync4,
-  realpathSync as realpathSync3,
-  writeFileSync as writeFileSync4
+  realpathSync as realpathSync4,
+  writeFileSync as writeFileSync3
 } from "node:fs";
 import { join as join13, relative as relative5 } from "node:path";
 
@@ -3069,15 +3292,15 @@ ${errors}
 // src/lifecycle/trim-executor.ts
 function safeOutputDirectory(root) {
   try {
-    const canonicalRoot = realpathSync3(root);
+    const canonicalRoot = realpathSync4(root);
     const directory = voidMachinePath(root, "outputs");
     mkdirSync4(directory, { recursive: true, mode: 448 });
     const info = lstatSync5(directory);
-    const canonicalDirectory = realpathSync3(directory);
-    if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory)) {
+    const canonicalDirectory2 = realpathSync4(directory);
+    if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory2)) {
       return void 0;
     }
-    return canonicalDirectory;
+    return canonicalDirectory2;
   } catch {
     return void 0;
   }
@@ -3109,7 +3332,7 @@ function executeTrim(rawInput, root, env) {
   const hash = createHash3("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
   const file = join13(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
-  const spillPath = relative5(realpathSync3(root), file).replaceAll("\\", "/");
+  const spillPath = relative5(realpathSync4(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
     thresholdBytes,
@@ -3119,7 +3342,7 @@ function executeTrim(rawInput, root, env) {
     return { status: "skipped", details: { reason: "below-threshold" } };
   }
   try {
-    writeFileSync4(file, plan.fullOutput, {
+    writeFileSync3(file, plan.fullOutput, {
       encoding: "utf8",
       flag: "wx",
       mode: 384
@@ -3144,13 +3367,13 @@ function executeTrim(rawInput, root, env) {
 }
 
 // src/lifecycle/typecheck-executor.ts
-import { existsSync as existsSync8 } from "node:fs";
+import { existsSync as existsSync7 } from "node:fs";
 import { join as join15 } from "node:path";
 import { spawnSync as spawnSync3 } from "node:child_process";
 
 // src/lifecycle/typecheck.ts
 import {
-  dirname as dirname6,
+  dirname as dirname5,
   isAbsolute as isAbsolute5,
   join as join14,
   relative as relative6,
@@ -3252,7 +3475,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
     const target = resolve5(root, changedPath);
     if (!within3(root, target)) continue;
-    let current = dirname6(target);
+    let current = dirname5(target);
     while (within3(root, current)) {
       const config = join14(current, "tsconfig.json");
       if (hasFile(config)) {
@@ -3260,7 +3483,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
         break;
       }
       if (current === root) break;
-      current = dirname6(current);
+      current = dirname5(current);
     }
   }
   return [...found];
@@ -3310,7 +3533,7 @@ function executeTypecheck(root, env) {
   if (changed.length === 0) {
     return { status: "skipped", details: { reason: "no-touched-typescript" } };
   }
-  const configs = nearestTsconfigs(changed, root, existsSync8);
+  const configs = nearestTsconfigs(changed, root, existsSync7);
   const configured = configuredTypecheck(readJson(join15(root, ".void", "config.json")));
   const configuredArgv = "argv" in configured ? configured.argv : void 0;
   const warning = "warning" in configured ? configured.warning : void 0;
@@ -3396,7 +3619,7 @@ Resolve before claiming done. This never blocks.
 }
 
 // src/record.ts
-import { homedir } from "node:os";
+import { homedir as homedir2 } from "node:os";
 import { resolve as resolve9 } from "node:path";
 
 // src/project-registry.ts
@@ -3450,7 +3673,7 @@ async function registerProjectRoot(root, globalDir) {
 // src/runtime-input.ts
 import { createHash as createHash5 } from "node:crypto";
 import {
-  basename as basename4,
+  basename as basename5,
   extname,
   isAbsolute as isAbsolute7,
   relative as relative8,
@@ -3495,7 +3718,7 @@ function nameFor(tool, category, input) {
     const explicit = text(input["name"]);
     if (explicit !== "") return explicit;
     const script = text(input["scriptPath"]);
-    return script === "" || script.endsWith("/") ? "inline" : basename4(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
+    return script === "" || script.endsWith("/") ? "inline" : basename5(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
   }
   return tool || "unknown";
 }
@@ -3531,10 +3754,10 @@ function outcomeStatus(raw) {
 function adaptRuntimeInput(value, options) {
   const raw = record6(value);
   if (raw === void 0) return void 0;
-  const runtimeSessionId = runtimeSession(raw);
+  const runtimeSessionId2 = runtimeSession(raw);
   if (options.phase === "stop" || text(raw["hook_event_name"]) === "Stop") {
     return {
-      runtimeSessionId,
+      runtimeSessionId: runtimeSessionId2,
       source: `runtime:${options.runtime}`,
       kind: "runtime.session.stopped",
       subject: `runtime:${options.runtime}`,
@@ -3548,7 +3771,7 @@ function adaptRuntimeInput(value, options) {
   const fileGlobs = safePaths(input, options.root);
   const extensions = fileGlobs.map((path) => extname(path).slice(1)).filter((extension) => extension !== "");
   return {
-    runtimeSessionId,
+    runtimeSessionId: runtimeSessionId2,
     source: `runtime:${options.runtime}`,
     kind: options.phase === "outcome" ? "runtime.tool.completed" : "runtime.tool.started",
     subject: `${category}:${name}`,
@@ -3561,21 +3784,21 @@ function adaptRuntimeInput(value, options) {
     }
   };
 }
-function deriveMissionId(explicit, runtime3, runtimeSessionId, root) {
+function deriveMissionId(explicit, runtime3, runtimeSessionId2, root) {
   if (explicit !== void 0 && explicit !== "") {
     if (!MISSION_ID.test(explicit)) {
       throw new Error("HOOK_INVALID_MISSION_ID: expected mis_<opaque-id>");
     }
     return explicit;
   }
-  const opaque = createHash5("sha256").update(`${runtime3}\0${runtimeSessionId || "unknown"}\0${resolve7(root)}`).digest("hex").slice(0, 32);
+  const opaque = createHash5("sha256").update(`${runtime3}\0${runtimeSessionId2 || "unknown"}\0${resolve7(root)}`).digest("hex").slice(0, 32);
   return `mis_${opaque}`;
 }
 
 // src/sequenced-writer.ts
 import { randomUUID as nodeRandomUUID } from "node:crypto";
 import {
-  constants as constants2
+  constants as constants3
 } from "node:fs";
 import {
   lstat as lstat2,
@@ -3588,7 +3811,7 @@ import {
   unlink
 } from "node:fs/promises";
 import {
-  dirname as dirname7,
+  dirname as dirname6,
   isAbsolute as isAbsolute8,
   join as join17,
   relative as relative9,
@@ -3867,7 +4090,7 @@ async function safeRunDirectory(root, missionId) {
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;
   while (!await exists(ancestor)) {
-    const parent = dirname7(ancestor);
+    const parent = dirname6(ancestor);
     if (parent === ancestor) break;
     ancestor = parent;
   }
@@ -3964,7 +4187,7 @@ async function ensureLineBoundary(logPath, logBytes) {
   }
   const append = await open2(
     logPath,
-    constants2.O_APPEND | constants2.O_WRONLY | (constants2.O_NOFOLLOW ?? 0)
+    constants3.O_APPEND | constants3.O_WRONLY | (constants3.O_NOFOLLOW ?? 0)
   );
   try {
     await append.writeFile("\n", "utf8");
@@ -3974,7 +4197,7 @@ async function ensureLineBoundary(logPath, logBytes) {
   return logBytes + 1;
 }
 async function appendLine(logPath, line) {
-  const flags = constants2.O_APPEND | constants2.O_CREAT | constants2.O_WRONLY | (constants2.O_NOFOLLOW ?? 0);
+  const flags = constants3.O_APPEND | constants3.O_CREAT | constants3.O_WRONLY | (constants3.O_NOFOLLOW ?? 0);
   const handle = await open2(logPath, flags, 384);
   try {
     await handle.writeFile(`${line}
@@ -4116,7 +4339,7 @@ async function recordRuntimeEvent(options) {
   });
   await registerProjectRoot(
     options.root,
-    options.globalDir ?? resolve9(homedir(), ".void")
+    options.globalDir ?? resolve9(homedir2(), ".void")
   ).catch(() => {
   });
   return event;
@@ -4152,7 +4375,7 @@ async function recordHookEvent(options) {
   });
   await registerProjectRoot(
     options.root,
-    options.globalDir ?? resolve9(homedir(), ".void")
+    options.globalDir ?? resolve9(homedir2(), ".void")
   ).catch(() => {
   });
   return event;
@@ -4170,7 +4393,7 @@ async function recordRuntimeEventFromCli(raw, argv, env) {
     runtime: runtime(argv[3] ?? env["VOID_AGENT_RUNTIME"]),
     phase: phase(argv[2]),
     rawInput: raw,
-    globalDir: env["VOID_GLOBAL_DIR"] ?? resolve9(homedir(), ".void"),
+    globalDir: env["VOID_GLOBAL_DIR"] ?? resolve9(homedir2(), ".void"),
     ...env["VOID_MISSION_ID"] === void 0 ? {} : { missionId: env["VOID_MISSION_ID"] }
   });
 }

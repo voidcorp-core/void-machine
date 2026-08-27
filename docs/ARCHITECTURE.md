@@ -201,13 +201,19 @@ threshold, merge, and complete/degraded decisions. `hook-runner` normalizes Clau
 payloads, reads at most 1,048,576 transcript bytes, confines project paths, and replaces the block
 under a no-wait lock through a same-directory temporary file and rename. Runtime manifests only
 map `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and `SessionStart` to that handler.
+The lock covers the complete read-modify-write decision. Transcript reads use no-follow bounded
+descriptors and are limited to the project or the runtime's project-scoped transcript directory;
+configuration reads are regular-file-only and capped at 65,536 bytes. Direct runtime read/write
+payloads contribute paths, while shell-mediated reads remain unobserved.
 
 The latest complete `message.usage` record is an occupation observation, not accumulated session
 cost. A nudge is possible only when `.void/config.json` supplies a positive `context.windowTokens`;
 the 40–60% integer threshold defaults to 50. Unknown windows produce no percentage. The handler
 never invokes `/clear`, `/compact`, or `void-checkpoint`, and never authors semantic residue.
 `SessionStart:clear` is consequently degraded until a later semantic checkpoint reconciles the
-revisions. See the decision
+revisions. A semantic rewrite invalidates the previous `sealed_work_revision`; only a successful
+`PreCompact` can seal the current work revision, so a failed seal cannot be rendered complete on
+the next compact resume. See the decision
 [PreCompact may preserve mechanical checkpoint state](decisions-log/2026-08-27-precompact-preserves-mechanical-checkpoint-state--da9bb0a9-9c5a-46df-9459-27a583e92af2.md).
 
 ### Source self-host boundary

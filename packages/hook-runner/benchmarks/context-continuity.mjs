@@ -1,5 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,57 +25,151 @@ function timed(action) {
   return Number(process.hrtime.bigint() - started) / 1_000_000;
 }
 
-function nodeStartupP95() {
-  return percentile95(Array.from({ length: 10 }, () => timed(() => {
-    const result = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore' });
-    if (result.status !== 0) throw new Error('Node startup baseline failed');
-  })));
+function usageLine(usedTokens) {
+  return `${JSON.stringify({
+    type: 'assistant',
+    message: {
+      usage: {
+        input_tokens: Math.max(0, usedTokens - 30),
+        output_tokens: 10,
+        cache_read_input_tokens: 10,
+        cache_creation_input_tokens: 10,
+      },
+    },
+  })}\n`;
+}
+
+function spawnMeasured(script, args, options = {}) {
+  let result;
+  const elapsed = timed(() => {
+    result = spawnSync(process.execPath, [script, ...args], {
+      encoding: 'utf8',
+      ...options,
+    });
+  });
+  if (result.status !== 0) throw new Error(`Benchmark child failed: ${result.stderr}`);
+  return elapsed;
 }
 
 async function main() {
   const temporary = mkdtempSync(join(tmpdir(), 'context-continuity-benchmark-'));
   const project = join(temporary, 'project');
-  const bundle = join(temporary, 'context-continuity.mjs');
+  const featureBundle = join(temporary, 'context-continuity.mjs');
+  const shippedBundle = join(temporary, '_void-hook.mjs');
+  const bareNode = join(temporary, 'node-startup.mjs');
   const checkpoint = join(project, '.void', 'machine', 'checkpoint.md');
+  const transcript = join(project, 'transcript.jsonl');
   mkdirSync(dirname(checkpoint), { recursive: true });
-  writeFileSync(join(project, '.void', 'config.json'), '{}\n');
+  writeFileSync(
+    join(project, '.void', 'config.json'),
+    '{"context":{"windowTokens":200000,"checkpointThresholdPercent":50}}\n',
+  );
   writeFileSync(checkpoint, '## Objective\n\nBenchmark context continuity.\n');
+  writeFileSync(transcript, usageLine(10_000));
+  writeFileSync(bareNode, '');
 
   try {
-    await build({
-      entryPoints: [
-        join(ROOT, 'packages', 'hook-runner', 'src', 'lifecycle', 'context-continuity-executor.ts'),
-      ],
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      target: 'node22',
-      outfile: bundle,
-    });
-    const importStarted = process.hrtime.bigint();
-    const module = await import(pathToFileURL(bundle).href);
-    const importMs = Number(process.hrtime.bigint() - importStarted) / 1_000_000;
-    const invoke = () => module.executeContextContinuity(
-      { hook_event_name: 'UserPromptSubmit', prompt: 'continue' },
+    await Promise.all([
+      build({
+        entryPoints: [
+          join(ROOT, 'packages', 'hook-runner', 'src', 'lifecycle', 'context-continuity-executor.ts'),
+        ],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        target: 'node22',
+        outfile: featureBundle,
+      }),
+      build({
+        entryPoints: [join(ROOT, 'packages', 'hook-runner', 'src', 'cli.ts')],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        target: 'node22',
+        outfile: shippedBundle,
+      }),
+    ]);
+    const feature = await import(pathToFileURL(featureBundle).href);
+    feature.executeContextContinuity(
+      { hook_event_name: 'PreCompact', transcript_path: transcript },
       project,
       'codex',
       1_000,
     );
-    const firstInvokeMs = timed(invoke);
-    const hot = Array.from({ length: RUNS }, () => timed(invoke));
-    const baseline = Array.from({ length: RUNS }, () => timed(() => undefined));
-    const coldMs = importMs + firstInvokeMs;
+    let hotIndex = 0;
+    const hot = Array.from({ length: RUNS }, () => {
+      hotIndex += 1;
+      appendFileSync(transcript, usageLine(10_000 + hotIndex));
+      return timed(() => feature.executeContextContinuity(
+        {
+          hook_event_name: 'PostToolUse',
+          transcript_path: transcript,
+          tool_name: 'read_file',
+          tool_input: { path: `src/hot-${String(hotIndex)}.ts` },
+          tool_response: { success: true },
+        },
+        project,
+        'codex',
+        10_000 + hotIndex * 5_001,
+      ));
+    });
+
+    const environment = {
+      ...process.env,
+      VOID_GLOBAL_DIR: join(project, '.void', 'global'),
+      VOID_PROJECT_ROOT: project,
+    };
+    const nodeStartup = [];
+    const bundleStartup = [];
+    const processCold = [];
+    for (let index = 0; index < RUNS; index += 1) {
+      nodeStartup.push(spawnMeasured(bareNode, []));
+      bundleStartup.push(spawnMeasured(
+        shippedBundle,
+        ['lifecycle', 'context-continuity', 'codex'],
+        {
+          env: environment,
+          input: JSON.stringify({
+            hook_event_name: 'Unknown',
+            session_id: 'context-continuity-benchmark',
+          }),
+        },
+      ));
+      appendFileSync(transcript, usageLine(20_000 + index));
+      processCold.push(spawnMeasured(
+        shippedBundle,
+        ['lifecycle', 'context-continuity', 'codex'],
+        {
+          env: environment,
+          input: JSON.stringify({
+            hook_event_name: 'PostToolUse',
+            session_id: 'context-continuity-benchmark',
+            transcript_path: transcript,
+            tool_name: 'read_file',
+            tool_input: { path: `src/cold-${String(index)}.ts` },
+            tool_response: { success: true },
+          }),
+        },
+      ));
+    }
+
+    const nodeStartupP95Ms = percentile95(nodeStartup);
+    const bundleStartupP95Ms = percentile95(bundleStartup);
+    const processColdP95Ms = percentile95(processCold);
+    const coldP95Ms = Math.max(0, processColdP95Ms - nodeStartupP95Ms);
     const hotP95Ms = percentile95(hot);
-    const overheadP95Ms = Math.max(0, hotP95Ms - percentile95(baseline));
+    const overheadP95Ms = Math.max(0, processColdP95Ms - bundleStartupP95Ms);
     const result = {
-      coldMs: Number(coldMs.toFixed(2)),
+      coldP95Ms: Number(coldP95Ms.toFixed(2)),
       hotP95Ms: Number(hotP95Ms.toFixed(2)),
       overheadP95Ms: Number(overheadP95Ms.toFixed(2)),
-      nodeStartupP95Ms: Number(nodeStartupP95().toFixed(2)),
-      budgetsMs: { cold: 150, hotP95: 75, overheadP95: 25 },
+      processColdP95Ms: Number(processColdP95Ms.toFixed(2)),
+      nodeStartupP95Ms: Number(nodeStartupP95Ms.toFixed(2)),
+      bundleStartupP95Ms: Number(bundleStartupP95Ms.toFixed(2)),
+      budgetsMs: { coldP95: 150, hotP95: 75, overheadP95: 25 },
     };
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (coldMs >= 150 || hotP95Ms >= 75 || overheadP95Ms >= 25) process.exitCode = 1;
+    if (coldP95Ms >= 150 || hotP95Ms >= 75 || overheadP95Ms >= 25) process.exitCode = 1;
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

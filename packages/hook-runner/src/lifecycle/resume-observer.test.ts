@@ -92,8 +92,11 @@ describe('observeResume', () => {
     expect(observed.context.length).toBeLessThanOrEqual(4_000);
   });
 
-  it('stays silent when neither a program nor a useful checkpoint exists', () => {
-    expect(observeResume(project(), Date.now()).context).toBe('');
+  it('surfaces degraded continuity when neither a program nor a checkpoint exists', () => {
+    const observed = observeResume(project(), Date.now());
+
+    expect(observed.context).toContain('Context continuity: degraded');
+    expect(observed.context).toContain('Reconstruct context before any mutation.');
   });
 
   it('exposes a complete mechanical continuity status after compaction', () => {
@@ -103,6 +106,7 @@ describe('observeResume', () => {
       objectiveHash: `sha256:${'a'.repeat(64)}`,
       workRevision: 1,
       semanticRevision: 1,
+      sealedWorkRevision: 1,
       nudgeEmitted: false,
       transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
       transcriptCursorBytes: 0,

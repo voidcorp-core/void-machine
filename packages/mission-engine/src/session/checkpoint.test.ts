@@ -176,6 +176,7 @@ const MECHANICAL: MechanicalContextState = {
   objectiveHash: `sha256:${'a'.repeat(64)}`,
   workRevision: 4,
   semanticRevision: 4,
+  sealedWorkRevision: 4,
   nudgeEmitted: false,
   transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
   transcriptCursorBytes: 128,

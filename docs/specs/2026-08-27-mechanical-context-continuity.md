@@ -169,6 +169,7 @@ schema_version: 1
 objective_hash: sha256:...
 work_revision: 18
 semantic_revision: 17
+sealed_work_revision: 17
 nudge_emitted: true
 transcript_fingerprint: sha256:...
 transcript_cursor_bytes: 42891
@@ -200,6 +201,9 @@ Règles :
 
 Le curseur est lié à une empreinte du `transcript_path`. Quand l'empreinte change, la lecture
 reprend à zéro sur le nouveau transcript sans réinitialiser la chaîne cumulative du checkpoint.
+Un transcript est lu via un descripteur borné sans suivi de lien symbolique. Son chemin canonique
+doit rester dans le projet ou dans le répertoire de transcript propre au projet du runtime ; hors
+du projet, l'identifiant de session doit aussi correspondre au nom de fichier.
 
 ## Configuration
 
@@ -314,6 +318,7 @@ minimales :
 
 - bloc mécanique absent ou ambigu ;
 - `semantic_revision` en retard ;
+- le dernier `PreCompact` ne scelle pas la révision de travail courante ;
 - `/clear` non réconcilié.
 
 Une fenêtre inconnue dégrade la capacité de nudge, pas nécessairement la reprise. Une erreur
@@ -328,6 +333,8 @@ l'autorité jusqu'à une écriture atomique réussie.
   aucune estimation n'est inventée.
 - L'acquisition du verrou n'attend jamais activement. Un verrou de moins de 1 000 ms fait
   abandonner l'écriture courante ; un verrou plus ancien est remplacé une seule fois.
+- Le verrou couvre la lecture, la décision et le remplacement ; une écriture sémantique invalide
+  `sealed_work_revision` et seul un `PreCompact` réussi le remet à la révision courante.
 - Une écriture atomique échouée laisse l'ancien checkpoint intact.
 - Un bloc ambigu n'est jamais réparé automatiquement.
 - Une même cause n'émet qu'un diagnostic local par cycle ; les répétitions restent silencieuses.

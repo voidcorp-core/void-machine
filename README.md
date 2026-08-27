@@ -118,6 +118,9 @@ The threshold must be an integer from 40 through 60 and defaults to 50 when `con
 Without `windowTokens`, the handler records the latest usage counters but computes no percentage
 and emits no threshold nudge. Transcript reads stay local, inspect only usage counters, and are
 bounded to 1,048,576 bytes per invocation; prompt and response content are neither logged nor sent.
+Only runtime-reported direct read/write paths are observed. Shell-mediated reads are intentionally
+not inferred, and transcript files outside the project are accepted only from the runtime's
+project-scoped transcript directory.
 
 The limits are intentional: the harness never invokes `/clear` or `/compact`, and the hook never
 writes objective, progress, dead ends, assumptions, or a next action. A nudge asks the agent to

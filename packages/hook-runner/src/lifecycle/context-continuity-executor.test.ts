@@ -13,11 +13,14 @@ import {
   unlinkSync,
   utimesSync,
   writeFileSync,
+  type Mode,
+  type OpenMode,
+  type PathLike,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   claimStaleLock,
   executeContextContinuity,
@@ -26,10 +29,35 @@ import {
 } from './context-continuity-executor.js';
 import { observeResume } from './resume-observer.js';
 
+const recoveryOpenFault = vi.hoisted(() => ({ attempts: 0, remaining: 0 }));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    openSync(path: PathLike, flags: OpenMode, mode?: Mode | null) {
+      if (
+        recoveryOpenFault.remaining > 0
+        && typeof path === 'string'
+        && path.endsWith('.recovery')
+        && typeof flags === 'number'
+        && (flags & actual.constants.O_EXCL) !== 0
+      ) {
+        recoveryOpenFault.attempts += 1;
+        recoveryOpenFault.remaining -= 1;
+        throw Object.assign(new Error('recovery claim creation failed'), { code: 'EACCES' });
+      }
+      return actual.openSync(path, flags, mode);
+    },
+  };
+});
+
 const roots: string[] = [];
 const originalHome = process.env['HOME'];
 
 afterEach(() => {
+  recoveryOpenFault.attempts = 0;
+  recoveryOpenFault.remaining = 0;
   if (originalHome === undefined) delete process.env['HOME'];
   else process.env['HOME'] = originalHome;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -142,6 +170,20 @@ describe('executeContextContinuity PreCompact', () => {
     expect(execution.status).toBe('skipped');
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
     expect(existsSync(lock)).toBe(true);
+  });
+
+  it('abandons recovery when a missing claim cannot be created', () => {
+    const root = project();
+    const lock = `${checkpoint(root)}.lock`;
+    writeFileSync(lock, 'stale\n');
+    const observed = lstatSync(lock);
+    recoveryOpenFault.remaining = 100;
+
+    const claim = claimStaleLock(lock, observed, Date.now() + 2_000);
+
+    if (claim !== undefined) closeSync(claim.descriptor);
+    expect(claim).toBeUndefined();
+    expect(recoveryOpenFault.attempts).toBe(1);
   });
 
   it('does not remove an older generation when another contender already owns recovery', () => {

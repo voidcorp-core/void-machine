@@ -9,6 +9,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { observeResume } from './resume-observer.js';
+import {
+  mergeMechanicalContextBlock,
+  type MechanicalContextState,
+} from '@voidcorp/mission-engine/session';
 
 const roots: string[] = [];
 
@@ -90,5 +94,33 @@ describe('observeResume', () => {
 
   it('stays silent when neither a program nor a useful checkpoint exists', () => {
     expect(observeResume(project(), Date.now()).context).toBe('');
+  });
+
+  it('exposes a complete mechanical continuity status after compaction', () => {
+    const root = project();
+    const state: MechanicalContextState = {
+      schemaVersion: 1,
+      objectiveHash: `sha256:${'a'.repeat(64)}`,
+      workRevision: 1,
+      semanticRevision: 1,
+      nudgeEmitted: false,
+      transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
+      transcriptCursorBytes: 0,
+      lastMeasurementAtMs: 0,
+      lastUsedTokens: 0,
+      readFiles: [],
+      modifiedFiles: [],
+      readFilesOverflow: 0,
+      modifiedFilesOverflow: 0,
+      clearPending: false,
+    };
+    const merged = mergeMechanicalContextBlock('## Objective\n\nResume me.\n', state);
+    if (!merged.ok) throw new Error(merged.error);
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), merged.value);
+
+    const observed = observeResume(root, Date.now(), { source: 'compact' });
+
+    expect(observed.bundle.continuity.status).toBe('complete');
+    expect(observed.context).toContain('Context continuity: complete');
   });
 });

@@ -27,7 +27,11 @@ describe.each([
 
   it('replays resume context for every documented SessionStart source', () => {
     expect(source.hooks.SessionStart?.[0]?.matcher).toBe('startup|resume|clear|compact');
-    expect(commands(source, 'SessionStart').join('\n')).toContain('lifecycle context');
+    expect(commands(source, 'SessionStart').join('\n')).toContain('lifecycle context-continuity');
+  });
+
+  it('seals mechanical state before compaction through the shared handler', () => {
+    expect(commands(source, 'PreCompact').join('\n')).toContain('lifecycle context-continuity');
   });
 
   it('reminds explicit closes at UserPromptSubmit without replacing the prompt', () => {

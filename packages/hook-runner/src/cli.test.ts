@@ -161,6 +161,44 @@ describe('lifecycle context', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('seals PreCompact and resumes through the unique continuity handler', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-continuity-cli-'));
+    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
+    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nCLI parity.\n');
+
+    try {
+      const compact = spawnSync(
+        process.execPath,
+        [hook, 'lifecycle', 'context-continuity', 'codex'],
+        {
+          input: JSON.stringify({ hook_event_name: 'PreCompact', trigger: 'auto' }),
+          encoding: 'utf8',
+          env: { ...process.env, VOID_PROJECT_ROOT: root },
+        },
+      );
+      expect(compact.status).toBe(0);
+      expect(readFileSync(join(root, '.void', 'machine', 'checkpoint.md'), 'utf8')).toContain(
+        'void-harness:context-continuity:begin',
+      );
+
+      const resume = spawnSync(
+        process.execPath,
+        [hook, 'lifecycle', 'context-continuity', 'claude'],
+        {
+          input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact' }),
+          encoding: 'utf8',
+          env: { ...process.env, VOID_PROJECT_ROOT: root },
+        },
+      );
+      expect(JSON.parse(resume.stdout ?? '{}').hookSpecificOutput.additionalContext).toContain(
+        'Context continuity: complete',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('session close lifecycle', () => {

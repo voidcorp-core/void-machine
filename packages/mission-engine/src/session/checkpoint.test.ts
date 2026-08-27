@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseCheckpoint } from './checkpoint.js';
+import {
+  mergeMechanicalContextBlock,
+  parseCheckpoint,
+  parseMechanicalContextBlock,
+  type MechanicalContextState,
+} from './checkpoint.js';
 
 /**
  * The checkpoint answers one question — what was happening just before the
@@ -161,5 +166,70 @@ describe('parseCheckpoint', () => {
     const checkpoint = parseCheckpoint('## Open loops\n\n- one\n\n- two\n');
 
     expect(checkpoint.openLoops).toEqual(['one', 'two']);
+  });
+});
+
+const MECHANICAL: MechanicalContextState = {
+  schemaVersion: 1,
+  objectiveHash: `sha256:${'a'.repeat(64)}`,
+  workRevision: 4,
+  semanticRevision: 4,
+  nudgeEmitted: false,
+  transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
+  transcriptCursorBytes: 128,
+  lastMeasurementAtMs: 0,
+  lastUsedTokens: 0,
+  readFiles: [],
+  modifiedFiles: [],
+  readFilesOverflow: 0,
+  modifiedFilesOverflow: 0,
+  clearPending: false,
+};
+
+describe('mechanical context block', () => {
+  it('adds and parses exactly one bounded block without changing semantic prose', () => {
+    const semantic = '## Objective\n\nPreserve the semantic checkpoint.\n';
+    const merged = mergeMechanicalContextBlock(semantic, MECHANICAL);
+
+    expect(merged.ok).toBe(true);
+    if (!merged.ok) return;
+    expect(merged.value).toContain(semantic.trimEnd());
+    expect(parseMechanicalContextBlock(merged.value)).toEqual({
+      status: 'valid',
+      state: MECHANICAL,
+    });
+    expect(parseCheckpoint(merged.value).objective).toBe('Preserve the semantic checkpoint.');
+  });
+
+  it('replaces only the existing mechanical block', () => {
+    const first = mergeMechanicalContextBlock('## Objective\n\nKeep me.\n', MECHANICAL);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const replacement = { ...MECHANICAL, workRevision: 5 };
+    const second = mergeMechanicalContextBlock(first.value, replacement);
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+
+    expect(second.value.match(/void-harness:context-continuity:begin/g)).toHaveLength(1);
+    expect(second.value).toContain('## Objective\n\nKeep me.');
+    expect(parseMechanicalContextBlock(second.value)).toEqual({
+      status: 'valid',
+      state: replacement,
+    });
+  });
+
+  it.each([
+    [
+      'multiple blocks',
+      '<!-- void-harness:context-continuity:begin -->\n<!-- void-harness:context-continuity:end -->\n'.repeat(2),
+    ],
+    ['missing end marker', '<!-- void-harness:context-continuity:begin -->\n'],
+    ['end marker before begin', '<!-- void-harness:context-continuity:end -->\n<!-- void-harness:context-continuity:begin -->\n'],
+  ])('refuses %s without returning rewritten markdown', (_label, raw) => {
+    expect(mergeMechanicalContextBlock(raw, MECHANICAL)).toEqual({
+      ok: false,
+      error: 'ambiguous-mechanical-block',
+    });
   });
 });

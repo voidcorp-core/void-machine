@@ -1,8 +1,11 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -17,6 +20,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   executeContextContinuity,
   isExternalTranscriptBound,
+  readBoundedDescriptor,
 } from './context-continuity-executor.js';
 import { observeResume } from './resume-observer.js';
 
@@ -136,6 +140,26 @@ describe('executeContextContinuity PreCompact', () => {
     expect(execution.status).toBe('skipped');
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
     expect(existsSync(lock)).toBe(true);
+  });
+
+  it('recovers an aged hardlink election orphan left by process death', () => {
+    const root = project();
+    const lock = `${checkpoint(root)}.lock`;
+    writeFileSync(checkpoint(root), '## Objective\n\nRecover a dead election owner.\n');
+    writeFileSync(lock, 'stale\n');
+    utimesSync(lock, new Date(0), new Date(0));
+    linkSync(lock, `${lock}.recovery`);
+
+    const execution = executeContextContinuity(
+      { hook_event_name: 'PreCompact', trigger: 'auto' },
+      root,
+      'codex',
+      Date.now() + 2_000,
+    );
+
+    expect(execution.status).toBe('ok');
+    expect(existsSync(`${lock}.recovery`)).toBe(false);
+    expect(mechanicalState(root).status).toBe('valid');
   });
 
   it('leaves the old checkpoint intact when the atomic temporary write fails', () => {
@@ -367,6 +391,18 @@ describe('executeContextContinuity cumulative state', () => {
 });
 
 describe('executeContextContinuity transcript threshold', () => {
+  it('caps descriptor reads even when the opened file is larger than the advertised bound', () => {
+    const root = project();
+    const path = join(root, 'growing.txt');
+    writeFileSync(path, '12345678901');
+    const descriptor = openSync(path, 'r');
+    try {
+      expect(readBoundedDescriptor(descriptor, 10)).toBe(undefined);
+    } finally {
+      closeSync(descriptor);
+    }
+  });
+
   it('binds only exact strong Claude session names outside the project', () => {
     expect(isExternalTranscriptBound(
       '/runtime/.codex/sessions/codex-session.jsonl',

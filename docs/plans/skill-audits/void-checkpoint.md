@@ -42,11 +42,14 @@ progress provider owns mutable execution state, and the durable file never store
   authoritative; a restore file would duplicate them and would be trusted while stale. Only the
   closing half is kept.
 
-- **An automatic hook on session end.** Tempting, and refused for the reason `void-learn`
+- **An automatic semantic hook on session end.** Tempting, and refused for the reason `void-learn`
   already documented for its own Stop nudge: a stop event cannot distinguish an interruption
   from a context limit from a completed turn. A handoff written on a false positive is
   authoritative and describes a moment nobody chose, which is worse than no handoff. The trigger
-  stays the human, or the model's own reading of the conversation.
+  stays the human, or the model's own reading of the conversation. The later decision
+  [PreCompact may preserve mechanical checkpoint state](../../decisions-log/2026-08-27-precompact-preserves-mechanical-checkpoint-state--da9bb0a9-9c5a-46df-9459-27a583e92af2.md)
+  narrows this rejection only for a delimited block of observed facts at the unambiguous
+  `PreCompact` boundary; it does not authorize semantic writing.
 
 - **A session narrative.** "What happened, in order" is pleasant to write and nearly useless to
   read: it duplicates the commit messages, ages badly, and buries the next action at the bottom.
@@ -96,6 +99,11 @@ writer. The semantic rejection still stands; the ownership vocabulary changed:
 - `ResumeBundle` composes programme, checkpoint and Git for both runtimes and the CLI;
 - `UserPromptSubmit` only reminds on explicit close intent, while `SessionEnd` only audits. Neither
   hook writes semantic state or calls another model.
+
+The mechanical continuity decision adds one bounded exception: `PreCompact` may preserve observed
+usage, revision, and working-set facts in the delimited block. `void-checkpoint` preserves that
+block byte-for-byte on every semantic rewrite. The same handler can nudge at a configured reliable
+window threshold, but it cannot invoke `/clear`, `/compact`, or the skill itself.
 
 Rejected: storing a current or next unit in either durable file, blocking a local checkpoint on
 provider availability, or treating a session close as completion.

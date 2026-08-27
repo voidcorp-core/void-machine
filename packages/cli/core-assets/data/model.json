@@ -1855,7 +1855,7 @@
         }
       ],
       "id": "skill:void-context",
-      "lines": 162,
+      "lines": 168,
       "name": "void-context",
       "owner": "folpe",
       "pack": null,
@@ -1864,7 +1864,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-context/SKILL.md",
-      "staticTokens": 2582,
+      "staticTokens": 2874,
       "type": "skill"
     },
     {

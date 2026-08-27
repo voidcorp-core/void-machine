@@ -23,7 +23,7 @@ So the discipline is proactive, not reactive. You manage the budget before it ov
 
 ### 1. `/clear` between unrelated tasks
 
-When you finish one task and start a logically separate one, run `/clear`. Carrying the first task's context into the second is the "kitchen-sink session" anti-pattern: nothing in the residue helps the new task, and all of it competes for attention.
+When you finish one task and start a logically separate one, run `/clear`. Carrying the first task's context into the second is the "kitchen-sink session" anti-pattern: nothing in the residue helps the new task, and all of it competes for attention. If work remains open, invoke `void-checkpoint` first: `/clear` has no pre-event, and the harness cannot preserve semantic residue after it is gone.
 
 Rule of thumb: if the next task would not cite anything from the current conversation, clear first.
 
@@ -42,7 +42,7 @@ A clean window with a sharp prompt beats a dirty window with three patches. Corr
 
 When a task is genuinely long and coherent (not mixed subjects, just big), do not clear — you would lose the thread. Run `/compact <focus>` to summarize the history down to what matters, naming the focus so the compaction keeps the relevant fil rather than a generic digest.
 
-Use `/clear` when subjects changed; use `/compact` when the subject is the same but the history is heavy.
+Use `/clear` when subjects changed; use `/compact` when the subject is the same but the history is heavy. The `PreCompact` hook preserves the bounded mechanical block before compaction; it does not invent dead ends, assumptions, or the next action.
 
 ### 4. Delegate heavy investigation to fresh-context subagents
 
@@ -60,8 +60,11 @@ A subagent must return a **compacted structured summary** — findings, the answ
 
 Treat context usage like a gauge you keep in a healthy band, not a tank you fill to the brim. Aim to keep effective usage around **40–60%**; a window run to the limit reasons worse long before it errors.
 
-- After each verified phase, compact the status **into the plan file on disk** (resume point + what changed), then trim the chat. The disk is the durable record; the window is working memory.
+- When `.void/config.json` declares a reliable `context.windowTokens`, the lifecycle hook can emit one `void-checkpoint` nudge per cycle at the configured 40–60% threshold (50% by default). Without that denominator it reports no percentage and emits no threshold nudge.
+- After each verified phase, route durable programme and provider state to their owners, invoke `void-checkpoint` for session residue, then trim the chat. The disk is the durable record; the window is working memory.
 - Compaction is a deliberate move you schedule, not an emergency you react to. Do it at clean boundaries (phase done, gate passed), where the summary is easy to write and nothing in flight is lost.
+
+The hook never invokes `/clear` or `/compact`, and never writes a semantic checkpoint. Its nudge is advisory; the runtime and the agent still own those actions.
 
 ## Leverage hierarchy
 
@@ -75,9 +78,10 @@ So concentrate human review and verification **upstream**: research > plan > cod
 
 A long task must not keep its state only in the conversation, because the conversation is the thing you will reset. Durable state goes on disk:
 
-- The plan and its resume point (composes with `void-plan` — the plan file is the source of truth, not the chat log).
-- Running notes, decisions made, open questions: a markdown scratch file the agent reads back after a `/clear`.
-- Intermediate findings from subagents, written down before they scroll away.
+- The versioned programme descriptor and its linked plan/spec, when a programme exists.
+- Mutable execution state in the declared progress provider, never duplicated locally.
+- `.void/machine/checkpoint.md` for session residue and the bounded mechanical working set.
+- Durable decisions in ADRs and reusable rules in doctrine, through their owning skills.
 
 The test: **if you `/clear` right now, can the next session pick up the task from disk alone?** If not, the state is trapped in the window and one reset will lose it. Write it down first.
 
@@ -99,7 +103,7 @@ Decompose long tasks into sub-tasks with their own gates (composes with `void-pl
 
 ## Operating procedure
 
-1. **Before a new task**: is it related to the current one? No → `/clear`. Yes → continue.
+1. **Before a new task**: is it related to the current one? No → checkpoint any open residue, then `/clear`. Yes → continue.
 2. **Before heavy reading**: will this dump many files for a small answer? Yes → dispatch a subagent.
 3. **During a long coherent task**: window feeling heavy but subject unchanged → `/compact <focus>`.
 4. **On a stuck correction loop**: hit two failed corrections → `/clear`, reformulate the prompt with the lessons folded in.
@@ -113,7 +117,7 @@ Decompose long tasks into sub-tasks with their own gates (composes with `void-pl
 |---|---|
 | "Keeping everything in context is safer — I might need it." | The model attends to all of it; the irrelevant 90% degrades the relevant 10%. Keeping everything is the harm, not the safety. |
 | "One more correction will fix it." | After two failures, the third inherits a confused window. A clean re-prompt wins. |
-| "Clearing loses my work." | Only if your work lived in the chat. Persist it to disk first; then `/clear` loses nothing. |
+| "Clearing loses my work." | It loses semantic residue that was only in chat. Route state and invoke `void-checkpoint` first; then `/clear` has a durable recovery point. |
 | "Reading the files myself is faster than dispatching a subagent." | Faster this turn, slower every turn after — those files now sit in your window forever. The subagent returns the conclusion, not the bytes. |
 | "The session is fine, no errors." | Context rot produces no errors. It produces dropped constraints and repeated questions. Silence is not health. |
 | "Compacting might drop something important." | Name the focus. `/compact <focus>` keeps the named thread; an unmanaged window drops things at random instead. |
@@ -123,7 +127,8 @@ Decompose long tasks into sub-tasks with their own gates (composes with `void-pl
 ## Composition with other skills
 
 - **`void-debug`**: investigate without drowning the window — gather evidence in a subagent, bring back the timeline and root cause, not every log line read.
-- **`void-plan`**: the plan file IS the on-disk state that survives a reset. Resume point is updated there, never only in chat.
+- **`void-plan`**: owns the approved execution structure; mutable progress remains with its declared provider.
+- **`void-checkpoint`**: owns semantic session residue; the lifecycle hook owns only the delimited mechanical block it must preserve.
 - **`superpowers:dispatching-parallel-agents`** (vendored target): fan out independent investigations to protect the main window.
 - **`superpowers:subagent-driven-development`** (vendored target): run independent plan steps in fresh-context subagents.
 
@@ -147,7 +152,8 @@ This skill absorbs the "context-engineering / anti-context-rot" concept; other s
 - [ ] No correction stacked beyond two attempts without a reset + reformulation.
 - [ ] Long coherent work was `/compact <focus>`-ed rather than left to bloat.
 - [ ] Heavy investigation was delegated to a fresh-context subagent that returned only its conclusion.
-- [ ] Task state (plan, resume point, notes) is on disk and survives a `/clear` — the survivability test passes.
+- [ ] Programme, provider state, checkpoint residue, decisions, and doctrine are routed to their single authoritative owners before a reset.
+- [ ] Open semantic residue is checkpointed before `/clear`; no hook capability is assumed beyond mechanical preservation and an advisory nudge.
 - [ ] Acting on degradation signals before they compound, not after errors appear.
 
 ---

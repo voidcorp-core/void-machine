@@ -65,10 +65,11 @@ gap in the harness; nothing to instrument until Codex surfaces skill use.
 
 The safety *floor* for an unattended run is the deny-by-default permission scope
 (`.codex/hooks.json` allow/deny + a sandbox), not the blocklist hooks. The hooks
-are enforcement on top. Codex's hook system mirrors Claude's: same event names
-(`PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`), same `hooks.json` schema
-(events under a top-level `hooks` key), same "exit 2 blocks" convention, so the
-the same portable Node runner serves both runtimes.
+are enforcement on top. Codex and Claude share the lifecycle events used here:
+`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PreCompact`, `SessionStart`,
+`SessionEnd`, and `Stop`. Both manifests route them to the same portable Node
+runner. The continuity path depends only on observing `PreCompact`; it never
+depends on Codex's ability to block that event.
 
 Codex used to receive only two guardrails where Claude received eighteen. It now
 receives the **same enforcement surface**: the blocking greps (`no-any`,
@@ -93,9 +94,16 @@ properties matter:
 - **every file in the patch is scanned**, not just the first — a secret added in
   the second file of a multi-file patch is blocked and names the right file.
 
-Enforcement, formatting, session context, advisory typecheck and telemetry are
+Enforcement, formatting, session context, context continuity, advisory typecheck and telemetry are
 dependency-free beyond the Node runtime required by the CLI. No native Codex
 hook requires `jq`, Bash or an executable file bit.
+
+Context continuity has no Codex degradation. The runner records the latest complete usage counters
+and a bounded working set, seals their delimited checkpoint block at `PreCompact`, and composes the
+same complete/degraded `ResumeBundle` at `SessionStart`. Because neither runtime documents a
+reliable window size, a threshold nudge requires explicit `context.windowTokens` configuration;
+model names are never mapped to guessed windows. The handler does not invoke `/clear`, `/compact`,
+or a semantic checkpoint.
 
 ### Wiring the Codex hooks (auto-wired by `init`)
 

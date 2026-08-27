@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:5abb6154249cd356389d8dc05a4d63dc90378b65f5810d2a331dbcb68cdae026"
+    "rootHash": "sha256:7e2e4037d8df88c7d47c0b6e9a0b639eaf57612462a91cd35dbd360dcb388086"
   },
   "nodes": [
     {
@@ -3757,7 +3757,7 @@
             }
           ],
           "id": "skill:void-context",
-          "lines": 162,
+          "lines": 168,
           "name": "void-context",
           "owner": "folpe",
           "pack": null,
@@ -3766,7 +3766,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-context/SKILL.md",
-          "staticTokens": 2582,
+          "staticTokens": 2874,
           "type": "skill"
         }
       },

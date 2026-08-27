@@ -3,9 +3,13 @@ Sources for `void-context` skill (see `docs/plans/skill-audits/void-context.md` 
 - Anthropic / Claude Code best practices — context management guidance: use /clear between unrelated tasks; /compact <focus> to condense long sessions; delegate investigation to subagents to protect the main window. https://www.anthropic.com/engineering/claude-code-best-practices
 - Anthropic engineering — "Effective context engineering for AI agents" (context as a finite, attention-competing budget; subagents return distilled conclusions, not raw material). https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
 - Boris Cherny / Cat Wu (Claude Code creators) interviews — "context is the fundamental constraint" of an agent; subagents exist to protect the main context window from heavy exploration. (Latent Space / podcast appearances on Claude Code.)
-- "get-shit-done" / Ralph-style autonomous loops — anti-context-rot principle: decompose long tasks, persist state on the filesystem (plan + notes as markdown) so work survives a context reset rather than living in conversation history.
+- "get-shit-done" / Ralph-style autonomous loops — anti-context-rot principle: decompose long tasks and persist state with its authoritative owner so work survives a context reset rather than living in conversation history.
 - superpowers/dispatching-parallel-agents + superpowers/subagent-driven-development — composed (vendored targets) for fan-out investigation and subagent-run plan steps.
+- PrimeIntellect `prime-agent` compaction format — adapted only for cumulative bounded read and
+  modified file observations; its semantic summary format is not copied.
 
 Strategy: distill. Distill the load-bearing context principles from Claude Code official best-practices and the creators' framing, plus the anti-context-rot / on-disk-state principle from autonomous-loop practice. Rewritten for void-harness; absorbs the "context-engineering / anti-context-rot" concept. Composes with debug (investigate without drowning context), plan (on-disk state), and subagent delegation.
 
-No new companion hooks (this is a process skill; the discipline is behavioral, materialized by /clear, /compact, and subagent dispatch).
+Companion mechanism: the shared `context-continuity` lifecycle handler observes bounded usage and
+working-set facts, preserves them at `PreCompact`, and can emit one configured threshold nudge.
+It does not invoke `/clear`, `/compact`, or a semantic checkpoint.

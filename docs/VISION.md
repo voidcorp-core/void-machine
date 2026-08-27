@@ -35,9 +35,11 @@ vérification. Aucune passe déclenchée n'est sautée.
 **5. La branche se merge sur `develop` sans intervention.** Tout vert, prédicats observables
 satisfaits, vérification post-merge, arrêt net de la chaîne au premier échec.
 
-**6. La boucle continue.** Le harnais prend le ticket suivant. Quand le contexte se remplit, il
-sauvegarde son état sur disque, repart d'une fenêtre propre, et reprend le backlog là où il
-l'avait laissé. Implémenter, vérifier, merger, recommencer — sans perte de fil.
+**6. La boucle continue.** Le harnais prend le ticket suivant. Quand une fenêtre fiable est
+configurée et que le contexte se remplit, il demande un checkpoint ; avant une compaction annoncée,
+il préserve les faits mécaniques sur disque ; au cycle suivant, il réinjecte une reprise complète
+ou dégradée. Le runtime ou l'humain reste seul à pouvoir vider la fenêtre. Implémenter, vérifier,
+merger, recommencer, avec une perte éventuelle explicitement nommée.
 
 **7. L'humain intervient une fois.** Il ouvre le navigateur, regarde le résultat sur `develop`,
 et décide. S'il valide, il merge `develop → main`, ce qui déploie.
@@ -64,7 +66,7 @@ Ce qui ne bouge pas, quelle que soit l'autonomie atteinte.
 
 ## Où en est chaque maillon
 
-Relevé le 2026-08-20, chaque ligne vérifiée dans le dépôt.
+Relevé le 2026-08-27, chaque ligne vérifiée dans le dépôt.
 
 | Maillon | État | Ce qui manque |
 | -- | -- | -- |
@@ -73,7 +75,7 @@ Relevé le 2026-08-20, chaque ligne vérifiée dans le dépôt.
 | Cycle d'exécution complet | **livré** | `void-implement`, douze passes à prédicat observable. |
 | Chaînage entre skills | **manque** | Rien ne relie `void-implement` à `void-merge`, ni l'implémentation à la QA et à la passe sécurité — DEV-641. |
 | Merge autonome sur `develop` | **conçu, non livré** | DEV-612. Bloqué par DEV-618 (séquentiel par défaut). DEV-613 est livré : la CI tire sur `develop` et la branche est protégée. |
-| Boucle longue et reprise | **manque le déclencheur** | La skill `void-context` fixe déjà la bande saine à 40–60 % d'usage, et `void-checkpoint` sait écrire l'état. Mais `void-checkpoint` dit lui-même « the trigger is the human, or your own reading » : **aucun mécanisme ne surveille le contexte ni ne décide de sauvegarder et repartir**. C'est le maillon qui manque à une chaîne longue, et son absence dégrade en silence — un modèle n'annonce pas qu'il a oublié une contrainte, il la laisse tomber. |
+| Boucle longue et reprise | **mécanique livrée, nettoyage externe** | Le handler commun mesure le dernier `usage` complet quand une fenêtre est configurée, émet un seul nudge, préserve le bloc mécanique à `PreCompact` et réinjecte `ResumeBundle`. Il ne peut ni invoquer `void-checkpoint`, ni déclencher `/clear` ou `/compact` : le résidu sémantique reste agentique et un `/clear` brutal peut encore imposer une reconstruction. |
 | Doctrine rejouée | **en cours** | La directive permanente par `UserPromptSubmit` (spec du 2026-08-20) ; l'audit de placement de chaque règle, DEV-650. |
 | QA navigateur avant promotion | **livré** | `void-qa`, via claude-in-chrome. |
 

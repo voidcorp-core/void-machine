@@ -26,10 +26,14 @@ Inspirations, none vendored:
   reusing it after a rebase asserts something about a tree that no longer exists. The same
   reasoning applies to a sentence in a handoff.
 
+- PrimeIntellect `prime-agent` compaction format inspired the cumulative read-files and
+  modified-files observations. Only that bounded mechanical structure is adapted; its semantic
+  summary is rejected because it lacks this skill's dead ends and labelled assumptions.
+
 Strategy: original, distilled from observed failures. What it deliberately does NOT do:
 
 - summarise the session — the diff, the commit messages and the tracker already carry what
   happened; a narrative duplicates them and rots faster;
 - restore context on the next session — that is a read of authoritative sources, not a replay;
-- write anything automatically — closing is a judgement about a unit of work, and HITL is
-  absolute in this harness.
+- write semantic residue automatically — closing is a judgement about a unit of work. The
+  `PreCompact` hook owns only a delimited block of observed mechanical facts.

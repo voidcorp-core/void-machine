@@ -1,13 +1,13 @@
 ---
-skill: context
-status: draft
+skill: void-context
+status: reviewed
 strategy: distill
 target_loc: 230
 phase: B
 depends_on: []
 composes_with: [debug, plan, superpowers:dispatching-parallel-agents, superpowers:subagent-driven-development]
 matrix_row: plans/skill-decision-matrix.md#context
-audit_date: 2026-06-04
+audit_date: 2026-08-27
 auditor: Folpe + Claude Opus 4.8
 ---
 
@@ -56,7 +56,7 @@ Without this skill, an agent treats the context window as free scratch space and
 
 ## What we reject
 
-- **Hard turn/token thresholds for auto-clearing** ("clear every N messages"): rejected. Context health is about subject coherence and rot signals, not a counter. A counter would force-clear coherent work and miss early rot in short sessions.
+- **Hard turn/token thresholds for auto-clearing** ("clear every N messages"): rejected. A configured reliable window may trigger one advisory checkpoint nudge in the healthy 40–60% band, but the harness never infers a denominator and never invokes `/clear` or `/compact`.
 - **A bespoke context-budget framework / DSL**: rejected per anti-bloat rule 5. The moves are native commands (`/clear`, `/compact`) plus subagent dispatch; no machinery to build.
 - **Duplicating the investigation method**: rejected. The skill says investigate in a subagent; the method itself stays in `debug`.
 
@@ -73,15 +73,20 @@ No strict/souple split. The skill is a single behavioral discipline; the four mo
 
 ## Companion hooks
 
-None. This is a process skill; the discipline is behavioral and materialized through native commands (`/clear`, `/compact`) and subagent dispatch rather than a mechanical gate. A hook cannot reliably detect "subjects are mixing" or "this correction is the third" without false positives, so no hook is proposed.
+The shared `context-continuity` handler reads at most 1,048,576 transcript bytes per invocation,
+tracks bounded working-set facts, preserves its delimited block on `PreCompact`, and can emit one
+configured threshold nudge per cycle. It does not infer subject changes, author semantic residue,
+or invoke `/clear` or `/compact`; those behavioural decisions remain with this skill and
+`void-checkpoint`.
 
 ## Composition with other skills
 
 - **`debug`**: investigation runs in a subagent that returns the timeline + root cause, not every log read; protects the main window.
-- **`plan`**: the plan file is the canonical on-disk state that survives a `/clear`; resume point updated there.
+- **`plan`**: owns approved execution structure; mutable progress stays with the declared provider.
+- **`checkpoint`**: owns semantic session residue while the hook owns only the delimited mechanical block.
 - **`superpowers:dispatching-parallel-agents`** (vendored target): fan-out investigations to keep the main window clean.
 - **`superpowers:subagent-driven-development`** (vendored target): independent plan steps run in fresh-context subagents.
-- Shared state: the plan + notes markdown files on disk are the shared substrate between this skill and `plan`.
+- Shared state is avoided: programme, provider, checkpoint, ADR, and doctrine facts each keep one owner.
 
 ## Anti-rules (what this skill MUST NOT do)
 
@@ -104,8 +109,11 @@ None. This is a process skill; the discipline is behavioral and materialized thr
 - [ ] Sister-doc parity: AGENTS.md flavor matches (Codex terminology for `/clear`/`/compact` equivalents)
 - [ ] Audit status moved from `draft` → `reviewed` after user review
 
-## Open questions
+## 2026-08-27 mechanical continuity review
 
-- **Codex equivalents**: confirm the Codex-flavored `/clear` and `/compact` equivalents for the AGENTS.md mirror before status moves to `reviewed`.
-- **Matrix placement**: which tier does this sit in relative to `plan` and `debug`? Defer to matrix owner.
-- **Subagent return-format guidance**: should this skill prescribe a minimal "conclusion-only" return contract for dispatched subagents, or leave it to the dispatch skills? Lean: leave it to the dispatch skills, reference only.
+The Claude Code and Codex hook contracts were verified from their official documentation before
+implementation. Neither runtime exposes a reliable window size or lets a hook invoke `/clear` or
+`/compact`. The shipped mechanism therefore uses only explicit project configuration for the first
+denominator, remains advisory at the threshold, and treats `PreCompact` as the sole pre-loss write
+boundary. Prime-agent inspired only the bounded cumulative read/modified lists; its semantic
+summary was not copied.

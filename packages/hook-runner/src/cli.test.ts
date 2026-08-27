@@ -245,7 +245,7 @@ describe('lifecycle context', () => {
     writeFileSync(join(root, '.void', 'config.json'), '{}\n');
     const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
     const lock = `${checkpoint}.lock`;
-    const orphanClaim = `${lock}.recovery-0-0-0`;
+    const orphanClaim = `${lock}.recovery`;
     writeFileSync(
       checkpoint,
       `## Objective\n\nSerialize stale recovery.\n\n${'bounded context '.repeat(25_000)}`,
@@ -265,6 +265,7 @@ describe('lifecycle context', () => {
           tool_input: { path },
           tool_response: { success: true },
       }));
+      await new Promise((resolveReady) => setTimeout(resolveReady, 500));
       for (const contender of contenders) contender.release();
       await Promise.all(contenders.map((contender) => contender.completed));
 

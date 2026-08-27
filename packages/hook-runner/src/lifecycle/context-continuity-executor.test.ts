@@ -149,13 +149,35 @@ describe('executeContextContinuity PreCompact', () => {
     const lock = `${checkpoint(root)}.lock`;
     writeFileSync(lock, 'stale\n');
     const observed = lstatSync(lock);
-    const competing = `${lock}.recovery-1-1-1`;
+    const competing = `${lock}.recovery`;
     writeFileSync(competing, 'claimed\n');
 
     const claim = claimStaleLock(lock, observed, Date.now());
     if (claim !== undefined) closeSync(claim.descriptor);
     expect(claim).toBeUndefined();
     expect(existsSync(competing)).toBe(true);
+  });
+
+  it('advances an equal-ctime chain without letting the later lexical path preempt', () => {
+    const root = project();
+    const lock = `${checkpoint(root)}.lock`;
+    writeFileSync(lock, 'stale\n');
+    const observed = lstatSync(lock);
+    const recovery = `${lock}.recovery`;
+    writeFileSync(recovery, 'abandoned\n');
+    const recoveryInfo = lstatSync(recovery);
+    const laterLexicalPath = `${lock}.recovery-1-${String(recoveryInfo.dev)}-${String(recoveryInfo.ino)}`;
+    linkSync(recovery, laterLexicalPath);
+    expect(lstatSync(laterLexicalPath).ctimeMs).toBe(lstatSync(recovery).ctimeMs);
+
+    const claim = claimStaleLock(lock, observed, Date.now() + 2_000);
+
+    expect(claim).toBeDefined();
+    if (claim === undefined) return;
+    closeSync(claim.descriptor);
+    unlinkSync(lock);
+    expect(existsSync(recovery)).toBe(false);
+    expect(existsSync(laterLexicalPath)).toBe(false);
   });
 
   it('recovers an aged hardlink election orphan left by process death', () => {

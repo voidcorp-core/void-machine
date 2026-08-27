@@ -2410,7 +2410,7 @@ function acquireRecoveryFence(path, now) {
     if (read.status === "unsafe") return void 0;
     if (read.status === "missing") {
       const created = openExclusive(claimPath);
-      if (created === void 0) continue;
+      if (created === void 0) return void 0;
       return {
         tip: created,
         claims: [...claims, { ...created, path: claimPath, mtimeMs: now, ctimeMs: now }]

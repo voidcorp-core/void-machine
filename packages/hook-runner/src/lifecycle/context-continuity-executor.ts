@@ -232,7 +232,7 @@ function acquireRecoveryFence(path: string, now: number): RecoveryFence | undefi
     if (read.status === 'unsafe') return undefined;
     if (read.status === 'missing') {
       const created = openExclusive(claimPath);
-      if (created === undefined) continue;
+      if (created === undefined) return undefined;
       return {
         tip: created,
         claims: [...claims, { ...created, path: claimPath, mtimeMs: now, ctimeMs: now }],

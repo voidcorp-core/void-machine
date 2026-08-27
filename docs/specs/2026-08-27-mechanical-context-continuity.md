@@ -395,7 +395,8 @@ aucun fallback ne relit le transcript entier sur le chemin interactif.
 - nudge puis checkpoint puis compaction donne une reprise complète ;
 - compaction sans rafraîchissement sémantique donne une reprise dégradée ;
 - `/clear` donne une reprise dégradée et exige la reconstruction ;
-- benchmark chaud, froid et overhead sous les trois budgets.
+- benchmark hot mural et coût CPU feature/no-op sous les deux budgets DEV-651 ; p95 muraux
+  froid, Node et no-op publiés avec leur suivi DEV-662.
 
 Les tests étendent les suites existantes de `mission-engine` et `hook-runner`. Aucun framework ou
 banc parallèle n'est ajouté.
@@ -437,7 +438,7 @@ parseur tolérant l'ignore ; aucune migration inverse n'est requise.
 - [ ] Un nouvel objectif ouvre une nouvelle chaîne sans reset implicite par session ou branche.
 - [ ] Une écriture concurrente ou échouée ne corrompt pas l'ancien checkpoint.
 - [ ] Les deux runtimes passent la même matrice de contrat.
-- [ ] Les trois budgets de latence sont prouvés sur la machine de référence.
+- [ ] Les deux budgets DEV-651 sont prouvés ; les baselines murales DEV-662 sont publiées.
 - [ ] L'ADR `PreCompact` supersède explicitement la position de la note d'audit.
 
 ## Décisions rejetées

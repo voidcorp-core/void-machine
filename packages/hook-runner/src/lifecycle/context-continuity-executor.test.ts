@@ -3,6 +3,7 @@ import {
   closeSync,
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   openSync,
@@ -18,6 +19,7 @@ import { join } from 'node:path';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  claimStaleLock,
   executeContextContinuity,
   isExternalTranscriptBound,
   readBoundedDescriptor,
@@ -140,6 +142,18 @@ describe('executeContextContinuity PreCompact', () => {
     expect(execution.status).toBe('skipped');
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
     expect(existsSync(lock)).toBe(true);
+  });
+
+  it('does not remove the recovery claim when another contender wins the hardlink race', () => {
+    const root = project();
+    const lock = `${checkpoint(root)}.lock`;
+    writeFileSync(lock, 'stale\n');
+    const observed = lstatSync(lock);
+    linkSync(lock, `${lock}.recovery`);
+
+    expect(claimStaleLock(lock, observed)).toBeUndefined();
+    expect(existsSync(`${lock}.recovery`)).toBe(true);
+    expect(lstatSync(`${lock}.recovery`).ino).toBe(observed.ino);
   });
 
   it('recovers an aged hardlink election orphan left by process death', () => {

@@ -254,7 +254,8 @@ describe('lifecycle context', () => {
 
     try {
       await new Promise((resolveWait) => setTimeout(resolveWait, 1_100));
-      const contenders = ['src/first.ts', 'src/second.ts'].map((path) => stageLifecycle(root, {
+      const paths = ['src/first.ts', 'src/second.ts', 'src/third.ts'];
+      const contenders = paths.map((path) => stageLifecycle(root, {
           hook_event_name: 'PostToolUse',
           session_id: 'concurrent-context',
           tool_name: 'read_file',
@@ -264,7 +265,6 @@ describe('lifecycle context', () => {
       for (const contender of contenders) contender.release();
       await Promise.all(contenders.map((contender) => contender.completed));
 
-      const paths = ['src/first.ts', 'src/second.ts'];
       const concurrent = readFileSync(checkpoint, 'utf8');
       expect(paths.filter((path) => concurrent.includes(path))).toHaveLength(1);
       const runs = join(root, '.void', 'machine', 'runs');
@@ -276,7 +276,7 @@ describe('lifecycle context', () => {
           .map((line) => JSON.parse(line) as { readonly payload?: { readonly status?: string } })
           .map((event) => event.payload?.status)
           .filter((status): status is string => status !== undefined));
-      expect(statuses.sort()).toEqual(['ok', 'skipped']);
+      expect(statuses.sort()).toEqual(['ok', 'skipped', 'skipped']);
       for (const path of paths.filter((candidate) => !concurrent.includes(candidate))) {
         spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
           input: JSON.stringify({
@@ -293,6 +293,7 @@ describe('lifecycle context', () => {
       const recovered = readFileSync(checkpoint, 'utf8');
       expect(recovered).toContain('src/first.ts');
       expect(recovered).toContain('src/second.ts');
+      expect(recovered).toContain('src/third.ts');
       expect(recovered.match(/void-harness:context-continuity:begin/g)).toHaveLength(1);
     } finally {
       rmSync(root, { recursive: true, force: true });

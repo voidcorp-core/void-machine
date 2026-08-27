@@ -201,9 +201,12 @@ threshold, merge, and complete/degraded decisions. `hook-runner` normalizes Clau
 payloads, reads at most 1,048,576 transcript bytes, confines project paths, and replaces the block
 under a no-wait lock through a same-directory temporary file and rename. Runtime manifests only
 map `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and `SessionStart` to that handler.
-The lock covers the complete read-modify-write decision. Transcript reads use no-follow bounded
-descriptors and are limited to the project or the runtime's project-scoped transcript directory;
-configuration reads are regular-file-only and capped at 65,536 bytes. Direct runtime read/write
+The lock covers the complete read-modify-write decision. Stale takeover is serialized by a
+no-wait recovery election, and checkpoint mutation stays anchored to an opened, verified machine
+directory while relative no-follow files are read and renamed. Transcript reads use no-follow
+bounded descriptors. Codex transcripts remain project-local; Claude may also use its
+project-scoped transcript directory when the file name exactly matches a bounded session ID.
+Configuration reads are regular-file-only and capped at 65,536 bytes. Direct runtime read/write
 payloads contribute paths, while shell-mediated reads remain unobserved.
 
 The latest complete `message.usage` record is an occupation observation, not accumulated session

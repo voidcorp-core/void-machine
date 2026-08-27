@@ -202,8 +202,10 @@ Règles :
 Le curseur est lié à une empreinte du `transcript_path`. Quand l'empreinte change, la lecture
 reprend à zéro sur le nouveau transcript sans réinitialiser la chaîne cumulative du checkpoint.
 Un transcript est lu via un descripteur borné sans suivi de lien symbolique. Son chemin canonique
-doit rester dans le projet ou dans le répertoire de transcript propre au projet du runtime ; hors
-du projet, l'identifiant de session doit aussi correspondre au nom de fichier.
+doit rester dans le projet. Claude Code peut aussi utiliser son répertoire de transcript propre au
+projet lorsque l'identifiant de session est borné et correspond exactement au nom de fichier.
+Codex ne dispose pas ici d'une provenance externe équivalente : ses transcripts externes sont
+ignorés.
 
 ## Configuration
 
@@ -332,10 +334,12 @@ l'autorité jusqu'à une écriture atomique réussie.
 - Un transcript absent, retardé, tronqué ou illisible conserve la dernière observation connue ;
   aucune estimation n'est inventée.
 - L'acquisition du verrou n'attend jamais activement. Un verrou de moins de 1 000 ms fait
-  abandonner l'écriture courante ; un verrou plus ancien est remplacé une seule fois.
+  abandonner l'écriture courante ; un verrou plus ancien est remplacé par le gagnant d'une élection
+  de reprise exclusive, les autres invocations abandonnant sans attendre.
 - Le verrou couvre la lecture, la décision et le remplacement ; une écriture sémantique invalide
   `sealed_work_revision` et seul un `PreCompact` réussi le remet à la révision courante.
-- Une écriture atomique échouée laisse l'ancien checkpoint intact.
+- La mutation reste ancrée au descripteur du répertoire machine validé. Une écriture atomique
+  échouée ferme et nettoie son fichier temporaire sans toucher à l'ancien checkpoint.
 - Un bloc ambigu n'est jamais réparé automatiquement.
 - Une même cause n'émet qu'un diagnostic local par cycle ; les répétitions restent silencieuses.
 - Le `ResumeBundle` porte la dégradation visible au lieu de transformer l'erreur en succès.
@@ -347,6 +351,11 @@ La fonctionnalité reprend le budget du hook runner :
 - p95 inférieur à 75 ms à chaud ;
 - p95 inférieur à 150 ms à froid ;
 - overhead propre inférieur à 25 ms.
+
+Le benchmark répète le chargement du bundle complet pour le froid et un scénario représentatif
+pour le chaud. Pour l'overhead, de vrais processus rapportent leur temps CPU depuis le démarrage de
+Node : le p95 du bundle représentatif est comparé au p95 d'un processus Node nu. La latence murale
+observée par le parent est aussi publiée pour rendre visible le bruit d'ordonnancement externe.
 
 La lecture est incrémentale depuis `transcript_cursor_bytes` et ne dépasse jamais 1 048 576
 octets par invocation. Si le delta est plus grand, l'adaptateur lit sa fin à partir de la

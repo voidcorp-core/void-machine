@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
-  constants,
   closeSync,
+  constants,
   fstatSync,
   lstatSync,
   mkdirSync,
@@ -103,7 +103,7 @@ interface HeldLock {
   readonly ino: number;
 }
 
-function acquireLock(path: string, now: number): HeldLock | undefined {
+function openExclusive(path: string): HeldLock | undefined {
   try {
     const descriptor = openSync(
       path,
@@ -114,23 +114,7 @@ function acquireLock(path: string, now: number): HeldLock | undefined {
     const info = fstatSync(descriptor);
     return { descriptor, dev: info.dev, ino: info.ino };
   } catch {
-    try {
-      const info = lstatSync(path);
-      if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
-        return undefined;
-      }
-      unlinkSync(path);
-      const descriptor = openSync(
-        path,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL
-          | (constants.O_NOFOLLOW ?? 0),
-        0o600,
-      );
-      const opened = fstatSync(descriptor);
-      return { descriptor, dev: opened.dev, ino: opened.ino };
-    } catch {
-      return undefined;
-    }
+    return undefined;
   }
 }
 
@@ -146,6 +130,37 @@ function releaseLock(path: string, lock: HeldLock): void {
     } catch {
       // A missing stale lock is harmless after the checkpoint decision finished.
     }
+  }
+}
+
+function acquireLock(path: string, now: number): HeldLock | undefined {
+  const direct = openExclusive(path);
+  if (direct !== undefined) return direct;
+  try {
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  const recoveryPath = `${path}.recovery`;
+  const recovery = openExclusive(recoveryPath);
+  if (recovery === undefined) return undefined;
+  try {
+    const current = lstatSync(path);
+    if (
+      !current.isFile()
+      || current.isSymbolicLink()
+      || now - current.mtimeMs < LOCK_STALE_MS
+    ) return undefined;
+    unlinkSync(path);
+    return openExclusive(path);
+  } catch {
+    return undefined;
+  } finally {
+    releaseLock(recoveryPath, recovery);
   }
 }
 
@@ -177,46 +192,94 @@ function safeMachineDirectory(root: string): string | undefined {
   }
 }
 
-function sameSafeMachineDirectory(root: string, expected: string): boolean {
-  return safeMachineDirectory(root) === expected;
+interface AnchoredMachineDirectory {
+  readonly descriptor: number;
+  readonly previousCwd: string;
 }
 
-function atomicCheckpointWrite(
-  root: string,
-  directory: string,
-  path: string,
-  content: string,
-  now: number,
-): boolean {
-  const temporary = join(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+function anchorMachineDirectory(root: string): AnchoredMachineDirectory | undefined {
+  const directory = safeMachineDirectory(root);
+  if (directory === undefined) return undefined;
   let descriptor: number | undefined;
+  const previousCwd = process.cwd();
+  let changedDirectory = false;
+  let anchorEstablished = false;
   try {
-    if (!sameSafeMachineDirectory(root, directory)) return false;
+    descriptor = openSync(
+      directory,
+      constants.O_RDONLY | (constants.O_DIRECTORY ?? 0)
+        | (constants.O_NOFOLLOW ?? 0),
+    );
+    const opened = fstatSync(descriptor);
+    if (!opened.isDirectory()) return undefined;
+    process.chdir(directory);
+    changedDirectory = true;
+    const current = statSync('.');
+    if (
+      current.dev !== opened.dev
+      || current.ino !== opened.ino
+      || realpathSync('.') !== directory
+    ) return undefined;
+    anchorEstablished = true;
+    return { descriptor, previousCwd };
+  } catch {
+    return undefined;
+  } finally {
+    if (descriptor !== undefined && !anchorEstablished) {
+      if (changedDirectory) process.chdir(previousCwd);
+      closeSync(descriptor);
+    }
+  }
+}
+
+function releaseMachineDirectory(anchor: AnchoredMachineDirectory): void {
+  try {
+    process.chdir(anchor.previousCwd);
+  } finally {
+    closeSync(anchor.descriptor);
+  }
+}
+
+function atomicCheckpointWrite(content: string, now: number): boolean {
+  const temporary = `.checkpoint-${String(process.pid)}-${String(now)}.tmp`;
+  let descriptor: number | undefined;
+  let owned: Pick<HeldLock, 'dev' | 'ino'> | undefined;
+  let renamed = false;
+  try {
     descriptor = openSync(
       temporary,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL
         | (constants.O_NOFOLLOW ?? 0),
       0o600,
     );
+    const opened = fstatSync(descriptor);
+    owned = { dev: opened.dev, ino: opened.ino };
     const bytes = Buffer.from(content, 'utf8');
     let offset = 0;
     while (offset < bytes.length) {
-      offset += writeSync(descriptor, bytes, offset, bytes.length - offset);
+      const written = writeSync(descriptor, bytes, offset, bytes.length - offset);
+      if (written <= 0) return false;
+      offset += written;
     }
     closeSync(descriptor);
     descriptor = undefined;
-    if (!sameSafeMachineDirectory(root, directory)) return false;
-    renameSync(temporary, path);
+    renameSync(temporary, 'checkpoint.md');
+    renamed = true;
     return true;
   } catch {
-    try {
-      unlinkSync(temporary);
-    } catch {
-      // Failed temporary cleanup never changes the previous checkpoint authority.
-    }
     return false;
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
+    if (!renamed && owned !== undefined) {
+      try {
+        const current = lstatSync(temporary);
+        if (!current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino) {
+          unlinkSync(temporary);
+        }
+      } catch {
+        // Failed temporary cleanup never changes the previous checkpoint authority.
+      }
+    }
   }
 }
 
@@ -230,32 +293,32 @@ function mutateCheckpoint(
   now: number,
   decide: (raw: string) => CheckpointMutation,
 ): ContextContinuityExecution {
-  const directory = safeMachineDirectory(root);
-  if (directory === undefined) {
+  const anchor = anchorMachineDirectory(root);
+  if (anchor === undefined) {
     return { status: 'degraded', details: { reason: 'unsafe-checkpoint-path' } };
   }
-  const path = join(directory, 'checkpoint.md');
-  const lockPath = `${path}.lock`;
-  const lock = acquireLock(lockPath, now);
-  if (lock === undefined) {
-    return { status: 'skipped', details: { reason: 'checkpoint-lock-or-write-failed' } };
-  }
   try {
-    if (!sameSafeMachineDirectory(root, directory)) {
-      return { status: 'degraded', details: { reason: 'unsafe-checkpoint-path' } };
-    }
-    const raw = rawCheckpoint(path);
-    if (raw === undefined) {
-      return { status: 'degraded', details: { reason: 'checkpoint-unreadable' } };
-    }
-    const mutation = decide(raw);
-    if (mutation.content === undefined) return mutation.execution;
-    if (!atomicCheckpointWrite(root, directory, path, mutation.content, now)) {
+    const lockPath = 'checkpoint.md.lock';
+    const lock = acquireLock(lockPath, now);
+    if (lock === undefined) {
       return { status: 'skipped', details: { reason: 'checkpoint-lock-or-write-failed' } };
     }
-    return mutation.execution;
+    try {
+      const raw = rawCheckpoint('checkpoint.md');
+      if (raw === undefined) {
+        return { status: 'degraded', details: { reason: 'checkpoint-unreadable' } };
+      }
+      const mutation = decide(raw);
+      if (mutation.content === undefined) return mutation.execution;
+      if (!atomicCheckpointWrite(mutation.content, now)) {
+        return { status: 'skipped', details: { reason: 'checkpoint-lock-or-write-failed' } };
+      }
+      return mutation.execution;
+    } finally {
+      releaseLock(lockPath, lock);
+    }
   } finally {
-    releaseLock(lockPath, lock);
+    releaseMachineDirectory(anchor);
   }
 }
 
@@ -288,13 +351,10 @@ function transcriptRoots(
 ): readonly string[] {
   const canonicalRoot = realpathSync(resolve(root));
   const candidates = [canonicalRoot];
-  if (runtime === 'claude' || runtime === 'unknown') {
+  if (runtime === 'claude') {
     candidates.push(
       join(homedir(), '.claude', 'projects', encodedClaudeProject(canonicalRoot)),
     );
-  }
-  if (runtime === 'codex' || runtime === 'unknown') {
-    candidates.push(join(homedir(), '.codex', 'sessions'));
   }
   return candidates
     .map(canonicalDirectory)
@@ -304,9 +364,19 @@ function transcriptRoots(
 function runtimeSessionId(input: Record<string, unknown>): string | undefined {
   const value = input['session_id'] ?? input['sessionId']
     ?? input['thread_id'] ?? input['threadId'];
-  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(value)
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,200}$/.test(value)
     ? value
     : undefined;
+}
+
+export function isExternalTranscriptBound(
+  path: string,
+  runtime: 'claude' | 'codex' | 'unknown',
+  sessionId: string,
+): boolean {
+  return runtime === 'claude'
+    && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId)
+    && basename(path) === `${sessionId}.jsonl`;
 }
 
 interface OpenedRegularFile {
@@ -399,7 +469,10 @@ function observeTranscript(
     const canonicalRoot = realpathSync(resolve(root));
     if (!within(canonicalRoot, opened.canonicalPath)) {
       const sessionId = runtimeSessionId(input);
-      if (sessionId === undefined || !basename(opened.canonicalPath).includes(sessionId)) {
+      if (
+        sessionId === undefined
+        || !isExternalTranscriptBound(opened.canonicalPath, runtime, sessionId)
+      ) {
         return undefined;
       }
     }
@@ -754,15 +827,16 @@ export function executeContextContinuity(
   runtime: 'claude' | 'codex' | 'unknown',
   now: number,
 ): ContextContinuityExecution {
+  const projectRoot = resolve(root);
   const input = record(rawInput);
   if (input === undefined) {
     return { status: 'degraded', details: { reason: 'invalid-hook-input' } };
   }
   const event = input['hook_event_name'];
-  if (event === 'PreCompact') return sealPreCompact(input, root, runtime, now);
-  if (event === 'PostToolUse') return observePostToolUse(input, root, runtime, now);
+  if (event === 'PreCompact') return sealPreCompact(input, projectRoot, runtime, now);
+  if (event === 'PostToolUse') return observePostToolUse(input, projectRoot, runtime, now);
   if (event === 'UserPromptSubmit') {
-    return evolveCheckpoint(root, now, runtime, {}, input, 'UserPromptSubmit');
+    return evolveCheckpoint(projectRoot, now, runtime, {}, input, 'UserPromptSubmit');
   }
   if (event === 'SessionStart') {
     const source = input['source'];
@@ -770,7 +844,7 @@ export function executeContextContinuity(
       source === 'startup' || source === 'resume' || source === 'clear'
       || source === 'compact' || source === 'fork'
     ) {
-      return evolveCheckpoint(root, now, runtime, { resumeSource: source });
+      return evolveCheckpoint(projectRoot, now, runtime, { resumeSource: source });
     }
   }
   return { status: 'skipped', details: { reason: 'event-not-actionable' } };

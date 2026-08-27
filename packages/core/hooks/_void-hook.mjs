@@ -1584,8 +1584,8 @@ ${resumeContext.trimEnd()}`;
 // src/lifecycle/context-continuity-executor.ts
 import { createHash as createHash2 } from "node:crypto";
 import {
-  constants as constants2,
   closeSync as closeSync2,
+  constants as constants2,
   fstatSync,
   lstatSync as lstatSync3,
   mkdirSync as mkdirSync3,
@@ -2316,7 +2316,7 @@ function initialState(raw) {
     lastResumeSource: "none"
   };
 }
-function acquireLock(path, now) {
+function openExclusive(path) {
   try {
     const descriptor = openSync2(
       path,
@@ -2326,22 +2326,7 @@ function acquireLock(path, now) {
     const info = fstatSync(descriptor);
     return { descriptor, dev: info.dev, ino: info.ino };
   } catch {
-    try {
-      const info = lstatSync3(path);
-      if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
-        return void 0;
-      }
-      unlinkSync(path);
-      const descriptor = openSync2(
-        path,
-        constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | (constants2.O_NOFOLLOW ?? 0),
-        384
-      );
-      const opened = fstatSync(descriptor);
-      return { descriptor, dev: opened.dev, ino: opened.ino };
-    } catch {
-      return void 0;
-    }
+    return void 0;
   }
 }
 function releaseLock(path, lock) {
@@ -2355,6 +2340,31 @@ function releaseLock(path, lock) {
       }
     } catch {
     }
+  }
+}
+function acquireLock(path, now) {
+  const direct = openExclusive(path);
+  if (direct !== void 0) return direct;
+  try {
+    const info = lstatSync3(path);
+    if (!info.isFile() || info.isSymbolicLink() || now - info.mtimeMs < LOCK_STALE_MS) {
+      return void 0;
+    }
+  } catch {
+    return void 0;
+  }
+  const recoveryPath = `${path}.recovery`;
+  const recovery = openExclusive(recoveryPath);
+  if (recovery === void 0) return void 0;
+  try {
+    const current = lstatSync3(path);
+    if (!current.isFile() || current.isSymbolicLink() || now - current.mtimeMs < LOCK_STALE_MS) return void 0;
+    unlinkSync(path);
+    return openExclusive(path);
+  } catch {
+    return void 0;
+  } finally {
+    releaseLock(recoveryPath, recovery);
   }
 }
 function safeMachineDirectory(root) {
@@ -2384,66 +2394,109 @@ function safeMachineDirectory(root) {
     return void 0;
   }
 }
-function sameSafeMachineDirectory(root, expected) {
-  return safeMachineDirectory(root) === expected;
-}
-function atomicCheckpointWrite(root, directory, path, content, now) {
-  const temporary = join10(directory, `.checkpoint-${String(process.pid)}-${String(now)}.tmp`);
+function anchorMachineDirectory(root) {
+  const directory = safeMachineDirectory(root);
+  if (directory === void 0) return void 0;
   let descriptor;
+  const previousCwd = process.cwd();
+  let changedDirectory = false;
+  let anchorEstablished = false;
   try {
-    if (!sameSafeMachineDirectory(root, directory)) return false;
+    descriptor = openSync2(
+      directory,
+      constants2.O_RDONLY | (constants2.O_DIRECTORY ?? 0) | (constants2.O_NOFOLLOW ?? 0)
+    );
+    const opened = fstatSync(descriptor);
+    if (!opened.isDirectory()) return void 0;
+    process.chdir(directory);
+    changedDirectory = true;
+    const current = statSync3(".");
+    if (current.dev !== opened.dev || current.ino !== opened.ino || realpathSync3(".") !== directory) return void 0;
+    anchorEstablished = true;
+    return { descriptor, previousCwd };
+  } catch {
+    return void 0;
+  } finally {
+    if (descriptor !== void 0 && !anchorEstablished) {
+      if (changedDirectory) process.chdir(previousCwd);
+      closeSync2(descriptor);
+    }
+  }
+}
+function releaseMachineDirectory(anchor) {
+  try {
+    process.chdir(anchor.previousCwd);
+  } finally {
+    closeSync2(anchor.descriptor);
+  }
+}
+function atomicCheckpointWrite(content, now) {
+  const temporary = `.checkpoint-${String(process.pid)}-${String(now)}.tmp`;
+  let descriptor;
+  let owned;
+  let renamed = false;
+  try {
     descriptor = openSync2(
       temporary,
       constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | (constants2.O_NOFOLLOW ?? 0),
       384
     );
+    const opened = fstatSync(descriptor);
+    owned = { dev: opened.dev, ino: opened.ino };
     const bytes = Buffer.from(content, "utf8");
     let offset = 0;
     while (offset < bytes.length) {
-      offset += writeSync(descriptor, bytes, offset, bytes.length - offset);
+      const written = writeSync(descriptor, bytes, offset, bytes.length - offset);
+      if (written <= 0) return false;
+      offset += written;
     }
     closeSync2(descriptor);
     descriptor = void 0;
-    if (!sameSafeMachineDirectory(root, directory)) return false;
-    renameSync3(temporary, path);
+    renameSync3(temporary, "checkpoint.md");
+    renamed = true;
     return true;
   } catch {
-    try {
-      unlinkSync(temporary);
-    } catch {
-    }
     return false;
   } finally {
     if (descriptor !== void 0) closeSync2(descriptor);
+    if (!renamed && owned !== void 0) {
+      try {
+        const current = lstatSync3(temporary);
+        if (!current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino) {
+          unlinkSync(temporary);
+        }
+      } catch {
+      }
+    }
   }
 }
 function mutateCheckpoint(root, now, decide) {
-  const directory = safeMachineDirectory(root);
-  if (directory === void 0) {
+  const anchor = anchorMachineDirectory(root);
+  if (anchor === void 0) {
     return { status: "degraded", details: { reason: "unsafe-checkpoint-path" } };
   }
-  const path = join10(directory, "checkpoint.md");
-  const lockPath = `${path}.lock`;
-  const lock = acquireLock(lockPath, now);
-  if (lock === void 0) {
-    return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
-  }
   try {
-    if (!sameSafeMachineDirectory(root, directory)) {
-      return { status: "degraded", details: { reason: "unsafe-checkpoint-path" } };
-    }
-    const raw = rawCheckpoint(path);
-    if (raw === void 0) {
-      return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
-    }
-    const mutation = decide(raw);
-    if (mutation.content === void 0) return mutation.execution;
-    if (!atomicCheckpointWrite(root, directory, path, mutation.content, now)) {
+    const lockPath = "checkpoint.md.lock";
+    const lock = acquireLock(lockPath, now);
+    if (lock === void 0) {
       return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
     }
-    return mutation.execution;
+    try {
+      const raw = rawCheckpoint("checkpoint.md");
+      if (raw === void 0) {
+        return { status: "degraded", details: { reason: "checkpoint-unreadable" } };
+      }
+      const mutation = decide(raw);
+      if (mutation.content === void 0) return mutation.execution;
+      if (!atomicCheckpointWrite(mutation.content, now)) {
+        return { status: "skipped", details: { reason: "checkpoint-lock-or-write-failed" } };
+      }
+      return mutation.execution;
+    } finally {
+      releaseLock(lockPath, lock);
+    }
   } finally {
-    releaseLock(lockPath, lock);
+    releaseMachineDirectory(anchor);
   }
 }
 function canonicalDirectory(path) {
@@ -2462,19 +2515,19 @@ function encodedClaudeProject(root) {
 function transcriptRoots(root, runtime3) {
   const canonicalRoot = realpathSync3(resolve3(root));
   const candidates = [canonicalRoot];
-  if (runtime3 === "claude" || runtime3 === "unknown") {
+  if (runtime3 === "claude") {
     candidates.push(
       join10(homedir(), ".claude", "projects", encodedClaudeProject(canonicalRoot))
     );
-  }
-  if (runtime3 === "codex" || runtime3 === "unknown") {
-    candidates.push(join10(homedir(), ".codex", "sessions"));
   }
   return candidates.map(canonicalDirectory).filter((path) => path !== void 0);
 }
 function runtimeSessionId(input) {
   const value = input["session_id"] ?? input["sessionId"] ?? input["thread_id"] ?? input["threadId"];
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(value) ? value : void 0;
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value) ? value : void 0;
+}
+function isExternalTranscriptBound(path, runtime3, sessionId) {
+  return runtime3 === "claude" && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId) && basename3(path) === `${sessionId}.jsonl`;
 }
 function openBoundedRegularFile(path, maxBytes, allowedRoots) {
   let descriptor;
@@ -2531,7 +2584,7 @@ function observeTranscript(path, state, input, root, runtime3) {
     const canonicalRoot = realpathSync3(resolve3(root));
     if (!within(canonicalRoot, opened.canonicalPath)) {
       const sessionId = runtimeSessionId(input);
-      if (sessionId === void 0 || !basename3(opened.canonicalPath).includes(sessionId)) {
+      if (sessionId === void 0 || !isExternalTranscriptBound(opened.canonicalPath, runtime3, sessionId)) {
         return void 0;
       }
     }
@@ -2790,20 +2843,21 @@ function observePostToolUse(input, root, runtime3, now) {
   }
 }
 function executeContextContinuity(rawInput, root, runtime3, now) {
+  const projectRoot2 = resolve3(root);
   const input = record3(rawInput);
   if (input === void 0) {
     return { status: "degraded", details: { reason: "invalid-hook-input" } };
   }
   const event = input["hook_event_name"];
-  if (event === "PreCompact") return sealPreCompact(input, root, runtime3, now);
-  if (event === "PostToolUse") return observePostToolUse(input, root, runtime3, now);
+  if (event === "PreCompact") return sealPreCompact(input, projectRoot2, runtime3, now);
+  if (event === "PostToolUse") return observePostToolUse(input, projectRoot2, runtime3, now);
   if (event === "UserPromptSubmit") {
-    return evolveCheckpoint(root, now, runtime3, {}, input, "UserPromptSubmit");
+    return evolveCheckpoint(projectRoot2, now, runtime3, {}, input, "UserPromptSubmit");
   }
   if (event === "SessionStart") {
     const source = input["source"];
     if (source === "startup" || source === "resume" || source === "clear" || source === "compact" || source === "fork") {
-      return evolveCheckpoint(root, now, runtime3, { resumeSource: source });
+      return evolveCheckpoint(projectRoot2, now, runtime3, { resumeSource: source });
     }
   }
   return { status: "skipped", details: { reason: "event-not-actionable" } };

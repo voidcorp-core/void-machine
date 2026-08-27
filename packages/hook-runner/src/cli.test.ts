@@ -1,5 +1,14 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,31 +55,34 @@ const write = (file: string, content: string): unknown => ({
   tool_input: { file_path: file, content },
 });
 
-function runLifecycleConcurrently(
+function stageLifecycle(
   root: string,
   payload: unknown,
-): Promise<number | null> {
-  return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(
-      process.execPath,
-      [hook, 'lifecycle', 'context-continuity', 'codex'],
-      {
-        env: { ...process.env, VOID_PROJECT_ROOT: root },
-        stdio: ['pipe', 'ignore', 'pipe'],
-      },
-    );
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      stderr += chunk;
-    });
+): { readonly release: () => void; readonly completed: Promise<number | null> } {
+  const child = spawn(
+    process.execPath,
+    [hook, 'lifecycle', 'context-continuity', 'codex'],
+    {
+      env: { ...process.env, VOID_PROJECT_ROOT: root },
+      stdio: ['pipe', 'ignore', 'pipe'],
+    },
+  );
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  const completed = new Promise<number | null>((resolveRun, rejectRun) => {
     child.on('error', rejectRun);
     child.on('close', (code) => {
       if (code === 0) resolveRun(code);
-      else rejectRun(new Error(`concurrent hook failed (${String(code)}): ${stderr}`));
+      else rejectRun(new Error(`staged hook failed (${String(code)}): ${stderr}`));
     });
-    child.stdin.end(JSON.stringify(payload));
   });
+  return {
+    release: () => child.stdin.end(JSON.stringify(payload)),
+    completed,
+  };
 }
 
 describe('enforce', () => {
@@ -227,33 +239,43 @@ describe('lifecycle context', () => {
     }
   });
 
-  it('serializes overlapping working-set observations without a stale overwrite', async () => {
+  it('elects one stale-lock takeover before replaying the no-wait loser', async () => {
     const root = mkdtempSync(join(tmpdir(), 'void-continuity-concurrent-'));
     mkdirSync(join(root, '.void', 'machine'), { recursive: true });
     writeFileSync(join(root, '.void', 'config.json'), '{}\n');
     const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
-    writeFileSync(checkpoint, '## Objective\n\nSerialize observations.\n');
+    const lock = `${checkpoint}.lock`;
+    writeFileSync(
+      checkpoint,
+      `## Objective\n\nSerialize stale recovery.\n\n${'bounded context '.repeat(25_000)}`,
+    );
+    writeFileSync(lock, 'stale\n');
+    utimesSync(lock, new Date(0), new Date(0));
 
     try {
-      spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
-        input: JSON.stringify({ hook_event_name: 'PreCompact' }),
-        encoding: 'utf8',
-        env: { ...process.env, VOID_PROJECT_ROOT: root },
-      });
-      await Promise.all(['src/first.ts', 'src/second.ts'].map((path) => runLifecycleConcurrently(
-        root,
-        {
+      const contenders = ['src/first.ts', 'src/second.ts'].map((path) => stageLifecycle(root, {
           hook_event_name: 'PostToolUse',
           session_id: 'concurrent-context',
           tool_name: 'read_file',
           tool_input: { path },
           tool_response: { success: true },
-        },
-      )));
+      }));
+      for (const contender of contenders) contender.release();
+      await Promise.all(contenders.map((contender) => contender.completed));
 
       const paths = ['src/first.ts', 'src/second.ts'];
       const concurrent = readFileSync(checkpoint, 'utf8');
-      expect(paths.filter((path) => concurrent.includes(path)).length).toBeGreaterThanOrEqual(1);
+      expect(paths.filter((path) => concurrent.includes(path))).toHaveLength(1);
+      const runs = join(root, '.void', 'machine', 'runs');
+      const statuses = readdirSync(runs).flatMap((mission) =>
+        readFileSync(join(runs, mission, 'events.jsonl'), 'utf8')
+          .trim()
+          .split('\n')
+          .filter((line) => line !== '')
+          .map((line) => JSON.parse(line) as { readonly payload?: { readonly status?: string } })
+          .map((event) => event.payload?.status)
+          .filter((status): status is string => status !== undefined));
+      expect(statuses.sort()).toEqual(['ok', 'skipped']);
       for (const path of paths.filter((candidate) => !concurrent.includes(candidate))) {
         spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
           input: JSON.stringify({

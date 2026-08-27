@@ -1,7 +1,7 @@
 ---
 title: Continuité mécanique du contexte
 date: 2026-08-27
-status: in-design
+status: approved
 author: Folpe + Codex
 ticket: DEV-651
 related:

@@ -2322,7 +2322,7 @@ function sameFile(left, right) {
 function unlinkOwnedPath(path, owner) {
   try {
     const current = lstatSync3(path);
-    if (current.isSymbolicLink() || !sameFile(current, owner)) return false;
+    if (!sameFile(current, owner)) return false;
     unlinkSync(path);
     return true;
   } catch {
@@ -2371,17 +2371,23 @@ function acquireLock(path, now) {
   } catch (error) {
     if (errorCode(error) !== "ENOENT") return void 0;
   }
+  return claimStaleLock(path, observed);
+}
+function claimStaleLock(path, observed) {
+  const recoveryPath = `${path}.recovery`;
+  let claimed;
   try {
     linkSync(path, recoveryPath);
     const current = lstatSync3(path);
     const recovery = lstatSync3(recoveryPath);
+    claimed = recovery;
     if (!sameFile(current, observed) || !sameFile(recovery, observed)) return void 0;
     if (!unlinkOwnedPath(path, observed)) return void 0;
     return openExclusive(path);
   } catch {
     return void 0;
   } finally {
-    unlinkOwnedPath(recoveryPath, observed);
+    if (claimed !== void 0) unlinkOwnedPath(recoveryPath, claimed);
   }
 }
 function safeMachineDirectory(root) {

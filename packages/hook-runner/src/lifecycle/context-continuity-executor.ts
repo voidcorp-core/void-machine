@@ -115,7 +115,7 @@ function sameFile(left: FileIdentity, right: FileIdentity): boolean {
 function unlinkOwnedPath(path: string, owner: FileIdentity): boolean {
   try {
     const current = lstatSync(path);
-    if (current.isSymbolicLink() || !sameFile(current, owner)) return false;
+    if (!sameFile(current, owner)) return false;
     unlinkSync(path);
     return true;
   } catch {
@@ -176,17 +176,27 @@ function acquireLock(path: string, now: number): HeldLock | undefined {
     if (errorCode(error) !== 'ENOENT') return undefined;
   }
 
+  return claimStaleLock(path, observed);
+}
+
+export function claimStaleLock(
+  path: string,
+  observed: FileIdentity,
+): HeldLock | undefined {
+  const recoveryPath = `${path}.recovery`;
+  let claimed: FileIdentity | undefined;
   try {
     linkSync(path, recoveryPath);
     const current = lstatSync(path);
     const recovery = lstatSync(recoveryPath);
+    claimed = recovery;
     if (!sameFile(current, observed) || !sameFile(recovery, observed)) return undefined;
     if (!unlinkOwnedPath(path, observed)) return undefined;
     return openExclusive(path);
   } catch {
     return undefined;
   } finally {
-    unlinkOwnedPath(recoveryPath, observed);
+    if (claimed !== undefined) unlinkOwnedPath(recoveryPath, claimed);
   }
 }
 

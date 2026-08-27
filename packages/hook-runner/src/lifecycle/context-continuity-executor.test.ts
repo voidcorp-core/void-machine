@@ -7,18 +7,25 @@ import {
   rmSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseMechanicalContextBlock } from '@voidcorp/mission-engine/session';
 import { afterEach, describe, expect, it } from 'vitest';
-import { executeContextContinuity } from './context-continuity-executor.js';
+import {
+  executeContextContinuity,
+  isExternalTranscriptBound,
+} from './context-continuity-executor.js';
 import { observeResume } from './resume-observer.js';
 
 const roots: string[] = [];
+const originalHome = process.env['HOME'];
 
 afterEach(() => {
+  if (originalHome === undefined) delete process.env['HOME'];
+  else process.env['HOME'] = originalHome;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -108,6 +115,27 @@ describe('executeContextContinuity PreCompact', () => {
     expect(execution.status).toBe('skipped');
     expect(readFileSync(checkpoint(root), 'utf8')).toBe(before);
     expect(existsSync(`${checkpoint(root)}.lock`)).toBe(true);
+  });
+
+  it('does not take over a stale lock while another recovery owns the election', () => {
+    const root = project();
+    const raw = '## Objective\n\nKeep one stale-lock recovery owner.\n';
+    const lock = `${checkpoint(root)}.lock`;
+    writeFileSync(checkpoint(root), raw);
+    writeFileSync(lock, 'stale\n');
+    utimesSync(lock, new Date(0), new Date(0));
+    writeFileSync(`${lock}.recovery`, 'recovering\n');
+
+    const execution = executeContextContinuity(
+      { hook_event_name: 'PreCompact', trigger: 'auto' },
+      root,
+      'codex',
+      Date.now(),
+    );
+
+    expect(execution.status).toBe('skipped');
+    expect(readFileSync(checkpoint(root), 'utf8')).toBe(raw);
+    expect(existsSync(lock)).toBe(true);
   });
 
   it('leaves the old checkpoint intact when the atomic temporary write fails', () => {
@@ -339,6 +367,24 @@ describe('executeContextContinuity cumulative state', () => {
 });
 
 describe('executeContextContinuity transcript threshold', () => {
+  it('binds only exact strong Claude session names outside the project', () => {
+    expect(isExternalTranscriptBound(
+      '/runtime/.codex/sessions/codex-session.jsonl',
+      'codex',
+      'codex-session',
+    )).toBe(false);
+    expect(isExternalTranscriptBound(
+      '/runtime/.claude/projects/project/prefix-x-suffix.jsonl',
+      'claude',
+      'x',
+    )).toBe(false);
+    expect(isExternalTranscriptBound(
+      '/runtime/.claude/projects/project/claude-session.jsonl',
+      'claude',
+      'claude-session',
+    )).toBe(true);
+  });
+
   it('uses the last complete usage entry and emits one nudge at the default threshold', () => {
     const root = project({ context: { windowTokens: 1_000 } });
     writeFileSync(checkpoint(root), '## Objective\n\nMeasure context.\n');
@@ -395,6 +441,65 @@ describe('executeContextContinuity transcript threshold', () => {
       hook_event_name: 'UserPromptSubmit',
       transcript_path: externalTranscript,
     }, root, 'codex', 2_000);
+
+    expect(result.output).toBe(undefined);
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(0);
+  });
+
+  it('rejects a self-asserted Codex session transcript outside the project', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    const fakeHome = mkdtempSync(join(tmpdir(), 'void-context-home-'));
+    roots.push(fakeHome);
+    process.env['HOME'] = fakeHome;
+    const externalTranscript = join(
+      fakeHome,
+      '.codex',
+      'sessions',
+      'codex-session.jsonl',
+    );
+    mkdirSync(join(fakeHome, '.codex', 'sessions'), { recursive: true });
+    writeFileSync(checkpoint(root), '## Objective\n\nReject self-asserted sessions.\n');
+    writeFileSync(externalTranscript, `${usageLine(900)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'codex', 1_000);
+
+    const result = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'codex-session',
+      transcript_path: externalTranscript,
+    }, root, 'codex', 2_000);
+
+    expect(result.output).toBe(undefined);
+    const parsed = mechanicalState(root);
+    expect(parsed.status).toBe('valid');
+    if (parsed.status !== 'valid') return;
+    expect(parsed.state.lastUsedTokens).toBe(0);
+  });
+
+  it('requires an exact strong session token for external Claude transcripts', () => {
+    const root = project({ context: { windowTokens: 1_000 } });
+    const fakeHome = mkdtempSync(join(tmpdir(), 'void-context-home-'));
+    roots.push(fakeHome);
+    process.env['HOME'] = fakeHome;
+    const projectTranscripts = join(
+      fakeHome,
+      '.claude',
+      'projects',
+      root.replace(/[^a-zA-Z0-9]/g, '-'),
+    );
+    const externalTranscript = join(projectTranscripts, 'prefix-x-suffix.jsonl');
+    mkdirSync(projectTranscripts, { recursive: true });
+    writeFileSync(checkpoint(root), '## Objective\n\nBind Claude sessions exactly.\n');
+    writeFileSync(externalTranscript, `${usageLine(900)}\n`);
+    executeContextContinuity({ hook_event_name: 'PreCompact' }, root, 'claude', 1_000);
+
+    const result = executeContextContinuity({
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'x',
+      transcript_path: externalTranscript,
+    }, root, 'claude', 2_000);
 
     expect(result.output).toBe(undefined);
     const parsed = mechanicalState(root);

@@ -222,8 +222,9 @@ the next compact resume. See the decision
 
 The continuity benchmark executes the exact delivered hook bundle in 25 fresh processes and keeps
 bare Node, same-bundle no-op, and representative-event measurements separate. DEV-651 gates only
-the hot path and incremental feature-versus-no-op cost. The existing global cold-start and
-no-op-versus-Node budgets remain owned by
+the hot wall path and incremental feature-versus-no-op CPU cost. It still publishes raw wall
+latencies, but external scheduler contention cannot make the causal feature gate flaky. The
+existing global cold-start and no-op-versus-Node wall budgets remain owned by
 [DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
 
 ### Source self-host boundary

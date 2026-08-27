@@ -13,6 +13,7 @@ import { build } from 'esbuild';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const RUNS = 25;
+const WARMUP_RUNS = 3;
 
 function percentile95(values) {
   const ordered = [...values].sort((left, right) => left - right);
@@ -53,7 +54,12 @@ function spawnMeasured(measurement, script, args, options = {}) {
   if (!Number.isFinite(uptimeMs) || uptimeMs < 0) {
     throw new Error(`Benchmark child reported invalid uptime: ${result.stderr}`);
   }
-  return { parentWallMs, uptimeMs };
+  const cpuMatch = result.stderr.match(/VOID_BENCH_CPU_MS=([0-9.]+)/);
+  const cpuMs = Number(cpuMatch?.[1]);
+  if (!Number.isFinite(cpuMs) || cpuMs < 0) {
+    throw new Error(`Benchmark child reported invalid CPU time: ${result.stderr}`);
+  }
+  return { cpuMs, parentWallMs, uptimeMs };
 }
 
 async function main() {
@@ -78,7 +84,9 @@ async function main() {
     [
       "const { writeSync } = require('node:fs');",
       "process.once('exit', () => {",
-      "  writeSync(2, `\\nVOID_BENCH_UPTIME_MS=${String(process.uptime() * 1_000)}\\n`);",
+      '  const cpu = process.cpuUsage();',
+      '  const cpuMs = (cpu.user + cpu.system) / 1_000;',
+      "  writeSync(2, `\\nVOID_BENCH_UPTIME_MS=${String(process.uptime() * 1_000)}\\nVOID_BENCH_CPU_MS=${String(cpuMs)}\\n`);",
       '});',
       '',
     ].join('\n'),
@@ -134,20 +142,21 @@ async function main() {
     const nodeStartup = [];
     const bundleNoop = [];
     const processFeature = [];
-    const featureVsNoop = [];
-    const featureVsNode = [];
-    const bundleNoopVsNode = [];
+    const nodeCpu = [];
+    const bundleNoopCpu = [];
+    const processFeatureCpu = [];
     const nodeParentWall = [];
     const noopParentWall = [];
     const featureParentWall = [];
-    for (let index = 0; index < RUNS; index += 1) {
+
+    function measureFreshIteration(iteration, pathLabel) {
       let nodeSample;
       let noopSample;
       let processSample;
       const order = ['node', 'noop', 'feature'];
       const rotated = [
-        ...order.slice(index % order.length),
-        ...order.slice(0, index % order.length),
+        ...order.slice(iteration % order.length),
+        ...order.slice(0, iteration % order.length),
       ];
       for (const sample of rotated) {
         if (sample === 'node') {
@@ -163,7 +172,7 @@ async function main() {
             },
           );
         } else {
-          appendFileSync(transcript, usageLine(30_000 + index));
+          appendFileSync(transcript, usageLine(30_000 + iteration));
           processSample = spawnMeasured(
             measurement,
             shippedBundle,
@@ -175,7 +184,7 @@ async function main() {
                 session_id: 'context-continuity-benchmark',
                 transcript_path: transcript,
                 tool_name: 'read_file',
-                tool_input: { path: `src/process-${String(index)}.ts` },
+                tool_input: { path: `src/process-${pathLabel}.ts` },
                 tool_response: { success: true },
               }),
             },
@@ -185,12 +194,24 @@ async function main() {
       if (nodeSample === undefined || noopSample === undefined || processSample === undefined) {
         throw new Error('Benchmark rotation omitted a required sample');
       }
+      return { nodeSample, noopSample, processSample };
+    }
+
+    for (let index = 0; index < WARMUP_RUNS; index += 1) {
+      measureFreshIteration(index, `warmup-${String(index)}`);
+    }
+
+    for (let index = 0; index < RUNS; index += 1) {
+      const { nodeSample, noopSample, processSample } = measureFreshIteration(
+        WARMUP_RUNS + index,
+        String(index),
+      );
       nodeStartup.push(nodeSample.uptimeMs);
       bundleNoop.push(noopSample.uptimeMs);
       processFeature.push(processSample.uptimeMs);
-      featureVsNoop.push(Math.max(0, processSample.uptimeMs - noopSample.uptimeMs));
-      featureVsNode.push(Math.max(0, processSample.uptimeMs - nodeSample.uptimeMs));
-      bundleNoopVsNode.push(Math.max(0, noopSample.uptimeMs - nodeSample.uptimeMs));
+      nodeCpu.push(nodeSample.cpuMs);
+      bundleNoopCpu.push(noopSample.cpuMs);
+      processFeatureCpu.push(processSample.cpuMs);
       nodeParentWall.push(nodeSample.parentWallMs);
       noopParentWall.push(noopSample.parentWallMs);
       featureParentWall.push(processSample.parentWallMs);
@@ -199,9 +220,13 @@ async function main() {
     const nodeStartupP95Ms = percentile95(nodeStartup);
     const bundleNoopP95Ms = percentile95(bundleNoop);
     const processFeatureP95Ms = percentile95(processFeature);
-    const processVsNodeP95Ms = percentile95(featureVsNode);
-    const bundleNoopVsNodeP95Ms = percentile95(bundleNoopVsNode);
-    const featureVsNoopP95Ms = percentile95(featureVsNoop);
+    const processVsNodeP95Ms = Math.max(0, processFeatureP95Ms - nodeStartupP95Ms);
+    const bundleNoopVsNodeP95Ms = Math.max(0, bundleNoopP95Ms - nodeStartupP95Ms);
+    const featureVsNoopP95Ms = Math.max(0, processFeatureP95Ms - bundleNoopP95Ms);
+    const nodeCpuP95Ms = percentile95(nodeCpu);
+    const bundleNoopCpuP95Ms = percentile95(bundleNoopCpu);
+    const processFeatureCpuP95Ms = percentile95(processFeatureCpu);
+    const featureVsNoopCpuP95Ms = Math.max(0, processFeatureCpuP95Ms - bundleNoopCpuP95Ms);
     const coldP95Ms = processFeatureP95Ms;
     const hotP95Ms = percentile95(hot);
     const result = {
@@ -213,10 +238,14 @@ async function main() {
       featureVsNoopP95Ms: Number(featureVsNoopP95Ms.toFixed(2)),
       featureVsNodeP95Ms: Number(processVsNodeP95Ms.toFixed(2)),
       bundleNoopVsNodeP95Ms: Number(bundleNoopVsNodeP95Ms.toFixed(2)),
-      budgetsMs: { hotP95: 75, featureVsNoopP95: 25 },
+      processFeatureCpuP95Ms: Number(processFeatureCpuP95Ms.toFixed(2)),
+      bundleNoopCpuP95Ms: Number(bundleNoopCpuP95Ms.toFixed(2)),
+      nodeStartupCpuP95Ms: Number(nodeCpuP95Ms.toFixed(2)),
+      featureVsNoopCpuP95Ms: Number(featureVsNoopCpuP95Ms.toFixed(2)),
+      budgetsMs: { hotWallP95: 75, featureVsNoopCpuP95: 25 },
       globalBaseline: {
         trackedBy: 'DEV-662',
-        budgetsMs: { coldP95: 150, bundleNoopVsNodeP95: 25 },
+        budgetsMs: { coldWallP95: 150, bundleNoopVsNodeWallP95: 25 },
       },
       parentWallDiagnosticP95Ms: {
         node: Number(percentile95(nodeParentWall).toFixed(2)),
@@ -225,7 +254,7 @@ async function main() {
       },
     };
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    if (hotP95Ms >= 75 || featureVsNoopP95Ms >= 25) process.exitCode = 1;
+    if (hotP95Ms >= 75 || featureVsNoopCpuP95Ms >= 25) process.exitCode = 1;
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

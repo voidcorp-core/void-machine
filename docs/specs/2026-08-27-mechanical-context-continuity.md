@@ -348,15 +348,15 @@ l'autorité jusqu'à une écriture atomique réussie.
 
 DEV-651 porte les budgets qu'il peut causalement garantir :
 
-- p95 inférieur à 75 ms à chaud ;
-- coût incrémental inférieur à 25 ms face au no-op du même bundle livré.
+- p95 mural inférieur à 75 ms à chaud ;
+- coût CPU incrémental p95 inférieur à 25 ms face au no-op du même bundle livré.
 
 Le benchmark lance 25 processus frais sur le bundle livré complet pour le froid et répète un
 scénario représentatif dans le même processus pour le chaud. Les processus frais mesurent aussi le
-même bundle en no-op et un processus Node nu. Chaque processus rapporte son uptime ; les p95
-bruts, les deltas fonctionnalité/no-op et fonctionnalité/Node, puis les latences murales observées
-par le parent comme diagnostic sont publiés. Les deltas sont appariés dans chaque itération avant
-le calcul du p95. Seul le delta fonctionnalité/no-op gate DEV-651.
+même bundle en no-op et un processus Node nu. Chacun rapporte son uptime et son temps CPU. Après
+trois groupes de warm-up exclus, les 25 groupes mesurés alternent leur ordre. Les p95 muraux bruts
+et leurs deltas restent diagnostiques : la contention du scheduler d'une CI partagée n'est pas
+attribuée à la feature. Le delta des p95 CPU entre feature et no-op du même bundle gate DEV-651.
 Les budgets globaux p95 froid inférieur à 150 ms et no-op/Node inférieur à 25 ms ne sont ni
 supprimés ni attribués à cette feature : la baseline préexistante qui les dépasse est suivie dans
 [DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).

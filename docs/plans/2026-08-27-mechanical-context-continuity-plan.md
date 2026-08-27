@@ -116,9 +116,10 @@ modèle reste seul auteur du résidu sémantique.
   `pnpm exec vitest run packages/cli/src/lib/config-schema.test.ts
   packages/hook-runner/src/lifecycle/context-continuity-executor.test.ts
   packages/hook-runner/src/cli.test.ts packages/core/hooks/lifecycle-hooks.test.ts` passe ; le
-  benchmark `pnpm benchmark:hooks` prouve un p95 inférieur à 75 ms à chaud et un coût incrémental
-  inférieur à 25 ms face au no-op du même bundle livré. Il publie aussi les p95 bruts Node,
-  no-op et feature : la baseline globale hors budget reste visible et appartient à
+  benchmark `pnpm benchmark:hooks` prouve un p95 mural inférieur à 75 ms à chaud et un coût CPU
+  incrémental p95 inférieur à 25 ms face au no-op du même bundle livré. Il publie aussi les p95
+  CPU et muraux bruts Node, no-op et feature : la baseline globale hors budget reste visible et
+  appartient à
   [DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
 - **Expected commits**:
   - `test(context): define bounded context threshold behavior`

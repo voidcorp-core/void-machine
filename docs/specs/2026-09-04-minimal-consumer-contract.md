@@ -1,7 +1,7 @@
 ---
 title: Minimal consumer contract
 date: 2026-09-04
-status: in-design
+status: approved
 author: Folpe + Codex
 ticket: DEV-808
 related:
@@ -46,14 +46,16 @@ The black-box suite covers these public journeys:
 
 - install for Claude-only, Codex-only and both-runtime projects;
 - update of a locally packed install while preserving a user-owned sentinel;
-- refusal of malformed, unsupported and unreadable receipts before any write;
+- refusal of malformed and unsupported receipts before any write;
 - doctor from a linked worktree and with no detected runtime;
-- offline autopilot planning, interrupted-run recovery and exact-SHA verification.
+- offline autopilot planning from the installed package.
 
 Runtime permutations are table rows inside one test implementation, not separate framework
 objects. Existing focused unit or component tests remain the authority for transaction internals,
-collision classes, path normalization and process outcomes. The black-box suite does not repeat
-them.
+collision classes, path normalization, process outcomes, interrupted-run recovery and exact-SHA
+verification. Unreadable or non-regular receipt handling is also proven at that focused level,
+where it does not depend on cross-platform permission emulation. The black-box suite does not
+repeat them.
 
 ## Explicit non-goals
 
@@ -102,12 +104,10 @@ attestation graph.
 On every relevant pull request:
 
 - the normal unit/component suite runs once;
-- one Linux job runs all black-box consumer cases;
-- the macOS and Windows jobs run only the minimal install/update/doctor smoke that exercises their
-  filesystem and process semantics;
+- the same bounded consumer suite runs on Linux, macOS and Windows, with no platform-specific
+  scenario graph;
 - every matrix cell is required and `continue-on-error` remains false;
-- changed-area routing may skip the consumer matrix only when neither shipped consumer content nor
-  its installer/runtime code changed.
+- the consumer suite packs once per matrix cell and reuses that artifact for every case.
 
 Repeated stress, exhaustive fault injection, real subscription runtimes and native-versus-legacy
 differential certification belong to nightly or release certification. They do not lengthen every
@@ -134,7 +134,7 @@ and require a new hypothesis or a smaller boundary.
 The replacement is rejected during review if it introduces more authorities than it removes. Its
 shape is intentionally bounded:
 
-- one black-box test entrypoint;
+- the existing install and autopilot conformance scripts become one smaller consumer entrypoint;
 - one small process helper only if existing helpers cannot be reused safely;
 - ordinary test fixtures colocated with the cases;
 - no normative file that restates expectations already present in executable assertions.
@@ -158,7 +158,7 @@ corresponding cutover removes the legacy authority.
 - [ ] The invalid-receipt regression is red before the production fix and then green.
 - [ ] Every black-box case invokes a packed artifact and imports no production TypeScript.
 - [ ] Every case has isolated filesystem roots and a minimal declared environment.
-- [ ] The Linux suite covers all named journeys; macOS and Windows cover only OS-relevant smoke.
+- [ ] The same bounded suite covers the named journeys on Linux, macOS and Windows.
 - [ ] A missing matrix cell, real credential requirement or unexpected write fails.
 - [ ] Failures name the case and boundary without persisting secrets or machine-specific paths.
 - [ ] No retry, quarantine, raised assertion timeout, duplicated expectation manifest or recursive

@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { fileModesEqual } from './receipts.js';
 import { commitFileTransaction, type FileMutation } from './transaction.js';
 
 function scratch(): string {
@@ -29,7 +30,7 @@ describe('commitFileTransaction', () => {
     await commitFileTransaction(root, mutations);
 
     expect(readFileSync(join(root, '.void/hooks/guard.mjs'), 'utf8')).toBe('new guard\n');
-    expect(lstatSync(join(root, '.void/hooks/guard.mjs')).mode & 0o777).toBe(0o755);
+    expect(fileModesEqual(lstatSync(join(root, '.void/hooks/guard.mjs')).mode, 0o755)).toBe(true);
     expect(readFileSync(join(root, '.agents/skills/tdd/SKILL.md'), 'utf8')).toBe('# TDD\n');
   });
 
@@ -45,7 +46,7 @@ describe('commitFileTransaction', () => {
     );
 
     expect(readFileSync(existing, 'utf8')).toBe('user bytes\n');
-    expect(lstatSync(existing).mode & 0o777).toBe(0o600);
+    expect(fileModesEqual(lstatSync(existing).mode, 0o600)).toBe(true);
     expect(existsSync(join(root, '.agents/skills/tdd/SKILL.md'))).toBe(false);
   });
 

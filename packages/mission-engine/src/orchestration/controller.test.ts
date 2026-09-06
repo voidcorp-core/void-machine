@@ -566,6 +566,33 @@ describe('mission team controller', () => {
     });
   });
 
+  it('reruns the complete post-implementation panel after a correction', () => {
+    const initialReviews = TEST_SPECIALIST_IDS.map((specialistId, index) =>
+      completion(
+        specialistId,
+        index + 6,
+        specialistId === 'core:security-engineer' ? 'changes-requested' : 'pass',
+        'post-implementation',
+        HASH,
+      ));
+    const initialEvents = [started(), ...preReviews(), writer(), ...initialReviews];
+
+    const correction = decide(initialEvents, PLAN, INPUTS, INPUTS);
+    expect(correction.phase).toBe('correction');
+
+    const afterCorrection = decide(
+      [...initialEvents, writer(9, 'writer:primary', 'run-correction')],
+      PLAN,
+      INPUTS,
+      INPUTS,
+    );
+
+    expect(afterCorrection.phase).toBe('review');
+    expect(afterCorrection.review.reviewRound).toBe(2);
+    expect(afterCorrection.review.missingSpecialists).toEqual(TEST_SPECIALIST_IDS);
+    expect(afterCorrection.review.specialistsToRun).toEqual(TEST_SPECIALIST_IDS);
+  });
+
   it('rejects post-review completions recorded before implementation', () => {
     const earlyPost = TEST_SPECIALIST_IDS.map((specialistId, index) =>
       completion(specialistId, index + 5));

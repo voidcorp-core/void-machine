@@ -7,7 +7,7 @@ spec: docs/specs/2026-09-10-native-void-machine-pivot.md
 progress:
   provider: linear
   scope: voidcorp/DEV/void harness
-  order: [DEV-706, DEV-815, DEV-733, DEV-734, DEV-816, DEV-817]
+  order: [DEV-820]
   states:
     ready: [Backlog, Todo]
     started: [In Progress]
@@ -84,8 +84,8 @@ Claude subscription adapter. The only human
 promotion gate remains the branch that deploys.
 
 `progress.order` is a deterministic tie-break among ready units, not mutable
-execution state. The queue continues with VM-10 through VM-14 after the merged
-VM-07 through VM-09 handoff; native blockers remain the authority for readiness.
+execution state. The current order starts with VM-07 after VM-06's merged
+handoff.
 
 The measurement discussion was explicitly concluded on 2026-09-10. No
 per-ticket human gate is declared for the native pivot; promotion to the

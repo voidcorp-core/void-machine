@@ -44,16 +44,73 @@ writes. A corrective release follows passing CI and the observed cluster proof.
 
 ## Alternatives
 
-1. Recommended: repair the existing contracts and share their observations.
-   Reuse root resolution and the deterministic autopilot core, replace implicit
-   migration with explicit admission, and validate real runtime capabilities.
-   This addresses the demonstrated failures with a bounded compatibility change.
-2. Patch each symptom locally: doctor wording, adapter prose and one GitHub API.
-   Smaller initial diff, but independent readers can still disagree and worker
-   journals still require an end-to-end ownership contract.
-3. Replace orchestration with a new native execution backend. Potentially a
-   stronger long-term boundary, but it expands the corrective release into a
-   runtime migration and cannot itself supply missing GitHub protection.
+1. Recommended: establish one authoritative execution contract in the existing
+   Void Machine architecture. The kernel owns admission, run identity, resource
+   ownership, transitions and evidence. Runtime adapters execute through official
+   interfaces that can enforce the requested capabilities. Migrate complete
+   responsibilities and retire their superseded paths after conformance proof.
+2. Share helpers across the existing independent command and hook paths. This
+   can remove duplication, but does not by itself establish one authority or
+   enforce capabilities the spawning runtime does not expose. Not sufficient
+   for the requested durable result.
+3. Replace the agent runtime and orchestration wholesale. This increases the
+   surface to maintain and duplicates native session, permission and reasoning
+   mechanisms. No demonstrated need justifies this scope.
+
+## Architectural correction after user review
+
+The initial draft over-prioritized bounded compatibility repairs. Folpe requires
+a durable architecture rather than symptom patches. Reuse is conditional on
+the target contract: retaining existing code is not an acceptance criterion.
+
+The target follows `docs/VOID-MACHINE-VISION.md`: one execution authority with
+native runtime delegation. It extends beyond the currently approved pivot's
+no-cutover boundary and therefore requires an explicit approved migration plan
+and applicable decision supersessions before implementation.
+
+Separate declaration, authority and observations:
+
+- Versioned project files declare intent and project/provider bindings. A copied
+  file cannot by itself grant execution on a different repository.
+- The kernel admits a run against a specific declaration revision, repository,
+  provider scope, runtime capability set and authorization envelope. Workers
+  receive bounded assignments; they do not re-derive project identity.
+- One durable transaction owner records assignments, leases and effect intents.
+  A stale worker cannot publish results after its lease has been superseded.
+  External effects are reconciled after an ambiguous response before repetition;
+  no distributed exactly-once claim is made for GitHub or Linear.
+- Doctor and preflight render the same versioned admission results. Neither
+  has an independent definition of readiness. Evidence freshness is bound to
+  the inputs and action it authorizes, not to an enduring global green badge.
+
+Evaluate the existing native core, host and adapters against these requirements
+before choosing implementation placement. Do not add a second SQLite store,
+scheduler or permission policy alongside an existing authoritative equivalent.
+
+### Runtime boundary to prove before choosing a transport
+
+Compare native in-session delegation with the official Codex App Server using
+the installed version's schema and an isolated executable probe. App Server
+documents explicit thread cwd, permission configuration, approval requests and
+event notifications. Documentation establishes a candidate capability, not its
+availability or conformance in this installation.
+
+Select a route only if it can establish the assigned workspace, apply the
+authorization envelope, collect attributable events, interrupt and resume with
+unambiguous session identity. Native subagents may remain a runtime's internal
+strategy; the harness must not fabricate an environment option for them.
+Changing transport must retain managed approvals, authentication and billing
+constraints. No silent switch to a paid API or less restricted process.
+
+Worktrees isolate checkout contents but share Git state and are not security
+sandboxes. Enforcement must cover the worker's actual writable surfaces and
+shared refs; a startup assertion and a prompt prohibition are insufficient to
+claim isolation. An unavailable enforcement capability refuses that route.
+
+The supervisor owns durable collection outside disposable worktrees. Runtime
+events and hook outcomes retain their distinct provenance; neither substitutes
+for missing evidence from the other. Workers submit through a scoped validated
+boundary, rather than acquiring arbitrary write access to every mission log.
 
 ## Proposed design
 
@@ -87,14 +144,14 @@ installation root for central journals. Reuse existing root resolution without
 introducing a CLI-to-hook-runner dependency cycle; preserve its special Git
 layout handling rather than assuming the parent of .git is a checkout.
 
-The controller persists the run-to-worktree-to-repository association before
+The kernel persists the run-to-worktree-to-repository association before
 dispatch. Hook/event resolution validates that association against Git identity
 and the controller's reservation. Workers cannot redirect evidence with an
 arbitrary copied path. Unregistered ordinary worktrees retain their normal
 installation behavior. Ambiguous or missing run ownership blocks the cluster.
 
-Do not rely on spawn arguments absent from the live tool. Use its actual
-capabilities, explicit per-operation worktree paths and observed worker startup
+Do not rely on spawn arguments absent from the live tool. Use a runtime route
+that enforces the workspace and permissions, plus observed worker startup
 proof. A worker must prove its assigned Git branch/worktree and centrally
 recorded event before production edits. If hook payloads or runtime behavior
 cannot establish the association, report unavailable and stop. A simulated
@@ -136,6 +193,16 @@ is not solvable by a local human-merge convention.
 
 ## Verification and release
 
+First approve an ownership matrix naming what is retained, moved, replaced and
+deleted. Introduce the target behind a non-authorizing comparison path, compare
+decisions against conformance fixtures, then cut over one complete responsibility
+at a time. There is only one writer and authorizer at every step. Delete obsolete
+fallbacks, adapter instructions and duplicate decisions when their replacement
+passes; do not leave a compatibility path able to grant execution.
+
+Rollback preserves journals and pending external-effect identities. It cannot
+reactivate foreign legacy consent or restore a route known to lack enforcement.
+
 Use strict TDD for admission, root resolution, readiness and protection logic.
 Regressions cover legacy-only, foreign-but-existing references, multiple files,
 missing/escaping references, repeated declaration and no silent overwrite;
@@ -169,7 +236,9 @@ and external gates. No implementation authorized by this draft alone. Approval
 is followed by an implementation plan, including any required supersession of
 accepted legacy-compatibility decisions without rewriting their history.
 
-References: GitHub effective rules API
+References: Git worktree guarantees <https://git-scm.com/docs/git-worktree>;
+Codex App Server <https://learn.chatgpt.com/docs/app-server>;
+GitHub effective rules API
 <https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch>;
 official subagent documentation <https://learn.chatgpt.com/docs/agent-configuration/subagents>.
 The live tool schema is the authority for this session's available spawn inputs.

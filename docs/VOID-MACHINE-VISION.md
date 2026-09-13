@@ -3,6 +3,11 @@
 Cadrage fourni par Folpe le 2026-09-05. Ce fichier conserve la vision de référence ;
 l'avancement appartient au tracker, pas à ce document.
 
+Complément de vision du 13 septembre :
+[Machine généraliste, Cortex et Déclic](DECLIC-MACHINE-VISION-2026-09-13.md).
+Ce complément conserve le coordinateur LLM, le routage par client, les spécialités,
+l'exécution hébergée et les parcours à spécifier ; il ne remplace pas les gates actives.
+
 Ce document fixe la direction cible. Commencer par la confronter au dépôt
 et aux décisions applicables, puis proposer une spec et une migration.
 Ne pas interpréter ce cadrage comme une autorisation de réécriture immédiate.

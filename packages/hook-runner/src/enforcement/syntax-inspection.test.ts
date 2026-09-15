@@ -1,11 +1,27 @@
 // @test-resource subprocess
 // evaluateRule invokes the bounded compiler child; filesystem-only routing hides that cost.
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
+import { build } from 'esbuild';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { inspectSourceSyntax } from './syntax-inspection.js';
 import { evaluateRule } from './runner.js';
+
+let bundledInspect: typeof inspectSourceSyntax;
+let bundleDirectory: string;
+beforeAll(async () => {
+  bundleDirectory = mkdtempSync(join(tmpdir(), 'hook-syntax-bundle-'));
+  const outfile = join(bundleDirectory, 'syntax.mjs');
+  await build({
+    entryPoints: [fileURLToPath(new URL('./syntax-inspection.ts', import.meta.url))],
+    bundle: true, platform: 'node', format: 'esm', target: 'node22', outfile,
+  });
+  bundledInspect = (await import(pathToFileURL(outfile).href)).inspectSourceSyntax;
+});
+afterAll(() => { rmSync(bundleDirectory, { recursive: true, force: true }); });
 
 function project() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'hook-evidence-')));
@@ -18,7 +34,17 @@ function project() {
   return root;
 }
 
-describe('evidence-aware hooks', () => {
+describe('isolated syntax inspection', () => {
+  it.each([
+    ['focused-tests', 'view.test.tsx', 'const view = <div>{test.only("case", () => {})}</div>;', 'FOCUSED_OR_SKIPPED_TEST'],
+    ['declarations', 'view.tsx', 'const view = 1;\n// tdd-cover: e2e missing.spec.ts', 'TDD_DECLARATION_INVALID'],
+  ] as const)('runs the serialized bundled AST for %s', (purpose, path, source, code) => {
+    const verdict = bundledInspect(project(), path, source, 1_000, purpose);
+    expect(verdict.code).toBe(code);
+    expect(verdict.allow).toBe(false);
+    expect(verdict.evidence).toEqual([purpose === 'focused-tests' ? `${path}:1` : path]);
+  });
+
   it('does not grant TDD evidence after the aggregate deadline expires during syntax inspection', () => {
     const root = project();
     writeFileSync(join(root, 'apps/web/src/page.test.tsx'), 'test("page", () => {});');

@@ -59,6 +59,8 @@ export type RuleName =
 
 export interface EvaluateRuleOptions {
   readonly root: string;
+  /** Trusted TypeScript caller dependency; never read from CLI arguments or hook payloads. */
+  readonly syntaxInspector?: typeof inspectSourceSyntax;
   /** CI judges the checked-out final file; pre-write hooks reconstruct tool intent. */
   readonly source?: 'tool-input' | 'checked-out';
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -217,7 +219,8 @@ function readTddConfig(root: string): TddConfig {
 }
 
 
-function focusedVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown): RuleVerdict {
+function focusedVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown,
+  syntaxInspector: typeof inspectSourceSyntax): RuleVerdict {
   const deadline = performance.now() + 1_000;
   const governed = projectEdits(root, edits).filter((edit) => isTestPath(edit.path) && edit.operation !== 'delete');
   const limit = () => unavailableSyntax('operation exceeds its file or one-second work budget', '',
@@ -241,7 +244,7 @@ function focusedVerdict(root: string, edits: readonly NormalizedEdit[], raw: unk
     if (/^[ \t]*(?:(?:it|test|describe)\.only|(?:it|test)\.skip|xit|xdescribe)[ \t]*\(/.test(proposed.content)) {
       return noFocusedTest([{ path: edit.path, addedContent: proposed.content.split('\n')[0] ?? '' }]);
     }
-    const verdict = inspectSourceSyntax(root, edit.path, proposed.content, deadline - performance.now());
+    const verdict = syntaxInspector(root, edit.path, proposed.content, deadline - performance.now());
     if (performance.now() >= deadline) return limit();
     if (!verdict.allow) return verdict;
   }
@@ -270,7 +273,8 @@ function tddOperationLimit(reason: string): RuleVerdict {
     message: `cannot verify TDD evidence: ${reason}; split the operation into smaller edits`, evidence: [] };
 }
 
-function tddVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown, checkedOut = false): RuleVerdict {
+function tddVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown, checkedOut: boolean,
+  syntaxInspector: typeof inspectSourceSyntax): RuleVerdict {
   const physicalRoot = physicalPath(root);
   const projectChanges = projectEdits(physicalRoot, edits);
   const config = readTddConfig(physicalRoot);
@@ -304,7 +308,7 @@ function tddVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown
     const startsWithDeclaration = /^\/\/\s*tdd-cover:/.test(header);
     if (body.some((line) => line.includes('tdd-cover:'))
       || (header.includes('tdd-cover:') && !startsWithDeclaration)) {
-      const syntax = inspectSourceSyntax(physicalRoot, edit.path, proposed.content,
+      const syntax = syntaxInspector(physicalRoot, edit.path, proposed.content,
         deadline - performance.now(), 'declarations');
       if (performance.now() >= deadline) return tddOperationLimit('operation exhausted its one-second work budget');
       if (syntax.code === 'TDD_DECLARATION_HEADER' && !startsWithDeclaration) {
@@ -384,8 +388,10 @@ export function evaluateRule(
   // damage wherever it lands, and narrowing to the project's business paths
   // would have missed both of the two that reached committed source.
   if (rule === 'control-character') return controlCharacter(call.edits);
-  if (rule === 'tdd-order') return tddVerdict(options.root, call.edits, rawInput, options.source === 'checked-out');
-  if (rule === 'no-focused-test') return focusedVerdict(options.root, call.edits, rawInput);
+  if (rule === 'tdd-order') return tddVerdict(options.root, call.edits, rawInput, options.source === 'checked-out',
+    options.syntaxInspector ?? inspectSourceSyntax);
+  if (rule === 'no-focused-test') return focusedVerdict(options.root, call.edits, rawInput,
+    options.syntaxInspector ?? inspectSourceSyntax);
   const edits = projectEdits(options.root, call.edits);
   if (rule === 'no-any') return noAny(edits);
   if (rule === 'no-as-cast') return noAsCast(edits);

@@ -1,5 +1,5 @@
-import { analyzeSyntax, type SyntaxPurpose } from './syntax-analysis.js';
 import { spawnSync } from 'node:child_process';
+import { analyzeSyntax, type SyntaxPurpose } from './syntax-analysis.js';
 import type { RuleVerdict } from './types.js';
 import { MAX_SOURCE_BYTES } from './proposed-source.js';
 
@@ -24,7 +24,6 @@ function syntaxWorker(analyze: typeof analyzeSyntax): void {
     const ts = loaded as typeof import('typescript');
     reason = 'source could not be parsed within the supported limits';
     process.stdout.write(JSON.stringify(analyze(ts, input)));
-
   } catch {
     process.stdout.write(JSON.stringify({ unavailable: reason }));
   }

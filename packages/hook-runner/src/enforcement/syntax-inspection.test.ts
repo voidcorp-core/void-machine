@@ -35,6 +35,24 @@ function project() {
 }
 
 describe('isolated syntax inspection', () => {
+  it.each(['6.0.3', '7.0.2', 'absent'])('keeps enforcement independent of consumer TypeScript %s', (version) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'hook-consumer-compiler-')));
+    const marker = join(root, 'consumer-compiler-executed');
+    if (version !== 'absent') {
+      const directory = join(root, 'node_modules/typescript');
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(join(directory, 'package.json'), JSON.stringify({ main: 'index.cjs' }));
+      writeFileSync(join(directory, 'index.cjs'),
+        `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed'); module.exports = { version: ${JSON.stringify(version)} };`);
+    }
+    expect(bundledInspect(root, 'view.test.tsx', '// Explain test.skip\nconst view = <div />;').allow).toBe(true);
+    expect(bundledInspect(root, 'view.test.tsx', 'test.only("case", () => <div />);').code)
+      .toBe('FOCUSED_OR_SKIPPED_TEST');
+    expect(bundledInspect(root, 'view.test.ts', '// test.skip\nconst = ;').code)
+      .toBe('TEST_SYNTAX_UNVERIFIED');
+    expect(existsSync(marker)).toBe(false);
+  });
+
   it.each([
     ['focused-tests', 'view.test.tsx', 'const view = <div>{test.only("case", () => {})}</div>;', 'FOCUSED_OR_SKIPPED_TEST'],
     ['declarations', 'view.tsx', 'const view = 1;\n// tdd-cover: e2e missing.spec.ts', 'TDD_DECLARATION_INVALID'],

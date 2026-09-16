@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	createTypeScriptExtractor,
 	createTypeScriptModuleResolver,
@@ -181,6 +181,89 @@ describe('TypeScript extraction diagnostics', () => {
 		expect(extraction.imports).toEqual([]);
 		expect(extraction.diagnostics).toEqual([]);
 		expect(extraction.unresolved).toContain('dynamic import specifier is not a string literal');
+	});
+});
+
+describe('syntax-only compiler diagnostics', () => {
+	const extract = (path: string, content: string) => createTypeScriptExtractor(ts).extract({
+		path, content, hash: `sha256:${'a'.repeat(64)}`, kind: 'source',
+	});
+
+	it.each(['d.ts', 'd.mts', 'd.cts'])('reports invalid %s syntax and keeps recoverable exports', (extension) => {
+		const result = extract(`src/types.${extension}`, 'export declare const broken: ;');
+		expect(result.diagnostics).toContain('Type expected.');
+		expect(result.exports).toEqual(['broken']);
+	});
+
+	it.each(['d.ts', 'd.mts', 'd.cts'])('accepts valid %s without trying to emit it', (extension) => {
+		const result = extract(`src/types.${extension}`, "import type { Missing } from './absent'; export declare const value: Missing;");
+		expect(result.diagnostics).toEqual([]);
+		expect(result.exports).toEqual(['value']);
+		expect(result.imports).toEqual([{ specifier: './absent', dynamic: false }]);
+	});
+
+	it.each(['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'])('reports broken %s syntax without losing topology', (extension) => {
+		const result = extract(`src/broken.${extension}`, "import './absent'; export const broken = ;");
+		expect(result.diagnostics).toContain('Expression expected.');
+		expect(result.exports).toEqual(['broken']);
+		expect(result.imports).toEqual([{ specifier: './absent', dynamic: false }]);
+	});
+
+	it.each(['tsx', 'jsx'])('preserves valid %s and reports malformed JSX', (extension) => {
+		expect(extract(`src/view.${extension}`, 'export const View = () => <Missing />;').diagnostics).toEqual([]);
+		const broken = extract(`src/view.${extension}`, 'export const View = () => <div></span>;');
+		expect(broken.diagnostics.join(' ')).toContain('Expected corresponding JSX closing tag');
+		expect(broken.exports).toEqual(['View']);
+	});
+
+	it.each(['js', 'jsx', 'mjs', 'cjs'])('retains JavaScript-specific syntax errors in %s', (extension) => {
+		expect(extract(`src/value.${extension}`, 'export const value: number = 1;').diagnostics.join(' '))
+			.toContain('Type annotations can only be used in TypeScript files.');
+	});
+
+	it.each(['ts', 'mts', 'cts', 'tsx'])('does not turn semantic errors into source defects in %s', (extension) => {
+		const result = extract(`src/value.${extension}`, "import { absent } from './missing'; export const value: string = 42; export const other: Unknown = absent;");
+		expect(result.diagnostics).toEqual([]);
+		expect(result.exports).toEqual(['other', 'value']);
+	});
+
+	it('reuses one AST without filesystem access, emit, binding or semantic checks', () => {
+		let parsed = 0;
+		let programs = 0;
+		const forbidden = () => { throw new Error('syntax extraction requested a forbidden compiler phase or filesystem access'); };
+		const filesystem = ['readFile', 'writeFile', 'fileExists', 'directoryExists', 'getDirectories', 'readDirectory'] as const;
+		const spies = filesystem.map((method) => vi.spyOn(ts.sys, method).mockImplementation(forbidden));
+		const api: typeof ts = {
+			...ts,
+			transpileModule: forbidden,
+			createSourceFile: new Proxy(ts.createSourceFile, {
+				apply(target, receiver, args) { parsed += 1; return Reflect.apply(target, receiver, args); },
+			}),
+			createProgram: new Proxy(ts.createProgram, {
+				apply(target, receiver, args) {
+					programs += 1;
+					const program: ts.Program = Reflect.apply(target, receiver, args);
+					return new Proxy(program, {
+						get(value, key, owner) {
+							if (['emit', 'getTypeChecker', 'getSemanticDiagnostics', 'getDeclarationDiagnostics'].includes(String(key))) return forbidden;
+							return Reflect.get(value, key, owner);
+						},
+					});
+				},
+			}),
+		};
+		try {
+			const result = createTypeScriptExtractor(api).extract({
+				path: 'src/example.ts', hash: `sha256:${'b'.repeat(64)}`, kind: 'source',
+				content: '/// <reference path="../missing.d.ts" />\nimport { absent } from "missing"; export const value: Unknown = absent;',
+			});
+			expect(result.diagnostics).toEqual([]);
+			expect(result.exports).toEqual(['value']);
+			expect(parsed).toBe(1);
+			expect(programs).toBe(1);
+		} finally {
+			for (const spy of spies) spy.mockRestore();
+		}
 	});
 });
 

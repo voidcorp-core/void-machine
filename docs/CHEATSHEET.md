@@ -65,6 +65,7 @@ Proving the thing works, and that it is worth looking at.
 | `void-qa` | Live browser QA of a running web app via the claude-in-chrome MCP: systematic exploration, edge/error/empty states, atomic fix loop, evidence-backed report. |
 | `void-accessibility` | WCAG 2.2 AA floor. Radix primitives only, touch >=44x44, keyboard parity, semantic HTML, form labels, aria-live errors, mobile-first dual-quality. |
 | `void-frontend-design` | Anti-AI-slop UI. Density first, 3-size hierarchy, functional motion <250ms, expressive motion by purpose, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. |
+| `void-interface-motion` | Design functional feedback and expressive interface sequences. |
 | `void-ui-review` | Audit and polish an EXISTING UI: the AI-slop test, heuristic critique, technical audit (contrast/a11y/responsive/perf), refine modes. |
 | `void-devex-audit` | Audit an EXISTING dev-facing surface (API/CLI/SDK/docs): measured TTHW, real error-path tracing, evidence-backed DX scorecard, scoped refine. |
 

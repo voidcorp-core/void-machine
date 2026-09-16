@@ -70,3 +70,31 @@ cannot certify the existing application's WCAG conformance or frame rate.
 - Final generated-asset and full-verification results accompany the worker
   handoff with their exact command logs and observed commit identity. Independent post-implementation review is owned
   by the coordinator and is not replaced by this author's assessment.
+
+## Full-verification correction
+
+The first full verification on `c853eefb` failed on two deterministic integration
+omissions: `test/cheatsheet/cheatsheet.test.ts:52` reported the new skill without a
+taxonomy group, and `test/readme/readme-counts.test.ts:53` reported 41 skills where
+the generated model has 42. The generator cannot infer editorial classification
+or rewrite the README count. The existing tests already own these obligations;
+no duplicate test or weakened assertion is added. Register the skill in the
+existing interface group, update the count, and regenerate the cheat sheet.
+
+The package-size gate also measured 923.4 kB against 920.0 kB. The coordinator's
+sealed base measured 919.8 kB, leaving only 0.2 kB before this feature. Inspection
+of the actual tarball found 341 unique file paths, no tests/logs/observed state,
+and precisely the required motion skill, source/metadata, frontend replacement
+and generated catalog/model/certification changes in core-assets. Their net
+uncompressed growth is 11,449 bytes; the candidate tarball is 923,420 bytes.
+Do not infer an exact compressed delta from the rounded base measurement.
+
+With coordinator authorization, the ceiling becomes 930,000 bytes: a bounded
+10 kB increase for this feature, approximately 6.6 kB above the measured package.
+Required safety prose is retained. The existing boundary tests and real packing
+gate stay intact. Evidence: `/private/tmp/dev531-verify.log`,
+`/private/tmp/dev531-pack.log`, `/private/tmp/dev531-pack-delta.log`.
+
+Observed ownership widening, approved before writing: `README.md`,
+`docs/cheatsheet-taxonomy.json`, and only the CLI ceiling/comment in
+`scripts/check-package-size.mjs`. Frozen ticket and footprint files are unchanged.

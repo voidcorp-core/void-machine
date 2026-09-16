@@ -49,7 +49,10 @@ export const PACKAGE_LIMITS = Object.freeze({
   // going to refuse the next commit whatever it contained.
   // DEV-738 measured 901.1 kB after adding verified worker journal routing.
   // Retain a bounded 20 kB margin for this safety behavior; no payload omitted.
-  voidharness: 920_000,
+  // DEV-531: 919.8 -> 923.4 kB for the motion skill and catalogue records.
+  // Packed-file inspection found only required assets, with no logs or tests.
+  // A bounded 10 kB increase retains 6.6 kB margin; the gate stays enforced.
+  voidharness: 930_000,
   '@voidcorp/harness-graph': 120_000,
   '@voidcorp/pack-monorepo': 20_000,
   '@voidcorp/pack-nextjs': 20_000,

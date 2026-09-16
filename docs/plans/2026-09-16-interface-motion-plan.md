@@ -116,3 +116,21 @@ mobile/desktop screenshots and new observability instrumentation do not apply.
 Security quick scan found no new trust boundary, dependency or outbound action.
 The anti-patch review checks the guidance's actual semantics: string contracts
 are omission guards, never a substitute for independent motion judgment.
+
+### Integration correction from observed verification
+
+The first full run failed on missing taxonomy registration, the README skill
+count and a measured package-size breach. Existing assertions reproduce these
+failures; their expectations remain unchanged. The coordinator approved bounded
+widening to `docs/cheatsheet-taxonomy.json`, `README.md` and the voidharness ceiling
+in `scripts/check-package-size.mjs`. Add the interface group entry, change the
+count from 41 to 42, regenerate, and raise only that ceiling from 920,000 to
+930,000 bytes after inspecting the actual packed-file delta. The audit records
+measurements and rationale. Targeted affected gates and full verification must
+pass on the correction; the failed run is retained, never retried unchanged.
+
+Targeted correction verification passed: 42 tests across motion, cheat sheet,
+README counts and size boundaries; all four real packages are within ceilings.
+Logs: `/private/tmp/dev531-correction-green.log` and
+`/private/tmp/dev531-correction-size.log`. The subsequent full run is recorded in
+`/private/tmp/dev531-final-verify.log` and the worker handoff, against its commit.

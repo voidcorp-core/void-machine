@@ -1,6 +1,6 @@
 ---
 name: void-frontend-design
-description: Anti-AI-slop UI. Density first, 3-size hierarchy, motion <250ms, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.
+description: Anti-AI-slop UI. Density first, 3-size hierarchy, functional motion <250ms, expressive motion by purpose, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.
 ---
 
 # frontend-design — voidcorp craftsman edition
@@ -54,7 +54,7 @@ These signal "vibe coded" and lose user trust before the content is read. The co
 - Abstract 3D / blobs / orbs as primary hero visual
 - Lorem ipsum or placeholder text in shipped UI
 - Random ad hoc font sizes outside the 3-size system
-- Decorative animations longer than 250ms
+- Motion without a state-change or explicit narrative outcome
 
 These are defaults. Brand can override via `DESIGN.md` if the brand justifies a specific pattern (e.g., a brand that legitimately uses a specific gradient). Override is documented; default is rejection.
 
@@ -98,7 +98,7 @@ THEN visual:
 
 5. Typography expresses the hierarchy
 6. Color guides attention to the primary action
-7. Motion communicates state change, not entertainment
+7. Motion clarifies state change or a specified narrative; classify the interaction via `void-interface-motion`
 
 AI-generated UI tends to skip the IA step and jump to visual. The result feels busy and unfocused.
 
@@ -162,31 +162,17 @@ WCAG AA contrast minimum (composes with `void-accessibility` — 4.5:1 normal te
 
 ---
 
-## Motion: purpose-driven, < 250ms, ease-out
+## Motion: functional by default, expressive by purpose
 
-```css
-/* allowed */
-.dropdown-content { animation: slide-down 200ms ease-out; }
+Functional feedback defaults to <250ms: button response, open/close and state
+changes must not delay the user's action. Expressive sequences require a named,
+observable narrative outcome; a landing's form still uses functional feedback.
 
-/* banned */
-.hero-decoration { animation: float 8s ease-in-out infinite; }
-```
-
-Motion communicates state change. Not entertainment. Reserve for:
-
-- Opening / closing (modal, dropdown, drawer)
-- Affordance feedback (button press)
-- State transition (success, error)
-
-Duration: < 250ms. Easing: `ease-out` for entry, `ease-in` for exit. The design system (`pack-nextjs`) provides default tokens.
-
-`prefers-reduced-motion` respected — composes with `void-accessibility`. The design system handles by default.
-
-### Banned
-
-- Looping decorative animations
-- Bouncy easing on functional UI (`ease-in-out-back` etc.) — reserves for playful brands explicitly
-- Animations longer than 250ms unless documented (page transitions, intentional reveals)
+Use `void-interface-motion` for classification, orchestration, easing, spatial
+continuity, compositing budgets and motion verification. Its invariants apply in
+both contexts: reduced motion preserves information, content works without
+animation, and hot paths stay compositor-safe. Its pause/stop/hide and flashing
+safeguards apply independently of reduced-motion preferences.
 
 ---
 
@@ -196,7 +182,7 @@ Duration: < 250ms. Easing: `ease-out` for entry, `ease-in` for exit. The design 
 - **Flexbox for 1D, Grid for 2D.** Don't reach for Grid when `flex-wrap` fits. Responsive grid without breakpoints: `repeat(auto-fit, minmax(280px, 1fr))`.
 - **Semantic z-index scale** (dropdown → sticky → modal-backdrop → modal → toast → tooltip). Never `999` / `9999`.
 - **Vary spacing for rhythm** — uniform spacing reads as a wireframe.
-- **Motion easing**: ease-out with exponential curves (quart / quint / expo); no bounce, no elastic on functional UI. Every animation needs a `prefers-reduced-motion` alternative (crossfade or instant).
+- **Motion craft**: apply `void-interface-motion`; the reduced-motion alternative must preserve the interaction's information and outcome.
 - **Reveal animations must enhance an already-visible default** — never gate content visibility on a class-triggered transition; it pauses on hidden tabs / headless renderers and the section ships blank.
 - **Dropdown clipping**: a `position: absolute` menu inside `overflow: hidden`/`auto` is clipped — use `<dialog>` / the popover API / `position: fixed` / a portal to escape the stacking context.
 
@@ -258,7 +244,7 @@ See `../../hooks/`.
 | Layout looks generic | Density audit. Information architecture first. Cut what does not earn its place. |
 | Hero feels weak | Singular primary action. Recess everything else. Cut decorative gradient if generic. |
 | Too many font sizes | Reduce to the 3-token system. Vary by weight and color. |
-| Motion feels excessive | Cut decorative animations. Keep only state-change communication. |
+| Motion feels excessive | Check the interaction's state-change or narrative outcome with `void-interface-motion`; remove motion that adds neither. |
 | Mobile screenshot fails | Layout was desktop-first. Restart at 360–390px. |
 | Cannot reach AA contrast | Design system token failure. Adjust palette tokens, not per-component overrides. |
 
@@ -267,7 +253,7 @@ See `../../hooks/`.
 ## Final rule
 
 ```
-Every UI → IA first, density first, 3-size hierarchy, motion <250ms, @repo/ui components, dual-viewport verified, brand-from-DESIGN.md.
+Every UI → IA first, density first, 3-size hierarchy, functional motion <250ms by default, expressive motion by purpose, @repo/ui components, dual-viewport verified, brand-from-DESIGN.md.
 Otherwise → it is not voidcorp frontend-design.
 ```
 

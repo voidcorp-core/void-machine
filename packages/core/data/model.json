@@ -2051,7 +2051,7 @@
     },
     {
       "activation": "always",
-      "description": "Anti-AI-slop UI. Density first, 3-size hierarchy, motion <250ms, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.",
+      "description": "Anti-AI-slop UI. Density first, 3-size hierarchy, functional motion <250ms, expressive motion by purpose, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -2068,7 +2068,7 @@
         }
       ],
       "id": "skill:void-frontend-design",
-      "lines": 274,
+      "lines": 260,
       "name": "void-frontend-design",
       "owner": "folpe",
       "pack": null,
@@ -2077,7 +2077,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-frontend-design/SKILL.md",
-      "staticTokens": 3590,
+      "staticTokens": 3581,
       "triggers": {
         "extensions": [
           "tsx"
@@ -2205,6 +2205,42 @@
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
       "staticTokens": 5351,
+      "type": "skill"
+    },
+    {
+      "activation": "always",
+      "description": "Design functional feedback and expressive interface sequences. Use for app or site animation, choreography, scroll reveals, easing, or reduced-motion alternatives.",
+      "enforcement": {
+        "floor": "ci",
+        "inline": {
+          "claude": "pretooluse",
+          "codex": "pretooluse",
+          "hermes": "ci-only"
+        }
+      },
+      "evalTargets": [
+        {
+          "provider": "anthropic",
+          "runtime": "claude",
+          "tier": "opus"
+        }
+      ],
+      "id": "skill:void-interface-motion",
+      "lines": 107,
+      "name": "void-interface-motion",
+      "owner": "folpe",
+      "pack": null,
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "source": "packages/core/skills/void-interface-motion/SKILL.md",
+      "staticTokens": 1735,
+      "triggers": {
+        "extensions": [
+          "tsx"
+        ]
+      },
       "type": "skill"
     },
     {

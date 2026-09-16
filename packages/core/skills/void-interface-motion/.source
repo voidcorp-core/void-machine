@@ -1,0 +1,15 @@
+# Sources inspected 2026-09-16; distilled, never copied.
+# Hyperframes: adapt compositional timing and craft, reject video/seek runtime.
+https://github.com/heygen-com/hyperframes/blob/main/skills/hyperframes-animation/SKILL.md
+https://github.com/heygen-com/hyperframes/blob/main/skills/hyperframes-animation/adapters/gsap-timeline-and-labels.md
+https://github.com/heygen-com/hyperframes/blob/main/skills/hyperframes-animation/adapters/gsap-easing-and-stagger.md
+# Accessibility: independent safety requirements and preference semantics.
+https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html
+https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html
+https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion
+# Browser performance and the original FLIP explanation.
+https://web.dev/articles/animations-guide
+https://aerotwist.com/blog/flip-your-animations/
+# Approved local outcome and rationale.
+DEV-531, Folpe decisions 2026-07-29: contextual motion, dedicated core skill.
+Audit: docs/plans/skill-audits/void-interface-motion.md

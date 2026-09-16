@@ -1,7 +1,7 @@
 ---
 title: Contextual interface motion
 date: 2026-09-16
-status: prepared
+status: implemented-awaiting-verification
 spec: docs/specs/2026-09-15-approved-six-ticket-cluster.md
 ---
 
@@ -93,3 +93,26 @@ The coordinator owns mission receipts, specialist dispatch, tracker mutations,
 integration and publication. No shared Git ref/config/stash/tag/remote mutation,
 push or merge. Preparation creates this plan only; implementation and all test,
 build, lint and commit actions await the controller's next writer action.
+
+## Implementation handoff
+
+- DONE: source distillation, library-agnostic skill, all frontend motion assertions,
+  three invariants plus independent WCAG safeguards, source audit and two new
+  CLI-created ADRs. No optional library recipe was necessary.
+- DONE: strict contract RED (seven failures) then GREEN (seven passes), through
+  cockpit RUN; `/private/tmp/dev531-red.log` and `/private/tmp/dev531-green.log`.
+- DONE: build and declared derivation through cockpit RUN;
+  `/private/tmp/dev531-build.log` and `/private/tmp/dev531-derive.log`.
+- DONE: source-based application to graph-studio, including functional, expressive
+  and no-motion classifications, existing gaps and honest rendering limitations;
+  see the skill audit and `/private/tmp/dev531-dogfood.log`.
+- PENDING: full `pnpm verify` on the implementation commit, followed by the
+  coordinator's independent semantic panel. Logs and SHA accompany the worker
+  report; this plan does not certify checks not yet run.
+
+No mutation runner is configured and no runtime business logic or UI is changed.
+Coverage is the seven authored contract cases plus existing asset validators;
+mobile/desktop screenshots and new observability instrumentation do not apply.
+Security quick scan found no new trust boundary, dependency or outbound action.
+The anti-patch review checks the guidance's actual semantics: string contracts
+are omission guards, never a substitute for independent motion judgment.

@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:341949cad40cf41f70976de3eca45449e8ae1aefdd511c66b13a6875baaec7a8"
+    "rootHash": "sha256:15c4261a529911fc23c04f73b1b0f6edb89d2efd24bdc60a43275d1b8a292863"
   },
   "nodes": [
     {
@@ -4115,7 +4115,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "Anti-AI-slop UI. Density first, 3-size hierarchy, motion <250ms, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.",
+          "description": "Anti-AI-slop UI. Density first, 3-size hierarchy, functional motion <250ms, expressive motion by purpose, components via @repo/ui (Radix/shadcn), mobile-first dual-quality. Brand from DESIGN.md. Use when building or modifying UI.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4132,7 +4132,7 @@
             }
           ],
           "id": "skill:void-frontend-design",
-          "lines": 274,
+          "lines": 260,
           "name": "void-frontend-design",
           "owner": "folpe",
           "pack": null,
@@ -4141,7 +4141,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-frontend-design/SKILL.md",
-          "staticTokens": 3590,
+          "staticTokens": 3581,
           "triggers": {
             "extensions": [
               "tsx"
@@ -4351,6 +4351,60 @@
           {
             "kind": "path",
             "ref": "packages/core/skills/void-implement/SKILL.md",
+            "hashOrVersion": "catalog-v1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog:skill:skill:void-interface-motion",
+      "kind": "skill",
+      "label": "void-interface-motion",
+      "data": {
+        "legacy": {
+          "activation": "always",
+          "description": "Design functional feedback and expressive interface sequences. Use for app or site animation, choreography, scroll reveals, easing, or reduced-motion alternatives.",
+          "enforcement": {
+            "floor": "ci",
+            "inline": {
+              "claude": "pretooluse",
+              "codex": "pretooluse",
+              "hermes": "ci-only"
+            }
+          },
+          "evalTargets": [
+            {
+              "provider": "anthropic",
+              "runtime": "claude",
+              "tier": "opus"
+            }
+          ],
+          "id": "skill:void-interface-motion",
+          "lines": 107,
+          "name": "void-interface-motion",
+          "owner": "folpe",
+          "pack": null,
+          "runtimes": [
+            "claude",
+            "codex"
+          ],
+          "source": "packages/core/skills/void-interface-motion/SKILL.md",
+          "staticTokens": 1735,
+          "triggers": {
+            "extensions": [
+              "tsx"
+            ]
+          },
+          "type": "skill"
+        }
+      },
+      "provenance": {
+        "origin": "extracted",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "path",
+            "ref": "packages/core/skills/void-interface-motion/SKILL.md",
             "hashOrVersion": "catalog-v1"
           }
         ]

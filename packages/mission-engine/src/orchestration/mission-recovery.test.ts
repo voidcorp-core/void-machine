@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { replayEventLog, serializeEvent } from '../events/index.js';
+import { parseEvent, replayEventLog, serializeEvent } from '../events/index.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
+import { sealEvidence } from '../evidence/schema.js';
+import { evidenceDraft } from '../test/evidence.js';
 import { canonicalJsonHash } from '../evidence/canonical-json.js';
 import { event } from '../test/events.js';
 import { planStoppedMissionRecovery, validatedRecoveredReviewEvents, type MissionRecoveryRequest } from './mission-recovery.js';
@@ -365,4 +367,62 @@ it('refuses an otherwise valid replay receipt attached to another mission journa
     stream: replayEventLog(events.map(serializeEvent).join('\n')),
   })).toMatchObject({ kind: 'refused', code: 'invalid-journal' });
   expect(validatedRecoveredReviewEvents(events)).toMatchObject({ ok: false });
+});
+
+function preparationObligationAtPost(due: string, disposition = 'pending') {
+  const text = 'Provide the implemented invariant matrix and its actual verification result.';
+  const completion = { schemaVersion: 1, specialistId: SPECIALIST, contractVersion: 1,
+    completionId: 'completion-preparation-proof', verdict: 'pass', findings: [],
+    evidenceRequests: disposition === 'no-request' ? [] : [text], limitations: [] };
+  const binding = { completionEventId: id(2), completionHash: canonicalJsonHash(completion),
+    specialistId: SPECIALIST, nativeContextId: 'context-classify-pre-proof', requestId: id(3) };
+  const events = [entry(1, 'mission.started'), { ...entry(2, 'specialist.completed', {
+    stage: 'pre-implementation', reviewRound: 2, inputHash: HASH, contextId: 'context-original-pre-proof', completion,
+  }), subject: SPECIALIST }, { ...entry(3, 'specialist.evidence-classification-requested', binding),
+    source: 'void-harness:mission.dispatch', subject: SPECIALIST },
+  { ...entry(4, 'specialist.evidence-classified', { ...binding, items: [{ requestIndex: 0,
+    requestText: text, requestTextHash: canonicalJsonHash(text), due, reason: 'Required at the declared implementation phase.' }] }),
+    subject: SPECIALIST, causationId: id(3), source: disposition === 'unauthorized' ? 'writer:primary' : 'runtime:codex' }];
+  if (disposition === 'no-request') events.splice(2);
+  if (disposition === 'discharged') {
+    const proof = sealEvidence(evidenceDraft({ dependencies: [{ kind: 'diff', key: 'git:working-tree', hash: HASH }] }));
+    const obligationId = canonicalJsonHash({ completionEventId: id(2), completionId: completion.completionId,
+      requestIndex: 0, requestTextHash: canonicalJsonHash(text) });
+    events.push({ ...entry(5, 'evidence.recorded', { evidence: { ...proof, environment: { ...proof.environment },
+      output: { ...proof.output }, dependencies: proof.dependencies.map(value => ({ ...value })) } }), subject: proof.evidenceId },
+      { ...entry(6, 'specialist.evidence-discharge-requested', { ...binding, requestId: id(6),
+        nativeContextId: 'context-discharge-pre-proof', obligationIds: [obligationId] }),
+        source: 'void-harness:mission.dispatch', subject: SPECIALIST },
+      { ...entry(7, 'specialist.evidence-discharged', { ...binding, requestId: id(6),
+        nativeContextId: 'context-discharge-pre-proof', items: [{ obligationId, proofEventIds: [id(5)],
+          reason: 'Actual canonical verification satisfies the original request.' }] }),
+        subject: SPECIALIST, causationId: id(6) });
+  }
+  events.push({ ...entry(events.length + 1, 'lead-writer.completed', {
+    actionKind: 'run-lead-writer', implementationRound: 2, writerId: 'writer:primary' }), subject: 'writer:primary' });
+  const closureSeq = events.length + 1;
+  events.push(entry(closureSeq, 'mission.closed', { reason: 'controller-stop' }));
+  const candidate = input(events);
+  return { ...candidate, request: { ...candidate.request, closureEventId: id(closureSeq) },
+    observation: { ...candidate.observation, stage: 'post-implementation' as const,
+      currentInputHashes: { [SPECIALIST]: HASH }, evidenceDependencies: { 'git:working-tree': HASH } } };
+}
+
+it.each(['current-review', 'post-implementation'])('recovers for a preparation obligation currently due at post stage: %s', due => {
+  const candidate = preparationObligationAtPost(due);
+  const before = canonicalJsonHash(candidate.stream.events);
+  const result = planStoppedMissionRecovery(candidate);
+  expect(result).toMatchObject({ kind: 'recover', receipt: { consumedRounds: 0, remainingRounds: 2,
+    nextAction: 'clarification', preservedCompletionEventIds: [], invalidatedCompletionEventIds: [] } });
+  expect(canonicalJsonHash(candidate.stream.events)).toBe(before);
+  if (result.kind !== 'recover') throw new Error('Expected clarification admission');
+  const recorded = parseEvent({ ...entry(candidate.stream.events.length + 1, 'mission.recovered'),
+    source: 'void-harness:mission.recover', payload: result.receipt });
+  if (!recorded.ok) throw new Error('Expected canonical recovery receipt');
+  expect(validatedRecoveredReviewEvents([...candidate.stream.events, recorded.value]).ok).toBe(true);
+});
+
+it.each(['completion', 'no-request', 'unauthorized', 'discharged'])('refuses an ineligible preparation obligation at post stage: %s', cause => {
+  const candidate = preparationObligationAtPost(cause === 'completion' ? 'completion' : 'post-implementation', cause);
+  expect(planStoppedMissionRecovery(candidate).kind).toBe('refused');
 });

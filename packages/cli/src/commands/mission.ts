@@ -916,10 +916,11 @@ export async function recoverStoppedMission(
   roots: ProjectRoots, missionId: string, request: MissionRecoveryRequest,
 ) {
   const { workRoot, installRoot } = roots;
-  const [stored, inspected, coreRoot] = await Promise.all([
+  const [stored, current, coreRoot] = await Promise.all([
     loadMissionControllerPlan(installRoot, missionId),
-    inspectMission(installRoot, missionId, { dependencies: {} }), findCoreSource(),
+    inspectCurrentMission(roots, missionId, collectKnownSecrets()), findCoreSource(),
   ]);
+  const inspected = current.inspected;
   if (missionRoutingHash(inspected.stream.events) !== stored.routingHash) {
     throw new Error('MISSION_CONTROLLER_PLAN_INVALID: recovery requires the original bound plan');
   }
@@ -975,6 +976,7 @@ export async function recoverStoppedMission(
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined;
   const observation: MissionRecoveryObservation = {
     stage: implemented ? 'post-implementation' : 'pre-implementation', maxRounds: 2,
+    evidenceDependencies: { 'git:working-tree': current.project.diffHash },
     expectedSource: identity.runtime === 'codex' ? 'runtime:codex' : 'runtime:claude',
     currentInputHashes,
     contractVersions: Object.fromEntries(migration.plan.specialists.map(value => [value.specialistId, value.contractVersion])),

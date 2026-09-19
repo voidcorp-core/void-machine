@@ -1,3 +1,5 @@
+import { parseEvidence } from '../evidence/schema.js';
+import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
 import { initialEventStream, reduceEventStream, type EventStreamState } from '../events/reducer.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
@@ -24,6 +26,7 @@ export interface MissionRecoveryObservation {
   readonly stage: SpecialistInvocationStage;
   readonly contractVersions: Readonly<Record<string, number>>;
   readonly resolutionArtifact?: RecoveryResolutionArtifact;
+  readonly evidenceDependencies?: Readonly<Record<string, string>>;
   readonly currentInputHashes: Readonly<Record<string, string>>;
   readonly maxRounds: number;
   readonly expectedSource: 'runtime:codex' | 'runtime:claude';
@@ -202,7 +205,27 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     return refuse('unproven-controller-defect', 'The journal must prove the requested controller defect; do not reset its budget');
   }
   if (disposition.kind === 'review-blocker') {
-    const blockers = existing.filter(({ event, completion }) => disposition.completionEventIds.includes(event.eventId)
+    let eligible = existing;
+    if (observation.stage === 'post-implementation' && disposition.completionEventIds.some(id =>
+      !existing.some(item => item.event.eventId === id))) {
+      const proofs = events.flatMap(event => {
+        if (event.kind !== 'evidence.recorded') return [];
+        const parsed = parseEvidence(field(event, 'evidence'));
+        return parsed.ok ? [{ eventId: event.eventId, evidence: parsed.value }] : [];
+      });
+      const obligations = reduceEvidenceObligations({ events, expectedSource: observation.expectedSource,
+        phase: observation.stage, proofs, evidenceContext: {
+          missionId: events[0]!.missionId, dependencies: observation.evidenceDependencies ?? {},
+        } });
+      if (obligations.issues.length > 0) return refuse('invalid-evidence', 'Resolve invalid author dispositions before requesting recovery');
+      const blocking = new Set(obligations.blockingObligationIds);
+      const owners = new Set(obligations.obligations.filter(item => blocking.has(item.obligationId))
+        .map(item => item.completionEventId));
+      eligible = [...existing, ...completions(events).filter(item =>
+        field(item.event, 'stage') === 'pre-implementation' && owners.has(item.event.eventId)
+        && observation.contractVersions[item.event.subject] !== undefined)];
+    }
+    const blockers = eligible.filter(({ event, completion }) => disposition.completionEventIds.includes(event.eventId)
       && (completion.verdict !== 'pass' || completion.findings.length > 0
         || completion.evidenceRequests.length > 0 || completion.limitations.length > 0));
     if (blockers.length !== disposition.completionEventIds.length || blockers.length === 0
@@ -299,7 +322,8 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
 function recoveryObservation(value: JsonValue | undefined): value is JsonValue & MissionRecoveryObservation {
   if (value === undefined || !record(value)
     || !exactKeys(value, ['stage', 'contractVersions', 'currentInputHashes', 'maxRounds', 'expectedSource',
-      ...(value['resolutionArtifact'] === undefined ? [] : ['resolutionArtifact'])])
+      ...(value['resolutionArtifact'] === undefined ? [] : ['resolutionArtifact']),
+      ...(value['evidenceDependencies'] === undefined ? [] : ['evidenceDependencies'])])
     || !['pre-implementation', 'post-implementation'].includes(String(value['stage']))
     || !['runtime:codex', 'runtime:claude'].includes(String(value['expectedSource']))
     || typeof value['maxRounds'] !== 'number' || !Number.isSafeInteger(value['maxRounds']) || value['maxRounds'] < 1 || value['maxRounds'] > 8
@@ -310,7 +334,11 @@ function recoveryObservation(value: JsonValue | undefined): value is JsonValue &
       && typeof version === 'number' && Number.isSafeInteger(version) && version >= 1 && version <= 10_000)
     && Object.entries(value['currentInputHashes']).every(([key, hash]) => specialistId(key)
       && typeof hash === 'string' && /^sha256:[a-f0-9]{64}$/.test(hash))
-    && (value['resolutionArtifact'] === undefined || artifact(value['resolutionArtifact']));
+    && (value['resolutionArtifact'] === undefined || artifact(value['resolutionArtifact']))
+    && (value['evidenceDependencies'] === undefined || (record(value['evidenceDependencies'])
+      && Object.keys(value['evidenceDependencies']).length <= 64
+      && Object.entries(value['evidenceDependencies']).every(([key, hash]) => key.length > 0 && key.length <= 500
+        && typeof hash === 'string' && /^sha256:[a-f0-9]{64}$/.test(hash))));
 }
 function streamFrom(events: readonly CanonicalEvent[]): EventStreamState {
   return events.reduce(reduceEventStream, initialEventStream());

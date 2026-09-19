@@ -126,3 +126,19 @@ Current `ProjectRoots.installRoot` owns both the real journal and installed nati
 After implementation, tests and the isolated proof, present the exact native-agent installation delta and provenance for separate user authorization. No release is inherently needed for a local explicit activation, but the real installation must not be silently changed. Do not split roots or use a capability override to avoid this boundary.
 
 This adds one explicit version transition and one targeted review-dispatch allowance. Reinterpreting v2 would be superficially smaller but retroactively changes the protected contract and cannot be called a valid v2 review. No wider applicability mechanism, new orchestration kernel, or unrelated incident work belongs in this lot.
+
+## Clarification of preparation obligations due after implementation
+
+The existing `review-blocker` recovery may name an original preparation completion
+only when the shared evidence reducer finds one of its obligations still blocking
+at the current post-implementation phase. Author classifications, exact original
+request bindings and canonical proof freshness govern eligibility. Future completion-only
+obligations, absent requests, invalid dispositions and already discharged obligations
+cannot justify this cross-stage clarification. The adapter observes Git dependencies;
+the optional `evidenceDependencies` observation is preserved in new receipts, while
+historical receipts without it retain their original schema and admission behavior.
+
+Only blocker eligibility crosses the stage boundary. Review calculations, preserved
+completion sets and consumed rounds still concern the current stage. Preparation
+results are neither replayed nor relabeled as post-implementation results. Recovery
+opens clarification; it does not discharge the obligation or certify the mission.

@@ -12,6 +12,11 @@ high_risk: true
 
 # Supervised general missions, local first
 
+The proposed [TypeScript foundation plan](2026-09-20-void-machine-typescript-foundation-plan.md)
+consolidates the port, the S0-S4 journey below and explicit core-stability evidence.
+Its source-precedence table identifies historical Rust footprints; use actual
+ported TypeScript successors after parity, without reopening the port scope.
+
 ## Binding TypeScript port decision
 
 The later explicit Folpe decision replaces Rust continuation with a bounded port

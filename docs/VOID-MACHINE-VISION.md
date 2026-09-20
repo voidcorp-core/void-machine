@@ -8,6 +8,11 @@ Complément de vision du 13 septembre :
 Ce complément conserve le coordinateur LLM, le routage par client, les spécialités,
 l'exécution hébergée et les parcours à spécifier ; il ne remplace pas les gates actives.
 
+Plan de réalisation proposé le 20 septembre :
+[portage, preuves et stabilisation du socle TypeScript](plans/2026-09-20-void-machine-typescript-foundation-plan.md).
+Il rassemble les sources, les frontières de couches et les critères empêchant de
+reproduire les blocages du harnais ; il ne déclare aucune implémentation réalisée.
+
 Ce document fixe la direction cible. Commencer par la confronter au dépôt
 et aux décisions applicables, puis proposer une spec et une migration.
 Ne pas interpréter ce cadrage comme une autorisation de réécriture immédiate.

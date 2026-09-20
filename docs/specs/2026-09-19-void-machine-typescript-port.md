@@ -3,6 +3,10 @@
 Decision owner: Folpe, 2026-09-19. Implementation and isolated verification authorized
 **after WORK-1/2/3 closure**. No release or active-install replacement authorized.
 
+Proposed execution sequence: [TypeScript foundation plan](../plans/2026-09-20-void-machine-typescript-foundation-plan.md).
+Its milestone A implements this bounded contract; general mission proofs and core
+stabilization remain separate later milestones, not additions to the port scope.
+
 ## Scope and baseline
 
 Port only implemented Rust capabilities idiomatically to strict TypeScript on Node.js.

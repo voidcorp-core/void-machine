@@ -113,9 +113,9 @@ describe('remote effects stay with the roles that own them', () => {
     expect(mayNot).toMatch(/prune the mission journals/i);
   });
 
-  it('keeps the merge a declaration, never a flag', () => {
+  it('keeps who merges an explicit instruction, never a flag', () => {
     expect(body(SKILL)).toMatch(/never merges/i);
-    expect(body(SKILL)).toMatch(/mergeGate: human/);
+    expect(body(SKILL).replace(/\s+/g, ' ')).toMatch(/autopilot merges --by-human/);
     // The flag must not reappear as a CAPABILITY. Naming it to say it does not
     // exist is the opposite, and forbidding the string outright forbids saying so
     // -- which is how this assertion first fired on prose that agreed with it.

@@ -9,6 +9,7 @@ import {
   programPath,
   readProgramDescriptor,
 } from './program.js';
+import { loopProgramOf } from './loop.js';
 
 const VALID = `---
 schemaVersion: 1
@@ -27,10 +28,9 @@ progress:
     done: [Done]
 humanGates: [DEV-433]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: 4
   base: auto
-  mergeGate: human
   verifyCommands:
     - [pnpm, build]
     - [pnpm, test]
@@ -231,7 +231,7 @@ describe('parseProgramDescriptor', () => {
 
   it('rejects unsafe autopilot commands and paths', () => {
     const shellCommand =
-      'autopilot:\n  schemaVersion: 1\n  mergeGate: human\n  verifyCommands:\n    - pnpm test';
+      'autopilot:\n  schemaVersion: 2\n  verifyCommands:\n    - pnpm test';
     expect(() => parseProgramDescriptor(withAutopilot(shellCommand))).toThrow(/verifyCommands/);
     expect(() => parseProgramDescriptor(VALID.replace('docs/plans/2026-07-24-plan.md', '/etc/passwd'))).toThrow(
       /plan/,
@@ -241,47 +241,65 @@ describe('parseProgramDescriptor', () => {
     ).toThrow(/ownership/);
   });
 
-  // `union-reviewed` is the gate the union-is-read-before-it-merges record
-  // grants: an integration branch may merge itself once an adversarial reading
-  // of the whole diff came back clean, and the human moves to the promotion.
-  it('accepts the union-reviewed gate when the deploying branch is named', () => {
-    const descriptor = parseProgramDescriptor(
-      VALID.replace('mergeGate: human', 'mergeGate: union-reviewed\n  deployBranch: main'),
-    );
+  // One merge mode: a programme declares no gate, and the loop merges on its
+  // own into the integration branch unless a person holds the merges.
+  it('reads a programme that declares no merge gate, with no deploying branch required', () => {
+    const descriptor = parseProgramDescriptor(VALID);
 
-    expect(descriptor?.autopilot?.mergeGate).toBe('union-reviewed');
+    expect(descriptor?.autopilot?.deployBranch).toBeUndefined();
+    expect(descriptor?.autopilot?.legacyMergeGate).toBeUndefined();
+    expect(loopProgramOf(descriptor).autopilot.base).toBe('auto');
+  });
+
+  it('reads the deploying branch when the programme names it', () => {
+    const descriptor = parseProgramDescriptor(VALID.replace('base: auto', 'base: develop\n  deployBranch: main'));
+
     expect(descriptor?.autopilot?.deployBranch).toBe('main');
   });
 
-  it('refuses to grant the merge without knowing which branch deploys', () => {
-    // Defaulting to `main` would be the name-based guess the record rejects: a
-    // project shipping from `production`, or from `develop` itself, would get
-    // the human gate in the wrong place and never notice.
-    expect(() => parseProgramDescriptor(VALID.replace('mergeGate: human', 'mergeGate: union-reviewed')))
+  it('refuses a programme that integrates straight into the branch it says deploys', () => {
+    expect(() => parseProgramDescriptor(VALID.replace('base: auto', 'base: main\n  deployBranch: main')))
       .toThrow(/deployBranch/);
   });
 
-  it('refuses a gate that would integrate straight into the deploying branch', () => {
-    // Declaring union-reviewed while every integration targets production is a
-    // contradiction, and it is better said once here than discovered as a
-    // refusal on every merge.
-    expect(() => parseProgramDescriptor(
-      VALID
-        .replace('base: auto', 'base: main')
-        .replace('mergeGate: human', 'mergeGate: union-reviewed\n  deployBranch: main'),
-    )).toThrow(/deployBranch/);
+  // A 4.0 programme is autopilot schema 1 and carries `mergeGate`. Readers such
+  // as resume and doctor keep working on it; the loop refuses it until it is
+  // migrated, so a former human gate is never read as consent to merge.
+  const legacy = (gate: string) =>
+    VALID.replace('  schemaVersion: 2\n', '  schemaVersion: 1\n').replace('base: auto', `base: develop\n  ${gate}`);
+
+  it('reads a 4.0 human gate and has the loop refuse it, holding the merges first', () => {
+    const human = parseProgramDescriptor(legacy('mergeGate: human'));
+
+    expect(human?.autopilot?.legacyMergeGate).toBe('human');
+    expect(() => loopProgramOf(human)).toThrow(
+      /mergeGate[\s\S]*first run `void-machine autopilot merges --by-human`[\s\S]*schemaVersion: 2/,
+    );
   });
 
-  it('leaves deployBranch absent when the gate is human, which needs no such thing', () => {
-    expect(parseProgramDescriptor(VALID)?.autopilot?.deployBranch).toBeUndefined();
+  it('reads a 4.0 granted gate and has the loop refuse it, naming the automatic default', () => {
+    const granted = parseProgramDescriptor(legacy('mergeGate: union-reviewed\n  deployBranch: main'));
+
+    expect(granted?.autopilot?.legacyMergeGate).toBe('union-reviewed');
+    expect(granted?.autopilot?.deployBranch).toBe('main');
+    expect(() => loopProgramOf(granted)).toThrow(
+      /remove `mergeGate`[\s\S]*merges on its own into the integration branch[\s\S]*schemaVersion: 2/,
+    );
   });
 
-  it('rejects unknown status, merge gate and cluster size values', () => {
+  it('refuses a mergeGate written into the current schema, which has none', () => {
+    expect(() => parseProgramDescriptor(VALID.replace('base: auto', 'base: auto\n  mergeGate: human')))
+      .toThrow(/mergeGate[\s\S]*autopilot merges --by-human/);
+  });
+
+  it('refuses an autopilot schema this CLI does not know', () => {
+    expect(() => parseProgramDescriptor(VALID.replace('  schemaVersion: 2\n', '  schemaVersion: 3\n')))
+      .toThrow(/autopilot schema/);
+  });
+
+  it('rejects unknown status and cluster size values', () => {
     expect(() => parseProgramDescriptor(VALID.replace('status: executing', 'status: paused'))).toThrow(
       /status/,
-    );
-    expect(() => parseProgramDescriptor(VALID.replace('mergeGate: human', 'mergeGate: auto'))).toThrow(
-      /mergeGate/,
     );
     expect(() => parseProgramDescriptor(VALID.replace('clusterSize: 4', 'clusterSize: 5'))).toThrow(
       /clusterSize/,
@@ -363,11 +381,11 @@ describe("this repository's program", () => {
     // The status follows the programme's lifecycle; the contract is that it is one this CLI reads.
     expect(['executing', 'completed']).toContain(descriptor?.status);
     expect(descriptor?.progress?.provider).toBe('linear');
-    // This repository integrates into develop and ships from main, so it takes
-    // the granted gate. The pair is asserted rather than the value alone: a
-    // deploy branch equal to the base would make every merge refuse, and the
-    // refusal would look like a bug in the gate rather than a wrong descriptor.
-    expect(descriptor?.autopilot?.mergeGate).toBe('union-reviewed');
+    // This repository integrates into develop and ships from main, and says so
+    // rather than leaving the loop to read the default branch. The pair is
+    // asserted rather than the value alone: a deploy branch equal to the base
+    // would make every merge refuse, and the refusal would look like a bug.
+    expect(descriptor?.autopilot?.legacyMergeGate).toBeUndefined();
     expect(descriptor?.autopilot?.deployBranch).toBe('main');
     expect(descriptor?.autopilot?.deployBranch).not.toBe(descriptor?.autopilot?.base);
   });

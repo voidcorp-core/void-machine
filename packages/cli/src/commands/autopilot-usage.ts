@@ -21,6 +21,9 @@ Usage:
   echo '<LoopTracker>'           | ${PRODUCT_COMMAND} autopilot next [--json]
   ${PRODUCT_COMMAND} autopilot stop --drain | --now [--json]
   ${PRODUCT_COMMAND} autopilot fingerprint [--before <ticket> | --after <ticket>] [--json]
+  ${PRODUCT_COMMAND} autopilot merges [--by-human | --automatic] [--json]
+  ${PRODUCT_COMMAND} autopilot merge --ticket <id> --pr <number> --head <sha> [--json]
+  ${PRODUCT_COMMAND} autopilot update-branch --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
   ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> [--json]
@@ -28,8 +31,9 @@ Usage:
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
 signal, and prints the actions for each slot: assign, wait, hand-back-to-worker,
-mark-human-wait, review, enable-auto-merge, disable-auto-merge, requeue, drain,
-freeze, recap, with the humanWaitLabel a mark-human-wait sets
+mark-human-wait, review, merge, update-branch, enable-auto-merge,
+disable-auto-merge, requeue, drain, freeze, recap, with who merges this tick
+(merges) and the humanWaitLabel a mark-human-wait sets
 (autopilot.humanWaitLabel, default void:human-wait); humanWait on stdin is that
 label's presence. It never acts on them. stop writes
 .void/machine/autopilot/stop, read before every assignment; delete the file to
@@ -44,11 +48,20 @@ location, checks its HEAD before and after, delegates a fresh-context, read-only
 independent-code-reviewer there, and records the verdict, bound to that head and
 to the session the runtime listed, in
 .void/machine/autopilot/reviews/<id>/<sha>.json. next merges on that record
-alone; a verdict posted on GitHub is a copy nothing reads. arm answers
-enable-auto-merge: it records the head in .void/machine/autopilot/armed/<id>.json,
-arms on exactly that head, and reads GitHub back: armed is an auto-merge request
-or, once the checks pass on a base with a merge queue, a queue entry; a head
-already merged counts. disarm answers
+alone; a verdict posted on GitHub is a copy nothing reads. merges --by-human
+writes .void/machine/autopilot/merge-hold.json: from the next tick every
+reviewed pull request goes to a person instead of merging; --automatic removes
+it, and an unreadable file counts as a hold. merge answers merge, on a base with
+no merge queue, and arm answers enable-auto-merge, on one with a queue: both
+prove again that no person holds the merges, that a clean local verdict holds
+exactly that head, and that the pull request targets the loop's base, never the
+branch that deploys. merge runs gh pr merge --match-head-commit, and when the
+base's policy refuses a direct merge it arms the native auto-merge on the same
+head; arm records the head in .void/machine/autopilot/armed/<id>.json, arms on
+exactly that head, and reads GitHub back: armed is an auto-merge request or,
+once the checks pass on a base with a merge queue, a queue entry; a head
+already merged counts. update-branch answers update-branch: GitHub merges the
+base into the branch if its head is still the one named. disarm answers
 disable-auto-merge, which next returns before any outcome that stops watching
 an armed pull request: its head moved since arm recorded it, no clean local
 verdict holds it, no arm recorded it, a worker or a person takes the ticket, or an
@@ -65,9 +78,10 @@ stdin JSON (LoopTracker):
              | { "ticketId", "outcome": "human-wait", "reason" }],
     "liveWorkers": ["<ticket id>"], "quota": "ok" | "low" }
 
-There is no --auto-merge flag. A machine merge is declared once in the program
-(autopilot.mergeGate: union-reviewed, plus deployBranch), and the loop arms one
-only on a head a local verdict passed, never into the branch that deploys.
+There is no --auto-merge flag. The loop merges on its own into the integration
+branch, only a head a local verdict passed, never into the branch that deploys
+(autopilot.deployBranch, or the repository default branch); a person who wants
+the merges runs merges --by-human.
 `.trimStart();
 
 /**
@@ -81,6 +95,9 @@ export const SUBCOMMANDS = Object.freeze({
   next: 'reads-stdin',
   stop: 'no-stdin',
   fingerprint: 'no-stdin',
+  merges: 'no-stdin',
+  merge: 'no-stdin',
+  'update-branch': 'no-stdin',
   arm: 'no-stdin',
   disarm: 'no-stdin',
   review: 'no-stdin',

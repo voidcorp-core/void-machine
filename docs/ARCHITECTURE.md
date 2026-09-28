@@ -365,7 +365,9 @@ evidence live only in the provider.
 
 `packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
 validates every field on read and refuses a file that is present but wrong, rather than falling
-back to a default: a typo in `mergeGate` must never be what hands a merge to a machine. Paths
+back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
+place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by
+the loop with its migration, so a former human gate never becomes consent to merge. Paths
 declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
 a YAML syntax.
 

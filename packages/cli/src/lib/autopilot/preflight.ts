@@ -33,11 +33,11 @@ export interface ParsedProgram {
   readonly autopilotConsentWithheld?: boolean;
   readonly autopilot?: {
     readonly clusterSize?: number;
-    readonly mergeGate?: string;
+    /** The `mergeGate` of a 4.0 programme, which the loop refuses until migrated. */
+    readonly legacyMergeGate?: string;
     /**
-     * The branch that deploys, which `union-reviewed` requires and `human`
-     * forbids. Observed rather than inferred: the gate cannot be reported
-     * without saying where the human still stands.
+     * The branch that deploys, or absent for the repository default branch.
+     * Carried so the merge check can say where the loop never merges.
      */
     readonly deployBranch?: string;
     readonly base?: string;
@@ -156,55 +156,39 @@ function programCheck(observation: AutopilotObservation): CheckResult {
   return pass(name, 'executing, autopilot declared');
 }
 
-// A file that did not parse has no fields to judge. Passing "human merge gate"
+// A file that did not parse has no fields to judge. Reporting a merge mode
 // and failing "no verifyCommands" off an unparsed file states two things the
 // file never said — the same misattribution this preflight exists to avoid.
 const UNPARSED = 'not judged: .void/program.md could not be parsed';
 const UNPARSED_FIX = 'fix the frontmatter reported by the program check above, then run doctor again';
 
 /**
- * The gates a program may declare, in the order the contract lists them.
- *
- * Named here rather than asserted as a single value. This check spent releases
- * telling a consumer who declared `union-reviewed` that "human" was the only
- * accepted value and to set it back — while `program.ts` accepted it, the
- * autopilot skill documented it, and machine merges had already landed. A red
- * doctor ordering an operator to undo the consent they just declared is worse
- * than no check: the consent is a durable declaration in the program, never a
- * switch, so nothing about this reading could be right.
- *
- * Consumers could not see the disagreement either. This repository is the one
- * place whose doctor would have surfaced it, and here doctor runs the self-host
- * release gate instead of the consumer preflight.
+ * Who merges, as the loop will read it. There is one mode: the loop merges on
+ * its own into the integration branch, never into the branch that deploys, and
+ * a person takes the merges with `autopilot merges --by-human`. A 4.0 programme
+ * still declaring `mergeGate` is refused by the loop, so it fails here with the
+ * migration rather than surfacing on the first tick.
  */
-const DECLARABLE_GATES = ['human', 'union-reviewed'] as const;
-
-function mergeGateCheck(observation: AutopilotObservation): CheckResult {
+function mergeModeCheck(observation: AutopilotObservation): CheckResult {
   const name = 'autopilot merge';
   if (malformedProgram(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
   const block = parsedProgram(observation)?.autopilot;
-  const gate = block?.mergeGate;
-
-  if (gate !== undefined && !DECLARABLE_GATES.includes(gate as (typeof DECLARABLE_GATES)[number])) {
+  const gate = block?.legacyMergeGate;
+  if (gate !== undefined) {
     return fail(
       name,
-      `mergeGate is ${JSON.stringify(gate)}, and only ${DECLARABLE_GATES.join(' and ')} exist`,
-      'set `mergeGate: human`, or `union-reviewed` with a `deployBranch` naming the branch that ships',
+      `the programme still declares \`mergeGate: ${gate}\`, which the loop refuses since the single merge mode`,
+      gate === 'union-reviewed'
+        ? 'remove `mergeGate` and set `autopilot.schemaVersion: 2`; the loop merges on its own by default'
+        : `run \`${PRODUCT_COMMAND} autopilot merges --by-human\` first to keep every merge yours, then remove \`mergeGate\` and set \`autopilot.schemaVersion: 2\``,
     );
   }
-
-  // Absent means human: a program that says nothing has consented to nothing.
-  if (gate === undefined || gate === 'human') return pass(name, 'human merge gate');
-
-  // `union-reviewed` without a `deployBranch`, or with one equal to the base,
-  // is refused by the descriptor parser itself, so it reaches here as malformed
-  // and never as a gate. What is left to report is what the operator enabled.
-  const deployBranch = block?.deployBranch;
+  const base = block?.base ?? 'auto';
+  const deploying = block?.deployBranch ?? 'the repository default branch';
   return pass(
     name,
-    deployBranch === undefined
-      ? 'union-reviewed merge gate'
-      : `union-reviewed merge gate; the human gate is the promotion to ${deployBranch}`,
+    `the loop merges into ${base} on a clean local verdict, never into ${deploying}; `
+      + `\`${PRODUCT_COMMAND} autopilot merges --by-human\` hands every reviewed pull request to a person`,
   );
 }
 
@@ -283,28 +267,36 @@ function worktreeCheck(observation: AutopilotObservation): CheckResult {
 function protectionCheck(observation: AutopilotObservation): CheckResult {
   const name = 'autopilot base';
   if (observation.baseProtected === 'unprobed') {
-    return unprobed(name, 'not probed here; autopilot proves protection at preflight and refuses to start without it');
+    return unprobed(
+      name,
+      'not probed by this preflight; the loop needs no protection, and required checks on the base are one more gate GitHub enforces',
+    );
   }
   if (observation.baseProtected === null) {
     // The first suspect used to be the token scope, which was usually already
     // correct: GitHub answers 403 "Upgrade to GitHub Pro or make this repository
     // public" on both /protection and /rulesets for a private repo on a free
     // plan. That is a plan constraint, and it means no server-side gate exists
-    // to find — the human merge gate is then a harness contract and nothing
-    // else (#193).
+    // to find — the local verdict is then the only gate before a merge
+    // (#193).
     return unknown(
       name,
       'branch protection could not be read',
-      'read the API error first: a 403 on a private repository on a free plan means protection cannot exist at all (make it public, upgrade, or accept that the human merge gate is enforced by contract only) — otherwise grant the token repository read access',
+      'read the API error first: a 403 on a private repository on a free plan means protection cannot exist at all (make it public, upgrade, or accept that the local verdict is the only gate) — otherwise grant the token repository read access',
     );
   }
-  return observation.baseProtected
-    ? pass(name, 'base branch protected')
-    : fail(
-        name,
-        'the base branch is unprotected, so nothing server-side stops a bad merge',
-        'require status checks on the base branch; autopilot relies on it as its last line',
-      );
+  if (observation.baseProtected) return pass(name, 'base branch protected');
+  // Optional since the single merge mode: the loop merges on its local verdict,
+  // and a consumer sets up nothing on GitHub. Required checks add a gate GitHub
+  // enforces at merge time, which a repository that cannot accept the local
+  // verdict's residual risk wants.
+  return {
+    name,
+    ok: true,
+    status: 'advisory',
+    message: 'the base branch is unprotected: the local verdict is the only gate before a merge',
+    fix: 'require status checks on the base branch to add a gate GitHub enforces at merge time',
+  };
 }
 
 /**
@@ -316,7 +308,7 @@ function protectionCheck(observation: AutopilotObservation): CheckResult {
 export function autopilotPreflight(observation: AutopilotObservation): readonly CheckResult[] {
   return Object.freeze([
     programCheck(observation),
-    mergeGateCheck(observation),
+    mergeModeCheck(observation),
     verifyCommandsCheck(observation),
     adapterCheck(observation),
     connectorCheck(observation),

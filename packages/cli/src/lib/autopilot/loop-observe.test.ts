@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   gitIn,
   observeGithub,
+  parseBehind,
+  parseDefaultBranch,
+  parseMergeMethod,
   parseMergeQueuePresence,
   parseQueueMembership,
   parsePullRequestFiles,
@@ -105,8 +108,10 @@ describe('parsePullRequestView', () => {
     expect(parsePullRequestView(withRollup(view, rollup)).checks).toBe('pending');
   });
 
-  it('holds the checks pending before any has registered', () => {
-    expect(parsePullRequestView(withRollup(openView(), [])).checks).toBe('pending');
+  it('reads a head no check runs on as having none, not as pending forever', () => {
+    // A project without CI merges on its local verdict alone; a pending state
+    // that never settles would hold every one of its pull requests.
+    expect(parsePullRequestView(withRollup(openView(), [])).checks).toBe('none');
   });
 
   it('reads commit statuses as checks', () => {
@@ -167,6 +172,45 @@ describe('parsePullRequestView', () => {
   it('asks gh for exactly the fields it reads', () => {
     const keys = Object.keys(openView()).sort();
     expect([...PULL_REQUEST_FIELDS].sort()).toEqual(keys);
+  });
+});
+
+describe('parseDefaultBranch', () => {
+  it('reads the default branch gh reports', () => {
+    expect(parseDefaultBranch(fixture('repo-view-default-branch.json'))).toBe('main');
+  });
+
+  it('reads an empty repository as having none, never as a guessed name', () => {
+    expect(parseDefaultBranch('{"defaultBranchRef":null}')).toBeUndefined();
+    expect(parseDefaultBranch('{"defaultBranchRef":{"name":""}}')).toBeUndefined();
+    expect(() => parseDefaultBranch('{}')).toThrow(/default branch/);
+  });
+});
+
+describe('parseBehind', () => {
+  it('reads the commits of the base a head lacks', () => {
+    expect(parseBehind(fixture('compare-behind.json'))).toBe(true);
+    expect(parseBehind(fixture('compare-ahead.json'))).toBe(false);
+    expect(() => parseBehind('{"status":"behind"}')).toThrow(/base comparison/);
+  });
+});
+
+describe('parseMergeMethod', () => {
+  const methods = (merge: boolean, squash: boolean, rebase: boolean) => JSON.stringify({
+    ...(JSON.parse(fixture('repo-view-merge-methods.json')) as Raw),
+    mergeCommitAllowed: merge,
+    squashMergeAllowed: squash,
+    rebaseMergeAllowed: rebase,
+  });
+
+  it('prefers a merge commit, which keeps each commit of the unit', () => {
+    expect(parseMergeMethod(fixture('repo-view-merge-methods.json'))).toBe('--merge');
+  });
+
+  it('takes the method the repository allows, and refuses a repository that allows none', () => {
+    expect(parseMergeMethod(methods(false, true, true))).toBe('--squash');
+    expect(parseMergeMethod(methods(false, false, true))).toBe('--rebase');
+    expect(() => parseMergeMethod(methods(false, false, false))).toThrow(/no merge method/);
   });
 });
 
@@ -280,21 +324,23 @@ describe('observeGithub', () => {
   it('reads the queue once and each pull request with its queue event', () => {
     const { run, calls } = runner({
       'mergeQueue(branch': fixture('queue-present.json'),
+      'defaultBranchRef': fixture('repo-view-default-branch.json'),
       'pr view 381': viewText('pr-view-open.json'),
       'timelineItems': fixture('timeline-requeued-after-ejections.json'),
       'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
       'pulls/381/files': fixture('pulls-files-rest.json'),
     });
-    const observed = observeGithub(run, { base: 'develop', pullRequests: [381] });
+    const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true });
     expect(observed.mergeQueue).toBe(true);
     expect(observed.pullRequests.get(381)).toMatchObject({
       headSha: expect.any(String),
       queue: 'none',
       ejections: 2,
     });
-    expect(calls.filter((call) => call.includes('view'))).toHaveLength(1);
+    const views = calls.filter((call) => call[0] === 'pr' && call.includes('view'));
+    expect(views).toHaveLength(1);
     // argv, never a shell string: the PR number and fields travel as separate words.
-    expect(calls.find((call) => call.includes('view'))).toEqual([
+    expect(views[0]).toEqual([
       'pr', 'view', '381', '--json', PULL_REQUEST_FIELDS.join(','),
     ]);
   });
@@ -310,12 +356,13 @@ describe('observeGithub', () => {
       observeGithub(
         runner({
           'mergeQueue(branch': fixture('queue-present.json'),
+          'defaultBranchRef': fixture('repo-view-default-branch.json'),
           'pr view 381': viewText('pr-view-open.json'),
           'timelineItems': timeline,
           'isInMergeQueue': fixture(membership),
               'pulls/381/files': fixture('pulls-files-rest.json'),
         }).run,
-        { base: 'develop', pullRequests: [381] },
+        { base: 'develop', pullRequests: [381], defaultBranch: true },
       ).pullRequests.get(381)?.queue;
     expect(observe(entered, 'pr-queue-membership-absent.json')).toBe('none');
     expect(observe(entered, 'pr-queue-membership-queued.json')).toBe('queued');
@@ -329,12 +376,13 @@ describe('observeGithub', () => {
     const failed = { ...run, name: 'independent-review', conclusion: 'FAILURE' };
     const { run: gh, calls } = runner({
       'mergeQueue(branch': fixture('queue-present.json'),
+      'defaultBranchRef': fixture('repo-view-default-branch.json'),
       'pr view 381': withRollup(view, [...(view.statusCheckRollup as Raw[]), failed]),
       'timelineItems': fixture('timeline-requeued-after-ejections.json'),
       'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
       'pulls/381/files': fixture('pulls-files-rest.json'),
     });
-    expect(observeGithub(gh, { base: 'develop', pullRequests: [381] }).pullRequests.get(381))
+    expect(observeGithub(gh, { base: 'develop', pullRequests: [381], defaultBranch: true }).pullRequests.get(381))
       .toMatchObject({ checks: 'failing' });
     expect(calls.find((call) => call[0] === 'run')).toBeUndefined();
   });
@@ -356,13 +404,14 @@ describe('observeGithub', () => {
         calls.push([...args]);
         const line = args.join(' ');
         if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
+        if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
         if (line.includes('pr view 381')) return JSON.stringify({ ...openView(), changedFiles });
         if (line.includes('timelineItems')) return fixture('timeline-requeued-after-ejections.json');
         if (line.includes('isInMergeQueue')) return fixture('pr-queue-membership-absent.json');
         if (line.includes('pulls/381/files')) return page();
         throw new Error(`unexpected gh call: ${line}`);
       };
-      const observed = observeGithub(run, { base: 'develop', pullRequests: [381] }).pullRequests.get(381);
+      const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true }).pullRequests.get(381);
       return { observed, pages: calls.filter((call) => call.join(' ').includes('pulls/381/files')) };
     }
 
@@ -391,61 +440,79 @@ describe('observeGithub', () => {
     });
   });
 
+  it('reads the default branch once, the one that deploys when the programme names none', () => {
+    const { run, calls } = runner({
+      'mergeQueue(branch': fixture('queue-present.json'),
+      'defaultBranchRef': fixture('repo-view-default-branch.json'),
+    });
+    expect(observeGithub(run, { base: 'develop', pullRequests: [], defaultBranch: true }).defaultBranch).toBe('main');
+    expect(calls.filter((call) => call.join(' ') === 'repo view --json defaultBranchRef')).toHaveLength(1);
+  });
+
+  it('reads no default branch when the programme names the one that deploys', () => {
+    const { run, calls } = runner({ 'mergeQueue(branch': fixture('queue-present.json') });
+    expect(observeGithub(run, { base: 'develop', pullRequests: [], defaultBranch: false }).defaultBranch)
+      .toBeUndefined();
+    expect(calls.filter((call) => call.join(' ').includes('defaultBranchRef'))).toEqual([]);
+  });
+
   describe('without a merge queue', () => {
-    // Serial merges are only safe when the base demands a branch up to date
-    // before it merges: otherwise two pull requests merge one after the other
-    // on a combination nobody tested.
-    const classic = (strict: boolean): string =>
-      JSON.stringify({ ...(JSON.parse(fixture('protection-required-checks-strict.json')) as Raw), strict });
-    const rules = (strict: boolean): string =>
-      JSON.stringify(
-        (JSON.parse(fixture('rules-branch-required-checks.json')) as Raw[]).map((rule) =>
-          rule.type === 'required_status_checks'
-            ? { ...rule, parameters: { ...(rule.parameters as Raw), strict_required_status_checks_policy: strict } }
-            : rule,
-        ),
-      );
-    const notFound = (): string => {
-      throw new Error('gh: Required status checks not enabled (HTTP 404)');
-    };
-    function observe(answers: { classic: () => string; rules: () => string }) {
-      const run = (args: readonly string[]): string => {
-        const line = args.join(' ');
-        if (line.includes('mergeQueue(branch')) return fixture('queue-absent.json');
-        if (line.includes('/protection/required_status_checks')) return answers.classic();
-        if (line.includes('/rules/branches/')) return answers.rules();
-        throw new Error(`unexpected gh call: ${line}`);
-      };
-      return () => observeGithub(run, { base: 'develop', pullRequests: [] });
+    // The loop merges one pull request at a time and brings the base into a
+    // head the base moved past, so it reads that itself: GitHub reports BEHIND
+    // only under a protection that requires it.
+    function observe(compare: string, mergeQueue = false) {
+      const { run, calls } = runner({
+        'mergeQueue(branch': fixture(mergeQueue ? 'queue-present.json' : 'queue-absent.json'),
+        'defaultBranchRef': fixture('repo-view-default-branch.json'),
+        'pr view 381': viewText('pr-view-open.json'),
+        'timelineItems': fixture('timeline-requeued-after-ejections.json'),
+        'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
+        'pulls/381/files': fixture('pulls-files-rest.json'),
+        '/compare/': fixture(compare),
+      });
+      const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true });
+      return { observed, compares: calls.filter((call) => call.join(' ').includes('/compare/')) };
     }
 
-    it('proceeds when classic protection requires the branch up to date', () => {
-      expect(observe({ classic: () => classic(true), rules: () => '[]' })().mergeQueue).toBe(false);
+    it('reads a head the base moved past as behind, whatever the protection says', () => {
+      const { observed, compares } = observe('compare-behind.json');
+      expect(observed.mergeQueue).toBe(false);
+      expect(observed.pullRequests.get(381)?.behind).toBe(true);
+      const head = observed.pullRequests.get(381)?.headSha as string;
+      expect(compares).toEqual([[
+        'api', `repos/{owner}/{repo}/compare/develop...${head}`,
+        '--jq', '{behind_by: .behind_by, ahead_by: .ahead_by, status: .status}',
+      ]]);
     });
 
-    it('proceeds when a ruleset requires the branch up to date', () => {
-      expect(observe({ classic: notFound, rules: () => rules(true) })().mergeQueue).toBe(false);
+    it('reads a head that contains its base as up to date', () => {
+      expect(observe('compare-ahead.json').observed.pullRequests.get(381)?.behind).toBe(false);
     });
 
-    it('refuses the serial fallback when nothing requires the branch up to date', () => {
-      expect(observe({ classic: notFound, rules: () => rules(false) })).toThrow(/up to date/);
-      expect(observe({ classic: () => classic(false), rules: () => '[]' })).toThrow(/up to date/);
-      expect(observe({ classic: notFound, rules: notFound })).toThrow(/HTTP 404/);
+    it('asks nothing more of a base with no protection at all', () => {
+      // 4.0 refused the tick here unless the base required branches up to date,
+      // which no consumer project had set up.
+      expect(() => observe('compare-ahead.json')).not.toThrow();
+    });
+
+    it('leaves the comparison to the queue when there is one', () => {
+      expect(observe('compare-behind.json', true).compares).toEqual([]);
     });
   });
 
   it('refuses to decide on a partial observation', () => {
     const run = (args: readonly string[]): string => {
+      if (args.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
       if (args.includes('view')) throw new Error('HTTP 502');
       return fixture('queue-absent.json');
     };
-    expect(() => observeGithub(run, { base: 'develop', pullRequests: [7] })).toThrow(/#7/);
+    expect(() => observeGithub(run, { base: 'develop', pullRequests: [7], defaultBranch: true })).toThrow(/#7/);
   });
 
   it('refuses more pull requests than a loop can hold slots for', () => {
     const run = (): string => fixture('queue-absent.json');
     const many = Array.from({ length: 33 }, (_, index) => index + 1);
-    expect(() => observeGithub(run, { base: 'develop', pullRequests: many })).toThrow(/at most/);
+    expect(() => observeGithub(run, { base: 'develop', pullRequests: many, defaultBranch: true })).toThrow(/at most/);
   });
 });
 

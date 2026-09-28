@@ -625,6 +625,28 @@ describe('autopilot merge', () => {
     expect(other.calls).toEqual([]);
   });
 
+  it('merges nothing past a check that registered since the tick read the head', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const view = JSON.parse(reviewedPull()) as Record<string, unknown>;
+    const [run] = view.statusCheckRollup as Record<string, unknown>[];
+    for (const [check, status] of [[{ ...run, conclusion: 'FAILURE' }, 'failing'], [{ ...run, status: 'IN_PROGRESS', conclusion: '' }, 'pending']] as const) {
+      const runner = github({ views: [JSON.stringify({ ...view, statusCheckRollup: [check] })] });
+      expect(mergeWith(root, runner).stderr).toMatch(new RegExp(`a ${status} check`));
+      expect(runner.writes()).toEqual([]);
+    }
+  });
+
+  it('merges nothing on a verdict recorded for another pull request under this head', () => {
+    const root = project();
+    const path = recordLocalVerdict(root);
+    const record = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    writeFileSync(path, JSON.stringify({ ...record, pullRequest: 12 }));
+    const runner = github({ views: [reviewedPull(), merged()] });
+    expect(mergeWith(root, runner).stderr).toMatch(/clean local verdict/);
+    expect(runner.calls).toEqual([]);
+  });
+
   it('merges nothing on a head the pull request has moved past', () => {
     const root = project();
     recordLocalVerdict(root);

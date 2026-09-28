@@ -380,7 +380,8 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
   const gh = runner(context.gh, 'gh');
   const base = resolveLoopBase(gh, program.autopilot.base);
   const pullRequests = pullRequestsToObserve(program, tracker);
-  const github = observeGithub(gh, { base, pullRequests });
+  const defaultBranch = program.autopilot.deployBranch === undefined;
+  const github = observeGithub(gh, { base, pullRequests, defaultBranch });
   const before = new Map<string, SharedFingerprint>();
   for (const ticket of tracker.tickets) {
     const recorded = recordedFingerprint(context.root, ticket.id);
@@ -673,6 +674,16 @@ function guardedMerge(target: MergeTarget, context: LoopRunners) {
       `#${number} is not the pull request the kernel approved`,
       view.state !== 'open' ? `#${number} is ${view.state}` : `its head moved to ${view.headSha}, not ${head}`,
       'ask `autopilot next` again; it merges only the head it just read',
+    );
+  }
+  // A check registered since the tick read the head: a failing one goes back
+  // to the worker, a pending one is waited for, never merged past.
+  if (view.checks === 'failing' || view.checks === 'pending') {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} has a ${view.checks} check on ${head}`,
+      'the checks changed since the kernel named this head',
+      'ask `autopilot next` again; it waits for pending checks and hands failing ones back',
     );
   }
   const base = resolveLoopBase(gh, program.autopilot.base);

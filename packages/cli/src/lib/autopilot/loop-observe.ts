@@ -437,6 +437,11 @@ export function readBehind(run: GhRunner, base: string, headSha: string): boolea
 export interface GithubRequest {
   readonly base: string;
   readonly pullRequests: readonly number[];
+  /**
+   * Whether the kernel needs the default branch: only when the programme names
+   * no deploying branch, so a tick depends on nothing it does not use.
+   */
+  readonly defaultBranch: boolean;
 }
 
 /**
@@ -456,7 +461,9 @@ export function observeGithub(run: GhRunner, request: GithubRequest): GithubObse
   const mergeQueue = observed('the merge queue', () =>
     parseMergeQueuePresence(run([...queueArgs, '-f', `query=${QUEUE_QUERY}`])),
   );
-  const defaultBranch = observed('the default branch', () => readDefaultBranch(run));
+  const defaultBranch = request.defaultBranch
+    ? observed('the default branch', () => readDefaultBranch(run))
+    : undefined;
   const pullRequests = new Map<number, PullRequestObservation>();
   for (const number of request.pullRequests) {
     const viewArgs = ['pr', 'view', String(number), '--json', PULL_REQUEST_FIELDS.join(',')];

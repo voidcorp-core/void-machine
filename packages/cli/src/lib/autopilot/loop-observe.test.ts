@@ -330,7 +330,7 @@ describe('observeGithub', () => {
       'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
       'pulls/381/files': fixture('pulls-files-rest.json'),
     });
-    const observed = observeGithub(run, { base: 'develop', pullRequests: [381] });
+    const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true });
     expect(observed.mergeQueue).toBe(true);
     expect(observed.pullRequests.get(381)).toMatchObject({
       headSha: expect.any(String),
@@ -362,7 +362,7 @@ describe('observeGithub', () => {
           'isInMergeQueue': fixture(membership),
               'pulls/381/files': fixture('pulls-files-rest.json'),
         }).run,
-        { base: 'develop', pullRequests: [381] },
+        { base: 'develop', pullRequests: [381], defaultBranch: true },
       ).pullRequests.get(381)?.queue;
     expect(observe(entered, 'pr-queue-membership-absent.json')).toBe('none');
     expect(observe(entered, 'pr-queue-membership-queued.json')).toBe('queued');
@@ -382,7 +382,7 @@ describe('observeGithub', () => {
       'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
       'pulls/381/files': fixture('pulls-files-rest.json'),
     });
-    expect(observeGithub(gh, { base: 'develop', pullRequests: [381] }).pullRequests.get(381))
+    expect(observeGithub(gh, { base: 'develop', pullRequests: [381], defaultBranch: true }).pullRequests.get(381))
       .toMatchObject({ checks: 'failing' });
     expect(calls.find((call) => call[0] === 'run')).toBeUndefined();
   });
@@ -411,7 +411,7 @@ describe('observeGithub', () => {
         if (line.includes('pulls/381/files')) return page();
         throw new Error(`unexpected gh call: ${line}`);
       };
-      const observed = observeGithub(run, { base: 'develop', pullRequests: [381] }).pullRequests.get(381);
+      const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true }).pullRequests.get(381);
       return { observed, pages: calls.filter((call) => call.join(' ').includes('pulls/381/files')) };
     }
 
@@ -445,8 +445,15 @@ describe('observeGithub', () => {
       'mergeQueue(branch': fixture('queue-present.json'),
       'defaultBranchRef': fixture('repo-view-default-branch.json'),
     });
-    expect(observeGithub(run, { base: 'develop', pullRequests: [] }).defaultBranch).toBe('main');
+    expect(observeGithub(run, { base: 'develop', pullRequests: [], defaultBranch: true }).defaultBranch).toBe('main');
     expect(calls.filter((call) => call.join(' ') === 'repo view --json defaultBranchRef')).toHaveLength(1);
+  });
+
+  it('reads no default branch when the programme names the one that deploys', () => {
+    const { run, calls } = runner({ 'mergeQueue(branch': fixture('queue-present.json') });
+    expect(observeGithub(run, { base: 'develop', pullRequests: [], defaultBranch: false }).defaultBranch)
+      .toBeUndefined();
+    expect(calls.filter((call) => call.join(' ').includes('defaultBranchRef'))).toEqual([]);
   });
 
   describe('without a merge queue', () => {
@@ -463,7 +470,7 @@ describe('observeGithub', () => {
         'pulls/381/files': fixture('pulls-files-rest.json'),
         '/compare/': fixture(compare),
       });
-      const observed = observeGithub(run, { base: 'develop', pullRequests: [381] });
+      const observed = observeGithub(run, { base: 'develop', pullRequests: [381], defaultBranch: true });
       return { observed, compares: calls.filter((call) => call.join(' ').includes('/compare/')) };
     }
 
@@ -499,13 +506,13 @@ describe('observeGithub', () => {
       if (args.includes('view')) throw new Error('HTTP 502');
       return fixture('queue-absent.json');
     };
-    expect(() => observeGithub(run, { base: 'develop', pullRequests: [7] })).toThrow(/#7/);
+    expect(() => observeGithub(run, { base: 'develop', pullRequests: [7], defaultBranch: true })).toThrow(/#7/);
   });
 
   it('refuses more pull requests than a loop can hold slots for', () => {
     const run = (): string => fixture('queue-absent.json');
     const many = Array.from({ length: 33 }, (_, index) => index + 1);
-    expect(() => observeGithub(run, { base: 'develop', pullRequests: many })).toThrow(/at most/);
+    expect(() => observeGithub(run, { base: 'develop', pullRequests: many, defaultBranch: true })).toThrow(/at most/);
   });
 });
 

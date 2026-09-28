@@ -674,12 +674,13 @@ export function provesCleanVerdict(
   return bound && verdict !== undefined && verdict.blocking.length === 0;
 }
 
-/** The clean verdict recorded on the head, the one thing a merge is armed on. */
-function cleanVerdictOf(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput) {
-  const head = headReviewOf(ticket, pr, input);
-  if (head.kind !== 'recorded') return undefined;
-  const verdict = head.review.verdict?.verdict;
-  return verdict !== undefined && verdict.blocking.length === 0 ? verdict : undefined;
+/**
+ * Whether a clean verdict is recorded on the head, the one thing a merge rests
+ * on. The same predicate the commands prove again, so the two cannot drift.
+ */
+function holdsCleanVerdict(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput): boolean {
+  const raw = input.reviews.get(ticket.id)?.get(pr.headSha);
+  return provesCleanVerdict(raw, { ticketId: ticket.id, pullRequest: pr.number, headSha: pr.headSha });
 }
 
 /**
@@ -828,7 +829,8 @@ function deployTargetReason(pr: PullRequestObservation, input: LoopInput): strin
   if (declared !== undefined) return `#${pr.number} targets ${base}, the branch the programme says deploys`;
   return defaultBranch === undefined
     ? `#${pr.number} targets ${base}, and GitHub reports no default branch to tell the branch that deploys`
-    : `#${pr.number} targets ${base}, the repository default branch, which deploys when the programme names none`;
+    : `#${pr.number} targets ${base}, the repository default branch, which deploys when the programme `
+      + 'names none; declare `autopilot.deployBranch` if another branch ships';
 }
 
 /**
@@ -870,7 +872,7 @@ function disarmOf(ticket: TrackerTicket, pr: PullRequestObservation, input: Loop
 function vouches(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput): boolean {
   const record = input.armed.get(ticket.id);
   if (record?.pullRequest !== pr.number || record.headSha !== pr.headSha) return false;
-  return cleanVerdictOf(ticket, pr, input) !== undefined;
+  return holdsCleanVerdict(ticket, pr, input);
 }
 
 /**

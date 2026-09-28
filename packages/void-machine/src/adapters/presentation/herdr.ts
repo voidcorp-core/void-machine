@@ -152,16 +152,18 @@ export function createHerdrSurface(config: MultiplexerConfig): SurfacePort {
       }
       const clock = deadline(now, PRESENTATION_LIMITS.closeMs);
       const found = await presence(ref, clock);
-      if (found.state === 'closed') return { outcome: 'already-absent' };
       if (found.state === 'foreign') return { outcome: 'skipped', cause: surfaceCause('identity-mismatch', 'pane get') };
       if (found.state === 'unknown') return { outcome: 'failed', cause: found.cause };
-      const closed = await call(ref.scope, ['pane', 'close', ref.id], clock);
-      if (!closed.ok) return { outcome: 'failed', cause: closed.cause };
+      if (found.state === 'open') {
+        const closed = await call(ref.scope, ['pane', 'close', ref.id], clock);
+        if (!closed.ok) return { outcome: 'failed', cause: closed.cause };
+      }
+      // A pane a person closed left its tab count stale as well.
       const role = surfaceLabelRole(ref.label);
       if (role !== undefined && ref.container !== undefined) {
         await relabel(ref.scope, ref.container, crewFamily(role), clock);
       }
-      return { outcome: 'closed' };
+      return { outcome: found.state === 'open' ? 'closed' : 'already-absent' };
     },
   };
 }

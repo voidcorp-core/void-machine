@@ -172,6 +172,17 @@ describe('herdr placement and metadata', () => {
     expect((mux.state() as unknown as { tabs: { label: string }[] }).tabs.map((tab) => tab.label))
       .toEqual(['pilot', 'crew · 1']);
   });
+  it('relabels the crew tab when it finds the pane already closed by a person', async () => {
+    const mux = setup('herdr');
+    const surface = adapter('herdr', mux);
+    const first = await surface.open(view);
+    await surface.open({ ...view, runId: OTHER });
+    if (!first.ok) throw new Error('open failed');
+    mux.write((state) => { state['panes'] = (state['panes'] as { pane_id: string }[]).filter((pane) => pane.pane_id !== first.ref.id); });
+    expect(await surface.close(first.ref)).toEqual({ outcome: 'already-absent' });
+    expect((mux.state() as unknown as { tabs: { label: string }[] }).tabs.map((tab) => tab.label))
+      .toEqual(['pilot', 'crew · 1']);
+  });
 });
 
 describe('tmux placement and marker', () => {

@@ -15,6 +15,7 @@ import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js
 import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
 import { sessionStartOutput } from './lifecycle/context.js';
 import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
+import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
 import { executeFormat } from './lifecycle/format-executor.js';
@@ -287,6 +288,8 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
         ? executeTypecheck(root, process.env)
         : hook === 'large-change'
           ? executeLargeChange(root, process.env)
+        : hook === 'delegation-result'
+          ? executeDelegationResult(rawInput, Date.now())
         : undefined;
   if (execution === undefined) return;
   if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);

@@ -50,3 +50,11 @@ describe.each([
     expect(command).not.toMatch(/write|generate|llm/i);
   });
 });
+
+describe('Claude Code delegation hooks', () => {
+  it('records a delegated run\'s final message on Stop, beside the session telemetry', () => {
+    const stop = commands(manifest('packages/core/.claude-plugin/plugin.json'), 'Stop').join('\n');
+    expect(stop).toContain('lifecycle delegation-result claude');
+    expect(stop).toContain('stop claude');
+  });
+});

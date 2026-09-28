@@ -30,7 +30,8 @@ export const RUN_ID = /^run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_TRANSITIONS = 512;
 const MAX_RECORD_BYTES = 65_536;
-const MAX_RESULT_BYTES = 300_000;
+/** The hook stores at most 256 KiB of message; JSON escaping can multiply it by six. */
+const MAX_RESULT_BYTES = 2_097_152;
 const MAX_INDEX = 1_024;
 const LOCK_LEASE_MS = 60_000;
 

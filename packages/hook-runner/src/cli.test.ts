@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   utimesSync,
@@ -509,6 +510,33 @@ describe('lifecycle context', () => {
         /void-checkpoint/i,
       );
       expect(result.stdout).not.toContain('continue the implementation');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('delegation-result lifecycle', () => {
+  it('records the claimed result of a delegated session without writing stdout', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-delegation-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      const session = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+      const run = join(root, '.void', 'machine', 'runs', 'mis_cli-contract', 'agents', 'run_x');
+      mkdirSync(run, { recursive: true });
+      mkdirSync(join(root, '.void', 'machine', 'agents', 'sessions'), { recursive: true });
+      writeFileSync(join(root, '.void', 'machine', 'agents', 'sessions', `${session}.json`),
+        JSON.stringify({ schemaVersion: 1, resultPath: join(run, 'result.json') }));
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-result', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'Stop', session_id: session, cwd: root,
+          last_assistant_message: 'Done.' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('');
+      expect(JSON.parse(readFileSync(join(run, 'result.json'), 'utf8')))
+        .toMatchObject({ sessionId: session, lastAssistantMessage: 'Done.' });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

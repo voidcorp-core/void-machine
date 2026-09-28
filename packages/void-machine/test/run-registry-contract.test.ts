@@ -126,7 +126,7 @@ describe('binding and results', () => {
     expect(lstatSync(path).isSymbolicLink()).toBe(true);
     expect(await registry.result(RUN)).toBeUndefined();
     rmSync(path);
-    writeFileSync(path, result(1, 'x'.repeat(400_000)));
+    writeFileSync(path, result(1, 'x'.repeat(2_200_000)));
     expect(await registry.result(RUN)).toBeUndefined();
     writeFileSync(path, '{"schemaVersion": 1}');
     expect(await registry.result(RUN)).toBeUndefined();

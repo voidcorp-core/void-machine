@@ -3623,9 +3623,6 @@ function machineRootOf(cwd) {
   const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, "") : "";
   return common !== "" && basename4(common) === ".git" ? join11(dirname5(common), ".void", "machine") : void 0;
 }
-function plainDirectory(path) {
-  return lstatSync4(path, { throwIfNoEntry: false })?.isDirectory() === true;
-}
 function claimedPath(root, sessionId) {
   try {
     const claim = record3(JSON.parse(readFileSync11(join11(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
@@ -3633,7 +3630,9 @@ function claimedPath(root, sessionId) {
     if (claim?.["schemaVersion"] !== 1 || typeof path !== "string" || !isAbsolute5(path)) return void 0;
     if (path.length > MAX_CLAIM_BYTES || basename4(path) !== "result.json") return void 0;
     const runs = join11(root, "runs");
-    if (!within(runs, path) || !plainDirectory(dirname5(path))) return void 0;
+    if (!within(runs, path) || lstatSync4(dirname5(path), { throwIfNoEntry: false })?.isDirectory() !== true) {
+      return void 0;
+    }
     return within(realpathSync4(runs), realpathSync4(dirname5(path))) ? path : void 0;
   } catch {
     return void 0;
@@ -3660,8 +3659,7 @@ function boundedMessage(message) {
 }
 function executeDelegationResult(input, now) {
   const fields = record3(input);
-  const sessionId = fields?.["session_id"];
-  const cwd = fields?.["cwd"];
+  const [sessionId, cwd] = [fields?.["session_id"], fields?.["cwd"]];
   if (typeof sessionId !== "string" || !SESSION_ID.test(sessionId) || typeof cwd !== "string") {
     return skipped("not-a-session");
   }
@@ -3678,12 +3676,14 @@ function executeDelegationResult(input, now) {
   try {
     mkdirSync4(dirname5(target), { recursive: true, mode: 448 });
     const temporary = join11(dirname5(target), `.tmp-${randomUUID()}`);
+    const pendingWork = [fields?.["background_tasks"], fields?.["session_crons"]].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
     writeFileSync3(temporary, JSON.stringify({
       schemaVersion: 1,
       sessionId,
       recordedAt: now,
       lastAssistantMessage: text2,
-      truncated
+      truncated,
+      pendingWork
     }), { mode: 384, flag: "wx" });
     renameSync4(temporary, target);
   } catch {

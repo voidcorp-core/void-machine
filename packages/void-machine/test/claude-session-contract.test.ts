@@ -104,8 +104,8 @@ describe('parsing captured outputs', () => {
     ]);
     expect(sessions.get('vm-probe-working')?.observation).toEqual({ kind: 'present', state: 'working' });
     expect(sessions.get('vm-probe-env')?.observation)
-      .toEqual({ kind: 'present', state: 'blocked', waitingFor: 'permission prompt' });
-    expect(sessions.get('vm-probe-env2')?.observation).toEqual({ kind: 'present', state: 'done' });
+      .toEqual({ kind: 'present', state: 'blocked', waitingFor: 'permission prompt', status: 'waiting' });
+    expect(sessions.get('vm-probe-env2')?.observation).toEqual({ kind: 'present', state: 'done', status: 'idle' });
     expect(sessions.get('vm-probe-agent')?.observation).toEqual({ kind: 'present', state: 'failed' });
     expect(sessions.get('vm-probe-hold')?.observation).toEqual({ kind: 'present', state: 'stopped' });
     expect(sessions.has('void-harness-d1')).toBe(false);
@@ -168,7 +168,7 @@ describe('the Claude session runtime', () => {
   it('observes sessions from the listing, and a failed listing as unreadable', async () => {
     const read = await runtime().observe([{ name: 'vm-probe-env2' }]);
     expect(read.kind === 'read' && read.sessions.get('vm-probe-env2')?.observation)
-      .toEqual({ kind: 'present', state: 'done' });
+      .toEqual({ kind: 'present', state: 'done', status: 'idle' });
     expect(await runtime({ agents: 'agents-garbage' }).observe([{ name: 'x' }]))
       .toMatchObject({ kind: 'unreadable' });
     expect(await runtime({ agents: 'agents-fail' }).observe([{ name: 'x' }]))

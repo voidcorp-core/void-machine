@@ -10,7 +10,6 @@ import { type LifecycleExecution, record, within } from './executor-shared.js';
  * parks it while a run still waits for its binding. It decides nothing, never writes stdout,
  * and ignores every session no run claims.
  */
-
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_MESSAGE_BYTES = 262_144;
 const MAX_CLAIM_BYTES = 4_096;
@@ -27,10 +26,6 @@ export function machineRootOf(cwd: string): string | undefined {
   return common !== '' && basename(common) === '.git' ? join(dirname(common), '.void', 'machine') : undefined;
 }
 
-function plainDirectory(path: string): boolean {
-  return lstatSync(path, { throwIfNoEntry: false })?.isDirectory() === true;
-}
-
 /** The claimed result path, only when it is a `result.json` inside a real run directory. */
 function claimedPath(root: string, sessionId: string): string | undefined {
   try {
@@ -39,7 +34,9 @@ function claimedPath(root: string, sessionId: string): string | undefined {
     if (claim?.['schemaVersion'] !== 1 || typeof path !== 'string' || !isAbsolute(path)) return undefined;
     if (path.length > MAX_CLAIM_BYTES || basename(path) !== 'result.json') return undefined;
     const runs = join(root, 'runs');
-    if (!within(runs, path) || !plainDirectory(dirname(path))) return undefined;
+    if (!within(runs, path) || lstatSync(dirname(path), { throwIfNoEntry: false })?.isDirectory() !== true) {
+      return undefined;
+    }
     return within(realpathSync(runs), realpathSync(dirname(path))) ? path : undefined;
   } catch {
     return undefined;
@@ -72,8 +69,7 @@ function boundedMessage(message: string): { readonly text: string; readonly trun
 
 export function executeDelegationResult(input: unknown, now: number): LifecycleExecution {
   const fields = record(input);
-  const sessionId = fields?.['session_id'];
-  const cwd = fields?.['cwd'];
+  const [sessionId, cwd] = [fields?.['session_id'], fields?.['cwd']];
   if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId) || typeof cwd !== 'string') {
     return skipped('not-a-session');
   }
@@ -90,8 +86,11 @@ export function executeDelegationResult(input: unknown, now: number): LifecycleE
   try {
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
     const temporary = join(dirname(target), `.tmp-${randomUUID()}`);
+    // Background tasks or wakeups still pending mean the turn resumes: the result is not final.
+    const pendingWork = [fields?.['background_tasks'], fields?.['session_crons']]
+      .reduce<number>((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
     writeFileSync(temporary, JSON.stringify({ schemaVersion: 1, sessionId, recordedAt: now,
-      lastAssistantMessage: text, truncated }), { mode: 0o600, flag: 'wx' });
+      lastAssistantMessage: text, truncated, pendingWork }), { mode: 0o600, flag: 'wx' });
     renameSync(temporary, target);
   } catch {
     return { status: 'degraded', details: { reason: 'result-not-written' } };

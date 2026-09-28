@@ -128,7 +128,7 @@ describe('one observation tick', () => {
     const bound = 'cccccccc-1111-2222-3333-444444444444';
     const store = memoryRegistry([record('run-a', [transition(1, 'admitted'), transition(2, 'working')])]);
     store.registry.bind('run-a', { handle: 'cccccccc', sessionId: bound });
-    store.results.set('run-a', { sessionId: 'dddddddd-1111-2222-3333-444444444444', recordedAt: T0 + 1,
+    store.results.set('run-a', { sessionId: 'dddddddd-1111-2222-3333-444444444444', recordedAt: T0 + 1, pendingWork: 0,
       text: 'forged', truncated: false });
     const { runtime } = fakeRuntime([new Map([['vm-run-a', session({ kind: 'present', state: 'done' }, bound)]])]);
     await observeMission(MISSION, { registry: store.registry, runtime, clock: manualClock(T0 + 10).clock,

@@ -101,7 +101,8 @@ describe('binding and results', () => {
       resultPath: join(root, 'runs', MISSION, 'agents', RUN, 'result.json') });
     expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(false);
     writeFileSync(claim.resultPath, result(500));
-    expect(await registry.result(RUN)).toEqual({ sessionId: SESSION, recordedAt: 500, text: 'LGTM', truncated: false });
+    expect(await registry.result(RUN)).toEqual({ sessionId: SESSION, recordedAt: 500, pendingWork: 0, text: 'LGTM',
+      truncated: false });
     expect((await registry.read(RUN))?.binding).toEqual({ handle: '6d5ea8bb', sessionId: SESSION });
   });
 

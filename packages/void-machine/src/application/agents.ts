@@ -226,7 +226,7 @@ export async function acceptAgent(context: AgentsContext, runId: string): Promis
     const result = currentResult(run, await context.store.result(runId));
     const now = context.clock.now();
     const accepted = acceptRun(runView(run.transitions),
-      result === undefined ? undefined : { recordedAt: result.recordedAt }, now);
+      result === undefined ? undefined : { recordedAt: result.recordedAt, pendingWork: result.pendingWork }, now);
     const failed = await record(context, runId, accepted);
     if (failed !== undefined || !accepted.ok || result === undefined) {
       return failed ?? refusal('no result is collected', 'send a message asking for the final result');

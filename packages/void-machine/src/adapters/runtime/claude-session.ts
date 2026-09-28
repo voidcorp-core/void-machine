@@ -105,6 +105,7 @@ const rowSchema = z.object({
   sessionId: z.string().optional(),
   startedAt: z.number(),
   state: z.string().optional(),
+  status: z.string().optional(),
   waitingFor: z.string().optional(),
 });
 export type SessionRow = z.infer<typeof rowSchema>;
@@ -119,14 +120,17 @@ export function parseSessionRows(stdout: string): SessionRow[] | undefined {
 }
 
 const NATIVE_STATES = ['working', 'blocked', 'done', 'failed', 'stopped'] as const;
+const PROCESS_STATUSES = ['busy', 'waiting', 'idle'] as const;
 
 function observationOf(row: SessionRow): RunObservation {
   const state = NATIVE_STATES.find((known) => known === row.state);
   if (state === undefined) {
     return { kind: 'unreadable', cause: `claude reported an unknown session state: ${String(row.state)}` };
   }
-  return state === 'blocked' && row.waitingFor !== undefined
-    ? { kind: 'present', state, waitingFor: row.waitingFor } : { kind: 'present', state };
+  const status = PROCESS_STATUSES.find((known) => known === row.status);
+  return { kind: 'present', state,
+    ...(state === 'blocked' && row.waitingFor !== undefined ? { waitingFor: row.waitingFor } : {}),
+    ...(status === undefined ? {} : { status }) };
 }
 
 /** The row of each run: its bound handle first, else the newest background row with its name. */

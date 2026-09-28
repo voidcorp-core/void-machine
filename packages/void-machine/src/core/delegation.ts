@@ -49,12 +49,17 @@ export interface RunTransition {
 /** A runtime's reading of one session. Unreadable never means absent. */
 export type RunObservation =
   | { readonly kind: 'present'; readonly state: 'working' | 'blocked' | 'done' | 'failed' | 'stopped';
-    readonly waitingFor?: string }
+    readonly waitingFor?: string;
+    /** Whether the session's process is busy right now; absent once the process has exited. */
+    readonly status?: 'busy' | 'waiting' | 'idle' }
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreadable'; readonly cause: string };
 
-/** The Stop-hook result as the kernel admits it: which turn it belongs to, never its text. */
-export interface RunResultStamp { readonly recordedAt: number }
+/**
+ * The Stop-hook result as the kernel admits it: which turn it belongs to, never its text, and
+ * how much background work (tasks, scheduled wakeups) would resume that turn.
+ */
+export interface RunResultStamp { readonly recordedAt: number; readonly pendingWork: number }
 
 export interface RunView {
   readonly state: RunState;
@@ -152,11 +157,6 @@ function observedAbsent(view: RunView, now: number): ObservationStep {
 
 function observedDone(view: RunView, input: ObservationInput): ObservationStep {
   if (view.state === 'turn-ended') return {};
-  if (input.result !== undefined && input.result.recordedAt >= view.turnStartedAt) {
-    return { transition: next(view, input.now, 'turn-ended', 'turn-ended',
-      'the agent ended its turn and its final message is collected',
-      'read it with void-machine agents status <runId>, then accept or send') };
-  }
   const doneSince = input.doneSince ?? input.now;
   if (input.now - doneSince < DELEGATION_LIMITS.resultGraceMs) return { doneSince };
   return { transition: next(view, input.now, 'turn-ended', 'result-missing',
@@ -164,22 +164,34 @@ function observedDone(view: RunView, input: ObservationInput): ObservationStep {
     'send a message asking for the final result: void-machine agents send <runId>') };
 }
 
+/** A final result of this turn, from a session that is not busy, ends the turn. */
+function endedByResult(view: RunView, input: ObservationInput): ObservationStep | undefined {
+  const { observation, result, now } = input;
+  if (observation.kind !== 'present' || observation.status === 'busy') return undefined;
+  if (observation.state === 'failed' || observation.state === 'stopped') return undefined;
+  if (result === undefined || result.recordedAt < view.turnStartedAt || result.pendingWork > 0) return undefined;
+  if (view.state === 'turn-ended') return {};
+  // Claude reads a turn that ends on a question as blocked, and may keep reading working
+  // long after an idle turn ended: the Stop-hook result is the reliable end of a turn.
+  const question = observation.state === 'blocked';
+  return { transition: next(view, now, 'turn-ended', 'turn-ended',
+    question ? 'the agent ended its turn with a question; its final message is collected'
+      : 'the agent ended its turn and its final message is collected',
+    question ? 'answer with void-machine agents send <runId>, or accept the result'
+      : 'read it with void-machine agents status <runId>, then accept or send') };
+}
+
 export function observeRun(view: RunView, input: ObservationInput): ObservationStep {
   const { observation, now } = input;
   if (!isOpen(view.state) || observation.kind === 'unreadable') return {};
   if (observation.kind === 'absent') return observedAbsent(view, now);
+  const ended = endedByResult(view, input);
+  if (ended !== undefined) return ended;
   switch (observation.state) {
     case 'working':
       return view.state === 'working' ? {} : { transition: next(view, now, 'working', 'observed',
         'the agent is working', 'wait with void-machine agents wait <runId>') };
     case 'blocked': {
-      // A turn that ends on a question reads blocked, yet its Stop hook ran: the coordinator
-      // answers it with send. Without a result for this turn, only a person can unblock it.
-      if (input.result !== undefined && input.result.recordedAt >= view.turnStartedAt) {
-        return view.state === 'turn-ended' ? {} : { transition: next(view, now, 'turn-ended', 'turn-ended',
-          'the agent ended its turn with a question; its final message is collected',
-          'answer with void-machine agents send <runId>, or accept the result') };
-      }
       const waitingFor = observation.waitingFor ?? 'input needed';
       if (view.state === 'waiting-human' && view.last.waitingFor === waitingFor) return {};
       return { transition: next(view, now, 'waiting-human', 'observed',

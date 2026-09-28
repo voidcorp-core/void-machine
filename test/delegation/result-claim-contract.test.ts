@@ -43,8 +43,8 @@ it('delivers the final message of a bound session to the run that claimed it', a
   const registry = await dispatchedRun(worktree);
   await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
   expect(executeDelegationResult(stop(worktree, 'Verdict: pass.'), 50)).toMatchObject({ status: 'ok' });
-  expect(await registry.result(RUN)).toEqual({ sessionId: SESSION, recordedAt: 50, text: 'Verdict: pass.',
-    truncated: false });
+  expect(await registry.result(RUN)).toEqual({ sessionId: SESSION, recordedAt: 50, pendingWork: 0,
+    text: 'Verdict: pass.', truncated: false });
 });
 
 it('delivers a message recorded before the bind once the session is bound', async () => {

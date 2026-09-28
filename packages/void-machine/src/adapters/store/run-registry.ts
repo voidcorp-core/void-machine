@@ -69,7 +69,8 @@ const transitionSchema = z.strictObject({
   cause: z.string().max(2_000), action: z.string().max(2_000), waitingFor: z.string().max(200).optional(),
 });
 const resultSchema = z.strictObject({ schemaVersion: z.literal(1), sessionId: z.string().regex(SESSION_ID),
-  recordedAt: z.number(), lastAssistantMessage: z.string(), truncated: z.boolean() });
+  recordedAt: z.number(), lastAssistantMessage: z.string(), truncated: z.boolean(),
+  pendingWork: z.number().int().min(0).max(10_000).optional() });
 const indexSchema = z.strictObject({ missionId: z.string().regex(MISSION_ID) });
 const lockSchema = z.strictObject({ owner: z.string(), pid: z.number().int(), token: z.string(),
   acquiredAt: z.number() });
@@ -298,7 +299,7 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       const stored = await readJson(join(runDirectory(missionId, runId), 'result.json'), resultSchema,
         MAX_RESULT_BYTES);
       return stored === undefined ? undefined : { sessionId: stored.sessionId, recordedAt: stored.recordedAt,
-        text: stored.lastAssistantMessage, truncated: stored.truncated };
+        pendingWork: stored.pendingWork ?? 0, text: stored.lastAssistantMessage, truncated: stored.truncated };
     },
     async lock(missionId, owner) {
       if (!MISSION_ID.test(missionId)) return undefined;

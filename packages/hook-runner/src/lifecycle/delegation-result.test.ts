@@ -48,8 +48,17 @@ describe('the delegation-result Stop hook', () => {
     claim(root, resultPath);
     expect(executeDelegationResult(stop(worktree), 1_234)).toMatchObject({ status: 'ok' });
     expect(JSON.parse(readFileSync(resultPath, 'utf8'))).toEqual({ schemaVersion: 1, sessionId: SESSION,
-      recordedAt: 1_234, lastAssistantMessage: 'No blocking finding.', truncated: false });
+      recordedAt: 1_234, lastAssistantMessage: 'No blocking finding.', truncated: false, pendingWork: 0 });
     expect(readdirSync(join(root, 'runs', 'mis_hook-contract', 'agents', 'run_x'))).toEqual(['result.json']);
+  });
+
+  it('counts the background work that would resume the turn', () => {
+    const { worktree, root } = repository();
+    const resultPath = join(runDirectory(root), 'result.json');
+    claim(root, resultPath);
+    executeDelegationResult({ ...stop(worktree), background_tasks: [{ id: 't1', type: 'shell' }],
+      session_crons: [{ id: 'c1' }] }, 1);
+    expect(JSON.parse(readFileSync(resultPath, 'utf8'))).toMatchObject({ pendingWork: 2 });
   });
 
   it('does nothing for a session no run claims while no run waits for its binding', () => {

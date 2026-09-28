@@ -34,6 +34,8 @@ export interface RunRecord {
 export interface RunResult {
   readonly sessionId: string;
   readonly recordedAt: number;
+  /** Background tasks and scheduled wakeups that would resume the turn, as the hook saw them. */
+  readonly pendingWork: number;
   readonly text: string;
   readonly truncated: boolean;
 }
@@ -169,7 +171,8 @@ export async function observeMission(missionId: string, deps: ObserveDependencie
     const since = deps.doneSince.get(run.runId);
     const step = observeRun(runView(run.transitions), {
       observation: state?.observation ?? { kind: 'absent' }, now: deps.clock.now(),
-      ...(result === undefined ? {} : { result: { recordedAt: result.recordedAt } }),
+      ...(result === undefined ? {} : { result: { recordedAt: result.recordedAt,
+        pendingWork: result.pendingWork } }),
       ...(since === undefined ? {} : { doneSince: since }),
     });
     if (step.doneSince === undefined) deps.doneSince.delete(run.runId);

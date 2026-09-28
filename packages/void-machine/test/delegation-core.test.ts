@@ -25,10 +25,11 @@ const absent: RunObservation = { kind: 'absent' };
 const unreadable: RunObservation = { kind: 'unreadable', cause: 'claude agents exited 1' };
 
 function observe(state: RunState, observation: RunObservation, now: number,
-  extra: { resultAt?: number; doneSince?: number; at?: number } = {}) {
+  extra: { resultAt?: number; pending?: number; doneSince?: number; at?: number } = {}) {
   return observeRun(runView(history(state, extra.at)), {
     observation, now,
-    ...(extra.resultAt === undefined ? {} : { result: { recordedAt: extra.resultAt } }),
+    ...(extra.resultAt === undefined ? {} : { result: { recordedAt: extra.resultAt,
+      pendingWork: extra.pending ?? 0 } }),
     ...(extra.doneSince === undefined ? {} : { doneSince: extra.doneSince }),
   });
 }
@@ -97,6 +98,20 @@ describe('observation', () => {
       .transition).toMatchObject({ to: 'waiting-human' });
   });
 
+  it('ends the turn on its recorded result even while the runtime still reads working', () => {
+    // Observed on 2.1.283: ten minutes after its Stop hook ran, an idle session still read working.
+    const idle: RunObservation = { kind: 'present', state: 'working', status: 'idle' };
+    expect(observe('working', idle, T0 + 10, { resultAt: T0 + 5 }).transition)
+      .toMatchObject({ to: 'turn-ended', event: 'turn-ended' });
+    expect(observe('working', { ...idle, status: 'busy' }, T0 + 10, { resultAt: T0 + 5 }).transition)
+      .toBeUndefined();
+  });
+
+  it('waits past a result recorded while background work would resume the turn', () => {
+    const idle: RunObservation = { kind: 'present', state: 'working', status: 'idle' };
+    expect(observe('working', idle, T0 + 10, { resultAt: T0 + 5, pending: 1 }).transition).toBeUndefined();
+  });
+
   it('ends the turn once the result of this turn is recorded', () => {
     expect(observe('working', present('done'), T0 + 10, { resultAt: T0 + 5 }).transition)
       .toMatchObject({ to: 'turn-ended', event: 'turn-ended' });
@@ -151,12 +166,12 @@ describe('commands', () => {
   });
 
   it('accepts only a turn-ended run with a result collected for its current turn', () => {
-    expect(acceptRun(ended, { recordedAt: T0 + 1 }, T0 + 60))
+    expect(acceptRun(ended, { recordedAt: T0 + 1, pendingWork: 0 }, T0 + 60))
       .toMatchObject({ ok: true, transition: { to: 'accepted' } });
     expect(acceptRun(ended, undefined, T0 + 60)).toMatchObject({ ok: false,
       action: expect.stringContaining('send') });
-    expect(acceptRun(ended, { recordedAt: T0 - 1 }, T0 + 60)).toMatchObject({ ok: false });
-    expect(acceptRun(runView(history('working')), { recordedAt: T0 + 1 }, T0 + 60))
+    expect(acceptRun(ended, { recordedAt: T0 - 1, pendingWork: 0 }, T0 + 60)).toMatchObject({ ok: false });
+    expect(acceptRun(runView(history('working')), { recordedAt: T0 + 1, pendingWork: 0 }, T0 + 60))
       .toMatchObject({ ok: false });
   });
 

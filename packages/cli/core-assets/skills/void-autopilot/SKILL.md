@@ -24,8 +24,9 @@ a ticket gets a different standard depending on how it was started.
 It never merges on a flag. Not on the command line, not because the checks are green, not because
 the diff is small. Consent to a machine merge is a durable declaration in the programme --
 `mergeGate: union-reviewed` together with a `deployBranch` -- and there is no `--auto-merge` on
-any path. Under `mergeGate: human` a ready pull request goes to a person; that wait is by design
-and never counts toward the streak that stops the loop. Promotion from the integration branch to the one that deploys stays human
+any path. Under `mergeGate: human` a pull request goes to a person once it is ready (no draft,
+conflict or failing check), without waiting on the review check, which a project without the
+review job never gets; that wait is by design and never counts toward the streak that stops the loop. Promotion from the integration branch to the one that deploys stays human
 under both gates.
 
 It never merges a change to the machinery that judges merges. A pull request touching

@@ -1,0 +1,5 @@
+backgrounded · e4c0c72c · vm-probe-agent
+  claude agents             list sessions
+  claude attach e4c0c72c    open in this terminal
+  claude logs e4c0c72c      show recent output
+  claude stop e4c0c72c      stop this session

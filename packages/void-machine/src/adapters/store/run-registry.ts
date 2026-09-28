@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { link, lstat, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { RUN_STATES, type RunTransition, isOpen } from '../../core/delegation.js';
@@ -288,9 +288,13 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       await replaceFile(agents('sessions', `${binding.sessionId}.json`),
         JSON.stringify({ schemaVersion: 1, resultPath }));
       await unlink(agents('pending', runId)).catch(() => { /* Bound before, or never pending. */ });
+      // A copy's answer parked before this bind replaces an older result of the first session.
       const parked = agents('parked', `${binding.sessionId}.json`);
-      if ((await lstat(resultPath).catch(() => undefined)) === undefined) {
-        await rename(parked, resultPath).catch(() => { /* Nothing was parked for this session. */ });
+      const early = await readJson(parked, resultSchema, MAX_RESULT_BYTES);
+      const recorded = await readJson(resultPath, resultSchema, MAX_RESULT_BYTES);
+      if (early !== undefined && early.sessionId === binding.sessionId
+        && (recorded === undefined || early.recordedAt > recorded.recordedAt)) {
+        await rename(parked, resultPath);
       }
     },
     async result(runId): Promise<RunResult | undefined> {

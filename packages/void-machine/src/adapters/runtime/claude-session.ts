@@ -40,6 +40,8 @@ export interface ClaudeSessionConfig {
   readonly env: NodeJS.ProcessEnv;
   /** Home of the person running the kernel, for user-level Claude settings. */
   readonly home: string;
+  /** The command that refreshes the installed hooks, as the shipping product names it. */
+  readonly updateCommand: string;
   readonly spawn?: ClaudeSpawn;
   readonly launchTimeoutMs?: number;
 }
@@ -262,14 +264,14 @@ function projectRoot(cwd: string): string {
   return top === '' ? cwd : top;
 }
 
-function resultHookPreflight(cwd: string, home: string): Preflight {
+function resultHookPreflight(cwd: string, home: string, updateCommand: string): Preflight {
   const root = projectRoot(cwd);
   const wirings = [join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json'),
     join(home, '.claude', 'settings.json')].map((path) => resultHookWiring(readBounded(path) ?? ''));
   // Refresh from the main checkout: an update run inside a worktree installs nothing it keeps.
   const machine = resolveMachineRoot(cwd);
   const main = machine.ok ? dirname(dirname(machine.root)) : root;
-  const update = `run npx voidmachine update in ${main}, commit the refreshed hooks, `
+  const update = `run ${updateCommand} in ${main}, commit the refreshed hooks, `
     + 'then dispatch from a checkout that has them';
   if (wirings.every((wiring) => wiring === 'missing')) {
     return { ok: false, action: update,
@@ -297,7 +299,7 @@ export function createClaudeSessionRuntime(config: ClaudeSessionConfig): AgentRu
         return { ok: false, cause: `Claude Code ${version} cannot resume background sessions in place`,
           action: `update Claude Code to ${MIN_CLAUDE_VERSION} or later` };
       }
-      return resultHookPreflight(cwd, config.home);
+      return resultHookPreflight(cwd, config.home, config.updateCommand);
     },
     async dispatch(plan) {
       return launchOutcome(await runBounded(config, launchArgs(plan), plan.cwd, launchTimeout), plan);

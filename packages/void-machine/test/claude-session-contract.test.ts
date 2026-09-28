@@ -33,6 +33,7 @@ function replay(modes: { launch?: string; version?: string; agents?: string; sto
 
 function runtime(modes: Parameters<typeof replay>[0] = {}, extra: { home?: string; launchTimeoutMs?: number } = {}) {
   return createClaudeSessionRuntime({ executable: 'claude', env: {}, home: extra.home ?? '/nonexistent',
+    updateCommand: 'npx product update',
     spawn: replay(modes), ...(extra.launchTimeoutMs === undefined ? {} : { launchTimeoutMs: extra.launchTimeoutMs }) });
 }
 
@@ -100,7 +101,7 @@ describe('parsing captured outputs', () => {
     const sessions = readSessions(rows ?? [], [
       { name: 'vm-probe-working' }, { name: 'vm-probe-env', handle: '00d01c20' },
       { name: 'vm-probe-env2' }, { name: 'vm-probe-agent' }, { name: 'vm-probe-hold' },
-      { name: 'void-harness-d1' }, { name: 'vm-never-launched' },
+      { name: 'coordinator-d1' }, { name: 'vm-never-launched' },
     ]);
     expect(sessions.get('vm-probe-working')?.observation).toEqual({ kind: 'present', state: 'working' });
     expect(sessions.get('vm-probe-env')?.observation)
@@ -108,7 +109,7 @@ describe('parsing captured outputs', () => {
     expect(sessions.get('vm-probe-env2')?.observation).toEqual({ kind: 'present', state: 'done', status: 'idle' });
     expect(sessions.get('vm-probe-agent')?.observation).toEqual({ kind: 'present', state: 'failed' });
     expect(sessions.get('vm-probe-hold')?.observation).toEqual({ kind: 'present', state: 'stopped' });
-    expect(sessions.has('void-harness-d1')).toBe(false);
+    expect(sessions.has('coordinator-d1')).toBe(false);
     expect(sessions.has('vm-never-launched')).toBe(false);
     expect(sessions.get('vm-probe-env')?.binding)
       .toEqual({ handle: '00d01c20', sessionId: '00d01c20-dfb6-4979-bd94-5bc6de2e2e1a' });
@@ -217,7 +218,7 @@ describe('preflight', () => {
   ])('refuses with the update command when %s', async (_case, settings, bundle) => {
     const outcome = await runtime().preflight(project(settings, bundle));
     expect(outcome).toMatchObject({ ok: false, cause: expect.stringContaining('delegation-result'),
-      action: expect.stringContaining('npx voidmachine update') });
+      action: expect.stringContaining('npx product update') });
   });
 
   it('refuses a Claude Code older than the resumable background sessions', async () => {
@@ -228,7 +229,7 @@ describe('preflight', () => {
 
   it('refuses when claude is not installed', async () => {
     const missing = createClaudeSessionRuntime({ executable: '/nonexistent/claude-dev923', env: {},
-      home: '/nonexistent' });
+      home: '/nonexistent', updateCommand: 'npx product update' });
     expect(await missing.preflight(project(wired, 'delegation-result')))
       .toMatchObject({ ok: false, action: expect.stringContaining('Claude Code') });
   });

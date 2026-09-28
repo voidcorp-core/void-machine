@@ -278,12 +278,13 @@ export async function attachAgent(context: AgentsContext, runId: string)
 
 /** Composes the file registry and the Claude runtime for a process running in `cwd`. */
 export function agentsContext(options: { readonly cwd: string; readonly env: NodeJS.ProcessEnv;
-  readonly home: string }): AgentsContext | Refusal {
+  readonly home: string; readonly updateCommand: string }): AgentsContext | Refusal {
   const root = resolveMachineRoot(options.cwd);
   if (!root.ok) return refusal(root.cause, root.action);
   return {
     store: createRunRegistry({ machineRoot: root.root }),
-    runtime: createClaudeSessionRuntime({ executable: 'claude', env: options.env, home: options.home }),
+    runtime: createClaudeSessionRuntime({ executable: 'claude', env: options.env, home: options.home,
+      updateCommand: options.updateCommand }),
     clock: { now: Date.now, sleep: (ms) => new Promise((done) => { setTimeout(done, ms); }) },
     owner: `agents-${String(process.pid)}-${randomUUID()}`,
     newRunId: () => `run_${randomUUID()}`,

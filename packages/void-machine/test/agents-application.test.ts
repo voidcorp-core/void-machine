@@ -85,10 +85,10 @@ describe('dispatch', () => {
   it('refuses with the repair when the result hook is not installed, and records nothing', async () => {
     const cwd = repository();
     const { runtime, launches } = scriptedRuntime({ preflight: { ok: false,
-      cause: 'the delegation-result Stop hook is not installed', action: 'run npx voidmachine update' } });
+      cause: 'the delegation-result Stop hook is not installed', action: 'run npx product update' } });
     const ctx = context(cwd, runtime);
     expect(await dispatchAgent(ctx, reviewInput(cwd))).toEqual({ ok: false,
-      cause: 'the delegation-result Stop hook is not installed', action: 'run npx voidmachine update' });
+      cause: 'the delegation-result Stop hook is not installed', action: 'run npx product update' });
     expect(launches).toHaveLength(0);
     expect(await ctx.store.runIds()).toEqual([]);
   });

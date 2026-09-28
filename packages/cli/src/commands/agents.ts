@@ -13,6 +13,7 @@ import {
 	stopAgent,
 	waitAgents,
 } from '@voidcorp/void-machine/agents';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 
 /**
  * `void-machine agents`: dispatch, follow and close delegated agent runs through the Void
@@ -87,7 +88,8 @@ function readText(path: string): string | undefined {
 }
 
 function context(io: AgentsIo, cwd = io.cwd): AgentsContext | AgentsOutcome {
-	const composed = agentsContext({ cwd, env: io.env, home: io.home });
+	const composed = agentsContext({ cwd, env: io.env, home: io.home,
+		updateCommand: `npx ${PRODUCT_IDENTITY.packageName} update` });
 	return 'ok' in composed ? answer(composed) : composed;
 }
 

@@ -124,6 +124,32 @@ describe('binding and results', () => {
     expect(JSON.parse(readFileSync(join(root, 'agents', 'pending', RUN), 'utf8'))).toEqual({ cwd: main, createdAt: 900 });
   });
 
+  it('adopts the parked answer of a copy over the older result of the first session', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    writeFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'result.json'), result(300, 'first turn'));
+    const copy = '9a012d67-1111-4222-8333-444444444444';
+    mkdirSync(join(root, 'agents', 'parked'), { recursive: true });
+    writeFileSync(join(root, 'agents', 'parked', `${copy}.json`),
+      result(900, 'copy turn').replace(SESSION, copy));
+    await registry.bind(RUN, { handle: '9a012d67', sessionId: copy });
+    expect(await registry.result(RUN)).toMatchObject({ sessionId: copy, recordedAt: 900, text: 'copy turn' });
+  });
+
+  it('keeps a recorded result newer than a parked one', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    mkdirSync(join(root, 'runs', MISSION, 'agents', RUN), { recursive: true });
+    writeFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'result.json'), result(900, 'newer'));
+    mkdirSync(join(root, 'agents', 'parked'), { recursive: true });
+    writeFileSync(join(root, 'agents', 'parked', `${SESSION}.json`), result(100, 'older'));
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    expect(await registry.result(RUN)).toMatchObject({ text: 'newer' });
+  });
+
   it('adopts a result the hook parked before the session was bound', async () => {
     const { main } = repository();
     const { root, registry } = registryIn(main);

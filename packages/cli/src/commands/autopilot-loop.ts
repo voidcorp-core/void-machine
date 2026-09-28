@@ -645,7 +645,7 @@ export function judgmentCommand(argv: readonly string[], stdin: string): LoopCom
       'AUTOPILOT_USAGE',
       'a review verdict is not rendered for posting by hand',
       '`autopilot review` records it locally, from the reviewer it delegated on the head',
-      'answer the `review` action with `autopilot review --ticket <id> --pr <n> --head <sha>`',
+      'answer the `review` action with `autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>`',
     );
   }
   const kinds = JUDGMENT_KINDS.filter((known) => known !== 'review-verdict');

@@ -1026,6 +1026,8 @@ describe('protected paths', () => {
       'packages/cli/src/lib/autopilot/program.ts',
       'packages/cli/src/lib/autopilot/judgments.ts',
       'packages/cli/src/commands/autopilot-review.ts',
+      'packages/cli/src/commands/autopilot.ts',
+      'packages/cli/src/lib/autopilot/footprint-area.ts',
       'packages/mission-engine/src/specialist/completion.ts',
       'packages/core/agents/independent-code-reviewer.md',
       'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',

@@ -36,7 +36,8 @@ what a judging workflow runs from outside `.github`
 `packages/core/enforce/**`), what judges a publication (`scripts/prepare-release-artifact.mjs`,
 `scripts/verify-release-publication.mjs` and the two release contracts they read), the loop code that believes a verdict and arms a merge (`loop.ts`,
 `loop-observe.ts`, `review-signature.ts`, `commands/autopilot-loop.ts`), the local chain of judgment
-(`packages/void-machine/src/**`, `commands/agents.ts`, `program.ts`, `judgments.ts`), or the
+(`packages/void-machine/src/**`, `commands/agents.ts`, `program.ts`, `judgments.ts`, the review
+command, its parser and the reviewer's definition, `footprint-area.ts`), or the
 runtime configuration installed here, which a reviewer running in a worktree of the head loads too
 (`.void/hooks/**`, `.claude/**`, `.mcp.json`, `.codex/**`, `.void/config.json`) goes to a person with the file named (`protected-path`). A rename
 counts by its source and its destination. The programme adds paths through
@@ -210,7 +211,9 @@ removed blindly), checks its `HEAD` before and after the run, refuses a change t
 protected path, whose configuration the reviewer would load, and delegates the reviewer there
 through the kernel. It takes the reviewer's answer only from the native session the runtime lists
 under that run, binds the verdict to the head itself, and records it in
-`.void/machine/autopilot/reviews/<ticket>/<head>.json`; `next` decides on that record alone. A
+`.void/machine/autopilot/reviews/<ticket>/<head>.json`; `next` decides on that record alone. One
+review runs per head at a time, a recorded verdict is never rewritten, and the round is counted
+from the records. A
 verdict posted on the pull request is a copy for people; a check GitHub runs, a review App's
 included, is one more check that must pass. The record lives where an agent on this machine could
 write: the binding to the head, the protected paths, the fingerprint and the human promotion bound

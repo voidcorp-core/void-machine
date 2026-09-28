@@ -99,6 +99,9 @@ export const PROTECTED_PATHS_FLOOR = [
   // parser that reads the reviewer's answer, and the reviewer's own definition,
   // from its source to the copy the package ships.
   'packages/cli/src/commands/autopilot-review.ts',
+  'packages/cli/src/commands/autopilot.ts',
+  // Decides whether a changed file lies on protected ground at all.
+  'packages/cli/src/lib/autopilot/footprint-area.ts',
   'packages/mission-engine/src/specialist/completion.ts',
   'packages/core/agents/independent-code-reviewer.md',
   'packages/core/specialists/independent-code-reviewer.yaml',

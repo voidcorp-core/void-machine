@@ -16,7 +16,16 @@
 // copy for humans; nothing reads it back.
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   type AgentsContext,
@@ -38,7 +47,7 @@ import {
   type TicketId,
   ticketIdSchema,
 } from '../lib/autopilot/judgments.js';
-import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX } from '../lib/autopilot/loop.js';
+import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX, REVIEW_RUNNING_MS } from '../lib/autopilot/loop.js';
 import { type GhRunner, type GitRunner, PULL_REQUEST_FIELDS, parsePullRequestView } from '../lib/autopilot/loop-observe.js';
 import { readProgramDescriptor } from '../lib/autopilot/program.js';
 import { flagValue } from './autopilot-usage.js';
@@ -140,6 +149,16 @@ export function readLocalReviews(
 function writeRecord(path: string, record: LocalReview): void {
   const admission = admitLocalReview(record);
   if (!admission.ok) throw new Error(admission.reason);
+  // A verdict, once recorded, is final for its head: nothing rewrites it.
+  const current = existsSync(path) ? admitLocalReview(parsedOrText(readFileSync(path, 'utf8'))) : undefined;
+  if (current?.ok === true && current.value.verdict !== undefined) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `a verdict is already recorded for ${record.ticketId} at ${record.headSha}`,
+      'another review of the same head recorded it first',
+      'ask `autopilot next` again; it decides on the recorded verdict',
+    );
+  }
   mkdirSync(dirname(path), { recursive: true });
   // An unpredictable name, created exclusively: the directory is writable by
   // any agent on the machine, and a link planted there must not be followed.
@@ -195,6 +214,53 @@ function previousBlocking(root: string, target: ReviewTarget): readonly Blocking
   });
   const latest = blocked.sort((left, right) => left.recordedAt - right.recordedAt).at(-1);
   return latest?.verdict.blocking ?? [];
+}
+
+/** The round the records count for this head: 2 once another head of the pull request was blocked. */
+function countedRound(root: string, target: ReviewTarget): 1 | 2 {
+  const heads = readLocalReviews(root, [target.ticket]).get(target.ticket) ?? new Map<string, unknown>();
+  const blocked = [...heads.values()].some((raw) => {
+    const admission = admitLocalReview(raw);
+    const review = admission.ok ? admission.value : undefined;
+    return review !== undefined && review.pullRequest === target.pullRequest && review.headSha !== target.head
+      && (review.verdict?.verdict.blocking.length ?? 0) > 0;
+  });
+  return blocked ? 2 : 1;
+}
+
+/**
+ * One review of a head at a time. The lock is created exclusively and removed
+ * when the command ends; one older than the window in which a review may run
+ * was left by an interrupted command and is taken over.
+ */
+function lockHead(path: string, now: number): () => void {
+  const lock = `${path}.lock`;
+  mkdirSync(dirname(lock), { recursive: true });
+  const text = `${JSON.stringify({ pid: process.pid, at: now })}\n`;
+  try {
+    writeFileSync(lock, text, { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
+    const held = parsedOrText(readFileSync(lock, 'utf8'));
+    const at = typeof held === 'object' && held !== null && 'at' in held && typeof held.at === 'number' ? held.at : now;
+    if (now - at < REVIEW_RUNNING_MS) {
+      throw autopilotFailure(
+        'AUTOPILOT_CONTRACT',
+        'a review of this head is already running',
+        `${lock} was taken ${Math.round((now - at) / 60_000)} min ago`,
+        'wait for it: `autopilot next` answers `wait awaiting-review` meanwhile',
+      );
+    }
+    unlinkSync(lock);
+    writeFileSync(lock, text, { encoding: 'utf8', flag: 'wx' });
+  }
+  return () => {
+    try {
+      unlinkSync(lock);
+    } catch {
+      // Already gone: an operator removed a lock they judged stale.
+    }
+  };
 }
 
 // Target ------------------------------------------------------------------------------------
@@ -558,10 +624,34 @@ export async function reviewCommand(argv: readonly string[], runners: ReviewRunn
   if (existing?.verdict !== undefined) {
     return { value: existing, human: `${target.ticket} at ${target.head} is already reviewed\n` };
   }
+  const counted = countedRound(runners.root, target);
+  if (counted !== target.round) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${target.pullRequest} is in round ${counted}, not round ${target.round}`,
+      'the round narrows what the reviewer reads, so it is counted from the records, never taken on trust',
+      'copy the round from the `review` action `autopilot next` just returned',
+    );
+  }
+  const release = lockHead(path, runners.now());
+  try {
+    return await reviewHead(runners, target, path, existing, view.baseRef);
+  } finally {
+    release();
+  }
+}
+
+async function reviewHead(
+  runners: ReviewRunners,
+  target: ReviewTarget,
+  path: string,
+  existing: LocalReview | undefined,
+  base: string,
+): Promise<ReviewCommandOutput> {
   const empty: LocalReview = { schemaVersion: 1, ticketId: target.ticket,
     pullRequest: target.pullRequest, headSha: target.head, attempts: [] };
   const worktree = reviewWorktreePath(runners.worktrees, repositoryName(runners), target);
-  const started = await startedRun(runners, path, worktree, target, existing ?? empty, view.baseRef);
+  const started = await startedRun(runners, path, worktree, target, existing ?? empty, base);
   let record = started.record;
   if (started.runId === undefined) return failed(path, record, runners.now(), started.failure ?? 'no run');
   const runId = started.runId;

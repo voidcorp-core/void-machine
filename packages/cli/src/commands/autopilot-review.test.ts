@@ -375,6 +375,30 @@ describe('autopilot review, around a crash and beside other reviews', () => {
     expect(launches).toHaveLength(0);
   });
 
+  it('refuses a round the records do not count, rather than narrowing a first review', async () => {
+    const repo = repository();
+    const { runners: built, launches } = runners(repo);
+    const second = argv(repo.head).map((arg, index, all) => (all[index - 1] === '--round' ? '2' : arg));
+    await expect(reviewCommand(second, built)).rejects.toThrow(/round 2/);
+    expect(launches).toHaveLength(0);
+  });
+
+  it('refuses a second review of a head while one is running on it', async () => {
+    const repo = repository();
+    const path = reviewPath(repo.root, 'DEV-1', repo.head);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(`${path}.lock`, `${JSON.stringify({ pid: 1, at: Date.now() })}\n`);
+    const { runners: built, launches, clock } = runners(repo);
+    writeFileSync(`${path}.lock`, `${JSON.stringify({ pid: 1, at: clock.value })}\n`);
+    await expect(reviewCommand(argv(repo.head), built)).rejects.toThrow(/already running/);
+    expect(launches).toHaveLength(0);
+    // A lock older than the window in which a review may run is an interrupted command's.
+    writeFileSync(`${path}.lock`, `${JSON.stringify({ pid: 1, at: clock.value - 46 * 60_000 })}\n`);
+    await reviewCommand(argv(repo.head), built);
+    expect(recorded(repo).verdict).toBeDefined();
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
   it('reviews nothing outside a programme, and says that is why', async () => {
     const repo = repository();
     rmSync(join(repo.root, '.void', 'program.md'));

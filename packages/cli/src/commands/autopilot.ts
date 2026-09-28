@@ -112,7 +112,7 @@ export function runAutopilotCommand(
         'AUTOPILOT_CONTRACT',
         '`review` waits on a delegated reviewer and runs only from the CLI entry point',
         'the synchronous surface cannot wait on an agent',
-        `run \`${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <n> --head <sha>\``,
+        `run \`${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>\``,
       );
     }
     return unroutedSubcommand(subcommand);

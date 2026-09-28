@@ -5,7 +5,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { executeDelegationResult, machineRootOf } from './delegation-result.js';
+import { machineRootOf } from './delegation-kernel.js';
+import { executeDelegationResult } from './delegation-result.js';
 
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
 

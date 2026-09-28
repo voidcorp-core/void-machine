@@ -57,4 +57,10 @@ describe('Claude Code delegation hooks', () => {
     expect(stop).toContain('lifecycle delegation-result claude');
     expect(stop).toContain('stop claude');
   });
+
+  it('routes the coordinator\'s Agent tool through the kernel before it runs', () => {
+    const capture = (manifest('packages/core/.claude-plugin/plugin.json').hooks.PreToolUse ?? [])
+      .filter((entry) => entry.matcher === 'Agent').flatMap((entry) => entry.hooks.map((hook) => hook.command));
+    expect(capture).toEqual([expect.stringContaining('lifecycle delegation-capture claude')]);
+  });
 });

@@ -220,8 +220,12 @@ once even when two processes observe. The final message comes from the `lifecycl
 delegation-result` Stop hook, which follows a claim keyed by the native session id
 ([decision](decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)).
 `dispatch` refuses, with the repairing command, when Claude Code is missing or older than
-2.1.257, the workspace is not trusted, or that hook is not installed. Presentation is `none` for
-now: a run is visible through `agents status` and `claude agents`.
+2.1.257, the workspace is not trusted, or that hook is not installed. Under a multiplexer, the
+`lifecycle delegation-capture` PreToolUse hook on `Agent` turns the coordinator's native delegation
+into a `dispatch` and refuses the native call with the runId and the `wait` command; it passes
+without a surface, for a `fork`, for a session the kernel launched (same session-id rule), and on
+any failure, which it reports instead of blocking. How a run is shown in a multiplexer is described
+in `NATIVE-SUPERVISION.md`.
 
 ## Stack profile compilation
 

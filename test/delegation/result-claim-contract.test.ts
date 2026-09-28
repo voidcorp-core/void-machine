@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, onTestFinished } from 'vitest';
+import { delegatedSession } from '../../packages/hook-runner/src/lifecycle/delegation-kernel.js';
 import { executeDelegationResult } from '../../packages/hook-runner/src/lifecycle/delegation-result.js';
 import { createRunRegistry, resolveMachineRoot } from '../../packages/void-machine/src/adapters/store/run-registry.js';
 
@@ -54,4 +55,16 @@ it('delivers a message recorded before the bind once the session is bound', asyn
     .toMatchObject({ status: 'ok', details: { parked: true } });
   await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
   expect(await registry.result(RUN)).toMatchObject({ text: 'Early verdict.' });
+});
+
+it('recognizes a session the kernel launched, before and after its binding, as a delegated caller', async () => {
+  const { main, worktree } = checkoutWithWorktree();
+  const root = join(main, '.void', 'machine');
+  const registry = await dispatchedRun(worktree);
+  expect(delegatedSession(root, SESSION)).toBe(false);
+  await registry.bind(RUN, { handle: '6d5ea8bb' });
+  expect(delegatedSession(root, SESSION)).toBe(true);
+  expect(delegatedSession(root, '0d5ea8bb-764f-4463-b733-8b94509eb25e')).toBe(false);
+  await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+  expect(delegatedSession(root, SESSION)).toBe(true);
 });

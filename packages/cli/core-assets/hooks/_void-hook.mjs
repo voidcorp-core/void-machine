@@ -729,8 +729,8 @@ function testName(edits) {
 var REDIRECTION = /(?:^|\s)(?:\d*|&)>{1,2}\s*("[^"]*"|'[^']*'|[^\s;|&<>]+)/g;
 var TEE = /(?:^|[\s|])tee\s+(?:-a\s+)?("[^"]*"|'[^']*'|[^\s;|&<>-][^\s;|&<>]*)/g;
 function unquote2(target) {
-  const quoted = /^(["'])(.*)\1$/.exec(target);
-  return quoted?.[2] ?? target;
+  const quoted2 = /^(["'])(.*)\1$/.exec(target);
+  return quoted2?.[2] ?? target;
 }
 function shellWriteTargets(command) {
   const targets = /* @__PURE__ */ new Set();
@@ -1484,14 +1484,14 @@ function cacheFilePath(env) {
   return base === void 0 ? void 0 : join4(base, PRODUCT_COMMAND, "freshness.json");
 }
 function parseEntry(raw) {
-  let json;
+  let json2;
   try {
-    json = JSON.parse(raw);
+    json2 = JSON.parse(raw);
   } catch {
     return void 0;
   }
-  if (!isRecord2(json)) return void 0;
-  const { latest, checkedAt } = json;
+  if (!isRecord2(json2)) return void 0;
+  const { latest, checkedAt } = json2;
   if (typeof latest !== "string" || latest.trim() === "") return void 0;
   if (typeof checkedAt !== "number" || !Number.isFinite(checkedAt)) return void 0;
   return { latest, checkedAt };
@@ -1608,9 +1608,9 @@ function distTagsUrl(registry, pkg) {
   }
   return `${registry}/-/package/${encodeURIComponent(name)}/dist-tags`;
 }
-function parseLatestTag(json) {
-  if (!isRecord3(json)) return void 0;
-  const latest = json["latest"];
+function parseLatestTag(json2) {
+  if (!isRecord3(json2)) return void 0;
+  const latest = json2["latest"];
   return typeof latest === "string" && latest.trim() !== "" ? latest.trim() : void 0;
 }
 async function fetchLatestVersion(options = {}) {
@@ -1637,13 +1637,13 @@ async function fetchLatestVersion(options = {}) {
       if (res.status === 403 || res.status === 429) return { reason: `HTTP ${res.status} (rate-limited)` };
       return { reason: `HTTP ${res.status}` };
     }
-    let json;
+    let json2;
     try {
-      json = await res.json();
+      json2 = await res.json();
     } catch {
       return { reason: "malformed response" };
     }
-    const latest = parseLatestTag(json);
+    const latest = parseLatestTag(json2);
     return latest === void 0 ? { reason: "no usable latest tag in response" } : { latest };
   } catch (error) {
     const name = error instanceof Error ? error.name : "";
@@ -3605,15 +3605,44 @@ function executeContextContinuity(rawInput, root, runtime3, now) {
   return { status: "skipped", details: { reason: "event-not-actionable" } };
 }
 
+import { spawnSync as spawnSync3 } from "node:child_process";
+import { mkdtempSync, readFileSync as readFileSync12, rmSync, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir2, tmpdir } from "node:os";
+import { dirname as dirname6, join as join13 } from "node:path";
+
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { lstatSync as lstatSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync4, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { basename as basename4, dirname as dirname5, isAbsolute as isAbsolute5, join as join11 } from "node:path";
-var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-var MAX_MESSAGE_BYTES = 262144;
-var MAX_CLAIM_BYTES = 4096;
-var PARKING_WINDOW_MS = 6e5;
-var skipped = (reason) => ({ status: "skipped", details: { reason } });
+import { existsSync as existsSync6, readFileSync as readFileSync11, readdirSync as readdirSync3 } from "node:fs";
+import { basename as basename4, dirname as dirname5, join as join12 } from "node:path";
+
+import { join as join11 } from "node:path";
+var VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
+function readVersion(path) {
+  const version = record3(readJson(path))?.["version"];
+  return typeof version === "string" && VERSION_SHAPE.test(version) ? version : void 0;
+}
+function resolveInstall(root, env) {
+  const explicit = productSetting(env, "VERSION");
+  if (explicit !== void 0 && VERSION_SHAPE.test(explicit)) {
+    return { version: explicit, source: void 0 };
+  }
+  const pluginRoot = env["CLAUDE_PLUGIN_ROOT"];
+  if (pluginRoot !== void 0) {
+    const version2 = readVersion(join11(pluginRoot, ".claude-plugin", "plugin.json"));
+    if (version2 !== void 0) return { version: version2, source: "marketplace" };
+  }
+  const receipt = record3(readJson(voidReadPath(root, "receipts", "install-v1.json")));
+  const version = receipt?.["version"];
+  if (typeof version === "string" && VERSION_SHAPE.test(version)) {
+    const declared = receipt?.["source"];
+    const source2 = declared === "local" || declared === "marketplace" ? declared : void 0;
+    return { version, source: source2 };
+  }
+  return { version: "unknown", source: void 0 };
+}
+
+var RUN_ID = /^run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var MISSION_ID = /^mis_[A-Za-z0-9_-]{8,100}$/;
+var MAX_PENDING = 64;
 function machineRootOf(cwd) {
   const result = spawnSync2(
     "git",
@@ -3621,19 +3650,154 @@ function machineRootOf(cwd) {
     { cwd, shell: false, encoding: "utf8", timeout: 5e3 }
   );
   const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, "") : "";
-  return common !== "" && basename4(common) === ".git" ? join11(dirname5(common), ".void", "machine") : void 0;
+  return common !== "" && basename4(common) === ".git" ? join12(dirname5(common), ".void", "machine") : void 0;
 }
+var json = (path) => {
+  try {
+    return record3(JSON.parse(readFileSync11(path, "utf8")));
+  } catch {
+    return void 0;
+  }
+};
+function delegatedSession(root, sessionId) {
+  if (existsSync6(join12(root, "agents", "sessions", `${sessionId}.json`))) return true;
+  let pending = [];
+  try {
+    pending = readdirSync3(join12(root, "agents", "pending")).filter((name) => RUN_ID.test(name));
+  } catch {
+  }
+  return pending.slice(0, MAX_PENDING).some((runId) => {
+    const missionId = json(join12(root, "agents", "index", `${runId}.json`))?.["missionId"];
+    const run = typeof missionId === "string" && MISSION_ID.test(missionId) ? json(join12(root, "runs", missionId, "agents", runId, "run.json")) : void 0;
+    return record3(run?.["binding"])?.["handle"] === sessionId.slice(0, 8);
+  });
+}
+function kernelCommand(checkout, env) {
+  const local = findExecutable("void-machine", checkout, env);
+  if (local !== void 0) return [local];
+  const [version, npx] = [resolveInstall(checkout, env).version, findExecutable("npx", checkout, env)];
+  return npx === void 0 || version === "unknown" ? void 0 : [npx, "--prefer-offline", "-y", `voidmachine@${version}`];
+}
+
+var DISPATCH_TIMEOUT_MS = 6e4;
+var WORK_MODES = /* @__PURE__ */ new Set(["auto", "bypassPermissions"]);
+var EDITING_TOOL = /(^|[\s,])(Edit|Write|NotebookEdit|MultiEdit|\*)([\s,(]|$)/;
+var skipped = (reason) => ({ status: "skipped", details: { reason } });
+var quoted = (arg) => /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`;
+var parse = (text2) => {
+  try {
+    return record3(JSON.parse(text2));
+  } catch {
+    return void 0;
+  }
+};
+var shown = (env) => env["HERDR_ENV"] === "1" || [env["TMUX"], env["CMUX_SOCKET_PATH"], env["CMUX_SOCKET"]].some(Boolean);
+function readOnly(type, checkout, env) {
+  if (type === "Explore" || type === "Plan") return true;
+  if (!/^[\w.-]{1,100}$/.test(type)) return false;
+  for (const home of [checkout, env["HOME"] ?? homedir2()]) {
+    try {
+      const definition = readFileSync12(join13(home, ".claude", "agents", `${type}.md`), "utf8");
+      const frontmatter2 = /^---\n([\s\S]*?)\n---/.exec(definition)?.[1] ?? "";
+      const tools = /^tools:(.*)$/m.exec(frontmatter2)?.[1];
+      return tools !== void 0 && tools.trim() !== "" && !EDITING_TOOL.test(tools);
+    } catch {
+    }
+  }
+  return false;
+}
+function ticketOf(cwd) {
+  const branch = spawnSync3("git", ["branch", "--show-current"], { cwd, encoding: "utf8", timeout: 5e3 }).stdout;
+  return /(?:^|\/)([a-z][a-z0-9]{0,9}-\d{1,9})(?:-|$)/i.exec(branch?.trim() ?? "")?.[1]?.toUpperCase();
+}
+var passWith = (reason, why) => ({
+  status: "degraded",
+  details: { reason },
+  diagnostic: `delegation-capture: ${why}
+`,
+  output: { hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    additionalContext: `void-machine could not supervise this subagent (${why}); it runs natively, without a pane.`
+  } }
+});
+function refusal(command, runId, ticket, background) {
+  const vm = [...command.map(quoted), "agents"].join(" ");
+  return `void-machine runs this subagent as supervised run ${runId}${ticket === void 0 ? "" : ` (${ticket})`}, shown in its own pane; do not call Agent again for it. Collect its answer: run \`${vm} wait ${runId} --timeout 540\`${background ? " in the background (Bash run_in_background)" : ""} until it reports turn-ended, answer a question with \`${vm} send ${runId} --message-file <file>\`, then close it with \`${vm} accept ${runId}\`, which prints its final message.`;
+}
+function executeDelegationCapture(input, env) {
+  const fields = record3(input);
+  const tool = record3(fields?.["tool_input"]);
+  const [sessionId, cwd, prompt] = [fields?.["session_id"], fields?.["cwd"], tool?.["prompt"]];
+  const [type, model] = [tool?.["subagent_type"], tool?.["model"]];
+  if (fields?.["tool_name"] !== "Agent" || typeof prompt !== "string" || prompt === "" || typeof sessionId !== "string" || typeof cwd !== "string") return skipped("not-an-agent-call");
+  if (!shown(env)) return skipped("no-surface");
+  if (type === "fork") return skipped("fork");
+  const root = machineRootOf(cwd);
+  if (root === void 0) return skipped("no-repository");
+  if (fields["agent_id"] !== void 0 || delegatedSession(root, sessionId)) return skipped("delegated-caller");
+  const checkout = dirname6(dirname6(root));
+  const command = kernelCommand(checkout, env);
+  if (command === void 0) return passWith("no-cli", "no void-machine command is installed or on PATH");
+  const role = typeof type === "string" && readOnly(type, checkout, env) ? "review" : "work";
+  const mode = String(fields["permission_mode"]);
+  if (role === "work" && !WORK_MODES.has(mode)) return passWith("caller-permission", `the caller runs in ${mode} mode`);
+  const ticket = ticketOf(cwd);
+  const briefs = mkdtempSync(join13(tmpdir(), "agent-capture-"));
+  try {
+    writeFileSync3(join13(briefs, "brief.md"), prompt, { mode: 384 });
+    const run = spawnSync3(
+      command[0] ?? "",
+      [
+        ...command.slice(1),
+        "agents",
+        "dispatch",
+        "--role",
+        role,
+        "--cwd",
+        cwd,
+        "--brief-file",
+        join13(briefs, "brief.md"),
+        ...typeof type === "string" ? ["--type", type] : [],
+        ...typeof model === "string" ? ["--model", model] : [],
+        ...ticket === void 0 ? [] : ["--ticket", ticket]
+      ],
+      { cwd, env, encoding: "utf8", timeout: DISPATCH_TIMEOUT_MS, shell: false }
+    );
+    const answer = parse(run.stdout ?? "");
+    const runId = answer?.["runId"];
+    if (run.status !== 0 || answer?.["ok"] !== true || typeof runId !== "string" || !RUN_ID.test(runId)) {
+      const cause = typeof answer?.["cause"] === "string" ? answer["cause"] : `dispatch exited ${String(run.status)}`;
+      return passWith("dispatch-refused", cause.slice(0, 500));
+    }
+    return { status: "ok", details: { captured: true, role }, output: { hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: refusal(command, runId, ticket, tool?.["run_in_background"] === true)
+    } } };
+  } finally {
+    rmSync(briefs, { recursive: true, force: true });
+  }
+}
+
+import { randomUUID } from "node:crypto";
+import { lstatSync as lstatSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync13, readdirSync as readdirSync4, realpathSync as realpathSync4, renameSync as renameSync4, writeFileSync as writeFileSync4 } from "node:fs";
+import { basename as basename5, dirname as dirname7, isAbsolute as isAbsolute5, join as join14 } from "node:path";
+var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var MAX_MESSAGE_BYTES = 262144;
+var MAX_CLAIM_BYTES = 4096;
+var PARKING_WINDOW_MS = 6e5;
+var skipped2 = (reason) => ({ status: "skipped", details: { reason } });
 function claimedPath(root, sessionId) {
   try {
-    const claim = record3(JSON.parse(readFileSync11(join11(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
+    const claim = record3(JSON.parse(readFileSync13(join14(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
     const path = claim?.["resultPath"];
     if (claim?.["schemaVersion"] !== 1 || typeof path !== "string" || !isAbsolute5(path)) return void 0;
-    if (path.length > MAX_CLAIM_BYTES || basename4(path) !== "result.json") return void 0;
-    const runs = join11(root, "runs");
-    if (!within(runs, path) || lstatSync4(dirname5(path), { throwIfNoEntry: false })?.isDirectory() !== true) {
+    if (path.length > MAX_CLAIM_BYTES || basename5(path) !== "result.json") return void 0;
+    const runs = join14(root, "runs");
+    if (!within(runs, path) || lstatSync4(dirname7(path), { throwIfNoEntry: false })?.isDirectory() !== true) {
       return void 0;
     }
-    return within(realpathSync4(runs), realpathSync4(dirname5(path))) ? path : void 0;
+    return within(realpathSync4(runs), realpathSync4(dirname7(path))) ? path : void 0;
   } catch {
     return void 0;
   }
@@ -3641,9 +3805,9 @@ function claimedPath(root, sessionId) {
 function waitingRun(root, cwd, now) {
   try {
     const here = realpathSync4(cwd);
-    const directory = join11(root, "agents", "pending");
-    return readdirSync3(directory).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
-      const marker = record3(JSON.parse(readFileSync11(join11(directory, name), "utf8")));
+    const directory = join14(root, "agents", "pending");
+    return readdirSync4(directory).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
+      const marker = record3(JSON.parse(readFileSync13(join14(directory, name), "utf8")));
       const createdAt = marker?.["createdAt"];
       const runCwd = marker?.["cwd"];
       return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync4(runCwd) === here;
@@ -3661,23 +3825,23 @@ function executeDelegationResult(input, now) {
   const fields = record3(input);
   const [sessionId, cwd] = [fields?.["session_id"], fields?.["cwd"]];
   if (typeof sessionId !== "string" || !SESSION_ID.test(sessionId) || typeof cwd !== "string") {
-    return skipped("not-a-session");
+    return skipped2("not-a-session");
   }
   const root = machineRootOf(cwd);
-  if (root === void 0) return skipped("no-repository");
+  if (root === void 0) return skipped2("no-repository");
   let target = claimedPath(root, sessionId);
   const parked = target === void 0;
   if (target === void 0) {
-    if (!waitingRun(root, cwd, now)) return skipped("not-delegated");
-    target = join11(root, "agents", "parked", `${sessionId}.json`);
+    if (!waitingRun(root, cwd, now)) return skipped2("not-delegated");
+    target = join14(root, "agents", "parked", `${sessionId}.json`);
   }
   const message = fields?.["last_assistant_message"];
   const { text: text2, truncated } = boundedMessage(typeof message === "string" ? message : "");
   try {
-    mkdirSync4(dirname5(target), { recursive: true, mode: 448 });
-    const temporary = join11(dirname5(target), `.tmp-${randomUUID()}`);
+    mkdirSync4(dirname7(target), { recursive: true, mode: 448 });
+    const temporary = join14(dirname7(target), `.tmp-${randomUUID()}`);
     const pendingWork = [fields?.["background_tasks"], fields?.["session_crons"]].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
-    writeFileSync3(temporary, JSON.stringify({
+    writeFileSync4(temporary, JSON.stringify({
       schemaVersion: 1,
       sessionId,
       recordedAt: now,
@@ -3692,33 +3856,7 @@ function executeDelegationResult(input, now) {
   return { status: "ok", details: { recorded: true, parked, truncated } };
 }
 
-import { join as join12 } from "node:path";
-var VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
-function readVersion(path) {
-  const version = record3(readJson(path))?.["version"];
-  return typeof version === "string" && VERSION_SHAPE.test(version) ? version : void 0;
-}
-function resolveInstall(root, env) {
-  const explicit = productSetting(env, "VERSION");
-  if (explicit !== void 0 && VERSION_SHAPE.test(explicit)) {
-    return { version: explicit, source: void 0 };
-  }
-  const pluginRoot = env["CLAUDE_PLUGIN_ROOT"];
-  if (pluginRoot !== void 0) {
-    const version2 = readVersion(join12(pluginRoot, ".claude-plugin", "plugin.json"));
-    if (version2 !== void 0) return { version: version2, source: "marketplace" };
-  }
-  const receipt = record3(readJson(voidReadPath(root, "receipts", "install-v1.json")));
-  const version = receipt?.["version"];
-  if (typeof version === "string" && VERSION_SHAPE.test(version)) {
-    const declared = receipt?.["source"];
-    const source2 = declared === "local" || declared === "marketplace" ? declared : void 0;
-    return { version, source: source2 };
-  }
-  return { version: "unknown", source: void 0 };
-}
-
-import { spawnSync as spawnSync3 } from "node:child_process";
+import { spawnSync as spawnSync4 } from "node:child_process";
 
 import {
   isAbsolute as isAbsolute6,
@@ -3766,7 +3904,7 @@ function executeFormat(rawInput, root, env) {
   );
   let formatted = 0;
   for (const file of files) {
-    const result = spawnSync3(biome, ["format", "--write", file], {
+    const result = spawnSync4(biome, ["format", "--write", file], {
       cwd: root,
       env: { ...process.env, ...env },
       shell: false,
@@ -3789,7 +3927,7 @@ function executeFormat(rawInput, root, env) {
   return { status: "ok", details: { formatted } };
 }
 
-import { spawnSync as spawnSync4 } from "node:child_process";
+import { spawnSync as spawnSync5 } from "node:child_process";
 
 function parseAddedLines(numstat) {
   return numstat.split(/\r?\n/).reduce((total, line) => {
@@ -3815,7 +3953,7 @@ function assessLargeChange(assessment) {
 }
 
 function runGit(git3, root, args, env) {
-  const result = spawnSync4(git3, args, {
+  const result = spawnSync5(git3, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -3915,21 +4053,21 @@ function executeLargeChange(root, env) {
 
 import { execFileSync } from "node:child_process";
 import {
-  existsSync as existsSync6,
+  existsSync as existsSync7,
   lstatSync as lstatSync5,
-  readFileSync as readFileSync12,
+  readFileSync as readFileSync14,
   statSync as statSync6
 } from "node:fs";
-import { basename as basename5, join as join13 } from "node:path";
+import { basename as basename6, join as join15 } from "node:path";
 var PROGRAM_PATHS = [
-  join13(".void", "program.md"),
-  join13(".void", "active.md"),
-  join13("plans", "ACTIVE.md")
+  join15(".void", "program.md"),
+  join15(".void", "active.md"),
+  join15("plans", "ACTIVE.md")
 ];
 var CHECKPOINT_PATHS = [
-  join13(".void", "machine", "checkpoint.md"),
-  join13(".void", "local", "checkpoint.md"),
-  join13(".void", "session", "current.md")
+  join15(".void", "machine", "checkpoint.md"),
+  join15(".void", "local", "checkpoint.md"),
+  join15(".void", "session", "current.md")
 ];
 var MAX_READ_BYTES = 5e5;
 var GIT_TIMEOUT_MS = 200;
@@ -3937,7 +4075,7 @@ function readBounded(path) {
   try {
     const info = lstatSync5(path);
     if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_READ_BYTES) return void 0;
-    return readFileSync12(path, "utf8");
+    return readFileSync14(path, "utf8");
   } catch {
     return void 0;
   }
@@ -3988,7 +4126,7 @@ function programFrom(raw, legacy) {
   };
 }
 function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative11) => existsSync6(join13(root, relative11)));
+  const present = PROGRAM_PATHS.filter((relative11) => existsSync7(join15(root, relative11)));
   if (present.length === 0) return { program: void 0 };
   if (present.length > 1) {
     return {
@@ -3998,7 +4136,7 @@ function observeProgram(root) {
   }
   const relative10 = present[0];
   if (relative10 === void 0) return { program: void 0 };
-  const raw = readBounded(join13(root, relative10));
+  const raw = readBounded(join15(root, relative10));
   const program = raw === void 0 ? void 0 : programFrom(raw, relative10 !== PROGRAM_PATHS[0]);
   return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative10}` } : { program };
 }
@@ -4026,7 +4164,7 @@ function gitObservation(root) {
 }
 function checkpointObservation(root) {
   for (const relative10 of CHECKPOINT_PATHS) {
-    const path = join13(root, relative10);
+    const path = join15(root, relative10);
     const raw = readBounded(path);
     if (raw === void 0) continue;
     try {
@@ -4040,7 +4178,7 @@ function checkpointObservation(root) {
 function observeResume(root, now, options = {}) {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
-    project: { name: basename5(root), path: root },
+    project: { name: basename6(root), path: root },
     now,
     git: gitObservation(root),
     ...observeProgram(root),
@@ -4094,9 +4232,9 @@ import {
   lstatSync as lstatSync6,
   mkdirSync as mkdirSync5,
   realpathSync as realpathSync5,
-  writeFileSync as writeFileSync4
+  writeFileSync as writeFileSync5
 } from "node:fs";
-import { join as join14, relative as relative6 } from "node:path";
+import { join as join16, relative as relative6 } from "node:path";
 
 function record4(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
@@ -4202,7 +4340,7 @@ function executeTrim(rawInput, root, env) {
   }
   const hash = createHash4("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
-  const file = join14(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
+  const file = join16(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
   const spillPath = relative6(realpathSync5(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
@@ -4213,7 +4351,7 @@ function executeTrim(rawInput, root, env) {
     return { status: "skipped", details: { reason: "below-threshold" } };
   }
   try {
-    writeFileSync4(file, plan.fullOutput, {
+    writeFileSync5(file, plan.fullOutput, {
       encoding: "utf8",
       flag: "wx",
       mode: 384
@@ -4237,14 +4375,14 @@ function executeTrim(rawInput, root, env) {
   };
 }
 
-import { existsSync as existsSync7 } from "node:fs";
-import { join as join16 } from "node:path";
-import { spawnSync as spawnSync5 } from "node:child_process";
+import { existsSync as existsSync8 } from "node:fs";
+import { join as join18 } from "node:path";
+import { spawnSync as spawnSync6 } from "node:child_process";
 
 import {
-  dirname as dirname6,
+  dirname as dirname8,
   isAbsolute as isAbsolute7,
-  join as join15,
+  join as join17,
   relative as relative7,
   resolve as resolve7
 } from "node:path";
@@ -4323,8 +4461,8 @@ function configuredTypecheck(value) {
   const commands = record5(root?.["commands"]);
   const configured = commands?.["typecheck"];
   if (Array.isArray(configured) && configured.length > 0 && configured.every((argument) => typeof argument === "string")) {
-    const refusal = acceptableTypecheck(configured);
-    return refusal === void 0 ? { argv: configured } : { warning: `commands.typecheck refused (${refusal}); falling back to the resolved type checker` };
+    const refusal2 = acceptableTypecheck(configured);
+    return refusal2 === void 0 ? { argv: configured } : { warning: `commands.typecheck refused (${refusal2}); falling back to the resolved type checker` };
   }
   if (typeof configured === "string") {
     return {
@@ -4344,15 +4482,15 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
     const target = resolve7(root, changedPath);
     if (!within3(root, target)) continue;
-    let current = dirname6(target);
+    let current = dirname8(target);
     while (within3(root, current)) {
-      const config = join15(current, "tsconfig.json");
+      const config = join17(current, "tsconfig.json");
       if (hasFile(config)) {
         found.add(config);
         break;
       }
       if (current === root) break;
-      current = dirname6(current);
+      current = dirname8(current);
     }
   }
   return [...found];
@@ -4361,7 +4499,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
 function runGit2(root, args, env) {
   const git3 = findExecutable("git", root, env);
   if (git3 === void 0) return { ok: false, output: "" };
-  const result = spawnSync5(git3, args, {
+  const result = spawnSync6(git3, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -4401,8 +4539,8 @@ function executeTypecheck(root, env) {
   if (changed.length === 0) {
     return { status: "skipped", details: { reason: "no-touched-typescript" } };
   }
-  const configs = nearestTsconfigs(changed, root, existsSync7);
-  const configured = configuredTypecheck(readJson(join16(root, ".void", "config.json")));
+  const configs = nearestTsconfigs(changed, root, existsSync8);
+  const configured = configuredTypecheck(readJson(join18(root, ".void", "config.json")));
   const configuredArgv = "argv" in configured ? configured.argv : void 0;
   const warning = "warning" in configured ? configured.warning : void 0;
   const fallback = findExecutable("tsc", root, env);
@@ -4438,7 +4576,7 @@ function executeTypecheck(root, env) {
   const invocations = isTsc && configs.length > 0 ? configs.map((config) => [...args, "-p", config]) : [args];
   let errors = "";
   for (const invocation of invocations) {
-    const result = spawnSync5(executablePath, invocation, {
+    const result = spawnSync6(executablePath, invocation, {
       cwd: root,
       env: minimalEnvironment(process.env, env),
       encoding: "utf8",
@@ -4486,9 +4624,9 @@ Resolve before claiming done. This never blocks.
   };
 }
 
-import { spawnSync as spawnSync6 } from "node:child_process";
-import { closeSync as closeSync3, existsSync as existsSync8, lstatSync as lstatSync7, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync6 } from "node:fs";
-import { dirname as dirname7, isAbsolute as isAbsolute8, join as join17, resolve as resolve8 } from "node:path";
+import { spawnSync as spawnSync7 } from "node:child_process";
+import { closeSync as closeSync3, existsSync as existsSync9, lstatSync as lstatSync7, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync6 } from "node:fs";
+import { dirname as dirname9, isAbsolute as isAbsolute8, join as join19, resolve as resolve8 } from "node:path";
 var GIT_TIMEOUT_MS2 = 5e3;
 var GIT_MAX_OUTPUT_BYTES = 1e6;
 function canonical(path) {
@@ -4501,7 +4639,7 @@ function canonical(path) {
 function git2(cwd, args, deadline) {
   const remaining = deadline === void 0 ? GIT_TIMEOUT_MS2 : Math.ceil(deadline - performance.now());
   if (remaining <= 0) return void 0;
-  const result = spawnSync6("git", args, {
+  const result = spawnSync7("git", args, {
     cwd,
     ...deadline === void 0 ? {} : {
       env: Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_(DIR|WORK_TREE|COMMON_DIR|CONFIG|INDEX_FILE)/.test(name)))
@@ -4530,7 +4668,7 @@ function mainWorkingTree(cwd, deadline, expectedCommon, query = git2) {
   return canonical(toplevel);
 }
 function holdsInstallReceipt(root) {
-  return existsSync8(voidReadPath(root, "receipts", "install-v1.json"));
+  return existsSync9(voidReadPath(root, "receipts", "install-v1.json"));
 }
 function gitPointer(path) {
   if (!lstatSync7(path).isFile()) throw new Error("INVALID_GIT_POINTER");
@@ -4550,18 +4688,18 @@ function gitPointer(path) {
   }
 }
 function ordinaryLinkedMain(tree) {
-  const marker = join17(tree, ".git");
+  const marker = join19(tree, ".git");
   const pointer = gitPointer(marker);
   if (!pointer.startsWith("gitdir: ")) throw new Error("INVALID_GIT_POINTER");
   const directory = canonical(resolve8(tree, pointer.slice(8)));
-  if (!existsSync8(join17(directory, "commondir"))) return void 0;
-  const common = canonical(resolve8(directory, gitPointer(join17(directory, "commondir"))));
-  const backlink = gitPointer(join17(directory, "gitdir"));
-  if (!isAbsolute8(backlink) || canonical(backlink) !== canonical(marker) || canonical(dirname7(directory)) !== canonical(join17(common, "worktrees"))) {
+  if (!existsSync9(join19(directory, "commondir"))) return void 0;
+  const common = canonical(resolve8(directory, gitPointer(join19(directory, "commondir"))));
+  const backlink = gitPointer(join19(directory, "gitdir"));
+  if (!isAbsolute8(backlink) || canonical(backlink) !== canonical(marker) || canonical(dirname9(directory)) !== canonical(join19(common, "worktrees"))) {
     throw new Error("INVALID_GIT_POINTER");
   }
-  const candidate = dirname7(common);
-  const candidateMarker = join17(candidate, ".git");
+  const candidate = dirname9(common);
+  const candidateMarker = join19(candidate, ".git");
   if (!lstatSync7(candidateMarker, { throwIfNoEntry: false })?.isDirectory() || canonical(candidateMarker) !== common) return void 0;
   return candidate;
 }
@@ -4569,14 +4707,14 @@ function resolveTelemetryRoot(cwd, query = git2) {
   const refused = { kind: "unavailable", code: "TELEMETRY_ROOT_UNRESOLVED" };
   try {
     let tree = canonical(cwd);
-    while (lstatSync7(join17(tree, ".git"), { throwIfNoEntry: false }) === void 0 && !holdsInstallReceipt(tree)) {
-      const parent = dirname7(tree);
+    while (lstatSync7(join19(tree, ".git"), { throwIfNoEntry: false }) === void 0 && !holdsInstallReceipt(tree)) {
+      const parent = dirname9(tree);
       if (parent === tree) {
         return { kind: "resolved", root: canonical(discoverProjectRoot(cwd)) };
       }
       tree = parent;
     }
-    const marker = join17(tree, ".git");
+    const marker = join19(tree, ".git");
     const markerStat = lstatSync7(marker, { throwIfNoEntry: false });
     if (markerStat?.isSymbolicLink()) return refused;
     if (markerStat === void 0 || markerStat.isDirectory() || holdsInstallReceipt(tree)) {
@@ -4605,13 +4743,13 @@ function resolveTelemetryRoot(cwd, query = git2) {
 
 import { createHash as createHash5 } from "node:crypto";
 import {
-  basename as basename6,
+  basename as basename7,
   extname,
   isAbsolute as isAbsolute9,
   relative as relative8,
   resolve as resolve9
 } from "node:path";
-var MISSION_ID = /^mis_[A-Za-z0-9_-]{8,100}$/;
+var MISSION_ID2 = /^mis_[A-Za-z0-9_-]{8,100}$/;
 function record6(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
 }
@@ -4650,7 +4788,7 @@ function nameFor(tool, category, input) {
     const explicit = text(input["name"]);
     if (explicit !== "") return explicit;
     const script = text(input["scriptPath"]);
-    return script === "" || script.endsWith("/") ? "inline" : basename6(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
+    return script === "" || script.endsWith("/") ? "inline" : basename7(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
   }
   return tool || "unknown";
 }
@@ -4718,7 +4856,7 @@ function adaptRuntimeInput(value, options) {
 }
 function deriveMissionId(explicit, runtime3, runtimeSessionId2, root) {
   if (explicit !== void 0 && explicit !== "") {
-    if (!MISSION_ID.test(explicit)) {
+    if (!MISSION_ID2.test(explicit)) {
       throw new Error("HOOK_INVALID_MISSION_ID: expected mis_<opaque-id>");
     }
     return explicit;
@@ -4742,9 +4880,9 @@ import {
   unlink
 } from "node:fs/promises";
 import {
-  dirname as dirname8,
+  dirname as dirname10,
   isAbsolute as isAbsolute10,
-  join as join18,
+  join as join20,
   relative as relative9,
   resolve as resolve10
 } from "node:path";
@@ -4754,7 +4892,7 @@ var MAX_EVENT_LINE_BYTES = 32 * 1024;
 var MAX_EVENT_PAYLOAD_DEPTH = 8;
 var MAX_EVENT_PAYLOAD_NODES = 512;
 var EVENT_ID = /^evt_[A-Za-z0-9_-]{8,100}$/;
-var MISSION_ID2 = /^mis_[A-Za-z0-9_-]{8,100}$/;
+var MISSION_ID3 = /^mis_[A-Za-z0-9_-]{8,100}$/;
 var DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 var EVENT_KIND = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/;
 var EVENT_KEYS = /* @__PURE__ */ new Set([
@@ -4835,7 +4973,7 @@ function parseEvent(value) {
   if (!boundedLabel(raw["eventId"], 12, 104, EVENT_ID)) {
     return contractError("eventId must be evt_<opaque-id>");
   }
-  if (!boundedLabel(raw["missionId"], 12, 104, MISSION_ID2)) {
+  if (!boundedLabel(raw["missionId"], 12, 104, MISSION_ID3)) {
     return contractError("missionId must be mis_<opaque-id>");
   }
   if (!boundedLabel(raw["ts"], 20, 24, DATE_TIME)) {
@@ -4853,7 +4991,7 @@ function parseEvent(value) {
   if (raw["causationId"] !== void 0 && !boundedLabel(raw["causationId"], 12, 104, EVENT_ID)) {
     return contractError("causationId must be evt_<opaque-id>");
   }
-  if (!boundedLabel(raw["correlationId"], 12, 104, MISSION_ID2)) {
+  if (!boundedLabel(raw["correlationId"], 12, 104, MISSION_ID3)) {
     return contractError("correlationId must be mis_<opaque-id>");
   }
   if (!isJsonValue(raw["payload"], 0, { nodes: 0 })) {
@@ -4985,7 +5123,7 @@ function replayEventLog(text2) {
 }
 
 var MAX_EVENT_LOG_BYTES = 8 * 1024 * 1024;
-var MISSION_ID3 = /^mis_[A-Za-z0-9_-]{8,100}$/;
+var MISSION_ID4 = /^mis_[A-Za-z0-9_-]{8,100}$/;
 var EVENT_ID2 = /^evt_[A-Za-z0-9_-]{8,100}$/;
 var DEFAULT_LOCK_STALE_MS = 3e4;
 var DEFAULT_LOCK_ATTEMPTS = 2e3;
@@ -5007,7 +5145,7 @@ async function exists(path) {
   }
 }
 async function safeRunDirectory(root, missionId) {
-  if (!MISSION_ID3.test(missionId)) {
+  if (!MISSION_ID4.test(missionId)) {
     throw new Error("HOOK_INVALID_MISSION_ID: expected mis_<opaque-id>");
   }
   const absoluteRoot = resolve10(root);
@@ -5015,7 +5153,7 @@ async function safeRunDirectory(root, missionId) {
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;
   while (!await exists(ancestor)) {
-    const parent = dirname8(ancestor);
+    const parent = dirname10(ancestor);
     if (parent === ancestor) break;
     ancestor = parent;
   }
@@ -5170,9 +5308,9 @@ async function writeSequencedEventInternal(options) {
     throw new Error("HOOK_INVALID_EVENT_ID: expected evt_<opaque-id>");
   }
   const run = await safeRunDirectory(options.root, options.missionId);
-  const logPath = join18(run, "events.jsonl");
-  const statePath = join18(run, ".seq.state");
-  const lockPath = join18(run, ".seq.lock");
+  const logPath = join20(run, "events.jsonl");
+  const statePath = join20(run, ".seq.state");
+  const lockPath = join20(run, ".seq.lock");
   await Promise.all([
     rejectSymlink(logPath),
     rejectSymlink(statePath),
@@ -5489,7 +5627,7 @@ async function runLifecycle(input) {
     await observeHook(hook, execution2, rawInput, agentRuntime, root);
     return;
   }
-  const execution = hook === "format" ? executeFormat(rawInput, root, process.env) : hook === "trim" ? executeTrim(rawInput, root, process.env) : hook === "typecheck" ? executeTypecheck(root, process.env) : hook === "large-change" ? executeLargeChange(root, process.env) : hook === "delegation-result" ? executeDelegationResult(rawInput, Date.now()) : void 0;
+  const execution = hook === "format" ? executeFormat(rawInput, root, process.env) : hook === "trim" ? executeTrim(rawInput, root, process.env) : hook === "typecheck" ? executeTypecheck(root, process.env) : hook === "large-change" ? executeLargeChange(root, process.env) : hook === "delegation-result" ? executeDelegationResult(rawInput, Date.now()) : hook === "delegation-capture" ? executeDelegationCapture(rawInput, process.env) : void 0;
   if (execution === void 0) return;
   if (execution.diagnostic !== void 0) process.stderr.write(execution.diagnostic);
   if ("output" in execution && execution.output !== void 0) {

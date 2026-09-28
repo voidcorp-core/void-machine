@@ -235,7 +235,9 @@ Fermer une surface ne touche jamais le run, la worktree ni les preuves.
 **Claude** : hook `PreToolUse` sur `Agent`, moins de 100 lignes, sans logique propre :
 
 - il laisse passer si aucune surface n'est détectée, si `subagent_type` vaut `fork`, ou si
-  l'appelant est lui-même un run délégué (`VOID_MACHINE_RUN_ID` présent) ;
+  l'appelant est lui-même un run délégué, reconnu par son `session_id` (réclamé par le registre,
+  ou lancé sous un handle qui en est le premier bloc) comme le hook `delegation-result`, et non
+  par l'environnement, qu'une session `--bg` hérite du superviseur ;
 - sinon il appelle `void-machine agents dispatch` avec `prompt`, `subagent_type` et `model`,
   le rôle `review` pour un type en lecture seule et `work` sinon, et le ticket de la mission ;
 - il refuse l'appel natif avec un `permissionDecisionReason` qui donne le `runId` et la

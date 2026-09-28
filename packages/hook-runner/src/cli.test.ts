@@ -543,6 +543,42 @@ describe('delegation-result lifecycle', () => {
   });
 });
 
+describe('delegation-capture lifecycle', () => {
+  it('lets the native Agent call through, with nothing on stdout, when no multiplexer shows the caller', () => {
+    const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: workspace,
+        session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'], VOID_PROJECT_ROOT: workspace },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('refuses the native Agent call on stdout once the kernel has dispatched the run', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-capture-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+      const runId = 'run_0f1e2d3c-4b5a-4968-8776-655443322110';
+      writeFileSync(join(root, 'node_modules', '.bin', 'void-machine'),
+        `#!/bin/sh\necho '${JSON.stringify({ ok: true, runId })}'\n`, { mode: 0o755 });
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: root, permission_mode: 'auto',
+          session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'], HERDR_ENV: '1', VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout ?? '{}').hookSpecificOutput;
+      expect(output).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' });
+      expect(output.permissionDecisionReason).toContain(`agents wait ${runId}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('session close lifecycle', () => {
   it('emits a checkpoint reminder only for explicit close intent', () => {
     const invoke = (prompt: string): string => {

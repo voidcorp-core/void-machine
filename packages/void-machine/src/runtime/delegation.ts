@@ -51,6 +51,23 @@ export interface RunRegistry {
   lock(missionId: string, owner: string): Promise<MissionLock | undefined>;
 }
 
+/** A file handed to a delegated agent, and the only directory it is granted for it. */
+export interface InstructionFile {
+  readonly path: string;
+  readonly directory: string;
+}
+
+/** The registry a command writes through: creation and instruction files, beside the driver's needs. */
+export interface DelegationStore extends RunRegistry {
+  /** Records the run and its first transition, and writes its brief. */
+  create(run: Omit<RunRecord, 'transitions' | 'binding'>, first: RunTransition, brief: string)
+    : Promise<InstructionFile>;
+  /** Writes the next message of a run as a new instruction file. */
+  writeMessage(runId: string, text: string): Promise<InstructionFile>;
+  /** Every recorded run identifier, bounded, for a status without a run. */
+  runIds(): Promise<readonly string[]>;
+}
+
 export interface NativeRunRef {
   readonly name: string;
   readonly handle?: string;

@@ -6,7 +6,7 @@ spec: docs/specs/2026-09-28-supervised-agent-delegation.md
 specs:
   - docs/specs/2026-09-28-supervised-agent-delegation.md
   - docs/specs/2026-09-28-autopilot-merge-without-consumer-setup.md
-ticket: DEV-902, DEV-920
+ticket: DEV-902, DEV-920 (unités DEV-921 à DEV-930)
 author: Folpe + Claude
 high_risk: true
 ---
@@ -256,19 +256,19 @@ cockpit. `void-verify`, puis signal.
 
 ## Execution handoff
 
-| Clé | Unité | Dépend de | Estimation | Gate humain |
-|---|---|---|---|---|
-| 01 | `mergeGate: human` sans check de revue | - | 0,5 j | non |
-| 02 | Deux ADR (livraison du noyau, merge unique) | - | 0,5 j | non |
-| 03 | Socle de délégation, adaptateur Claude | 02 | 2 j | Checkpoint A |
-| 04 | Verdict local lié au SHA | 01, 03 | 1,5 j | non |
-| 05 | Merge unique, `autopilot merges` | 02, 04 | 1 j | non (chemins protégés : humain) |
-| 06 | Port `Surface`, herdr, tmux, cmux | 03 | 1,5 j | non |
-| 07 | Capture de l'outil `Agent` | 06 | 0,5 j | Checkpoint B |
-| 08 | Adaptateur Codex | 03 | 1,5 j | non |
-| 09 | Appelants sur le socle | 05, 07, 08 | 1 j | non |
-| 10 | Preuves et 4.1.0 | 09 | 1 j | oui (promotion, release) |
+| Clé | Ticket | Unité | Dépend de | Estimation | Gate humain |
+|---|---|---|---|---|---|
+| 01 | DEV-921 | `mergeGate: human` sans check de revue | - | 0,5 j | non |
+| 02 | DEV-922 | Deux ADR (livraison du noyau, merge unique) | - | 0,5 j | non |
+| 03 | DEV-923 | Socle de délégation, adaptateur Claude | 02 | 2 j | Checkpoint A |
+| 04 | DEV-924 | Verdict local lié au SHA | 01, 03 | 1,5 j | non |
+| 05 | DEV-927 | Merge unique, `autopilot merges` | 02, 04 | 1 j | non (chemins protégés : humain) |
+| 06 | DEV-925 | Port `Surface`, herdr, tmux, cmux | 03 | 1,5 j | non |
+| 07 | DEV-928 | Capture de l'outil `Agent` | 06 | 0,5 j | Checkpoint B |
+| 08 | DEV-926 | Adaptateur Codex | 03 | 1,5 j | non |
+| 09 | DEV-929 | Appelants sur le socle | 05, 07, 08 | 1 j | non |
+| 10 | DEV-930 | Preuves et 4.1.0 | 09 | 1 j | oui (promotion, release) |
 
 Parallélisable après 03 : {04 → 05}, {06 → 07} et 08. Total estimé : environ 11 jours-agent.
-`void-ticket` crée ces unités comme sous-tickets de DEV-902 et DEV-920, avec leurs relations de
-blocage, puis installe le programme ; le fournisseur de progression détient ensuite l'état.
+Unités créées le 2026-09-28 comme sous-tickets de DEV-902 et DEV-920, avec leurs relations de
+blocage ; le fournisseur de progression (Linear) détient l'état.

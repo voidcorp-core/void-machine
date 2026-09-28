@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import {
 	type AgentsContext,
 	acceptAgent,
+	acceptReview,
 	agentStatus,
 	agentsContext,
 	attachAgent,
@@ -129,7 +130,12 @@ async function single(command: string, parsed: Parsed, io: AgentsIo, composed: A
 	: Promise<AgentsOutcome> {
 	const [runId] = parsed.positional;
 	if (runId === undefined || parsed.positional.length !== 1) return usage(`${command} needs one runId`);
-	if (command === 'accept') return answer(await acceptAgent(composed, runId));
+	if (command === 'accept') {
+		// A review verdict is taken only from the session the runtime lists under the run.
+		const known = await agentStatus(composed, runId);
+		const review = 'runs' in known && known.runs[0]?.role === 'review';
+		return answer(await (review ? acceptReview : acceptAgent)(composed, runId));
+	}
 	if (command === 'stop') return answer(await stopAgent(composed, runId));
 	if (command === 'send') {
 		const file = parsed.options.get('--message-file');

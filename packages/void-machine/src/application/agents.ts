@@ -257,13 +257,25 @@ async function withSurfaceClosed<T extends { readonly ok: boolean }>(context: Ag
   return closing === undefined ? receipt : { ...receipt, surface: closing };
 }
 
+/** Checks a run's record against what the runtime lists, before its result is taken. */
+type TakeGuard = (run: RunRecord) => Promise<Refusal | undefined>;
+
+/** Accepts a run's result; a review's only through the session check that `acceptReview` runs. */
 export async function acceptAgent(context: AgentsContext, runId: string): Promise<AcceptReceipt> {
+  return takeResult(context, runId, (run) => run.role === 'review'
+    ? sessionGuard(context, runId)(run) : Promise.resolve(undefined));
+}
+
+async function takeResult(context: AgentsContext, runId: string, guard: TakeGuard): Promise<AcceptReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;
   return withSurfaceClosed(context, runId, await withMissionLock(context, known.missionId, async (): Promise<AcceptReceipt> => {
     const run = await readRun(context, runId);
     if ('ok' in run) return run;
     const result = currentResult(run, await context.store.result(runId));
+    // The guard runs on the record and the result already read: nothing written after it counts.
+    const guarded = await guard(run);
+    if (guarded !== undefined) return guarded;
     const now = context.clock.now();
     const accepted = acceptRun(runView(run.transitions),
       result === undefined ? undefined : { recordedAt: result.recordedAt, pendingWork: result.pendingWork }, now);
@@ -279,6 +291,55 @@ export async function acceptAgent(context: AgentsContext, runId: string): Promis
     if (run.role === 'review') await context.runtime.stop(refOf(run));
     return { ok: true, runId, state: 'retired', result: { text: result.text, truncated: result.truncated } };
   }));
+}
+
+export type ReviewReceipt = { readonly ok: true; readonly runId: string; readonly sessionId: string;
+  readonly result: { readonly text: string; readonly truncated: boolean } } | Refusal;
+
+// The optional chain comes first, so the `&&` never dereferences an unbound record.
+const sameBinding = (left: RunRecord['binding'], right: { readonly handle: string; readonly sessionId: string }) =>
+  left?.handle === right.handle && left.sessionId === right.sessionId;
+
+/**
+ * Refuses a record whose session is not the one the runtime lists under the run now. It runs
+ * under the mission lock on the very record the result is bound to, then reads the record again:
+ * a run rebound before, during or after the runtime reading is refused.
+ */
+function sessionGuard(context: AgentsContext, runId: string,
+  verified: (sessionId: string) => void = () => undefined): TakeGuard {
+  return async (run) => {
+    const reading = await context.runtime.observe([refOf(run)]);
+    if (reading.kind === 'unreadable') {
+      return refusal(`the runtime cannot be read: ${reading.cause}`, 'retry once the runtime answers');
+    }
+    const live = reading.sessions.get(run.name)?.binding;
+    if (live === undefined) {
+      return refusal(`the runtime no longer lists the session of ${runId}`, 'dispatch a new review');
+    }
+    const again = await readRun(context, runId);
+    if ('ok' in again) return again;
+    if (!sameBinding(run.binding, live) || !sameBinding(again.binding, live)) {
+      return refusal(`the run record names ${String(again.binding?.sessionId)}, not the session the runtime lists`,
+        'stop the run and dispatch a new review; the record was changed outside the kernel');
+    }
+    verified(live.sessionId);
+    return undefined;
+  };
+}
+
+/**
+ * Accepts a review run's result only from the native session the runtime lists under that run
+ * now. The record and the result live where a delegated work agent can write, so the session is
+ * read from the runtime, never from the record. The result text itself stays untrusted input.
+ */
+export async function acceptReview(context: AgentsContext, runId: string): Promise<ReviewReceipt> {
+  let sessionId: string | undefined;
+  const check = sessionGuard(context, runId, (verified) => { sessionId = verified; });
+  const accepted = await takeResult(context, runId, (run) => run.role === 'review' ? check(run)
+    : Promise.resolve(refusal(`run ${runId} is not a review`, 'dispatch a run with --role review')));
+  if (!accepted.ok) return accepted;
+  if (sessionId === undefined) return refusal('the review session was not verified', 'dispatch a new review');
+  return { ok: true, runId, sessionId, result: accepted.result };
 }
 
 export async function stopAgent(context: AgentsContext, runId: string): Promise<CommandReceipt> {

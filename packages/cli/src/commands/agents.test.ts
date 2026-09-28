@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -73,6 +73,27 @@ describe('void-machine agents', () => {
 		const outcome = await runAgents(['status'], io(repository()));
 		expect(outcome).toMatchObject({ code: 0 });
 		expect(JSON.parse(outcome.stdout)).toEqual({ ok: true, runs: [] });
+	});
+
+	it('accepts a review run only through the session check, which reads the runtime', async () => {
+		// No claude on PATH: the runtime cannot be read, so a review is refused on the session
+		// check instead of reaching the record and its result.
+		const cwd = repository();
+		const runId = 'run_00000000-0000-4000-8000-000000000001';
+		const missionId = 'mis_cli-review';
+		const directory = join(cwd, '.void', 'machine', 'runs', missionId, 'agents', runId);
+		mkdirSync(join(directory, 'transitions'), { recursive: true });
+		writeFileSync(join(directory, 'run.json'), JSON.stringify({ schemaVersion: 1, runId, missionId,
+			name: `vm-${runId}`, role: 'review', runtime: 'claude', cwd, agentType: 'independent-code-reviewer',
+			binding: { handle: '6d5ea8bb', sessionId: '6d5ea8bb-764f-4463-b733-8b94509eb25e' } }));
+		writeFileSync(join(directory, 'transitions', '000001.json'), JSON.stringify({ seq: 1, at: 1,
+			to: 'admitted', event: 'admitted', cause: '', action: '' }));
+		mkdirSync(join(cwd, '.void', 'machine', 'agents', 'index'), { recursive: true });
+		writeFileSync(join(cwd, '.void', 'machine', 'agents', 'index', `${runId}.json`), JSON.stringify({ missionId }));
+		const outcome = await runAgents(['accept', runId], io(cwd));
+		expect(outcome.code).toBe(1);
+		expect(JSON.parse(outcome.stdout)).toMatchObject({ ok: false,
+			cause: expect.stringContaining('the runtime cannot be read') });
 	});
 
 	it('refuses outside a Git repository with the repair', async () => {

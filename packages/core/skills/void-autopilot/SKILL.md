@@ -35,8 +35,10 @@ what a judging workflow runs from outside `.github`
 (`scripts/promotion-authority.mjs`, `scripts/auto-merge-contract.mjs`, `scripts/verify.mjs`,
 `packages/core/enforce/**`), what judges a publication (`scripts/prepare-release-artifact.mjs`,
 `scripts/verify-release-publication.mjs` and the two release contracts they read), the loop code that believes a verdict and arms a merge (`loop.ts`,
-`loop-observe.ts`, `review-signature.ts`, `commands/autopilot-loop.ts`), or the hooks installed here (`.void/hooks/**`, `.claude/settings.json`,
-`.codex/**`, `.void/config.json`) goes to a person with the file named (`protected-path`). A rename
+`loop-observe.ts`, `review-signature.ts`, `commands/autopilot-loop.ts`), the local chain of judgment
+(`packages/void-machine/src/**`, `commands/agents.ts`, `program.ts`, `judgments.ts`), or the
+runtime configuration installed here, which a reviewer running in a worktree of the head loads too
+(`.void/hooks/**`, `.claude/**`, `.mcp.json`, `.codex/**`, `.void/config.json`) goes to a person with the file named (`protected-path`). A rename
 counts by its source and its destination. The programme adds paths through
 `autopilot.protectedPaths`; nothing removes from that floor.
 

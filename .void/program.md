@@ -2,21 +2,21 @@
 schemaVersion: 1
 status: executing
 program: release-4-stabilization
-plan: docs/plans/2026-09-25-release-4-stabilization-plan.md
-spec: docs/specs/2026-09-22-autopilot-native-loop.md
+plan: docs/plans/2026-09-28-release-4-1-delegation-and-autonomous-merge-plan.md
+spec: docs/specs/2026-09-28-supervised-agent-delegation.md
 progress:
   provider: linear
   scope: voidcorp/DEV/void machine
   # Selection belongs to the curator, which reads the project and the tracker;
   # the continuous loop never reads this list. It bounds a resume that names no
   # unit: the plan's order, the release gate held by a person.
-  order: [DEV-905, DEV-908, DEV-909, DEV-902]
+  order: [DEV-921, DEV-922, DEV-923, DEV-924, DEV-925, DEV-926, DEV-927, DEV-928, DEV-929, DEV-930]
   states:
     ready: [Backlog, Todo]
     started: [In Progress]
     review: [In Review]
     done: [Done, Canceled]
-humanGates: [DEV-909]
+humanGates: [DEV-923, DEV-928, DEV-930]
 autopilot:
   schemaVersion: 1
   clusterSize: 4
@@ -40,21 +40,21 @@ autopilot:
   protectedPaths: []
 ---
 
-# Program: release 4.0.0 stabilization
+# Program: release 4 stabilization, now 4.1.0
 
-## Scope, since 25 September 2026
+## Scope, since 28 September 2026
 
-The programme that delivered the continuous loop closed on 24 September; its
-review chain was proved end to end on #409 the next day. This one stabilizes
-what lies between `develop`, `main` and npm, then publishes 4.0.0, in the order
-of the plan named in frontmatter: DEV-905 (back-merge on ancestry), DEV-908
-(the repository becomes `void-machine`), DEV-909 (the release, a human gate),
-then DEV-902 (delegated agents in a pane).
+4.0.0 is published (DEV-905, DEV-908 and DEV-909 delivered). The programme now
+carries 4.1.0, in the order of the plan named in frontmatter: DEV-921 to DEV-930,
+the sub-tickets of DEV-902 (supervised agent delegation, agnostic of runtime and
+display) and DEV-920 (autonomous merge with no setup in a consumer project).
+DEV-923 and DEV-928 end on a checkpoint Folpe reviews; DEV-930 holds the
+promotion and the release, a human gate.
 
-The loop and its grant are unchanged: it merges into `develop` only, on a head
-the review App passed, never into `main`, and never a pull request touching the
-machinery that judges merges, which goes to a person. Promotion and release
-stay a person's.
+Until DEV-927 lands, the loop and its grant are unchanged: it merges into
+`develop` only, on a head the review App passed, never into `main`, and never a
+pull request touching the machinery that judges merges, which goes to a person.
+Promotion and release stay a person's.
 
 Corrections stay in the artefact being worked on. A change contradicting an
 accepted decision requires supersession, never an in-place rewrite.

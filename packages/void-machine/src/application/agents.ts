@@ -241,6 +241,35 @@ export async function acceptAgent(context: AgentsContext, runId: string): Promis
   });
 }
 
+export type ReviewReceipt = { readonly ok: true; readonly runId: string; readonly sessionId: string;
+  readonly result: { readonly text: string; readonly truncated: boolean } } | Refusal;
+
+/**
+ * Accepts a review run's result only from the native session the runtime lists under that run
+ * now. The record and the result live where a delegated work agent can write, so the session is
+ * read from the runtime, never from the record: a run rebound to another session, or a result
+ * recorded for one, is refused. The result text itself stays untrusted input.
+ */
+export async function acceptReview(context: AgentsContext, runId: string): Promise<ReviewReceipt> {
+  const run = await readRun(context, runId);
+  if ('ok' in run) return run;
+  if (run.role !== 'review') return refusal(`run ${runId} is not a review`, 'dispatch a run with --role review');
+  const reading = await context.runtime.observe([refOf(run)]);
+  if (reading.kind === 'unreadable') {
+    return refusal(`the runtime cannot be read: ${reading.cause}`, 'retry once the runtime answers');
+  }
+  const live = reading.sessions.get(run.name)?.binding;
+  if (live === undefined) {
+    return refusal(`the runtime no longer lists the session of ${runId}`, 'dispatch a new review');
+  }
+  if (run.binding?.handle !== live.handle || run.binding.sessionId !== live.sessionId) {
+    return refusal(`the run record names ${String(run.binding?.sessionId)}, not the session the runtime lists`,
+      'stop the run and dispatch a new review; the record was changed outside the kernel');
+  }
+  const accepted = await acceptAgent(context, runId);
+  return accepted.ok ? { ok: true, runId, sessionId: live.sessionId, result: accepted.result } : accepted;
+}
+
 export async function stopAgent(context: AgentsContext, runId: string): Promise<CommandReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;

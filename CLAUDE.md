@@ -25,6 +25,8 @@ If `.void/program.md` exists with `status: executing`, read it and its linked pl
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
+Delegate a subagent that should run on its own with `void-machine agents dispatch`, then `wait` and `accept` its run; under a multiplexer a hook turns an `Agent` call into that run and refuses the native call with its runId: follow the refusal, never retry the call.
+
 Run `void-machine doctor` to verify the install.
 
 <!-- void-machine:end -->

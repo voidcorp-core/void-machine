@@ -3612,6 +3612,7 @@ import { basename as basename4, dirname as dirname5, isAbsolute as isAbsolute5, 
 var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 var MAX_MESSAGE_BYTES = 262144;
 var MAX_CLAIM_BYTES = 4096;
+var PARKING_WINDOW_MS = 6e5;
 var skipped = (reason) => ({ status: "skipped", details: { reason } });
 function machineRootOf(cwd) {
   const result = spawnSync2(
@@ -3638,9 +3639,16 @@ function claimedPath(root, sessionId) {
     return void 0;
   }
 }
-function waitingRuns(root) {
+function waitingRun(root, cwd, now) {
   try {
-    return readdirSync3(join11(root, "agents", "pending")).some((name) => !name.startsWith("."));
+    const here = realpathSync4(cwd);
+    const directory = join11(root, "agents", "pending");
+    return readdirSync3(directory).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
+      const marker = record3(JSON.parse(readFileSync11(join11(directory, name), "utf8")));
+      const createdAt = marker?.["createdAt"];
+      const runCwd = marker?.["cwd"];
+      return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync4(runCwd) === here;
+    });
   } catch {
     return false;
   }
@@ -3662,7 +3670,7 @@ function executeDelegationResult(input, now) {
   let target = claimedPath(root, sessionId);
   const parked = target === void 0;
   if (target === void 0) {
-    if (!waitingRuns(root)) return skipped("not-delegated");
+    if (!waitingRun(root, cwd, now)) return skipped("not-delegated");
     target = join11(root, "agents", "parked", `${sessionId}.json`);
   }
   const message = fields?.["last_assistant_message"];

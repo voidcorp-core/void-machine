@@ -50,8 +50,8 @@ it('delivers the final message of a bound session to the run that claimed it', a
 it('delivers a message recorded before the bind once the session is bound', async () => {
   const { worktree } = checkoutWithWorktree();
   const registry = await dispatchedRun(worktree);
-  expect(executeDelegationResult(stop(worktree, 'Early verdict.'), 40))
+  expect(executeDelegationResult(stop(worktree, 'Early verdict.'), Date.now()))
     .toMatchObject({ status: 'ok', details: { parked: true } });
   await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
-  expect(await registry.result(RUN)).toMatchObject({ text: 'Early verdict.', recordedAt: 40 });
+  expect(await registry.result(RUN)).toMatchObject({ text: 'Early verdict.' });
 });

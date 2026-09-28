@@ -5,7 +5,7 @@ import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
-import { RUN_STATES, type RunTransition } from '../../core/delegation.js';
+import { RUN_STATES, type RunTransition, isOpen } from '../../core/delegation.js';
 import type {
   DelegationStore, InstructionFile, MissionLock, RunRecord, RunResult, SessionBinding,
 } from '../../runtime/delegation.js';
@@ -16,7 +16,7 @@ import type {
  *
  *   runs/<missionId>/agents/<runId>/{run.json, transitions/NNNNNN.json, brief/, result.json}
  *   agents/index/<runId>.json      the mission of each run
- *   agents/pending/<runId>          a run whose native session is not bound yet
+ *   agents/pending/<runId>          { cwd, createdAt } of a run whose session is not bound yet
  *   agents/sessions/<sessionId>.json  the claim the Stop hook follows: { resultPath }
  *   agents/parked/<sessionId>.json  a result the hook recorded before its session was bound
  *
@@ -244,7 +244,7 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       await writeFile(join(directory, 'run.json'), JSON.stringify({ schemaVersion: 1, ...run }),
         { mode: 0o600, flag: 'wx' });
       await replaceFile(agents('index', `${run.runId}.json`), JSON.stringify({ missionId: run.missionId }));
-      await replaceFile(agents('pending', run.runId), '');
+      await replaceFile(agents('pending', run.runId), JSON.stringify({ cwd: run.cwd, createdAt: now() }));
       if (await linkFile(join(directory, 'transitions', recordName(1)), JSON.stringify(first)) !== 'appended') {
         throw new Error('run history already exists');
       }
@@ -265,7 +265,12 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       if (previous < 1 || await readSmall(join(directory, recordName(previous)), MAX_RECORD_BYTES) === undefined) {
         return 'conflict';
       }
-      return linkFile(join(directory, recordName(transition.seq)), JSON.stringify(transition));
+      const outcome = await linkFile(join(directory, recordName(transition.seq)), JSON.stringify(transition));
+      // A closed run binds nothing more: stop the hook from parking messages for it.
+      if (outcome === 'appended' && !isOpen(transition.to)) {
+        await unlink(agents('pending', runId)).catch(() => { /* Bound before, or never pending. */ });
+      }
+      return outcome;
     },
     async bind(runId, binding: SessionBinding) {
       const missionId = await missionOf(runId);

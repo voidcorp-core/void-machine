@@ -105,6 +105,15 @@ describe('binding and results', () => {
     expect((await registry.read(RUN))?.binding).toEqual({ handle: '6d5ea8bb', sessionId: SESSION });
   });
 
+  it('marks a new run as waiting for its binding in its directory, until it is bound or closed', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main, { now: () => 777 });
+    await registry.create(run(main), admitted, 'brief');
+    expect(JSON.parse(readFileSync(join(root, 'agents', 'pending', RUN), 'utf8'))).toEqual({ cwd: main, createdAt: 777 });
+    await registry.append(RUN, { ...dispatched, to: 'failed', event: 'refused' });
+    expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(false);
+  });
+
   it('adopts a result the hook parked before the session was bound', async () => {
     const { main } = repository();
     const { root, registry } = registryIn(main);

@@ -58,13 +58,27 @@ describe('the delegation-result Stop hook', () => {
     expect(existsSync(root)).toBe(false);
   });
 
-  it('parks the message of an unclaimed session while a run waits for its binding', () => {
-    const { worktree, root } = repository();
+  function pending(root: string, cwd: string, createdAt: number): void {
     mkdirSync(join(root, 'agents', 'pending'), { recursive: true });
-    writeFileSync(join(root, 'agents', 'pending', 'run_x'), '');
-    expect(executeDelegationResult(stop(worktree), 7)).toMatchObject({ status: 'ok', details: { parked: true } });
+    writeFileSync(join(root, 'agents', 'pending', 'run_x'), JSON.stringify({ cwd, createdAt }));
+  }
+
+  it('parks the message of an unclaimed session while a run in its directory waits for its binding', () => {
+    const { worktree, root } = repository();
+    pending(root, worktree, 1_000);
+    expect(executeDelegationResult(stop(worktree), 7_000)).toMatchObject({ status: 'ok', details: { parked: true } });
     expect(JSON.parse(readFileSync(join(root, 'agents', 'parked', `${SESSION}.json`), 'utf8')))
-      .toMatchObject({ recordedAt: 7, lastAssistantMessage: 'No blocking finding.' });
+      .toMatchObject({ recordedAt: 7_000, lastAssistantMessage: 'No blocking finding.' });
+  });
+
+  it.each([
+    ['in another directory', (main: string) => main, 1_000],
+    ['for longer than the binding window', (_main: string, worktree: string) => worktree, 7_000 - 600_001],
+  ])('never parks for a session when the waiting run is %s', (_case, cwdOf, createdAt) => {
+    const { main, worktree, root } = repository();
+    pending(root, cwdOf(main, worktree), createdAt);
+    expect(executeDelegationResult(stop(worktree), 7_000)).toMatchObject({ status: 'skipped' });
+    expect(existsSync(join(root, 'agents', 'parked'))).toBe(false);
   });
 
   it('bounds the recorded message and says it was cut', () => {

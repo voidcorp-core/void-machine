@@ -14,6 +14,8 @@ import { type LifecycleExecution, record, within } from './executor-shared.js';
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_MESSAGE_BYTES = 262_144;
 const MAX_CLAIM_BYTES = 4_096;
+/** A run binds its session at the first observation; past this, nothing is parked for it. */
+const PARKING_WINDOW_MS = 600_000;
 
 const skipped = (reason: string): LifecycleExecution => ({ status: 'skipped', details: { reason } });
 
@@ -44,9 +46,18 @@ function claimedPath(root: string, sessionId: string): string | undefined {
   }
 }
 
-function waitingRuns(root: string): boolean {
+/** Whether a run launched in this session's directory, recently, still waits for its binding. */
+function waitingRun(root: string, cwd: string, now: number): boolean {
   try {
-    return readdirSync(join(root, 'agents', 'pending')).some((name) => !name.startsWith('.'));
+    const here = realpathSync(cwd);
+    const directory = join(root, 'agents', 'pending');
+    return readdirSync(directory).filter((name) => !name.startsWith('.')).slice(0, 64).some((name) => {
+      const marker = record(JSON.parse(readFileSync(join(directory, name), 'utf8')));
+      const createdAt = marker?.['createdAt'];
+      const runCwd = marker?.['cwd'];
+      return typeof createdAt === 'number' && now - createdAt < PARKING_WINDOW_MS
+        && typeof runCwd === 'string' && realpathSync(runCwd) === here;
+    });
   } catch {
     return false;
   }
@@ -71,7 +82,7 @@ export function executeDelegationResult(input: unknown, now: number): LifecycleE
   let target = claimedPath(root, sessionId);
   const parked = target === undefined;
   if (target === undefined) {
-    if (!waitingRuns(root)) return skipped('not-delegated');
+    if (!waitingRun(root, cwd, now)) return skipped('not-delegated');
     target = join(root, 'agents', 'parked', `${sessionId}.json`);
   }
   const message = fields?.['last_assistant_message'];

@@ -1,6 +1,6 @@
 // tdd-cover: e2e packages/void-machine/test/agents-application.test.ts
 import { randomUUID } from 'node:crypto';
-import { statSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createClaudeSessionRuntime } from '../adapters/runtime/claude-session.js';
 import { MISSION_ID, RUN_ID, createRunRegistry, resolveMachineRoot } from '../adapters/store/run-registry.js';
@@ -115,7 +115,7 @@ export type DispatchReceipt =
 export async function dispatchAgent(context: AgentsContext, input: DispatchInput): Promise<DispatchReceipt> {
   const invalid = invalidInput(input);
   if (invalid !== undefined) return invalid;
-  const cwd = resolve(input.cwd);
+  const cwd = realpathSync(resolve(input.cwd));
   const ready = await context.runtime.preflight(cwd);
   if (!ready.ok) return refusal(ready.cause, ready.action);
   const missionId = input.missionId ?? context.newMissionId();

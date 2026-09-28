@@ -65,10 +65,15 @@ export async function showRun(context: SurfaceContext, run: ShownRun, command: r
     return { ok: true as const, closed: current === undefined || !isOpen(runView(current.transitions).state) };
   });
   if (!written.ok) {
-    // Unrecorded, the surface would have no owner left to close it.
+    // Unrecorded, the surface would have no owner left to close it: close it now, and keep it as an
+    // orphan when that fails. The record is replaced whole, so no lock is needed to leave `opening`.
     const ref = heldSurface(record);
-    if (ref !== undefined) await context.surfaces.reach(ref.kind).close(ref);
-    return { state: 'failed', cause: surfaceCause('deadline', 'record', 'the mission stayed busy') };
+    const cleanup = ref === undefined ? undefined : await context.surfaces.reach(ref.kind).close(ref);
+    const settled = cleanup?.outcome === 'closed' || cleanup?.outcome === 'already-absent';
+    const failed: SurfaceRecord = { state: 'failed', cause: surfaceCause('deadline', 'record', 'the mission stayed busy'),
+      ...(ref === undefined || settled ? {} : { orphan: ref }) };
+    await context.store.writeSurface(run.runId, failed);
+    return failed;
   }
   if (!written.closed) return record;
   await closeRunSurface(context, run.runId);

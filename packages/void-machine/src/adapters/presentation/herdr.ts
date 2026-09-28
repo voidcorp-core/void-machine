@@ -147,7 +147,7 @@ export function createHerdrSurface(config: MultiplexerConfig): SurfacePort {
     },
     inspect: (ref) => presence(ref, deadline(now, PRESENTATION_LIMITS.inspectMs)),
     async close(ref) {
-      if (ref.id === config.env['HERDR_PANE_ID']) {
+      if (ref.id === config.env['HERDR_PANE_ID'] && ref.scope === scope) {
         return { outcome: 'skipped', cause: surfaceCause('own-pane', 'pane close') };
       }
       const clock = deadline(now, PRESENTATION_LIMITS.closeMs);

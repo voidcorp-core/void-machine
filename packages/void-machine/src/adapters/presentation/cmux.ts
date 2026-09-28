@@ -113,7 +113,9 @@ export function createCmuxSurface(config: MultiplexerConfig): SurfacePort {
     },
     inspect: (ref) => presence(ref, deadline(now, PRESENTATION_LIMITS.inspectMs)),
     async close(ref) {
-      if (ref.id === caller) return { outcome: 'skipped', cause: surfaceCause('own-pane', 'close-surface') };
+      if (ref.id === caller && ref.container === workspace) {
+        return { outcome: 'skipped', cause: surfaceCause('own-pane', 'close-surface') };
+      }
       const clock = deadline(now, PRESENTATION_LIMITS.closeMs);
       const found = await presence(ref, clock);
       if (found.state === 'closed') return { outcome: 'already-absent' };

@@ -214,6 +214,33 @@ describe('closing the surface of a closed run', () => {
     expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, surface: { state: 'closed' } });
     expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
   });
+  it('closes and records as failed a surface opened while the mission stayed busy', async () => {
+    const cwd = repository();
+    let ctx: AgentsContext | undefined;
+    let held: { release(): Promise<void> } | undefined;
+    const surface = scriptedSurface('herdr', { beforeOpen: async () => {
+      held = await ctx?.store.lock(MISSION, 'another-command');
+    } });
+    ctx = context(cwd, runtime(), surface.port);
+    const receipt = await dispatchAgent(ctx, input(cwd));
+    await held?.release();
+    expect(receipt).toMatchObject({ ok: true, surface: { state: 'failed', cause: { code: 'deadline' } } });
+    expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ surface: { state: 'failed' } }] });
+  });
+
+  it('keeps as orphan a surface it could neither record nor close', async () => {
+    const cwd = repository();
+    let ctx: AgentsContext | undefined;
+    let held: { release(): Promise<void> } | undefined;
+    const surface = scriptedSurface('herdr', { closing: { outcome: 'failed', cause: { code: 'timeout' } },
+      beforeOpen: async () => { held = await ctx?.store.lock(MISSION, 'another-command'); } });
+    ctx = context(cwd, runtime(), surface.port);
+    await dispatchAgent(ctx, input(cwd));
+    await held?.release();
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ surface: { state: 'failed',
+      orphan: { id: 'w1:p9' } } }] });
+  });
 });
 
 describe('what status says about the surface', () => {

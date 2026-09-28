@@ -80,11 +80,21 @@ export const PROTECTED_PATHS_FLOOR = [
   // whatever the verdict says.
   'packages/cli/src/lib/autopilot/branch-identity.ts',
   'packages/cli/src/commands/autopilot-loop.ts',
+  // The local chain of judgment: the kernel delegates the reviewer and binds
+  // its result to the session it launched, the agents command drives it, the
+  // programme grants the merge and `judgments.ts` admits the verdict.
+  'packages/void-machine/src/**',
+  'packages/cli/src/commands/agents.ts',
+  'packages/cli/src/lib/autopilot/program.ts',
+  'packages/cli/src/lib/autopilot/judgments.ts',
   // The sources above run only after a release and a reinstall; these run now.
   // The installed runner, the files that wire it into Claude and Codex, and the
-  // configuration that scopes what it enforces.
+  // configuration that scopes what it enforces. The reviewer runs in a worktree
+  // of the head and loads its runtime configuration there: its agent
+  // definition, its settings and the MCP servers it may start.
   '.void/hooks/**',
-  '.claude/settings.json',
+  '.claude/**',
+  '.mcp.json',
   '.codex/**',
   '.void/config.json',
 ] as const;

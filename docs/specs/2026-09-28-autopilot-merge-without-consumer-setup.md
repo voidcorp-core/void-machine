@@ -30,14 +30,19 @@ sécurité ne se paie jamais en fonctionnement ; il ne crée jamais d'App GitHub
   seule dans la branche d'intégration. Jamais dans la branche qui déploie ; un chemin protégé
   part toujours chez un humain.
 - **Merge humain sur demande.** Quand l'humain dit qu'il merge lui-même, le coordinateur lance
-  `void-machine autopilot merges --by-human`, qui écrit `merges: human` dans le bloc
-  `autopilot` de `.void/program.md` ; `--automatic` retire la valeur. Versionné, lu à chaque
-  tick, indépendant de la mémoire d'un agent. Une instruction réduit l'autorité, jamais ne
-  l'augmente.
+  `void-machine autopilot merges --by-human`, qui écrit la retenue dans l'état local de la
+  machine (`.void/machine/autopilot/merge-hold.json`) ; `--automatic` la retire. Lue à chaque
+  tick, indépendante de la mémoire d'un agent. Elle n'est pas écrite dans `.void/program.md` :
+  ce fichier est protégé et versionné, donc la retenue n'y prendrait effet qu'après une PR
+  mergée par un humain, et un arbre sale bloquerait la synchronisation `--ff-only`. Une
+  instruction réduit l'autorité, jamais ne l'augmente : effacer la retenue ne fait que revenir
+  au défaut que l'humain a déjà accepté.
 - **Conditions du merge**, toutes observées sur le même SHA de tête :
   1. un verdict sans bloquant, rendu par un relecteur à contexte neuf et en lecture seule que le
      noyau lance lui-même (délégation de rôle `review`, spec
-     `2026-09-28-supervised-agent-delegation.md`) et enregistré dans le journal local ;
+     `2026-09-28-supervised-agent-delegation.md`) dans une worktree détachée au SHA de tête, et
+     enregistré dans le journal local. Le noyau vérifie `HEAD` de cette worktree avant et après
+     le run et enregistre lui-même le SHA : le relecteur ne le déclare jamais ;
   2. aucun check GitHub en échec ni en attente sur ce SHA ;
   3. aucun chemin protégé touché ;
   4. branche à jour avec la base.
@@ -65,20 +70,34 @@ L'ADR qui remplace `03e82acc` l'écrit tel quel.
 - `openPullOutcome` ne lit plus `pr.review` (check GitHub) : il lit le verdict local du SHA. Pas
   de verdict pour ce SHA : action `review`, qui délègue un relecteur ; verdict bloquant : retour
   au worker, comme aujourd'hui.
-- `mergeOutcome` : `merges: human` rend la PR à l'humain après la revue, jamais avant ; sinon
+- `mergeOutcome` : la retenue humaine rend la PR à l'humain après la revue, jamais avant ; sinon
   merge direct `--match-head-commit`. Une base avec merge queue ou checks requis garde le chemin
   auto-merge existant, que GitHub arbitre.
 
+## Chemins protégés
+
+La chaîne de jugement change de fichiers ; la liste `PROTECTED_PATHS_FLOOR`
+(`loop.ts:55`) la suit dans le même commit : `packages/void-machine/src/**` (rôle `review` et
+ses permissions), `packages/cli/src/commands/agents.ts`,
+`packages/cli/src/lib/autopilot/program.ts` et `judgments.ts`. Sinon la boucle pourrait merger
+une modification de son propre juge.
+
+## Doctrine
+
+La section « Autonomous mode » de `CLAUDE.md` et `AGENTS.md` décrit encore le merge armé sur le
+check de l'App ; elle est réécrite dans le même commit que le changement de mode.
+
 ## Tests et preuves
 
-- **Strict** : table des transitions de `loop.ts` (verdict absent, bloquant, sain ; checks en
-  échec, en attente, absents ; `merges: human` ; tête déplacée), écriture et lecture de
-  `merges` dans le programme.
+- **Strict** : table des transitions de `loop.ts` (verdict absent, bloquant, sain, d'un autre
+  SHA ; checks en échec, en attente, absents ; base avancée : mise à jour puis attente ; chemin
+  protégé, y compris les nouveaux ; retenue humaine ; tête déplacée), écriture et lecture de la
+  retenue.
 - **Preuve réelle** : sur un dépôt consommateur sans App ni protection, `update` puis un ticket
-  va jusqu'au merge dans la branche d'intégration ; avec `merges: human`, la PR s'arrête prête.
+  va jusqu'au merge dans la branche d'intégration ; avec la retenue humaine, la PR s'arrête prête.
 
 ## Tranches
 
-1. `merges: human` ne dépend plus d'aucun check de revue (correctif isolé, publiable seul).
+1. `mergeGate: human` ne dépend plus d'aucun check de revue (correctif isolé, publiable seul).
 2. Verdict local lié au SHA, action `review` via la délégation, merge `--match-head-commit`,
    commande `autopilot merges`, ADR remplaçant `03e82acc`, mise à jour du skill `void-autopilot`.

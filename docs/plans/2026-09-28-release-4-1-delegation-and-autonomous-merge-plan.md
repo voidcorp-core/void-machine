@@ -65,7 +65,9 @@ plan déplace l'autorité de merge.
 - **Expected commits**:
   - `docs(decisions): ship the kernel's delegation capability in the published CLI`
   - `docs(decisions): merge autonomously on a local verdict bound to the head SHA`
-- **Notes**: créer par `void-machine decisions new` ; ne jamais modifier une ADR acceptée.
+- **Notes**: créer par `void-machine decisions new` ; ne jamais modifier une ADR acceptée. L'ADR
+  (b) ne remplace `03e82acc` que pour le mode de merge : elle garde écrit pourquoi ce dépôt,
+  public et qui livre un outil à d'autres, conserve son App de revue comme check requis.
 
 ### Step 3 - Socle de délégation, adaptateur Claude, présentation `none` (MVP)
 
@@ -76,8 +78,12 @@ plan déplace l'autorité de merge.
 - **Verification gate**: `pnpm test` ; tests purs de la machine d'états (toutes les transitions
   de la spec, dont `reconciling` et `waiting-human`) ; test de conformité avec un exécutable
   `claude` factice qui rejoue des sorties réelles capturées de `claude --bg` et
-  `claude agents --json --all` ; preuve manuelle : `dispatch` d'un relecteur
-  `independent-code-reviewer` dans ce dépôt, `wait`, résultat lu, `accept`, session arrêtée.
+  `claude agents --json --all` ; test : `dispatch` refuse, avec la commande qui répare, quand
+  le hook `delegation-result` n'est pas installé ; test : un run lancé depuis une worktree écrit
+  dans le dossier résolu depuis le répertoire Git commun ; preuve manuelle sur un consommateur
+  jetable installé depuis `pnpm pack` (ce dépôt exécute encore les hooks publiés 4.0.0) :
+  `dispatch` d'un relecteur `independent-code-reviewer`, `wait`, résultat lu, `accept`,
+  session arrêtée.
 - **Expected commits**:
   - `test(void-machine): specify the delegated run lifecycle`
   - `feat(void-machine): admit, track and reconcile delegated agent runs`
@@ -104,7 +110,8 @@ plan déplace l'autorité de merge.
 ### Checkpoint A - après Step 3
 
 Le socle tourne de bout en bout sans affichage. Lancer `void-verify`, montrer à Folpe une
-délégation réelle (dispatch, wait, résultat). Attendre son signal.
+délégation réelle (dispatch, wait, résultat) sur le consommateur jetable installé depuis le
+pack. Attendre son signal.
 
 ### Step 4 - Verdict local lié au SHA, relecteur délégué
 
@@ -114,25 +121,36 @@ délégation réelle (dispatch, wait, résultat). Attendre son signal.
 - **TDD mode**: strict
 - **Verification gate**: `pnpm test` ; table de `loop.test.ts` : verdict absent (action
   `review`), bloquant (retour au worker), sain ; verdict d'un autre SHA ignoré ; tête déplacée ;
-  un commentaire GitHub portant un bloc de verdict n'a aucun effet.
+  `HEAD` de la worktree de revue différent du SHA attendu, avant ou après le run : verdict
+  rejeté ; un commentaire GitHub portant un bloc de verdict n'a aucun effet ; une PR qui touche
+  un des chemins protégés ajoutés part chez un humain.
 - **Expected commits**:
   - `test(autopilot): decide on a local verdict bound to the head SHA`
+  - `feat(autopilot): protect the new judging chain from the loop that runs it`
   - `feat(autopilot): delegate the independent review and record its verdict locally`
-- **Notes**: `openPullOutcome` lit le verdict local au lieu de `pr.review`
-  (`loop-observe.ts:167` ne sert plus à la décision) ; l'action `review` appelle
-  `agents dispatch --role review --type independent-code-reviewer`, brief lié au SHA ; le verdict
-  suit le format déjà lu par `judgments.ts`. Le commentaire publié n'est qu'une copie.
+- **Notes**:
+  - `openPullOutcome` lit le verdict local au lieu de `pr.review` (`loop-observe.ts:167` ne sert
+    plus à la décision) ; le verdict suit le format déjà lu par `judgments.ts` ; le commentaire
+    publié n'est qu'une copie.
+  - L'action `review` crée une worktree détachée au SHA de tête, puis appelle
+    `agents dispatch --role review --type independent-code-reviewer --cwd <cette worktree>`. Le
+    noyau vérifie `git rev-parse HEAD` avant et après, et enregistre lui-même le SHA jugé.
+  - `PROTECTED_PATHS_FLOOR` (`loop.ts:55`) reçoit, dans le commit dédié et avant tout usage du
+    verdict local : `packages/void-machine/src/**`, `packages/cli/src/commands/agents.ts`,
+    `packages/cli/src/lib/autopilot/program.ts`, `packages/cli/src/lib/autopilot/judgments.ts`.
 
 ### Step 5 - Merge unique, commande `autopilot merges`, retrait de `mergeGate`
 
-- **Goal**: merge automatique par défaut avec `gh pr merge --match-head-commit`, merge humain sur
-  demande enregistré dans le programme, plus aucune clé `mergeGate` ni `trust`.
+- **Goal**: merge automatique par défaut avec `gh pr merge --match-head-commit`, retenue humaine
+  sur demande dans l'état local de la machine, plus aucune clé `mergeGate` ni `trust`.
 - **Depends on**: step-2, step-4
 - **TDD mode**: strict
 - **Verification gate**: `pnpm test` ; `program.test.ts` : programme sans clé (automatique),
-  `merges: human`, ancien `mergeGate` lu avec message de migration ; branche qui déploie absente
-  = branche par défaut du dépôt, jamais cible ; checks en attente = attente, en échec = retour ;
-  base avec merge queue ou checks requis = chemin auto-merge existant ; `pnpm derive:check`.
+  ancien `mergeGate` lu avec message de migration ; retenue présente ou absente dans
+  `.void/machine/autopilot/merge-hold.json` ; branche qui déploie absente = branche par défaut
+  du dépôt, jamais cible ; checks en attente = attente, en échec = retour, absents = merge ;
+  base avancée = mise à jour puis attente ; chemin protégé = humain ; base avec merge queue ou
+  checks requis = chemin auto-merge existant ; `pnpm derive:check` ; `pnpm sync:docs`.
 - **Expected commits**:
   - `test(autopilot): merge on the reviewed head unless a person asked to merge`
   - `feat(autopilot)!: replace mergeGate with one merge mode and an explicit human hold`
@@ -140,8 +158,11 @@ délégation réelle (dispatch, wait, résultat). Attendre son signal.
   - `docs(autopilot): describe the local verdict and the human merge hold`
 - **Notes**: `packages/cli/src/lib/autopilot/program.ts`, `loop.ts`, `commands/autopilot.ts` ;
   skill `packages/core/skills/void-autopilot/SKILL.md` (sous 400 lignes) ; `.void/program.md` de
-  ce dépôt migré. `BREAKING CHANGE` dans le commit. Ce dépôt garde son App de revue comme check
-  requis, arbitré par GitHub.
+  ce dépôt migré ; section « Autonomous mode » de `CLAUDE.md` et `AGENTS.md` réécrite dans le
+  même commit que le changement de mode. La retenue vit hors du programme, qui est protégé et
+  versionné : une retenue ne doit pas attendre une PR humaine pour prendre effet.
+  `BREAKING CHANGE` dans le commit. Ce dépôt garde son App de revue comme check requis, arbitré
+  par GitHub.
 
 ### Step 6 - Port `Surface` et adaptateurs herdr, tmux, cmux
 
@@ -166,8 +187,9 @@ délégation réelle (dispatch, wait, résultat). Attendre son signal.
 - **TDD mode**: strict
 - **Verification gate**: `pnpm test` ; tests du hook : pas de surface (passe), `fork` (passe),
   appelant délégué (passe), cas nominal (refus avec `runId` et commande `wait`) ; hook sous 100
-  lignes ; preuve réelle : un appel `Agent` sous herdr ouvre un pane rattaché au ticket et le
-  coordinateur récupère le retour sans action humaine ; hors multiplexeur, sous-agent natif.
+  lignes ; preuve réelle, sur un consommateur jetable installé depuis `pnpm pack` et ouvert
+  sous herdr : un appel `Agent` ouvre un pane rattaché au ticket et le coordinateur récupère le
+  retour sans action humaine ; hors multiplexeur, sous-agent natif.
 - **Expected commits**:
   - `test(hooks): route a coordinator's delegation through the kernel when it can be shown`
   - `feat(hooks): capture the Agent tool into a supervised run`
@@ -220,7 +242,7 @@ cockpit. `void-verify`, puis signal.
 - **TDD mode**: exploratory (preuves)
 - **Verification gate**: `pnpm pack` puis install réelle sur une copie jetable d'un consommateur
   (init, commit, clone) ; sur ce consommateur sans App ni protection : un ticket va jusqu'au
-  merge dans la branche d'intégration ; `merges: human` arrête la PR prête ; délégation visible
+  merge dans la branche d'intégration ; la retenue humaine arrête la PR prête ; délégation visible
   sous herdr et native sans multiplexeur ; `pnpm version:check`.
 - **Expected commits**: aucun code attendu ; correctifs éventuels en `fix:`.
 - **Notes**: **gate humain** : promotion develop vers main et merge de la PR release-please par

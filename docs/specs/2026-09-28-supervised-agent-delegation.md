@@ -95,7 +95,7 @@ interface AgentRunRequest {
   readonly agentType: string | undefined; // type natif : independent-code-reviewer, Explore...
   readonly role: 'work' | 'review';
   readonly model: string | undefined;
-  readonly cwd: string;               // worktree du ticket pour un WORK, dépôt pour un REVIEW
+  readonly cwd: string;               // worktree du ticket (WORK) ; worktree détachée au SHA jugé (REVIEW)
   readonly brief: string;             // contexte complet : l'agent ne sait rien d'autre
 }
 ```
@@ -125,7 +125,13 @@ dispatched|working --(observation perdue)--> reconciling
 - `reconciling` : lancement ou observation ambigus. On interroge la session native par sa
   référence, on ne relance jamais à l'aveugle.
 - L'état vivant vient toujours du runtime. Le registre ne garde que les identités, liens et
-  transitions acceptées, dans le journal de mission `.void/machine/runs/<mission-id>/`.
+  transitions acceptées, dans le journal de mission `.void/machine/runs/<mission-id>/`, résolu
+  depuis le répertoire Git commun : un run lancé dans une worktree écrit au même endroit que
+  le checkout principal.
+- Un run `review` qui juge un commit tourne dans une worktree détachée à ce SHA ; le noyau
+  vérifie son `HEAD` avant et après le run et enregistre lui-même le SHA jugé.
+- `dispatch` refuse, avec la commande qui répare, quand le hook qui collecte le résultat n'est
+  pas installé pour ce runtime : sans lui, aucun résultat ne serait jamais collecté.
 
 ### Interface CLI
 
@@ -248,7 +254,9 @@ déclarée non garantie.
 - **Conformité d'adaptateur** : exécutables factices qui rejouent les sorties réelles capturées
   (`claude agents --json`, flux app-server), sur le modèle de
   `packages/void-machine/test/claude-runtime-contract.test.ts`. Un seul jeu de tests par port.
-- **Preuves réelles** consignées dans la PR :
+- **Preuves réelles** consignées dans la PR, faites sur un consommateur jetable installé depuis
+  `pnpm pack` : ce dépôt exécute le bundle de hooks publié (4.0.0) jusqu'à la 4.1.0, donc les
+  nouveaux hooks n'y tournent pas avant la release :
   1. sous herdr et Ghostty, une délégation par l'outil `Agent` ouvre un pane rattaché au ticket,
      et le coordinateur récupère le retour sans action humaine ;
   2. sans multiplexeur, la même délégation reste un sous-agent natif ;

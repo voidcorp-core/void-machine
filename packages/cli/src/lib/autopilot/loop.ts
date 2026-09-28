@@ -12,6 +12,11 @@
 // footprint and by `sequential` path, two review rounds, the stop conditions,
 // one merge at a time without a merge queue, an ambiguous state to a human.
 //
+// There is one merge mode. Once a head carries a clean verdict, its checks have
+// settled and its branch is up to date, the loop merges it into the
+// integration branch itself, unless a person holds the merges, and never into
+// the branch that deploys.
+//
 // The review verdict is local: `autopilot review` delegates a fresh-context,
 // read-only reviewer on the exact head and records what it found, bound to that
 // head and to the session the runtime listed. Nothing read on GitHub decides a
@@ -34,6 +39,7 @@ import {
   type ReviewVerdict,
   ticketIdSchema,
 } from './judgments.js';
+import type { MergeHold } from './merge-hold.js';
 import type { AutopilotConfig, ProgramDescriptor, ProgressStates } from './program.js';
 import {
   changedParts,
@@ -90,11 +96,13 @@ export const PROTECTED_PATHS_FLOOR = [
   'packages/cli/src/commands/autopilot-loop.ts',
   // The local chain of judgment: the kernel delegates the reviewer and binds
   // its result to the session it launched, the agents command drives it, the
-  // programme grants the merge and `judgments.ts` admits the verdict.
+  // programme grants the merge, `judgments.ts` admits the verdict and the hold
+  // parser decides whether a person keeps the merges.
   'packages/void-machine/src/**',
   'packages/cli/src/commands/agents.ts',
   'packages/cli/src/lib/autopilot/program.ts',
   'packages/cli/src/lib/autopilot/judgments.ts',
+  'packages/cli/src/lib/autopilot/merge-hold.ts',
   // The command that delegates the reviewer and records its verdict, the
   // parser that reads the reviewer's answer, and the reviewer's own definition,
   // from its source to the copy the package ships.
@@ -158,12 +166,19 @@ export interface PullRequestObservation {
   readonly baseRef: string;
   /** GitHub reports a conflict with the base (`mergeStateStatus: DIRTY`). */
   readonly conflicted: boolean;
-  /** GitHub reports the base moved on (`mergeStateStatus: BEHIND`). */
+  /**
+   * The base moved on: GitHub reports `mergeStateStatus: BEHIND`, which it does
+   * only under a protection that requires it, or the base has commits the head
+   * lacks.
+   */
   readonly behind: boolean;
   /** An auto-merge request is pending. A queued pull request holds none: see `queue`. */
   readonly autoMerge: boolean;
-  /** Every check GitHub reports on the head, whatever runs it. */
-  readonly checks: 'pending' | 'passing' | 'failing';
+  /**
+   * Every check GitHub reports on the head, whatever runs it. `none` is a head
+   * no check runs on: a project without CI merges on its local verdict alone.
+   */
+  readonly checks: 'none' | 'pending' | 'passing' | 'failing';
   /** The last merge queue event not followed by a commit. */
   readonly queue: QueueEvent;
   /** Ejections of the current head from the merge queue since its last commit. */
@@ -188,6 +203,11 @@ export interface ChangedFile {
 export interface GithubObservation {
   /** The branch the loop merges into, `auto` already resolved. */
   readonly base: string;
+  /**
+   * The repository's default branch, the one that deploys when the programme
+   * names none. Undefined when GitHub reports none.
+   */
+  readonly defaultBranch: string | undefined;
   /** False when the base has no merge queue: merges then run one at a time. */
   readonly mergeQueue: boolean;
   readonly pullRequests: ReadonlyMap<number, PullRequestObservation>;
@@ -230,7 +250,7 @@ export const HUMAN_WAIT_REASONS = [
   'pull-request-closed',
   'semantic-conflict',
   'review-rounds-exhausted',
-  'human-merge-gate',
+  'human-merge-hold',
   'deploy-branch-target',
   'shared-state-changed',
   'ejections-exhausted',
@@ -241,7 +261,7 @@ export const HUMAN_WAIT_REASONS = [
 export type HumanWaitReason = (typeof HUMAN_WAIT_REASONS)[number];
 
 // The reason a ticket went to a human is required: the recap repeats it, and
-// the streak skips only the waits a merge gate asks for.
+// the streak skips only the waits a human hold asks for.
 const recentOutcomeSchema = z.discriminatedUnion('outcome', [
   z.strictObject({ ticketId: ticketIdSchema, outcome: z.literal('merged') }),
   z.strictObject({
@@ -281,13 +301,13 @@ export type WaitReason =
   | 'worker-active'
   | 'awaiting-review'
   | 'merging'
-  | 'serial-merge-turn';
+  | 'serial-merge-turn'
+  | 'checks-pending';
 export type HandBackReason =
   | 'resume'
   | 'checks-failed'
   | 'review-blocking'
   | 'conflict'
-  | 'update-on-base'
   | 'head-moved-after-arming';
 /** A ticket the run sent to a human, and why: what the recap reports. */
 export interface HumanWaitEntry {
@@ -311,6 +331,20 @@ export type LoopAction =
       readonly ticketId: string;
       readonly reason: HumanWaitReason;
       readonly detail: string;
+    }
+  | {
+      /** `autopilot merge`: merge exactly this head into the base, now. */
+      readonly kind: 'merge';
+      readonly ticketId: string;
+      readonly pullRequest: number;
+      readonly headSha: string;
+    }
+  | {
+      /** Bring the base into the branch; the head moves, and is reviewed again. */
+      readonly kind: 'update-branch';
+      readonly ticketId: string;
+      readonly pullRequest: number;
+      readonly headSha: string;
     }
   | {
       readonly kind: 'enable-auto-merge';
@@ -383,6 +417,8 @@ export interface LoopInput {
   readonly reviews: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
   /** The instant of this tick, in milliseconds: how old a running review is. */
   readonly now: number;
+  /** Whether a person holds the merges, read from the machine's state this tick. */
+  readonly mergeHold: MergeHold;
 }
 
 export interface LoopDecision {
@@ -391,6 +427,8 @@ export interface LoopDecision {
   readonly refusals: readonly string[];
   /** The label a `mark-human-wait` sets, and whose presence is `humanWait`. */
   readonly humanWaitLabel: string;
+  /** Who merges this tick: the loop, or a person holding the merges. */
+  readonly merges: 'automatic' | 'by-human';
 }
 
 /** The programme's consent and state roles, or a refusal naming what is missing. */
@@ -405,7 +443,31 @@ export function loopProgramOf(descriptor: ProgramDescriptor): LoopProgram {
       'declare an `autopilot` block and a `progress` provider in `.void/program.md`',
     );
   }
+  if (descriptor.autopilot.schemaVersion === 1) throw legacyProgramme(descriptor.autopilot);
   return { autopilot: descriptor.autopilot, states: descriptor.progress.states };
+}
+
+/**
+ * A 4.0 programme, refused with the migration its gate calls for. A former
+ * human gate is told to hold the merges first: removing the key alone would
+ * hand the next merge to the machine.
+ */
+function legacyProgramme(autopilot: AutopilotConfig) {
+  const gate = autopilot.legacyMergeGate;
+  const migrate = 'then set `autopilot.schemaVersion: 2`';
+  const fix = gate === 'union-reviewed'
+    ? 'remove `mergeGate`: the loop now merges on its own into the integration branch, never into '
+      + `\`deployBranch\` or the default branch; ${migrate}`
+    : `first run \`${PRODUCT_COMMAND} autopilot merges --by-human\` to keep every merge yours, then `
+      + `remove \`mergeGate\`, ${migrate.slice('then '.length)}`;
+  return autopilotFailure(
+    'AUTOPILOT_PROGRAM',
+    'the programme is written for the 4.0 merge gate, which no longer exists',
+    gate === undefined
+      ? '`autopilot.schemaVersion` is 1'
+      : `\`autopilot.schemaVersion\` is 1 and \`mergeGate\` is ${gate}`,
+    fix,
+  );
 }
 
 export function admitLoopTracker(value: unknown): Admission<LoopTracker> {
@@ -593,6 +655,25 @@ function headReviewOf(ticket: TrackerTicket, pr: PullRequestObservation, input: 
   return { kind: 'recorded', review };
 }
 
+/**
+ * Whether `raw` is a clean verdict recorded for exactly this ticket, pull
+ * request and head: what `autopilot merge` and `autopilot arm` prove again
+ * before they act, rather than trust the tick that asked for it.
+ */
+export function provesCleanVerdict(
+  raw: unknown,
+  target: { readonly ticketId: string; readonly pullRequest: number; readonly headSha: string },
+): boolean {
+  const admission = admitLocalReview(raw);
+  if (!admission.ok) return false;
+  const review = admission.value;
+  const bound = review.ticketId === target.ticketId
+    && review.pullRequest === target.pullRequest
+    && review.headSha === target.headSha;
+  const verdict = review.verdict?.verdict;
+  return bound && verdict !== undefined && verdict.blocking.length === 0;
+}
+
 /** The clean verdict recorded on the head, the one thing a merge is armed on. */
 function cleanVerdictOf(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput) {
   const head = headReviewOf(ticket, pr, input);
@@ -694,39 +775,60 @@ function sharedStateOutcome(
   return toHuman(ticket.id, 'shared-state-changed', detail);
 }
 
+/**
+ * The head carries a clean verdict: what stands between it and the base. Each
+ * refusal names its cause, and the hold comes only now, after the review, so a
+ * person is handed a pull request that is ready rather than one nobody read.
+ */
 function mergeOutcome(
   ticket: TrackerTicket,
   pr: PullRequestObservation,
   context: SlotContext,
 ): SlotOutcome {
   if (isArmed(pr)) return wait(ticket.id, 'merging');
-  const { autopilot } = context.input.program;
+  const { input } = context;
+  const { autopilot } = input.program;
   const guarded = protectedPathReason(pr, autopilot);
   if (guarded !== undefined) return toHuman(ticket.id, 'protected-path', guarded);
-  if (autopilot.mergeGate === 'human') {
-    return toHuman(ticket.id, 'human-merge-gate', `pull request #${pr.number} is ready to merge`);
-  }
-  // The programme refuses `base: deployBranch` as declared, but `auto` is only
-  // resolved here and can land on the branch that ships. A name that cannot be
-  // compared counts as that branch: a false refusal is a merge a person does.
-  const base = context.input.github.base;
-  if (sameBranch(base, autopilot.deployBranch) !== 'different') {
-    const detail = `#${pr.number} targets ${base}, the branch the programme says deploys`;
-    return toHuman(ticket.id, 'deploy-branch-target', detail);
-  }
-  const sharedStateRefusal = sharedStateOutcome(ticket, context.input.sharedState);
+  const deploying = deployTargetReason(pr, input);
+  if (deploying !== undefined) return toHuman(ticket.id, 'deploy-branch-target', deploying);
+  const sharedStateRefusal = sharedStateOutcome(ticket, input.sharedState);
   if (sharedStateRefusal !== undefined) return sharedStateRefusal;
-  if (!context.input.github.mergeQueue) {
-    if (context.serialTurn !== pr.number) return wait(ticket.id, 'serial-merge-turn');
-    if (pr.behind) return handBack(ticket.id, 'update-on-base', pr.number);
-  }
+  if (pr.checks === 'pending') return wait(ticket.id, 'checks-pending');
+  if (input.mergeHold.held) return toHuman(ticket.id, 'human-merge-hold', heldDetail(pr, input.mergeHold));
   const target = { ticketId: ticket.id, pullRequest: pr.number, headSha: pr.headSha };
+  if (!input.github.mergeQueue) {
+    if (context.serialTurn !== pr.number) return wait(ticket.id, 'serial-merge-turn');
+    if (pr.behind) return held({ kind: 'update-branch', ...target });
+    return held({ kind: 'merge', ...target });
+  }
   if (pr.queue !== 'ejected') return held({ kind: 'enable-auto-merge', ...target });
   if (pr.ejections > EJECTIONS_PER_HEAD_MAX) {
     const detail = `#${pr.number} was ejected ${pr.ejections} times on ${pr.headSha}`;
     return toHuman(ticket.id, 'ejections-exhausted', detail);
   }
   return held({ kind: 'requeue', ...target, ejections: pr.ejections });
+}
+
+function heldDetail(pr: PullRequestObservation, hold: Extract<MergeHold, { held: true }>): string {
+  return `#${pr.number} is reviewed on ${pr.headSha} and ready; ${hold.detail}`;
+}
+
+/**
+ * Why the base is the branch that deploys, or nothing. The programme names it,
+ * or the repository's default branch is it. `auto` is only resolved at tick
+ * time and can land there; a name that cannot be compared, or no default branch
+ * at all, counts as that branch: a false refusal is a merge a person does.
+ */
+function deployTargetReason(pr: PullRequestObservation, input: LoopInput): string | undefined {
+  const { base, defaultBranch } = input.github;
+  const declared = input.program.autopilot.deployBranch;
+  const deploying = declared ?? defaultBranch;
+  if (sameBranch(base, deploying) === 'different') return undefined;
+  if (declared !== undefined) return `#${pr.number} targets ${base}, the branch the programme says deploys`;
+  return defaultBranch === undefined
+    ? `#${pr.number} targets ${base}, and GitHub reports no default branch to tell the branch that deploys`
+    : `#${pr.number} targets ${base}, the repository default branch, which deploys when the programme names none`;
 }
 
 /**
@@ -796,9 +898,15 @@ function armedOutcome(
   if (record.headSha !== pr.headSha) {
     return { ...handBack(ticket.id, 'head-moved-after-arming', pr.number), disarm };
   }
-  if (vouches(ticket, pr, input)) return undefined;
-  const detail = `#${pr.number} is armed on ${pr.headSha} and no clean local verdict holds that head`;
-  return { ...toHuman(ticket.id, 'armed-verdict-unproven', detail), disarm };
+  if (!vouches(ticket, pr, input)) {
+    const detail = `#${pr.number} is armed on ${pr.headSha} and no clean local verdict holds that head`;
+    return { ...toHuman(ticket.id, 'armed-verdict-unproven', detail), disarm };
+  }
+  // Armed before the person took the merges back: GitHub would still merge it.
+  if (input.mergeHold.held) {
+    return { ...toHuman(ticket.id, 'human-merge-hold', heldDetail(pr, input.mergeHold)), disarm };
+  }
+  return undefined;
 }
 
 /**
@@ -829,7 +937,12 @@ function openPullOutcome(
   if (armed !== undefined) return armed;
   // A head the loop merges into, or that ships, is a promotion, never a ticket:
   // promoting develop to main is a release action a person takes.
-  if (protectedBranches(context.input.program.autopilot).includes(pr.headRef)) {
+  const { defaultBranch } = context.input.github;
+  const promoting = [
+    ...protectedBranches(context.input.program.autopilot),
+    ...(defaultBranch === undefined ? [] : [defaultBranch]),
+  ];
+  if (promoting.includes(pr.headRef)) {
     const detail = `#${pr.number} promotes ${pr.headRef} into ${pr.baseRef}`;
     return toHuman(ticket.id, 'promotion-pull-request', detail);
   }
@@ -846,10 +959,6 @@ function openPullOutcome(
   if (pr.draft) return handBack(ticket.id, 'resume', pr.number);
   if (pr.conflicted) return conflictOutcome(ticket, pr);
   if (pr.checks === 'failing') return handBack(ticket.id, 'checks-failed', pr.number);
-  // Under a human merge gate the person who merges is the review.
-  if (context.input.program.autopilot.mergeGate === 'human') {
-    return mergeOutcome(ticket, pr, context);
-  }
   return localReviewOutcome(ticket, pr, context);
 }
 
@@ -976,25 +1085,26 @@ interface Outcome {
 
 /**
  * Tickets sent to a human since the last merge. A pull request that only waits
- * for a human merge gate is neither: the loop did its part, the programme asked
- * a person to merge, so it neither counts nor resets the streak.
+ * for a person holding the merges is neither: the loop did its part, the person
+ * asked to merge themselves, so it neither counts nor resets the streak.
  */
 function trailingHumanWaits(outcomes: readonly Outcome[]): number {
   let count = 0;
   for (const entry of [...outcomes].reverse()) {
     if (entry.outcome === 'merged') return count;
-    if (entry.reason !== 'human-merge-gate') count += 1;
+    if (entry.reason !== 'human-merge-hold') count += 1;
   }
   return count;
 }
 
 export function decideLoop(input: LoopInput): LoopDecision {
   const humanWaitLabel = input.program.autopilot.humanWaitLabel ?? HUMAN_WAIT_LABEL;
+  const merges = input.mergeHold.held ? 'by-human' : 'automatic';
   // Freezing means nothing moves, a merge GitHub would run included: every
   // armed pull request is disarmed first, the proven ones too.
   if (input.signal === 'now') {
     const disarms = disarmsOf(input.tracker.tickets, input);
-    return { actions: [...disarms, { kind: 'freeze' }], refusals: [], humanWaitLabel };
+    return { actions: [...disarms, { kind: 'freeze' }], refusals: [], humanWaitLabel, merges };
   }
   const refusals: string[] = [];
   const holding = heldTickets(input.program, input.tracker);
@@ -1047,7 +1157,7 @@ export function decideLoop(input: LoopInput): LoopDecision {
     actions.push({ kind: 'drain', reason: drain });
     if (stillHeld.length === 0) actions.push(recapOf(recent, merged, waited));
   }
-  return { actions, refusals, humanWaitLabel };
+  return { actions, refusals, humanWaitLabel, merges };
 }
 
 function disarmsOf(tickets: readonly TrackerTicket[], input: LoopInput): LoopAction[] {

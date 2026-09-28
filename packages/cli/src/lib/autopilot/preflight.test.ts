@@ -7,7 +7,7 @@ function observation(over: Partial<AutopilotObservation> = {}): AutopilotObserva
   return {
     program: {
       status: 'executing',
-      autopilot: { mergeGate: 'human', verifyCommands: [['pnpm', 'test']] },
+      autopilot: { verifyCommands: [['pnpm', 'test']] },
     },
     adapters: ['claude'],
     trackerConnector: true,
@@ -94,78 +94,43 @@ describe('the provider-agnostic program boundary', () => {
   });
 });
 
-describe('the merge gate', () => {
-  // `union-reviewed` is the form the consent to a machine merge takes, decided in
-  // the union-is-read-before-it-merges and autopilot-block-is-the-consent records.
-  // This check told a consumer who declared it that "human" was the only accepted
-  // value, and to set it back -- with the authority of a red doctor, while
-  // `program.ts` accepted it and two machine merges had already landed on develop.
-  // A consumer cannot see the disagreement: the only repository whose doctor would
-  // have shown it is this one, and here doctor runs the self-host gate instead.
-  it('accepts the reviewed-union gate a program may declare', () => {
+describe('the merge mode', () => {
+  // One mode: the loop merges on its own into the integration branch, never
+  // into the branch that deploys, and a person takes the merges on request.
+  it('says where the loop merges, where it never does, and how a person takes the merges', () => {
     const results = autopilotPreflight(
       observation({
-        program: {
-          status: 'executing',
-          autopilot: { mergeGate: 'union-reviewed', deployBranch: 'main', base: 'develop' },
-        },
+        program: { status: 'executing', autopilot: { deployBranch: 'main', base: 'develop' } },
       }),
     );
 
     const check = named(results, 'autopilot merge');
     expect(check?.ok).toBe(true);
+    expect(check?.message).toMatch(/merges into develop[\s\S]*never into main[\s\S]*autopilot merges --by-human/);
   });
 
-  // Passing is not enough: a gate that hands merges to a machine must say so, or
-  // the operator reading a green doctor learns nothing about what they enabled.
-  it('says what the reviewed-union gate authorizes, and where the human still stands', () => {
-    const results = autopilotPreflight(
-      observation({
-        program: {
-          status: 'executing',
-          autopilot: { mergeGate: 'union-reviewed', deployBranch: 'main', base: 'develop' },
-        },
-      }),
-    );
+  it('names the repository default branch when the programme names no deploying branch', () => {
+    const results = autopilotPreflight(observation({ program: { status: 'executing', autopilot: {} } }));
 
-    const message = named(results, 'autopilot merge')?.message ?? '';
-    expect(message).toContain('union-reviewed');
-    expect(message).toContain('main');
+    expect(named(results, 'autopilot merge')?.message).toMatch(/never into the repository default branch/);
   });
 
-  it('rejects a gate no version of the contract has ever had', () => {
+  it('fails a 4.0 human gate with the migration that keeps the merges a person\'s', () => {
     const results = autopilotPreflight(
-      observation({
-        program: { status: 'executing', autopilot: { mergeGate: 'auto' } },
-      }),
+      observation({ program: { status: 'executing', autopilot: { legacyMergeGate: 'human' } } }),
     );
 
     const check = named(results, 'autopilot merge');
     expect(check?.status).toBe('fail');
+    expect(check?.fix).toMatch(/autopilot merges --by-human` first[\s\S]*schemaVersion: 2/);
   });
 
-  // The specific sentence this file exists to make impossible. It was true of an
-  // earlier contract and stayed in the code after the decision moved, which is
-  // why the refusal must name the gates that exist rather than assert a single one.
-  it('never claims one gate is the only value another reader accepts', () => {
+  it('fails a 4.0 granted gate with the migration to the automatic default', () => {
     const results = autopilotPreflight(
-      observation({
-        program: { status: 'executing', autopilot: { mergeGate: 'auto' } },
-      }),
+      observation({ program: { status: 'executing', autopilot: { legacyMergeGate: 'union-reviewed' } } }),
     );
 
-    const check = named(results, 'autopilot merge');
-    expect(`${check?.message} ${check?.fix}`).not.toMatch(/only accepted value/i);
-    expect(`${check?.message} ${check?.fix}`).not.toMatch(/autopilot never merges/i);
-    expect(check?.fix).toContain('union-reviewed');
-  });
-
-  it('treats an absent gate as human rather than as a missing value', () => {
-    const results = autopilotPreflight(
-      observation({ program: { status: 'executing', autopilot: {} } }),
-    );
-
-    expect(named(results, 'autopilot merge')?.ok).toBe(true);
+    expect(named(results, 'autopilot merge')?.fix).toMatch(/remove `mergeGate`[\s\S]*merges on its own/);
   });
 });
 
@@ -209,7 +174,9 @@ describe('what could not be read is not what is false', () => {
     const unprotected = named(autopilotPreflight(observation({ baseProtected: false })), 'autopilot base');
 
     expect(unreadable?.status).toBe('unknown');
-    expect(unprotected?.status).toBe('fail');
+    // Protection is optional since the single merge mode: advised, not required.
+    expect(unprotected?.status).toBe('advisory');
+    expect(unprotected?.ok).toBe(true);
     expect(unreadable?.message).not.toEqual(unprotected?.message);
   });
 

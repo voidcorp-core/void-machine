@@ -46,10 +46,9 @@ progress:
     review: [In Review]
     done: [Done]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: 4
   base: develop
-  mergeGate: union-reviewed
   deployBranch: main
 ---
 `;

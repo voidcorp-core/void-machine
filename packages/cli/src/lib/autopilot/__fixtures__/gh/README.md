@@ -20,6 +20,10 @@ variants from them by overriding fields; no shape here was written by hand.
 | `queue-present.json` | the same query on zed-industries/zed `main` |
 | `protection-required-checks-strict.json` | `gh api repos/{owner}/{repo}/branches/develop/protection/required_status_checks` (this repository): classic protection with `strict: true` |
 | `rules-branch-required-checks.json` | `gh api repos/zed-industries/zed/rules/branches/main`: rulesets, one `required_status_checks` rule with `strict_required_status_checks_policy: false` |
+| `repo-view-default-branch.json` | `gh repo view --json defaultBranchRef` (this repository, 2026-09-28) |
+| `repo-view-merge-methods.json` | `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` (this repository, 2026-09-28) |
+| `compare-behind.json` | `gh api 'repos/{owner}/{repo}/compare/develop...5335320e' --jq '{behind_by: .behind_by, ahead_by: .ahead_by, status: .status}'` (this repository, 2026-09-28): a head the base moved past |
+| `compare-ahead.json` | the same query on `develop~3...develop`: a head that contains its base |
 | `timeline-*.json` | `gh api graphql` `pullRequest.timelineItems` (merge queue events and commits) of zed PRs 64552 and 64434 |
 
 No pull request of this repository carries a commit status, hence the public

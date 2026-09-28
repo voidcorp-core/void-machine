@@ -68,13 +68,13 @@ export function runAutopilotCommand(
   const json = argv.includes('--json');
   try {
     if (argv.includes('--auto-merge')) {
-      // Consent to a machine merge is a durable declaration in the program, never
-      // a switch someone can put on one invocation and forget.
+      // Who merges is the loop by default and a person on their say, recorded
+      // with `autopilot merges`, never a switch put on one invocation and forgotten.
       throw autopilotFailure(
         'AUTOPILOT_USAGE',
         'autopilot does not accept --auto-merge',
-        'granting a merge is declared in the program, not passed to a run',
-        'set `autopilot.mergeGate: union-reviewed` with a `deployBranch` in the program',
+        'the loop already merges on its own, once a local verdict passed the head',
+        `run \`${PRODUCT_COMMAND} autopilot merges --by-human\` to keep the merges yours, \`--automatic\` to give them back`,
       );
     }
     if (argv.includes('--help') || argv.includes('-h')) return ok(USAGE);

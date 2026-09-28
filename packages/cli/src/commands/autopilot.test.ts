@@ -19,7 +19,7 @@ describe('runAutopilotCommand boundary', () => {
     const result = runAutopilotCommand(['next', '--auto-merge'], '{}', context());
 
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toMatch(/--auto-merge[\s\S]*mergeGate[\s\S]*program/i);
+    expect(result.stderr).toMatch(/--auto-merge[\s\S]*autopilot merges --by-human/i);
   });
 
   it.each([

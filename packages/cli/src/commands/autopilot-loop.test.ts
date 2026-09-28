@@ -30,10 +30,9 @@ progress:
     review: [In Review]
     done: [Done]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: 4
   base: develop
-  mergeGate: union-reviewed
   deployBranch: main
 ---
 `;
@@ -124,6 +123,7 @@ const gh = (args: readonly string[]): string => answer(args);
 function answer(args: readonly string[], view: string = reviewedPull()): string {
   const line = args.join(' ');
   if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
+  if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
   if (line.includes('pr view 11')) return view;
   if (line.includes('pulls/11/files')) return pullFiles();
   if (line.includes('isInMergeQueue')) return membership(false);
@@ -172,6 +172,11 @@ const heldTicket = {
 
 const HEAD = 'ca7fdc0008c5b597224c37b195e2a0ba0cd58e63';
 const cleanVerdict = { headSha: HEAD, round: 1, blocking: [], advisory: [] };
+const blockingFinding = {
+  location: 'packages/dev-1/index.ts:3',
+  scenario: 'A merged ticket keeps its slot.',
+  correction: 'Free the slot on merge.',
+};
 const queuedTicket = { id: 'DEV-2', status: 'Todo', humanWait: false, readiness: ready };
 
 const RUN = 'run_00000000-0000-4000-8000-000000000001';
@@ -326,6 +331,7 @@ describe('autopilot arm and disarm', () => {
 
   it('records the head, arms on exactly that head, and checks GitHub armed it', () => {
     const root = project();
+    recordLocalVerdict(root);
     const gh = sequence([reviewedPull(), reviewedPull({ armed: true })]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD, '--json'];
     const result = runAutopilotCommand(argv, '', { ...context(root), gh: gh.run });
@@ -334,8 +340,48 @@ describe('autopilot arm and disarm', () => {
     expect(JSON.parse(readFileSync(armedPath(root), 'utf8'))).toEqual({ pullRequest: 11, headSha: HEAD });
   });
 
+  it('arms nothing without a clean local verdict on exactly that head, whatever next said', () => {
+    // `next` answered on its observation; the arm proves the verdict again
+    // rather than trust that nothing moved in between.
+    const root = project();
+    const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
+    const none = sequence([reviewedPull(), reviewedPull({ armed: true })]);
+    expect(runAutopilotCommand(argv, '', { ...context(root), gh: none.run }).stderr).toMatch(/clean local verdict/);
+    expect(none.calls).toEqual([]);
+    recordLocalVerdict(root, HEAD, { ...cleanVerdict, blocking: [blockingFinding] });
+    const blocked = sequence([reviewedPull(), reviewedPull({ armed: true })]);
+    expect(runAutopilotCommand(argv, '', { ...context(root), gh: blocked.run }).exitCode).toBe(2);
+    expect(blocked.calls).toEqual([]);
+    expect(existsSync(armedPath(root))).toBe(false);
+  });
+
+  it('arms nothing while a person holds the merges', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    expect(runAutopilotCommand(['merges', '--by-human'], '', context(root)).exitCode).toBe(0);
+    const gh = sequence([reviewedPull(), reviewedPull({ armed: true })]);
+    const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
+    const result = runAutopilotCommand(argv, '', { ...context(root), gh: gh.run });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/holds the merges/);
+    expect(gh.calls).toEqual([]);
+  });
+
+  it('arms nothing on a pull request retargeted at the branch that deploys', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const onMain = JSON.stringify({ ...(JSON.parse(reviewedPull()) as Record<string, unknown>), baseRefName: 'main' });
+    const gh = sequence([onMain, reviewedPull({ armed: true })]);
+    const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
+    const result = runAutopilotCommand(argv, '', { ...context(root), gh: gh.run });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/targets main/);
+    expect(gh.writes()).toEqual([]);
+  });
+
   it('arms nothing on a head the pull request has moved past', () => {
     const root = project();
+    recordLocalVerdict(root);
     const gh = sequence([reviewedPull({ head: 'b'.repeat(40) })]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
     const result = runAutopilotCommand(argv, '', { ...context(root), gh: gh.run });
@@ -346,6 +392,7 @@ describe('autopilot arm and disarm', () => {
 
   it('fails when GitHub did not arm it, and disarms at once if the head moved meanwhile', () => {
     const root = project();
+    recordLocalVerdict(root);
     const unarmed = sequence([reviewedPull(), reviewedPull()]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
     expect(runAutopilotCommand(argv, '', { ...context(root), gh: unarmed.run }).stderr).toMatch(/not armed/);
@@ -375,6 +422,7 @@ describe('autopilot arm and disarm', () => {
     // Once the checks pass, arming on a base with a merge queue queues the pull
     // request and leaves no auto-merge request behind.
     const root = project();
+    recordLocalVerdict(root);
     const gh = sequence([reviewedPull(), reviewedPull({ queued: true })], [true]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD, '--json'];
     const result = runAutopilotCommand(argv, '', { ...context(root), gh: gh.run });
@@ -409,6 +457,7 @@ describe('autopilot arm and disarm', () => {
 
   it('succeeds when GitHub merged the head it armed before the read back', () => {
     const root = project();
+    recordLocalVerdict(root);
     const merged = JSON.stringify({ ...(JSON.parse(reviewedPull()) as Record<string, unknown>), state: 'MERGED' });
     const gh = sequence([reviewedPull(), merged]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
@@ -433,6 +482,243 @@ describe('autopilot arm and disarm', () => {
       { kind: 'disable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: 'b'.repeat(40), armedSha: HEAD },
       { kind: 'hand-back-to-worker', ticketId: 'DEV-1', reason: 'head-moved-after-arming', pullRequest: 11 },
     ]);
+  });
+});
+
+describe('autopilot merges', () => {
+  // The one thing a person says about merges. It lives in the machine's state,
+  // not the programme, so it takes effect on the next tick without a pull
+  // request, and it only ever takes authority away.
+  const holdPath = (root: string) => join(root, '.void', 'machine', 'autopilot', 'merge-hold.json');
+  const merges = (root: string, ...flags: string[]) =>
+    runAutopilotCommand(['merges', ...flags, '--json'], '', context(root));
+
+  function readyTick(root: string) {
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    recordLocalVerdict(root);
+    return () => next(root, trackerJson([heldTicket], []), gh).decision;
+  }
+
+  it('reports the automatic default until a person holds the merges', () => {
+    const result = merges(project());
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ merges: 'automatic' });
+  });
+
+  it('hands every reviewed pull request to the person from the next tick, and gives them back after', () => {
+    const root = project();
+    const tick = readyTick(root);
+    expect(tick().merges).toBe('automatic');
+    expect(tick().actions[0]).toMatchObject({ kind: 'enable-auto-merge' });
+
+    expect(JSON.parse(merges(root, '--by-human').stdout)).toMatchObject({ merges: 'by-human' });
+    expect(readFileSync(holdPath(root), 'utf8')).toBe(`${JSON.stringify({ schemaVersion: 1, mergedBy: 'human', since: NOW })}\n`);
+    expect(tick().merges).toBe('by-human');
+    expect(tick().actions[0]).toMatchObject({
+      kind: 'mark-human-wait',
+      reason: 'human-merge-hold',
+      detail: expect.stringMatching(new RegExp(`since ${NOW}`)),
+    });
+
+    expect(JSON.parse(merges(root, '--automatic').stdout)).toEqual({ merges: 'automatic', removed: true });
+    expect(existsSync(holdPath(root))).toBe(false);
+    expect(tick().actions[0]).toMatchObject({ kind: 'enable-auto-merge' });
+  });
+
+  it('reads a hold file it cannot parse as a hold, and lets --automatic clear it', () => {
+    const root = project();
+    const tick = readyTick(root);
+    mkdirSync(join(root, '.void', 'machine', 'autopilot'), { recursive: true });
+    writeFileSync(holdPath(root), '{ by-human');
+    expect(tick().actions[0]).toMatchObject({
+      kind: 'mark-human-wait',
+      reason: 'human-merge-hold',
+      detail: expect.stringMatching(/unreadable/),
+    });
+    expect(JSON.parse(merges(root).stdout)).toMatchObject({ merges: 'by-human', detail: expect.stringMatching(/unreadable/) });
+    expect(JSON.parse(merges(root, '--automatic').stdout)).toEqual({ merges: 'automatic', removed: true });
+    expect(tick().actions[0]).toMatchObject({ kind: 'enable-auto-merge' });
+  });
+
+  it('removes nothing that is not there, and takes one instruction at a time', () => {
+    const root = project();
+    expect(JSON.parse(merges(root, '--automatic').stdout)).toEqual({ merges: 'automatic', removed: false });
+    const both = merges(root, '--by-human', '--automatic');
+    expect(both.exitCode).toBe(2);
+    expect(both.stderr).toMatch(/--by-human or --automatic/);
+  });
+});
+
+describe('autopilot merge', () => {
+  // Without a merge queue the loop merges the head itself, and GitHub refuses
+  // if that head moved. Every guard is proven again here, where the merge
+  // happens, rather than trusted from the tick that asked for it.
+  const armedPath = (root: string) => join(root, '.void', 'machine', 'autopilot', 'armed', 'DEV-1.json');
+  const argv = ['merge', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD, '--json'];
+  const merged = (view: string = reviewedPull()) =>
+    JSON.stringify({ ...(JSON.parse(view) as Record<string, unknown>), state: 'MERGED' });
+
+  /**
+   * A gh answering `pr view` with the next view given, the base comparison with
+   * `compare`, the repository's merge methods from the real capture, and the
+   * direct merge as `direct` says; every call is recorded.
+   */
+  function github(options: {
+    views: readonly string[];
+    compare?: string;
+    direct?: 'merges' | 'refused';
+    queued?: readonly boolean[];
+  }) {
+    const calls: string[][] = [];
+    const views = [...options.views];
+    const memberships = [...(options.queued ?? [])];
+    const run = (args: readonly string[]): string => {
+      calls.push([...args]);
+      const line = args.join(' ');
+      if (args[0] === 'pr' && args[1] === 'view') return views.shift() ?? '';
+      if (line.includes('isInMergeQueue')) return membership(memberships.shift() ?? false);
+      if (line.includes('/compare/')) return fixture(options.compare ?? 'compare-ahead.json');
+      if (line.includes('mergeCommitAllowed')) return fixture('repo-view-merge-methods.json');
+      if (args[0] === 'pr' && args[1] === 'merge' && !args.includes('--auto') && options.direct === 'refused') {
+        throw new Error('GraphQL: Base branch policy prohibits the merge (mergePullRequest)');
+      }
+      return '';
+    };
+    const writes = () => calls.filter((call) => call[0] === 'pr' && call[1] === 'merge');
+    return { run, calls, writes };
+  }
+
+  function mergeWith(root: string, runner: ReturnType<typeof github>) {
+    return runAutopilotCommand(argv, '', { ...context(root), gh: runner.run });
+  }
+
+  it('merges exactly the reviewed head, with a method the repository allows', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const runner = github({ views: [reviewedPull(), merged()] });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(runner.writes()).toEqual([['pr', 'merge', '11', '--match-head-commit', HEAD, '--merge']]);
+    expect(JSON.parse(result.stdout)).toEqual({ ticketId: 'DEV-1', pullRequest: 11, headSha: HEAD, merged: true });
+    expect(existsSync(armedPath(root))).toBe(false);
+  });
+
+  it('merges nothing while a person holds the merges, and asks GitHub nothing', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    runAutopilotCommand(['merges', '--by-human'], '', context(root));
+    const runner = github({ views: [reviewedPull(), merged()] });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/holds the merges/);
+    expect(runner.calls).toEqual([]);
+  });
+
+  it('merges nothing without a clean local verdict on exactly that head', () => {
+    const root = project();
+    const none = github({ views: [reviewedPull(), merged()] });
+    expect(mergeWith(root, none).stderr).toMatch(/clean local verdict/);
+    expect(none.calls).toEqual([]);
+    recordLocalVerdict(root, 'b'.repeat(40));
+    const other = github({ views: [reviewedPull(), merged()] });
+    expect(mergeWith(root, other).exitCode).toBe(2);
+    expect(other.calls).toEqual([]);
+  });
+
+  it('merges nothing on a head the pull request has moved past', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const runner = github({ views: [reviewedPull({ head: 'b'.repeat(40) })] });
+    expect(mergeWith(root, runner).exitCode).toBe(2);
+    expect(runner.writes()).toEqual([]);
+  });
+
+  it('merges nothing the base moved past: the loop updates it and reviews it again', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const runner = github({ views: [reviewedPull()], compare: 'compare-behind.json' });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/base moved/);
+    expect(runner.writes()).toEqual([]);
+  });
+
+  it('merges nothing into the branch that deploys, whatever the kernel read before', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const onMain = JSON.stringify({ ...(JSON.parse(reviewedPull()) as Record<string, unknown>), baseRefName: 'main' });
+    const runner = github({ views: [onMain] });
+    expect(mergeWith(root, runner).stderr).toMatch(/targets main/);
+    expect(runner.writes()).toEqual([]);
+  });
+
+  it('arms the native auto-merge when the base refuses a direct merge, recording the head first', () => {
+    // A base with required checks or reviews: GitHub merges once they pass,
+    // and only on this head.
+    const root = project();
+    recordLocalVerdict(root);
+    const runner = github({ views: [reviewedPull(), reviewedPull(), reviewedPull({ armed: true })], direct: 'refused' });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(runner.writes()).toEqual([
+      ['pr', 'merge', '11', '--match-head-commit', HEAD, '--merge'],
+      ['pr', 'merge', '11', '--auto', '--match-head-commit', HEAD, '--merge'],
+    ]);
+    expect(JSON.parse(readFileSync(armedPath(root), 'utf8'))).toEqual({ pullRequest: 11, headSha: HEAD });
+    expect(JSON.parse(result.stdout)).toMatchObject({ merged: false, armed: true });
+  });
+
+  it('never falls back to an auto-merge when the refusal came from a head that moved', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const moved = reviewedPull({ head: 'b'.repeat(40) });
+    const runner = github({ views: [reviewedPull(), moved], direct: 'refused' });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/moved/);
+    expect(runner.writes()).toEqual([['pr', 'merge', '11', '--match-head-commit', HEAD, '--merge']]);
+    expect(existsSync(armedPath(root))).toBe(false);
+  });
+
+  it('refuses a programme still written for the 4.0 merge gate', () => {
+    const root = project();
+    recordLocalVerdict(root);
+    const legacy = PROGRAM.replace('  schemaVersion: 2\n', '  schemaVersion: 1\n').replace('deployBranch: main', 'mergeGate: human');
+    writeFileSync(join(root, '.void', 'program.md'), legacy);
+    const runner = github({ views: [reviewedPull(), merged()] });
+    const result = mergeWith(root, runner);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/autopilot merges --by-human/);
+    expect(runner.calls).toEqual([]);
+  });
+});
+
+describe('autopilot update-branch', () => {
+  it('brings the base into exactly the head the kernel named', () => {
+    const root = project();
+    const calls: string[][] = [];
+    const run = (args: readonly string[]): string => {
+      calls.push([...args]);
+      return args[0] === 'pr' ? reviewedPull() : '{"message":"Updating pull request branch.","url":"x"}';
+    };
+    const argv = ['update-branch', '--pr', '11', '--head', HEAD, '--json'];
+    const result = runAutopilotCommand(argv, '', { ...context(root), gh: run });
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(calls.at(-1)).toEqual([
+      'api', '-X', 'PUT', 'repos/{owner}/{repo}/pulls/11/update-branch', '-f', `expected_head_sha=${HEAD}`,
+    ]);
+  });
+
+  it('updates nothing on a head the pull request has moved past', () => {
+    const root = project();
+    const calls: string[][] = [];
+    const run = (args: readonly string[]): string => {
+      calls.push([...args]);
+      return reviewedPull({ head: 'b'.repeat(40) });
+    };
+    const result = runAutopilotCommand(['update-branch', '--pr', '11', '--head', HEAD], '', { ...context(root), gh: run });
+    expect(result.exitCode).toBe(2);
+    expect(calls.filter((call) => call[0] === 'api')).toEqual([]);
   });
 });
 

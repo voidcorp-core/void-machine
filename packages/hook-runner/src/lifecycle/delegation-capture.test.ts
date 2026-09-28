@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
+import { PRODUCT_IDENTITY } from '../identity.js';
 import { executeDelegationCapture } from './delegation-capture.js';
 
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
@@ -174,7 +175,7 @@ describe('the delegation-capture PreToolUse hook', () => {
     const { main, worktree, calls } = project();
     const bin = join(main, '..', 'bin');
     mkdirSync(bin);
-    // The fake npx drops `-y voidmachine@<version>` and hands the rest to the recorded CLI.
+    // The fake npx drops its own options and the package spec, and hands the rest to the recorded CLI.
     writeFileSync(join(bin, 'npx'), `#!/bin/sh\nshift 3\nexec ${join(main, 'node_modules', '.bin', 'void-machine')}.moved "$@"\n`);
     chmodSync(join(bin, 'npx'), 0o755);
     const cli = join(main, 'node_modules', '.bin', 'void-machine');
@@ -185,7 +186,7 @@ describe('the delegation-capture PreToolUse hook', () => {
       { ...HERDR, PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, VOID_MACHINE_VERSION: '4.1.0' });
     expect(execution).toMatchObject({ status: 'ok' });
     expect(dispatched(calls)).toHaveLength(1);
-    expect(execution.output?.hookSpecificOutput.permissionDecisionReason).toContain('--prefer-offline -y voidmachine@4.1.0 agents wait');
+    expect(execution.output?.hookSpecificOutput.permissionDecisionReason).toContain(`--prefer-offline -y ${PRODUCT_IDENTITY.packageName}@4.1.0 agents wait`);
   });
 
   it('ignores anything that is not an Agent call with a prompt', () => {

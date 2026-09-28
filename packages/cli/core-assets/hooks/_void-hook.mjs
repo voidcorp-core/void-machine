@@ -3676,7 +3676,7 @@ function kernelCommand(checkout, env) {
   const local = findExecutable("void-machine", checkout, env);
   if (local !== void 0) return [local];
   const [version, npx] = [resolveInstall(checkout, env).version, findExecutable("npx", checkout, env)];
-  return npx === void 0 || version === "unknown" ? void 0 : [npx, "--prefer-offline", "-y", `voidmachine@${version}`];
+  return npx === void 0 || version === "unknown" ? void 0 : [npx, "--prefer-offline", "-y", `${PRODUCT_IDENTITY.packageName}@${version}`];
 }
 
 var DISPATCH_TIMEOUT_MS = 6e4;

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { PRODUCT_IDENTITY } from '../identity.js';
 import { resolveInstall } from './context-executor.js';
 import { type Environment, findExecutable, record } from './executor-shared.js';
 
@@ -47,5 +48,5 @@ export function kernelCommand(checkout: string, env: Environment): string[] | un
   const local = findExecutable('void-machine', checkout, env);
   if (local !== undefined) return [local];
   const [version, npx] = [resolveInstall(checkout, env).version, findExecutable('npx', checkout, env)];
-  return npx === undefined || version === 'unknown' ? undefined : [npx, '--prefer-offline', '-y', `voidmachine@${version}`];
+  return npx === undefined || version === 'unknown' ? undefined : [npx, '--prefer-offline', '-y', `${PRODUCT_IDENTITY.packageName}@${version}`];
 }

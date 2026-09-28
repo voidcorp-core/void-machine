@@ -367,6 +367,18 @@ describe('a run delegated to Codex', () => {
     expect(codex.stops).toHaveLength(0);
   });
 
+  it('frees what the adapter holds when a run whose launch was lost is stopped', async () => {
+    const cwd = repository();
+    const codex = codexRuntime();
+    const lost: AgentRuntimePort = { ...codex.runtime,
+      dispatch: async () => ({ kind: 'lost', cause: 'codex did not confirm the turn in time' }) };
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, lost);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(await stopAgent(ctx, receipt.runId)).toMatchObject({ ok: true, status: { state: 'stopped' } });
+    expect(codex.released.map((ref) => ref.name)).toEqual([RUN_1]);
+  });
+
   it('never claims to supervise a run whose app-server is gone: it reconciles, then fails', async () => {
     const cwd = repository();
     const now = { value: 10_000 };

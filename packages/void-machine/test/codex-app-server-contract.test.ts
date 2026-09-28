@@ -133,15 +133,39 @@ describe.skipIf(process.platform === 'win32')('a run as a Codex app-server threa
     expect(stateOf(h)).toMatchObject({ phase: 'turn-started', turnId: TURN });
   });
 
-  it('surfaces an approval request to a person and never grants it', async () => {
+  it('surfaces an approval request to a person and leaves it unanswered', async () => {
     const h = harness('approval');
     await h.runtime.dispatch(h.plan);
-    expect((await session(h))?.observation).toEqual({ kind: 'present', state: 'blocked', status: 'waiting',
-      waitingFor: 'an approval, although the run was started with approvalPolicy never' });
-    const replies = h.frames().filter((frame) => frame.message.id === 900 && frame.message.method === undefined);
-    expect(replies).toHaveLength(1);
-    expect(replies[0]?.message.result).toBeUndefined();
-    expect(replies[0]?.message.error).toMatchObject({ code: -32601 });
+    const blocked = { kind: 'present', state: 'blocked', status: 'waiting',
+      waitingFor: 'an approval, although the run was started with approvalPolicy never' };
+    expect((await session(h))?.observation).toEqual(blocked);
+    expect((await session(h))?.observation).toEqual(blocked);
+    expect(h.frames().filter((frame) => frame.message.id === 900 && frame.message.method === undefined)).toEqual([]);
+  });
+
+  it('keeps following the last turn when Codex refuses the next one', async () => {
+    const h = harness('refuse-second-turn');
+    await h.runtime.dispatch(h.plan);
+    await session(h);
+    await session(h);
+    const next = join(h.plan.instructionDirectory, 'message-001.md');
+    writeFileSync(next, 'Reply with the single word ok.');
+    expect(await h.runtime.send({ name: h.plan.name }, { ...h.plan, instructionPath: next }))
+      .toEqual({ kind: 'refused', cause: 'codex refused the turn: turn already starting', action: 'send again' });
+    expect(stateOf(h)).toMatchObject({ phase: 'turn-started', turnId: TURN });
+    expect(await session(h)).toMatchObject({ observation: { state: 'done' }, result: { turnId: TURN } });
+  });
+
+  it('recognises its own app-server whatever the locale of the caller', async () => {
+    const previous = process.env['LC_ALL'];
+    process.env['LC_ALL'] = 'fr_FR.UTF-8';
+    onTestFinished(() => {
+      if (previous === undefined) delete process.env['LC_ALL'];
+      else process.env['LC_ALL'] = previous;
+    });
+    const h = harness();
+    expect(await h.runtime.dispatch(h.plan)).toEqual({ kind: 'acknowledged', handle: '82407fda' });
+    expect((await session(h))?.observation).toMatchObject({ state: 'working' });
   });
 
   it('stops a run: interrupts its turn, ends its app-server and forgets it', async () => {

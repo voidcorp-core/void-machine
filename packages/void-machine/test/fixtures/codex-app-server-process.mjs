@@ -52,11 +52,14 @@ function answer(message) {
     case 'turn/start':
       turnStarts += 1;
       if (mode === 'hang-turn-start' && turnStarts === 1) return undefined;
+      if (mode === 'refuse-second-turn' && turnStarts === 2) {
+        return { error: { code: -32600, message: 'turn already starting' } };
+      }
       return { result: turnStarts === 1 ? captured(3).result : read('turn-start-second.json').result };
     case 'thread/read': {
       threadReads += 1;
       if (mode === 'approval') return { result: waitingOnApproval(), request: true };
-      if (turnStarts >= 2) return { result: reads.secondCompleted };
+      if (turnStarts >= 2 && mode !== 'refuse-second-turn') return { result: reads.secondCompleted };
       return { result: threadReads === 1 ? reads.inProgress : reads.completed };
     }
     case 'turn/steer': return { result: read('steer.json').result };

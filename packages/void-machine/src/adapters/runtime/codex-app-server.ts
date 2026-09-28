@@ -93,8 +93,9 @@ async function writeState(path: string, state: RunState): Promise<void> {
 
 /** The start time and command line of a live process, from `ps`; undefined once it is gone. */
 function identity(pid: number): { readonly startedAt: string; readonly command: string } | undefined {
+  // The C locale fixes the date format: under fr_FR, lstart reads `mar. 29 sept.`.
   const ps = spawnSync('ps', ['-o', 'lstart=', '-o', 'command=', '-p', String(pid)],
-    { encoding: 'utf8', timeout: 5_000, shell: false });
+    { encoding: 'utf8', timeout: 5_000, shell: false, env: { PATH: process.env['PATH'], LC_ALL: 'C' } });
   const line = ps.status === 0 ? ps.stdout.trim() : '';
   // `lstart` is a fixed-width date, such as `Mon Sep 28 23:41:02 2026`.
   const match = /^(\w{3}\s+\w{3}\s+\d{1,2}\s+[\d:]{8}\s+\d{4})\s+(.+)$/.exec(line);
@@ -165,12 +166,9 @@ function connect(socket: string, timeouts: CodexTimeouts): Promise<Connection | 
     ws.on('message', (data: WebSocket.RawData) => {
       let frame: z.infer<typeof rpcSchema>;
       try { frame = rpcSchema.parse(JSON.parse(data.toString())); } catch { return; }
-      // A request from the server (an approval, an input) is a person's decision: never granted here.
-      if (frame.method !== undefined && frame.id !== undefined) {
-        ws.send(JSON.stringify({ id: frame.id, error: { code: -32601,
-          message: 'void-machine never answers a server request; a person decides in the Codex session' } }));
-        return;
-      }
+      // A request from the server (an approval, an input) is a person's decision: it is left
+      // pending, never answered, and the thread's active flags surface it.
+      if (frame.method !== undefined) return;
       const settle = typeof frame.id === 'number' ? pending.get(frame.id) : undefined;
       if (settle === undefined) return;
       pending.delete(Number(frame.id));
@@ -416,10 +414,12 @@ export function createCodexAppServerRuntime(config: CodexAppServerConfig): Agent
         const turn = await connection.call('turn/start', turnStartParams(state.threadId, brief, plan.outputSchema),
           timeouts.turnStartMs);
         const turnId = turn.ok ? turnIdOf(turn.result) : undefined;
-        if (turnId === undefined) {
-          return turn.ok || turn.kind !== 'error' ? { kind: 'lost', cause: 'codex did not confirm the turn in time' }
-            : { kind: 'refused', cause: `codex refused the turn: ${turn.message}`, action: 'send again' };
+        if (!turn.ok && turn.kind === 'error') {
+          // No new turn exists: the run keeps following the one it had.
+          await writeState(statePath(ref.name), state);
+          return { kind: 'refused', cause: `codex refused the turn: ${turn.message}`, action: 'send again' };
         }
+        if (turnId === undefined) return { kind: 'lost', cause: 'codex did not confirm the turn in time' };
         await writeState(statePath(ref.name), { ...starting, phase: 'turn-started', turnId });
         return { kind: 'acknowledged', handle: handleOf(state.threadId) };
       } finally {

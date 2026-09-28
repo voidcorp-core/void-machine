@@ -155,10 +155,11 @@ describe('the socket and the environment of an app-server', () => {
 
   it('keeps what Codex needs from the environment and drops the credentials of other tools', () => {
     const env = childEnvironment({ PATH: '/bin', HOME: '/home/user', CODEX_HOME: '/home/user/.codex',
-      OPENAI_API_KEY: 'sk-kept', GH_TOKEN: 'gho-dropped', GITHUB_TOKEN: 'dropped', NPM_TOKEN: 'dropped',
-      AWS_SECRET_ACCESS_KEY: 'dropped', DB_PASSWORD: 'dropped', VOID_MISSION_ID: 'mis_x' });
+      OPENAI_API_KEY: 'sk-kept', CODEX_API_KEY: 'kept', GH_TOKEN: 'gho-dropped', GITHUB_TOKEN: 'dropped',
+      NPM_TOKEN: 'dropped', AWS_SECRET_ACCESS_KEY: 'dropped', AWS_ACCESS_KEY_ID: 'dropped', DB_PASSWORD: 'dropped',
+      ANTHROPIC_API_KEY: 'dropped', STRIPE_API_KEY: 'dropped', VOID_MISSION_ID: 'mis_x' });
     expect(env).toEqual({ PATH: '/bin', HOME: '/home/user', CODEX_HOME: '/home/user/.codex',
-      OPENAI_API_KEY: 'sk-kept', VOID_MISSION_ID: 'mis_x' });
+      OPENAI_API_KEY: 'sk-kept', CODEX_API_KEY: 'kept', VOID_MISSION_ID: 'mis_x' });
   });
 
   it('parses the Codex version and derives a handle from the thread id', () => {

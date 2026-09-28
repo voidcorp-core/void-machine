@@ -128,9 +128,12 @@ export function socketPathFor(directory: string, runName: string): string | unde
   return Buffer.byteLength(path, 'utf8') <= SOCKET_PATH_MAX_BYTES ? path : undefined;
 }
 
-const CREDENTIAL = /TOKEN|SECRET|PASSWORD|PASSPHRASE|CREDENTIAL/i;
+const CREDENTIAL = /TOKEN|SECRET|PASSWORD|PASSPHRASE|CREDENTIAL|API_KEY|KEY_ID/i;
+/** The credentials Codex itself signs in with. */
+const CODEX_CREDENTIALS: ReadonlySet<string> = new Set(['OPENAI_API_KEY', 'CODEX_API_KEY']);
 
 /** The app-server's environment: the caller's, without other tools' credentials an agent could read. */
 export function childEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(env).filter(([name, value]) => value !== undefined && !CREDENTIAL.test(name)));
+  return Object.fromEntries(Object.entries(env).filter(([name, value]) => value !== undefined
+    && (CODEX_CREDENTIALS.has(name) || !CREDENTIAL.test(name))));
 }

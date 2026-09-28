@@ -400,6 +400,8 @@ export async function stopAgent(context: AgentsContext, runId: string): Promise<
     }
     const failed = await record(context, runId, decision);
     if (failed !== undefined) return failed;
+    // A launch never bound to a session may still hold something of the adapter's: free it.
+    if (ref.handle === undefined) await port.release(ref);
     const latest = await readRun(context, runId);
     return 'ok' in latest ? latest : { ok: true, runId, status: statusOf(latest, undefined) };
   }));

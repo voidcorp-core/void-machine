@@ -221,6 +221,79 @@ describe('preflight', () => {
       action: expect.stringContaining('npx product update') });
   });
 
+  describe('a hook supplied by an installed plugin', () => {
+    const stop = { Stop: [{ hooks: [{ type: 'command',
+      command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs" lifecycle delegation-result claude' }] }] };
+
+    /** A home whose plugins root holds `harness@voidcorp`, the way Claude Code lays it out. */
+    function home(options: { enabled: boolean; wiring: 'manifest' | 'hooks-file' | 'none';
+      record: 'installed' | 'none'; projectPath?: string }): string {
+      const dir = mkdtempSync(join(tmpdir(), 'vm-plugin-home-'));
+      onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+      const plugins = join(dir, '.claude', 'plugins');
+      const marketplace = join(plugins, 'marketplaces', 'voidcorp');
+      const plugin = options.record === 'installed'
+        ? join(plugins, 'cache', 'voidcorp', 'harness', '4.1.0') : join(marketplace, 'packages', 'core');
+      mkdirSync(join(plugin, '.claude-plugin'), { recursive: true });
+      mkdirSync(join(plugin, 'hooks'), { recursive: true });
+      mkdirSync(join(marketplace, '.claude-plugin'), { recursive: true });
+      writeFileSync(join(plugin, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'harness',
+        ...(options.wiring === 'manifest' ? { hooks: stop } : {}) }));
+      if (options.wiring === 'hooks-file') {
+        writeFileSync(join(plugin, 'hooks', 'hooks.json'), JSON.stringify({ hooks: stop }));
+      }
+      writeFileSync(join(dir, '.claude', 'settings.json'),
+        JSON.stringify({ enabledPlugins: { 'harness@voidcorp': options.enabled } }));
+      writeFileSync(join(plugins, 'known_marketplaces.json'),
+        JSON.stringify({ voidcorp: { source: { source: 'github', repo: 'owner/marketplace' },
+          installLocation: marketplace } }));
+      writeFileSync(join(marketplace, '.claude-plugin', 'marketplace.json'),
+        JSON.stringify({ name: 'voidcorp', plugins: [{ name: 'harness', source: './packages/core' }] }));
+      if (options.record === 'installed') {
+        writeFileSync(join(plugins, 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: {
+          'harness@voidcorp': [{ scope: options.projectPath === undefined ? 'user' : 'project',
+            ...(options.projectPath === undefined ? {} : { projectPath: options.projectPath }),
+            installPath: plugin, version: '4.1.0' }] } }));
+      }
+      return dir;
+    }
+
+    it.each([
+      ['inline in its manifest', 'manifest'],
+      ['in its hooks/hooks.json', 'hooks-file'],
+    ] as const)('passes when the installed plugin wires the hook %s', async (_case, wiring) => {
+      const root = project(undefined, undefined);
+      const outcome = await runtime({}, { home: home({ enabled: true, wiring, record: 'installed' }) })
+        .preflight(root);
+      expect(outcome).toEqual({ ok: true });
+    });
+
+    it('passes for a relative-path plugin loaded from its marketplace without an install record', async () => {
+      const root = project(undefined, undefined);
+      expect(await runtime({}, { home: home({ enabled: true, wiring: 'manifest', record: 'none' }) })
+        .preflight(root)).toEqual({ ok: true });
+    });
+
+    it('refuses when the plugin wiring the hook is installed but disabled', async () => {
+      const root = project(undefined, undefined);
+      expect(await runtime({}, { home: home({ enabled: false, wiring: 'manifest', record: 'installed' }) })
+        .preflight(root)).toMatchObject({ ok: false, cause: expect.stringContaining('delegation-result') });
+    });
+
+    it('refuses when the plugin is installed for another project only', async () => {
+      const root = project(undefined, undefined);
+      const elsewhere = home({ enabled: true, wiring: 'manifest', record: 'installed', projectPath: '/elsewhere' });
+      expect(await runtime({}, { home: elsewhere }).preflight(root))
+        .toMatchObject({ ok: false, cause: expect.stringContaining('delegation-result') });
+    });
+
+    it('refuses when the enabled plugin wires no delegation-result hook', async () => {
+      const root = project(undefined, undefined);
+      expect(await runtime({}, { home: home({ enabled: true, wiring: 'none', record: 'installed' }) })
+        .preflight(root)).toMatchObject({ ok: false, cause: expect.stringContaining('delegation-result') });
+    });
+  });
+
   it('refuses a Claude Code older than the resumable background sessions', async () => {
     expect(await runtime({ version: 'version-old' }).preflight(project(wired, 'delegation-result')))
       .toMatchObject({ ok: false, cause: expect.stringContaining('2.1.256'),

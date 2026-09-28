@@ -2,7 +2,7 @@
 import { spawn as nodeSpawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { RunObservation } from '../../core/delegation.js';
 import { resolveMachineRoot } from '../store/run-registry.js';
@@ -155,18 +155,28 @@ export function readSessions(rows: readonly SessionRow[], refs: readonly NativeR
 
 export type HookWiring = 'local-bundle' | 'wired' | 'missing';
 
-/** Whether a settings document runs the delegation-result lifecycle on Stop. */
-export function resultHookWiring(settings: string): HookWiring {
-  const commandSchema = z.object({ hooks: z.object({ Stop: z.array(z.object({
-    hooks: z.array(z.object({ command: z.string().optional() })).optional() })) }) });
-  let parsed: unknown;
-  try { parsed = JSON.parse(settings); } catch { return 'missing'; }
-  const document = commandSchema.safeParse(parsed);
-  if (!document.success) return 'missing';
-  const commands = document.data.hooks.Stop.flatMap((entry) => entry.hooks ?? [])
+const eventsSchema = z.object({ Stop: z.array(z.object({
+  hooks: z.array(z.object({ command: z.string().optional() })).optional() })) });
+const hooksDocumentSchema = z.object({ hooks: z.unknown() });
+
+function parseJson(text: string): unknown {
+  try { return JSON.parse(text); } catch { return undefined; }
+}
+
+/** Whether a hooks object, keyed by event as in settings, runs the delegation-result lifecycle on Stop. */
+function stopWiring(hooks: unknown): HookWiring {
+  const events = eventsSchema.safeParse(hooks);
+  if (!events.success) return 'missing';
+  const commands = events.data.Stop.flatMap((entry) => entry.hooks ?? [])
     .map((hook) => hook.command ?? '').filter((command) => command.includes('lifecycle delegation-result'));
   if (commands.length === 0) return 'missing';
   return commands.some((command) => command.includes('.void/hooks/_void-hook.mjs')) ? 'local-bundle' : 'wired';
+}
+
+/** Whether a settings document runs the delegation-result lifecycle on Stop. */
+export function resultHookWiring(settings: string): HookWiring {
+  const document = hooksDocumentSchema.safeParse(parseJson(settings));
+  return document.success ? stopWiring(document.data.hooks) : 'missing';
 }
 
 // Processes --------------------------------------------------------------------------------
@@ -264,14 +274,79 @@ function projectRoot(cwd: string): string {
   return top === '' ? cwd : top;
 }
 
-function resultHookPreflight(cwd: string, home: string, updateCommand: string): Preflight {
+function readJson(path: string): unknown {
+  const text = readBounded(path);
+  return text === undefined ? undefined : parseJson(text);
+}
+
+// Plugins, as the plugin loading reference lays them out (code.claude.com/docs/en/plugins/loading).
+
+const enabledSchema = z.object({ enabledPlugins: z.record(z.string(), z.unknown()) });
+const installedSchema = z.object({ plugins: z.record(z.string(), z.array(z.object({
+  projectPath: z.string().optional(), installPath: z.string() }))) });
+const marketplacesSchema = z.record(z.string(), z.object({ installLocation: z.string().optional() }));
+const catalogSchema = z.object({ plugins: z.array(z.object({ name: z.string(), source: z.unknown() })) });
+const manifestSchema = z.object({ hooks: z.unknown().optional() });
+
+/**
+ * Plugin ids enabled here. Sources merge key by key, the last one listed winning; the `--settings`
+ * flag and managed settings are invisible from outside the session and are not read.
+ */
+function enabledPluginIds(settings: readonly string[]): string[] {
+  const merged = new Map<string, boolean>();
+  for (const path of settings) {
+    const document = enabledSchema.safeParse(readJson(path));
+    if (!document.success) continue;
+    for (const [id, value] of Object.entries(document.data.enabledPlugins)) merged.set(id, value === true);
+  }
+  return [...merged].filter(([, enabled]) => enabled).map(([id]) => id);
+}
+
+/** Where an enabled plugin loads from: its install records, or in place from its marketplace. */
+function pluginDirectories(id: string, pluginsRoot: string, projects: readonly string[]): string[] {
+  const installed = installedSchema.safeParse(readJson(join(pluginsRoot, 'installed_plugins.json')));
+  const records = installed.success ? installed.data.plugins[id] ?? [] : [];
+  if (records.length > 0) {
+    return records.filter((record) => record.projectPath === undefined || projects.includes(record.projectPath))
+      .map((record) => record.installPath);
+  }
+  // A relative-path plugin needs no install record: it loads from the marketplace itself.
+  const at = id.lastIndexOf('@');
+  if (at <= 0) return [];
+  const marketplaces = marketplacesSchema.safeParse(readJson(join(pluginsRoot, 'known_marketplaces.json')));
+  const location = marketplaces.success ? marketplaces.data[id.slice(at + 1)]?.installLocation : undefined;
+  if (location === undefined) return [];
+  const catalog = catalogSchema.safeParse(readJson(join(location, '.claude-plugin', 'marketplace.json')));
+  const source = catalog.success ? catalog.data.plugins.find((entry) => entry.name === id.slice(0, at))?.source
+    : undefined;
+  return typeof source === 'string' && source.startsWith('./') ? [join(location, source)] : [];
+}
+
+/** A plugin's hooks: its manifest's `hooks` (paths, inline objects, or both), merged with hooks/hooks.json. */
+function pluginWirings(directory: string): HookWiring[] {
+  const manifest = manifestSchema.safeParse(readJson(join(directory, '.claude-plugin', 'plugin.json')));
+  const declared = manifest.success ? manifest.data.hooks : undefined;
+  const list = z.array(z.unknown()).safeParse(declared);
+  const declarations = list.success ? list.data : declared === undefined ? [] : [declared];
+  return ['./hooks/hooks.json', ...declarations].map((declaration) => {
+    if (typeof declaration !== 'string') return stopWiring(declaration);
+    const file = hooksDocumentSchema.safeParse(readJson(resolve(directory, declaration)));
+    return file.success ? stopWiring(file.data.hooks) : 'missing';
+  });
+}
+
+function resultHookPreflight(cwd: string, config: ClaudeSessionConfig): Preflight {
   const root = projectRoot(cwd);
-  const wirings = [join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json'),
-    join(home, '.claude', 'settings.json')].map((path) => resultHookWiring(readBounded(path) ?? ''));
   // Refresh from the main checkout: an update run inside a worktree installs nothing it keeps.
   const machine = resolveMachineRoot(cwd);
   const main = machine.ok ? dirname(dirname(machine.root)) : root;
-  const update = `run ${updateCommand} in ${main}, commit the refreshed hooks, `
+  const settings = [join(config.home, '.claude', 'settings.json'), join(root, '.claude', 'settings.json'),
+    join(root, '.claude', 'settings.local.json')];
+  const pluginsRoot = config.env['CLAUDE_CODE_PLUGIN_CACHE_DIR'] ?? join(config.home, '.claude', 'plugins');
+  const wirings = [...settings.map((path) => resultHookWiring(readBounded(path) ?? '')),
+    ...enabledPluginIds(settings).flatMap((id) => pluginDirectories(id, pluginsRoot, [root, main]))
+      .flatMap(pluginWirings)];
+  const update = `run ${config.updateCommand} in ${main}, commit the refreshed hooks, `
     + 'then dispatch from a checkout that has them';
   if (wirings.every((wiring) => wiring === 'missing')) {
     return { ok: false, action: update,
@@ -299,7 +374,7 @@ export function createClaudeSessionRuntime(config: ClaudeSessionConfig): AgentRu
         return { ok: false, cause: `Claude Code ${version} cannot resume background sessions in place`,
           action: `update Claude Code to ${MIN_CLAUDE_VERSION} or later` };
       }
-      return resultHookPreflight(cwd, config.home, config.updateCommand);
+      return resultHookPreflight(cwd, config);
     },
     async dispatch(plan) {
       return launchOutcome(await runBounded(config, launchArgs(plan), plan.cwd, launchTimeout), plan);

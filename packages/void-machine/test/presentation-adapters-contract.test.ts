@@ -89,6 +89,15 @@ describe.each(['herdr', 'tmux', 'cmux'] as const)('%s surface', (kind) => {
     expect(await adapter(kind, mux).close(ref)).toMatchObject({ outcome: 'skipped', cause: { code: 'own-pane' } });
   });
 
+  it('judges by ownership, not as the caller, a surface with the caller id on another server', async () => {
+    const mux = setup(kind);
+    const own = { herdr: 'w1:p1', tmux: '%1', cmux: 'surface:1' }[kind];
+    const ref: SurfaceRef = { kind, scope: '/tmp/another-server.sock',
+      ...(kind === 'tmux' ? {} : { container: kind === 'herdr' ? 'w1' : 'W-UUID' }), id: own, label: 'WORK-1', runId: RUN };
+    expect(await adapter(kind, mux).close(ref)).toMatchObject({ outcome: 'skipped',
+      cause: { code: 'identity-mismatch' } });
+  });
+
   it('reports an unreachable multiplexer as unknown, never as closed', async () => {
     const mux = setup(kind);
     const opened = await adapter(kind, mux).open(view);

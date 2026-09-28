@@ -113,7 +113,7 @@ export function createCmuxSurface(config: MultiplexerConfig): SurfacePort {
     },
     inspect: (ref) => presence(ref, deadline(now, PRESENTATION_LIMITS.inspectMs)),
     async close(ref) {
-      if (ref.id === caller && ref.container === workspace) {
+      if (ref.id === caller && ref.container === workspace && ref.scope === cmuxSocket(config.env)) {
         return { outcome: 'skipped', cause: surfaceCause('own-pane', 'close-surface') };
       }
       const clock = deadline(now, PRESENTATION_LIMITS.closeMs);

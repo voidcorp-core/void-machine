@@ -60,6 +60,14 @@ describe('argv', () => {
     }
   });
 
+  it('ends the options before the prompt, so the variadic --add-dir cannot swallow it', () => {
+    // Observed on 2.1.283: without the terminator the session starts with no prompt and waits.
+    for (const args of [launchArgs(review), resumeArgs('00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', review)]) {
+      expect(args.at(-2)).toBe('--');
+      expect(args.indexOf('--add-dir')).toBeLessThan(args.indexOf('--'));
+    }
+  });
+
   it('resumes the bound session in the background with the next instruction file', () => {
     const args = resumeArgs('00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', review);
     expect(args.slice(0, 3)).toEqual(['--resume', '00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', '--bg']);

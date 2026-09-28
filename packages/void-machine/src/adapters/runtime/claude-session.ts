@@ -46,7 +46,10 @@ export interface ClaudeSessionConfig {
 
 // Argv -------------------------------------------------------------------------------------
 
-/** The only prompt a delegated session receives: caller text travels in a file, never argv. */
+/**
+ * The only prompt a delegated session receives: caller text travels in a file, never argv. It
+ * always follows `--`: `--add-dir` takes several values and would otherwise swallow it.
+ */
 function instructionPrompt(path: string): string {
   return `Read ${path} completely before anything else and do what it asks. `
     + 'End your turn with your final answer.';
@@ -60,11 +63,11 @@ function permissionArgs(plan: LaunchPlan): string[] {
 export function launchArgs(plan: LaunchPlan): string[] {
   return ['--bg', '--name', plan.name, ...permissionArgs(plan),
     ...(plan.model === undefined ? [] : ['--model', plan.model]),
-    '--add-dir', plan.instructionDirectory, instructionPrompt(plan.instructionPath)];
+    '--add-dir', plan.instructionDirectory, '--', instructionPrompt(plan.instructionPath)];
 }
 
 export function resumeArgs(sessionId: string, plan: LaunchPlan): string[] {
-  return ['--resume', sessionId, '--bg', '--add-dir', plan.instructionDirectory,
+  return ['--resume', sessionId, '--bg', '--add-dir', plan.instructionDirectory, '--',
     instructionPrompt(plan.instructionPath)];
 }
 

@@ -70,7 +70,8 @@ describe('argv', () => {
 
   it('resumes the bound session in the background with the next instruction file', () => {
     const args = resumeArgs('00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', review);
-    expect(args.slice(0, 3)).toEqual(['--resume', '00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', '--bg']);
+    expect(args.slice(0, 5)).toEqual(['--resume', '00d01c20-dfb6-4979-bd94-5bc6de2e2e1a', '--bg',
+      '--name', 'vm-run_1']);
     expect(args.at(-1)).toContain(review.instructionPath);
   });
 });
@@ -80,6 +81,9 @@ describe('parsing captured outputs', () => {
     expect(parseAcknowledgement(captured('dispatch.stdout'))).toEqual({ handle: '6d5ea8bb', name: 'vm-probe-env2' });
     expect(parseAcknowledgement(captured('resume.stdout'))).toEqual({ handle: '99c69fc2', name: 'vm-probe-env3' });
     expect(parseAcknowledgement('Starting background service…\n')).toBeUndefined();
+    // A copy started without --name gets a generated name, with spaces.
+    expect(parseAcknowledgement('backgrounded · a59ab8b9 · code review degraded\n'))
+      .toEqual({ handle: 'a59ab8b9', name: 'code review degraded' });
   });
 
   it('reads the version and compares it numerically', () => {
@@ -182,6 +186,10 @@ describe('the Claude session runtime', () => {
     expect(await runtime({ launch: 'resume' })
       .send({ name: 'vm-x', handle: '99c69fc2', sessionId: '99c69fc2-b7c9-43eb-b964-087840a7d155' }, review))
       .toEqual({ kind: 'acknowledged', handle: '99c69fc2' });
+    // A session still running is resumed as a copy under a new handle.
+    expect(await runtime({ launch: 'resume-copy' })
+      .send({ name: 'vm-x', handle: 'fc5554fd', sessionId: 'fc5554fd-8512-4fff-9c65-f81fe9644463' }, review))
+      .toEqual({ kind: 'acknowledged', handle: '9a012d67' });
   });
 });
 

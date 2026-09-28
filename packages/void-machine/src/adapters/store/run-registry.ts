@@ -278,7 +278,11 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       const stored = directory === undefined ? undefined : await readJson(join(directory, 'run.json'), runSchema);
       if (directory === undefined || stored === undefined) throw new Error('unknown run');
       await replaceFile(join(directory, 'run.json'), JSON.stringify({ ...stored, binding }));
-      if (binding.sessionId === undefined) return;
+      if (binding.sessionId === undefined) {
+        // A new handle whose session is not listed yet: let the hook park its first result.
+        await replaceFile(agents('pending', runId), JSON.stringify({ cwd: stored.cwd, createdAt: now() }));
+        return;
+      }
       const resultPath = join(directory, 'result.json');
       await replaceFile(agents('sessions', `${binding.sessionId}.json`),
         JSON.stringify({ schemaVersion: 1, resultPath }));

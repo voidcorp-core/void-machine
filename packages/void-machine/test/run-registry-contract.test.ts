@@ -114,6 +114,15 @@ describe('binding and results', () => {
     expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(false);
   });
 
+  it('waits for a binding again when the run follows a new handle without its session', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main, { now: () => 900 });
+    await registry.create(run(main), admitted, 'brief');
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    await registry.bind(RUN, { handle: '9a012d67' });
+    expect(JSON.parse(readFileSync(join(root, 'agents', 'pending', RUN), 'utf8'))).toEqual({ cwd: main, createdAt: 900 });
+  });
+
   it('adopts a result the hook parked before the session was bound', async () => {
     const { main } = repository();
     const { root, registry } = registryIn(main);

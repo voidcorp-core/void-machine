@@ -155,6 +155,8 @@ describe('a delegated run end to end', () => {
     expect(readFileSync(scripted.resumes[0]?.plan.instructionPath ?? '', 'utf8')).toBe('Give the final verdict.');
     expect(scripted.resumes[0]?.ref.sessionId).toBe(SESSION);
     expect((await ctx.store.read(receipt.runId))?.binding).toEqual({ handle: 'aaaabbbb' });
+    // The original keeps running idle once a copy answers: it is stopped.
+    expect(scripted.stops.map((ref) => ref.handle)).toEqual(['6d5ea8bb']);
     expect(await acceptAgent(ctx, receipt.runId)).toMatchObject({ ok: false });
   });
 

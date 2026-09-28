@@ -15,6 +15,7 @@ switch (mode) {
   case 'untrusted': err('untrusted.stderr'); process.exitCode = 1; break;
   case 'unknown-agent': out('unknown-agent.stdout'); err('unknown-agent.stderr'); break;
   case 'resume': out('resume.stdout'); err('resume.stderr'); break;
+  case 'resume-copy': out('resume-copy.stdout'); err('resume-copy.stderr'); break;
   case 'agents': out('agents.json'); break;
   case 'agents-garbage': process.stdout.write('[{"id": '); break;
   case 'agents-fail': process.stderr.write('error: unknown option\n'); process.exitCode = 1; break;

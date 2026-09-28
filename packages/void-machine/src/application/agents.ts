@@ -204,6 +204,8 @@ export async function sendAgent(context: AgentsContext, runId: string, message: 
     // observation bind its session and claim its result.
     if (launch.kind === 'acknowledged' && launch.handle !== run.binding?.handle) {
       await context.store.bind(runId, { handle: launch.handle });
+      // The original would idle beside its copy until the supervisor reclaims it.
+      if (run.binding !== undefined) await context.runtime.stop(refOf(run));
     }
     const failed = await record(context, runId, decision);
     if (failed !== undefined) return failed;

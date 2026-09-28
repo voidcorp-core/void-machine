@@ -67,13 +67,16 @@ export function launchArgs(plan: LaunchPlan): string[] {
 }
 
 export function resumeArgs(sessionId: string, plan: LaunchPlan): string[] {
-  return ['--resume', sessionId, '--bg', '--add-dir', plan.instructionDirectory, '--',
+  // --name again: a session still running is resumed as a copy, which otherwise gets a
+  // generated name and cannot be found by the run's.
+  return ['--resume', sessionId, '--bg', '--name', plan.name, '--add-dir', plan.instructionDirectory, '--',
     instructionPrompt(plan.instructionPath)];
 }
 
 // Parsing ----------------------------------------------------------------------------------
 
-const ACK = /^backgrounded · ([0-9a-f]{8}) · (\S+)\s*$/m;
+// The name is free text: a copy started without --name gets a generated one, with spaces.
+const ACK = /^backgrounded · ([0-9a-f]{8}) · (.+?)\s*$/m;
 
 export function parseAcknowledgement(stdout: string): { handle: string; name: string } | undefined {
   const match = ACK.exec(stdout);

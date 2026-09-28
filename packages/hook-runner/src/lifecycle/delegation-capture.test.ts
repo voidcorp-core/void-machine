@@ -109,6 +109,7 @@ describe('the delegation-capture PreToolUse hook', () => {
     expect(output?.permissionDecisionReason).toContain(RUN);
     expect(output?.permissionDecisionReason).toContain(`agents wait ${RUN}`);
     expect(output?.permissionDecisionReason).toContain(`agents accept ${RUN}`);
+    expect(output?.permissionDecisionReason).toContain('with a Bash timeout of 600000 ms');
   });
 
   it('asks for the wait in the background when the native call was a background one', () => {

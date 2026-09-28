@@ -3722,7 +3722,7 @@ var passWith = (reason, why) => ({
 });
 function refusal(command, runId, ticket, background) {
   const vm = [...command.map(quoted), "agents"].join(" ");
-  return `void-machine runs this subagent as supervised run ${runId}${ticket === void 0 ? "" : ` (${ticket})`}, shown in its own pane; do not call Agent again for it. Collect its answer: run \`${vm} wait ${runId} --timeout 540\`${background ? " in the background (Bash run_in_background)" : ""} until it reports turn-ended, answer a question with \`${vm} send ${runId} --message-file <file>\`, then close it with \`${vm} accept ${runId}\`, which prints its final message.`;
+  return `void-machine runs this subagent as supervised run ${runId}${ticket === void 0 ? "" : ` (${ticket})`}, shown in its own pane; do not call Agent again for it. Collect its answer: run \`${vm} wait ${runId} --timeout 540\` ${background ? "in the background (Bash run_in_background)" : "with a Bash timeout of 600000 ms"} until it reports turn-ended, answer a question with \`${vm} send ${runId} --message-file <file>\`, then close it with \`${vm} accept ${runId}\`, which prints its final message.`;
 }
 function executeDelegationCapture(input, env) {
   const fields = record3(input);

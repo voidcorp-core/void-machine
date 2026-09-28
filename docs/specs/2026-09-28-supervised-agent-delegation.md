@@ -241,7 +241,9 @@ Fermer une surface ne touche jamais le run, la worktree ni les preuves.
 - sinon il appelle `void-machine agents dispatch` avec `prompt`, `subagent_type` et `model`,
   le rôle `review` pour un type en lecture seule et `work` sinon, et le ticket de la mission ;
 - il refuse l'appel natif avec un `permissionDecisionReason` qui donne le `runId` et la
-  commande `wait`.
+  commande `wait` ;
+- il n'élargit jamais l'autorité : un run `work` agissant en mode `auto`, un coordinateur dans un
+  autre mode que `auto` ou `bypassPermissions` garde son sous-agent natif, avec la cause signalée.
 
 **Codex** : même hook sur `spawn_agent`, livré seulement si la sonde prouve que le refus tient.
 Sinon, un coordinateur Codex appelle le CLI par l'instruction de son skill, et la capacité est

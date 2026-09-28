@@ -14,7 +14,7 @@ type Capture = LifecycleExecution & { readonly output?: { readonly hookSpecificO
   readonly hookEventName: 'PreToolUse'; readonly permissionDecision?: 'deny';
   readonly permissionDecisionReason?: string; readonly additionalContext?: string; } } };
 const DISPATCH_TIMEOUT_MS = 60_000;
-const WORK_MODES = new Set(['auto', 'bypassPermissions']);
+const WORK_MODES = new Set(['auto', 'bypassPermissions']); // A work run acts in auto mode: never wider.
 const EDITING_TOOL = /(^|[\s,])(Edit|Write|NotebookEdit|MultiEdit|\*)([\s,(]|$)/;
 const skipped = (reason: string): Capture => ({ status: 'skipped', details: { reason } });
 const quoted = (arg: string) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`);
@@ -53,7 +53,8 @@ function refusal(command: readonly string[], runId: string, ticket: string | und
   const vm = [...command.map(quoted), 'agents'].join(' ');
   return `void-machine runs this subagent as supervised run ${runId}${ticket === undefined ? '' : ` (${ticket})`}`
     + ', shown in its own pane; do not call Agent again for it. Collect its answer: run '
-    + `\`${vm} wait ${runId} --timeout 540\`${background ? ' in the background (Bash run_in_background)' : ''}`
+    + `\`${vm} wait ${runId} --timeout 540\` ${background ? 'in the background (Bash run_in_background)'
+      : 'with a Bash timeout of 600000 ms'}`
     + ` until it reports turn-ended, answer a question with \`${vm} send ${runId} --message-file <file>\`, then`
     + ` close it with \`${vm} accept ${runId}\`, which prints its final message.`;
 }
@@ -75,7 +76,6 @@ export function executeDelegationCapture(input: unknown, env: Environment): Capt
   if (command === undefined) return passWith('no-cli', 'no void-machine command is installed or on PATH');
   const role = typeof type === 'string' && readOnly(type, checkout, env) ? 'review' : 'work';
   const mode = String(fields['permission_mode']);
-  // A work run acts in auto mode: never grant that to a coordinator that asks before acting.
   if (role === 'work' && !WORK_MODES.has(mode)) return passWith('caller-permission', `the caller runs in ${mode} mode`);
   const ticket = ticketOf(cwd);
   const briefs = mkdtempSync(join(tmpdir(), 'agent-capture-'));

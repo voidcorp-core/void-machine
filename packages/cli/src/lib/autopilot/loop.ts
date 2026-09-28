@@ -793,6 +793,11 @@ function openPullOutcome(
   if (pr.draft) return handBack(ticket.id, 'resume', pr.number);
   if (pr.conflicted) return conflictOutcome(ticket, pr);
   if (pr.checks === 'failing') return handBack(ticket.id, 'checks-failed', pr.number);
+  // Under a human merge gate the person who merges is the review: a consumer
+  // has no review job, so waiting on its check would wait forever.
+  if (context.input.program.autopilot.mergeGate === 'human') {
+    return mergeOutcome(ticket, pr, context);
+  }
   if (pr.review === 'failure') return reviewFailureOutcome(ticket, pr);
   if (pr.review !== 'success') return wait(ticket.id, 'awaiting-review');
   const unapproved = unapprovedReason(pr);

@@ -866,6 +866,51 @@ describe('a held ticket and its pull request', () => {
     });
   });
 
+  it('never waits on the review check under a human merge gate', () => {
+    // A consumer has no review job, so the check never comes: the person who
+    // merges is the review, and the pull request is theirs as soon as it is ready.
+    const human = { mergeGate: 'human' };
+    for (const review of [
+      { review: undefined, verdict: undefined },
+      { review: 'PENDING' as const, verdict: undefined },
+      { review: 'FAILURE' as const, verdict: undefined },
+      { review: 'FAILURE' as const },
+    ]) {
+      expect(one({}, review, human)).toMatchObject({ kind: 'mark-human-wait', reason: 'human-merge-gate' });
+    }
+  });
+
+  it('keeps a draft, a conflict, a failing check and a protected path ahead of the human merge gate', () => {
+    const human = { mergeGate: 'human' };
+    const unreviewed = { review: undefined, verdict: undefined };
+    expect(one({}, { ...unreviewed, draft: true }, human)).toMatchObject({
+      kind: 'hand-back-to-worker',
+      reason: 'resume',
+    });
+    expect(one({}, { ...unreviewed, mergeState: 'DIRTY' }, human)).toMatchObject({
+      kind: 'hand-back-to-worker',
+      reason: 'conflict',
+    });
+    expect(one({}, { ...unreviewed, failingCheck: true }, human)).toMatchObject({
+      kind: 'hand-back-to-worker',
+      reason: 'checks-failed',
+    });
+    expect(one({}, { ...unreviewed, files: ['.void/program.md'] }, human)).toMatchObject({
+      kind: 'mark-human-wait',
+      reason: 'protected-path',
+    });
+  });
+
+  it('still waits on the review check when the loop merges itself', () => {
+    for (const review of [undefined, 'PENDING' as const]) {
+      expect(one({}, { review, verdict: undefined })).toEqual({
+        kind: 'wait',
+        ticketId: 'DEV-1',
+        reason: 'awaiting-review',
+      });
+    }
+  });
+
   it('frees the slot of a ticket sent to a human in the same tick', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];

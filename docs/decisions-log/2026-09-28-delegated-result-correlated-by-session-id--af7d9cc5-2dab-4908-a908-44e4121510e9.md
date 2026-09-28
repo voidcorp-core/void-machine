@@ -3,8 +3,8 @@ schemaVersion: 1
 id: "adr:af7d9cc5-2dab-4908-a908-44e4121510e9"
 createdAt: "2026-09-28T11:29:18.777Z"
 title: "A delegated run's result is correlated by native session id, not by environment"
-status: proposed
-deciders: []
+status: accepted
+deciders: ["folpe"]
 supersedes: []
 ---
 

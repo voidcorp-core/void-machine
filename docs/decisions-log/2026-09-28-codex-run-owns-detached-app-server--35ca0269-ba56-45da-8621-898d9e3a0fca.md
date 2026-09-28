@@ -3,8 +3,8 @@ schemaVersion: 1
 id: "adr:35ca0269-ba56-45da-8621-898d9e3a0fca"
 createdAt: "2026-09-28T22:18:56.487Z"
 title: "A delegated Codex run owns a detached app-server reached over a Unix-socket WebSocket"
-status: accepted
-deciders: ["folpe"]
+status: proposed
+deciders: []
 supersedes: []
 ---
 

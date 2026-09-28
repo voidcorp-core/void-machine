@@ -173,6 +173,13 @@ export function observeRun(view: RunView, input: ObservationInput): ObservationS
       return view.state === 'working' ? {} : { transition: next(view, now, 'working', 'observed',
         'the agent is working', 'wait with void-machine agents wait <runId>') };
     case 'blocked': {
+      // A turn that ends on a question reads blocked, yet its Stop hook ran: the coordinator
+      // answers it with send. Without a result for this turn, only a person can unblock it.
+      if (input.result !== undefined && input.result.recordedAt >= view.turnStartedAt) {
+        return view.state === 'turn-ended' ? {} : { transition: next(view, now, 'turn-ended', 'turn-ended',
+          'the agent ended its turn with a question; its final message is collected',
+          'answer with void-machine agents send <runId>, or accept the result') };
+      }
       const waitingFor = observation.waitingFor ?? 'input needed';
       if (view.state === 'waiting-human' && view.last.waitingFor === waitingFor) return {};
       return { transition: next(view, now, 'waiting-human', 'observed',

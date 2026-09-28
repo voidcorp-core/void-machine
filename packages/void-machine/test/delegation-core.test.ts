@@ -87,6 +87,16 @@ describe('observation', () => {
       action: expect.stringContaining('attach') });
   });
 
+  it('ends the turn of an agent that ended it with a question, so the coordinator can answer', () => {
+    // Observed on 2.1.283: a turn ending on a question reads blocked, and its Stop hook still ran.
+    expect(observe('working', present('blocked'), T0 + 10, { resultAt: T0 + 5 }).transition)
+      .toMatchObject({ to: 'turn-ended', event: 'turn-ended', action: expect.stringContaining('send') });
+    expect(observe('waiting-human', present('blocked', 'input needed'), T0 + 10, { resultAt: T0 + 5 })
+      .transition).toMatchObject({ to: 'turn-ended' });
+    expect(observe('working', present('blocked', 'permission prompt'), T0 + 10, { resultAt: T0 - 1 })
+      .transition).toMatchObject({ to: 'waiting-human' });
+  });
+
   it('ends the turn once the result of this turn is recorded', () => {
     expect(observe('working', present('done'), T0 + 10, { resultAt: T0 + 5 }).transition)
       .toMatchObject({ to: 'turn-ended', event: 'turn-ended' });

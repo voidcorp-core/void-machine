@@ -999,6 +999,27 @@ describe('protected paths', () => {
     }
   });
 
+  it('holds back the local chain of judgment: the reviewer, its delegation and its programme', () => {
+    // The verdict the loop merges on is produced on this machine: the kernel
+    // delegates the reviewer, the agents command drives it, the programme
+    // grants the merge and `judgments.ts` admits the verdict. The reviewer
+    // runs in a worktree of the head, so the runtime configuration it loads
+    // there (its agent definition, settings, MCP servers) judges too.
+    for (const file of [
+      'packages/void-machine/src/core/delegation.ts',
+      'packages/void-machine/src/adapters/runtime/claude-session.ts',
+      'packages/cli/src/commands/agents.ts',
+      'packages/cli/src/lib/autopilot/program.ts',
+      'packages/cli/src/lib/autopilot/judgments.ts',
+      '.claude/agents/independent-code-reviewer.md',
+      '.claude/settings.local.json',
+      '.mcp.json',
+    ]) {
+      const action = actionFor(decide({ tickets }, { pulls: [touching(['docs/a.md', file])] }), 'DEV-1');
+      expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
+    }
+  });
+
   it('holds back a real pull request that rewrote the programme', () => {
     const captured = (
       JSON.parse(readFileSync(new URL('./__fixtures__/gh/pr-view-files.json', import.meta.url), 'utf8')) as {

@@ -19,6 +19,9 @@ import {
   surfaceSummaries, surfacesFor,
 } from './surfaces.js';
 
+/** The ports a caller composes a context from, for a runtime of its own or a test double. */
+export type { AgentRuntimePort, LaunchPlan } from '../runtime/delegation.js';
+
 /**
  * `void-machine agents`: the one path by which a coordinator launches, follows and closes a
  * delegated agent. When a multiplexer hosts the caller, each run is also shown in a surface of

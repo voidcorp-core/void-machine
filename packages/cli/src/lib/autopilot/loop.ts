@@ -11,6 +11,12 @@
 // refusal, never a default. Policy stays here: four slots at most, collisions by
 // footprint and by `sequential` path, two review rounds, the stop conditions,
 // one merge at a time without a merge queue, an ambiguous state to a human.
+//
+// The review verdict is local: `autopilot review` delegates a fresh-context,
+// read-only reviewer on the exact head and records what it found, bound to that
+// head and to the session the runtime listed. Nothing read on GitHub decides a
+// merge: on a public repository anyone can comment, and a check GitHub runs is
+// one more check.
 
 import { z } from 'zod';
 import { autopilotFailure } from './errors.js';
@@ -19,11 +25,13 @@ import {
   type Admission,
   admitConflictClass,
   admitCuratorQueue,
-  admitReviewVerdict,
+  admitLocalReview,
   admitTicketReadiness,
   type CuratorQueueEntry,
   FOOTPRINT_AREAS_MAX,
   footprintAreaSchema,
+  type LocalReview,
+  type ReviewVerdict,
   ticketIdSchema,
 } from './judgments.js';
 import type { AutopilotConfig, ProgramDescriptor, ProgressStates } from './program.js';
@@ -87,6 +95,18 @@ export const PROTECTED_PATHS_FLOOR = [
   'packages/cli/src/commands/agents.ts',
   'packages/cli/src/lib/autopilot/program.ts',
   'packages/cli/src/lib/autopilot/judgments.ts',
+  // The command that delegates the reviewer and records its verdict, the
+  // parser that reads the reviewer's answer, and the reviewer's own definition,
+  // from its source to the copy the package ships.
+  'packages/cli/src/commands/autopilot-review.ts',
+  'packages/cli/src/commands/autopilot.ts',
+  // Decides whether a changed file lies on protected ground at all.
+  'packages/cli/src/lib/autopilot/footprint-area.ts',
+  'packages/mission-engine/src/specialist/completion.ts',
+  'packages/core/agents/independent-code-reviewer.md',
+  'packages/core/specialists/independent-code-reviewer.yaml',
+  'packages/cli/core-assets/agents/independent-code-reviewer.md',
+  'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',
   // The sources above run only after a release and a reinstall; these run now.
   // The installed runner, the files that wire it into Claude and Codex, and the
   // configuration that scopes what it enforces. The reviewer runs in a worktree
@@ -108,14 +128,20 @@ const LIVE_WORKERS_MAX = 16;
  * person has to look.
  */
 const EJECTIONS_PER_HEAD_MAX = 2;
-/**
- * A review that crashed is re-run twice at most on one run. GitHub numbers the
- * attempts, so the count survives a restart. Past it, the job fails for a
- * reason a re-run does not reach, and a person has to look.
- */
-const REVIEW_CHECK_RERUNS_MAX = 2;
 /** A blocking review is answered twice at most; the third failure goes to a human. */
 const REVIEW_ROUNDS_MAX = 2;
+/**
+ * A reviewer that fails or returns no verdict is delegated again once on the
+ * same head. The attempts are recorded, so the count survives a restart; past
+ * it, the review fails for a reason another run does not reach.
+ */
+export const REVIEW_ATTEMPTS_MAX = 2;
+/**
+ * How long a recorded review attempt is believed to be running. `autopilot
+ * review` stops its reviewer well before; an attempt older than this was
+ * interrupted, and counts as failed.
+ */
+export const REVIEW_RUNNING_MS = 45 * 60_000;
 /** Three tickets in a row handed to a human means the loop is no longer helping. */
 const HUMAN_WAIT_STREAK_MAX = 3;
 
@@ -136,25 +162,16 @@ export interface PullRequestObservation {
   readonly behind: boolean;
   /** An auto-merge request is pending. A queued pull request holds none: see `queue`. */
   readonly autoMerge: boolean;
-  /** Every check but the independent review, which `review` carries. */
+  /** Every check GitHub reports on the head, whatever runs it. */
   readonly checks: 'pending' | 'passing' | 'failing';
-  /** The `independent-review` check the review job published on the head commit. */
-  readonly review: 'absent' | 'pending' | 'success' | 'failure';
-  /** The GitHub Actions run that published it, when its URL names one. */
-  readonly reviewCheckRun?: number;
-  /** That run's attempt, read only when the review failed with no verdict: 1 until re-run. */
-  readonly reviewCheckAttempt?: number;
   /** The last merge queue event not followed by a commit. */
   readonly queue: QueueEvent;
   /** Ejections of the current head from the merge queue since its last commit. */
   readonly ejections: number;
-  /** Distinct heads of this pull request the review job blocked: the rounds used. */
-  readonly reviewFailures: number;
   /**
-   * The last judgment blocks posted as comments, raw: admitted where they are
-   * consumed, like every judgment. GitHub keeps them across a restart.
+   * The last conflict class posted as a comment, raw: admitted where it is
+   * consumed, like every judgment. GitHub keeps it across a restart.
    */
-  readonly verdict?: unknown;
   readonly conflict?: unknown;
   /** The files the pull request changes, as far as they could be read. */
   readonly files: readonly ChangedFile[];
@@ -206,7 +223,7 @@ export const HUMAN_WAIT_REASONS = [
   'pull-request-off-base',
   'branch-missing',
   'verdict-unproven',
-  'verdict-contradicts-review',
+  'review-failed',
   'conflict-class-unreadable',
   'shared-fingerprint-missing',
   'arming-unrecorded',
@@ -218,7 +235,6 @@ export const HUMAN_WAIT_REASONS = [
   'shared-state-changed',
   'ejections-exhausted',
   'protected-path',
-  'review-check-reruns-exhausted',
   'promotion-pull-request',
   'armed-verdict-unproven',
 ] as const;
@@ -312,12 +328,13 @@ export type LoopAction =
       readonly armedSha?: string;
     }
   | {
-      readonly kind: 'rerun-review-check';
+      /** `autopilot review`: delegate a reviewer on exactly this head and record its verdict. */
+      readonly kind: 'review';
       readonly ticketId: string;
       readonly pullRequest: number;
       readonly headSha: string;
-      /** The Actions run to re-run with `gh run rerun <run> --failed`. */
-      readonly run: number;
+      /** The round the kernel counted: 2 once another head of this pull request was blocked. */
+      readonly round: 1 | 2;
     }
   | {
       readonly kind: 'requeue';
@@ -359,6 +376,13 @@ export interface LoopInput {
   readonly sharedState: SharedStateObservation;
   /** The armed head of each ticket, by ticket, as `autopilot arm` recorded it. */
   readonly armed: ReadonlyMap<string, ArmedRecord>;
+  /**
+   * What `autopilot review` recorded, by ticket, then by the head each record
+   * is filed under, raw: admitted where it is consumed.
+   */
+  readonly reviews: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
+  /** The instant of this tick, in milliseconds: how old a running review is. */
+  readonly now: number;
 }
 
 export interface LoopDecision {
@@ -549,82 +573,105 @@ function conflictOutcome(ticket: TrackerTicket, pr: PullRequestObservation): Slo
   return handBack(ticket.id, 'conflict', pr.number);
 }
 
-/**
- * A review that failed and posted no verdict on this head did not judge it: the
- * job crashed or its output was refused. Re-running it is the answer, twice at
- * most on one run; GitHub numbers the attempts, so the count survives a restart.
- */
-function crashedReviewOutcome(ticket: TrackerTicket, pr: PullRequestObservation): SlotOutcome {
-  if (pr.reviewCheckRun === undefined || pr.reviewCheckAttempt === undefined) {
-    const detail = `the independent-review check of #${pr.number} failed and names no run`;
-    return toHuman(ticket.id, 'github-unreadable', detail);
+/** The local review of the head a pull request has now, or why it cannot be believed. */
+type HeadReview =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'unproven'; readonly detail: string }
+  | { readonly kind: 'recorded'; readonly review: LocalReview };
+
+function headReviewOf(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput): HeadReview {
+  const raw = input.reviews.get(ticket.id)?.get(pr.headSha);
+  if (raw === undefined) return { kind: 'none' };
+  const admission = admitLocalReview(raw);
+  if (!admission.ok) return { kind: 'unproven', detail: admission.reason };
+  const review = admission.value;
+  if (review.headSha !== pr.headSha || review.pullRequest !== pr.number || review.ticketId !== ticket.id) {
+    const detail =
+      `the review filed under ${pr.headSha} is for ${review.ticketId} #${review.pullRequest} at ${review.headSha}`;
+    return { kind: 'unproven', detail };
   }
-  if (pr.reviewCheckAttempt > REVIEW_CHECK_RERUNS_MAX) {
-    const reruns = pr.reviewCheckAttempt - 1;
-    const detail = `run ${pr.reviewCheckRun} of #${pr.number} still fails after ${reruns} re-runs`;
-    return toHuman(ticket.id, 'review-check-reruns-exhausted', detail);
-  }
-  return held({
-    kind: 'rerun-review-check',
-    ticketId: ticket.id,
-    pullRequest: pr.number,
-    headSha: pr.headSha,
-    run: pr.reviewCheckRun,
-  });
+  return { kind: 'recorded', review };
 }
 
-function reviewFailureOutcome(ticket: TrackerTicket, pr: PullRequestObservation): SlotOutcome {
-  if (pr.verdict === undefined) return crashedReviewOutcome(ticket, pr);
-  const admission = admitReviewVerdict(pr.verdict);
-  if (!admission.ok) return toHuman(ticket.id, 'verdict-unproven', admission.reason);
-  const verdict = admission.value;
-  if (verdict.headSha !== pr.headSha) {
-    const detail = `the verdict was given on another head (${verdict.headSha}), not ${pr.headSha}`;
-    return toHuman(ticket.id, 'verdict-unproven', detail);
+/** The clean verdict recorded on the head, the one thing a merge is armed on. */
+function cleanVerdictOf(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput) {
+  const head = headReviewOf(ticket, pr, input);
+  if (head.kind !== 'recorded') return undefined;
+  const verdict = head.review.verdict?.verdict;
+  return verdict !== undefined && verdict.blocking.length === 0 ? verdict : undefined;
+}
+
+/**
+ * The review rounds a pull request used: its distinct heads a recorded verdict
+ * blocked. Counted from the records, not from the round a verdict announces,
+ * so a reviewer with no memory of the first round cannot reset the bound.
+ */
+function reviewRoundsOf(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput): number {
+  const blocked = new Set<string>();
+  for (const raw of input.reviews.get(ticket.id)?.values() ?? []) {
+    const admission = admitLocalReview(raw);
+    if (!admission.ok || admission.value.pullRequest !== pr.number) continue;
+    const verdict = admission.value.verdict?.verdict;
+    if (verdict !== undefined && verdict.blocking.length > 0) blocked.add(admission.value.headSha);
   }
-  if (verdict.blocking.length === 0) {
-    const detail = 'the review failed on a verdict with no blocking finding';
-    return toHuman(ticket.id, 'verdict-contradicts-review', detail);
-  }
-  // Counted on GitHub: the round a verdict announces is the reviewer's memory,
-  // and a restarted reviewer has none.
-  if (pr.reviewFailures >= REVIEW_ROUNDS_MAX) {
+  return blocked.size;
+}
+
+function blockingOutcome(
+  ticket: TrackerTicket,
+  pr: PullRequestObservation,
+  verdict: ReviewVerdict,
+  input: LoopInput,
+): SlotOutcome {
+  if (reviewRoundsOf(ticket, pr, input) >= REVIEW_ROUNDS_MAX) {
     const first = verdict.blocking[0]?.scenario ?? '';
-    const detail = `still blocking after two rounds: ${first}`;
-    return toHuman(ticket.id, 'review-rounds-exhausted', detail);
+    return toHuman(ticket.id, 'review-rounds-exhausted', `still blocking after two rounds: ${first}`);
   }
   return handBack(ticket.id, 'review-blocking', pr.number);
 }
 
-interface Unapproved {
-  readonly reason: Extract<HumanWaitReason, 'verdict-unproven' | 'verdict-contradicts-review'>;
-  readonly detail: string;
+/**
+ * No verdict on the head yet: a review runs, or one is delegated. An attempt
+ * that ended without a verdict, or outlived its window, failed; the second
+ * failure on one head goes to a person with the last cause.
+ */
+function unjudgedOutcome(
+  ticket: TrackerTicket,
+  pr: PullRequestObservation,
+  review: LocalReview | undefined,
+  input: LoopInput,
+): SlotOutcome {
+  const attempts = review?.attempts ?? [];
+  const running = (attempt: LocalReview['attempts'][number]) =>
+    attempt.endedAt === undefined && input.now - attempt.startedAt < REVIEW_RUNNING_MS;
+  if (attempts.some(running)) return wait(ticket.id, 'awaiting-review');
+  if (attempts.length >= REVIEW_ATTEMPTS_MAX) {
+    const cause = attempts.at(-1)?.failure ?? 'the review was interrupted';
+    return toHuman(ticket.id, 'review-failed', `#${pr.number} at ${pr.headSha}: ${cause}`);
+  }
+  const round = reviewRoundsOf(ticket, pr, input) === 0 ? 1 : 2;
+  return held({ kind: 'review', ticketId: ticket.id, pullRequest: pr.number, headSha: pr.headSha, round });
 }
 
-/**
- * Why a passing review check on the head is not enough to arm a merge, or
- * nothing. The check is what branch protection trusts; the verdict the review
- * job posted beside it is what the loop reads the findings from. Both are
- * required, and they must agree: `loop-observe` hands over only a verdict the
- * review job posted on this head that says what its check says.
- */
-function unapprovedReason(pr: PullRequestObservation): Unapproved | undefined {
-  if (pr.verdict === undefined) {
-    const detail = 'the review passed and no verdict the review job posted on this head confirms it';
-    return { reason: 'verdict-unproven', detail };
+function localReviewOutcome(
+  ticket: TrackerTicket,
+  pr: PullRequestObservation,
+  context: SlotContext,
+): SlotOutcome {
+  const { input } = context;
+  // Checked before a review, not only before a merge: the reviewer runs in a
+  // worktree of the head, where its runtime loads the project's agents,
+  // settings, hooks and MCP servers. A head that changes them is never run.
+  const guarded = protectedPathReason(pr, input.program.autopilot);
+  if (guarded !== undefined) return toHuman(ticket.id, 'protected-path', guarded);
+  const head = headReviewOf(ticket, pr, input);
+  if (head.kind === 'unproven') return toHuman(ticket.id, 'verdict-unproven', head.detail);
+  const verdict = head.kind === 'recorded' ? head.review.verdict?.verdict : undefined;
+  if (verdict === undefined) {
+    return unjudgedOutcome(ticket, pr, head.kind === 'recorded' ? head.review : undefined, input);
   }
-  const admission = admitReviewVerdict(pr.verdict);
-  if (!admission.ok) return { reason: 'verdict-unproven', detail: admission.reason };
-  if (admission.value.headSha !== pr.headSha) {
-    const detail =
-      `the verdict was given on another head (${admission.value.headSha}), not ${pr.headSha}`;
-    return { reason: 'verdict-unproven', detail };
-  }
-  if (admission.value.blocking.length > 0) {
-    const detail = 'the review passed on a verdict that blocks';
-    return { reason: 'verdict-contradicts-review', detail };
-  }
-  return undefined;
+  if (verdict.blocking.length > 0) return blockingOutcome(ticket, pr, verdict, input);
+  return mergeOutcome(ticket, pr, context);
 }
 
 /**
@@ -721,7 +768,7 @@ function disarmOf(ticket: TrackerTicket, pr: PullRequestObservation, input: Loop
 function vouches(ticket: TrackerTicket, pr: PullRequestObservation, input: LoopInput): boolean {
   const record = input.armed.get(ticket.id);
   if (record?.pullRequest !== pr.number || record.headSha !== pr.headSha) return false;
-  return pr.review === 'success' && unapprovedReason(pr) === undefined;
+  return cleanVerdictOf(ticket, pr, input) !== undefined;
 }
 
 /**
@@ -750,16 +797,13 @@ function armedOutcome(
     return { ...handBack(ticket.id, 'head-moved-after-arming', pr.number), disarm };
   }
   if (vouches(ticket, pr, input)) return undefined;
-  const unproven =
-    pr.review === 'success' ? unapprovedReason(pr)?.detail : `the review status is ${pr.review}`;
-  const detail = `#${pr.number} is armed on ${pr.headSha} and ${unproven ?? 'is unproven'}`;
+  const detail = `#${pr.number} is armed on ${pr.headSha} and no clean local verdict holds that head`;
   return { ...toHuman(ticket.id, 'armed-verdict-unproven', detail), disarm };
 }
 
 /**
- * The only places an armed merge survives a tick: the loop vouches for its head
- * and hands it to nobody, it waits for the merge or re-runs the job that lets
- * it through. Every other outcome, a worker at work, a hand-back, a human wait,
+ * The only place an armed merge survives a tick: the loop vouches for its head
+ * and hands it to nobody, it waits for the merge. Every other outcome, a worker at work, a hand-back, a human wait,
  * runs while someone may push and GitHub could merge a head nobody proved, so
  * it carries the disarm, which runs first.
  */
@@ -768,8 +812,7 @@ function withDisarm(ticket: TrackerTicket, slot: SlotOutcome, input: LoopInput):
   const pr = armedPullOf(ticket, input.github);
   if (pr === undefined) return slot;
   const { action } = slot;
-  const watched =
-    (action.kind === 'wait' && action.reason === 'merging') || action.kind === 'rerun-review-check';
+  const watched = action.kind === 'wait' && action.reason === 'merging';
   if (watched && vouches(ticket, pr, input)) return slot;
   return { ...slot, disarm: disarmOf(ticket, pr, input) };
 }
@@ -803,16 +846,11 @@ function openPullOutcome(
   if (pr.draft) return handBack(ticket.id, 'resume', pr.number);
   if (pr.conflicted) return conflictOutcome(ticket, pr);
   if (pr.checks === 'failing') return handBack(ticket.id, 'checks-failed', pr.number);
-  // Under a human merge gate the person who merges is the review: a consumer
-  // has no review job, so waiting on its check would wait forever.
+  // Under a human merge gate the person who merges is the review.
   if (context.input.program.autopilot.mergeGate === 'human') {
     return mergeOutcome(ticket, pr, context);
   }
-  if (pr.review === 'failure') return reviewFailureOutcome(ticket, pr);
-  if (pr.review !== 'success') return wait(ticket.id, 'awaiting-review');
-  const unapproved = unapprovedReason(pr);
-  if (unapproved !== undefined) return toHuman(ticket.id, unapproved.reason, unapproved.detail);
-  return mergeOutcome(ticket, pr, context);
+  return localReviewOutcome(ticket, pr, context);
 }
 
 function slotOutcome(ticket: TrackerTicket, context: SlotContext): SlotOutcome {

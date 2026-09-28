@@ -9,6 +9,7 @@
 //
 // Zod 4 strict objects refuse unknown keys: https://zod.dev/api#zstrictobject.
 
+import { parseSpecialistCompletionValue, type SpecialistFinding } from '@voidcorp/mission-engine';
 import { z } from 'zod';
 import { normaliseArea } from './footprint-area.js';
 
@@ -137,6 +138,64 @@ const reviewVerdictSchema = z.strictObject({
 export type ReviewVerdict = z.infer<typeof reviewVerdictSchema>;
 export type BlockingFinding = ReviewVerdict['blocking'][number];
 
+/** How many review attempts one head keeps on record; the kernel stops far below. */
+export const REVIEW_ATTEMPTS_RECORDED_MAX = 8;
+
+const runId = z.string().regex(/^run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, {
+  error: 'must be a delegated run id',
+});
+const sessionId = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, {
+  error: 'must be a native session id',
+});
+const instant = z.int().nonnegative();
+
+// One delegated review of a head: when it started, and why it ended without a
+// verdict. An attempt with no end is running, or was interrupted.
+const reviewAttemptSchema = z.strictObject({
+  runId: runId.optional(),
+  startedAt: instant,
+  endedAt: instant.optional(),
+  failure: reason.optional(),
+});
+
+// The verdict and what binds it: the run the kernel dispatched and the native
+// session the runtime listed under it when the kernel accepted the result.
+const recordedVerdictSchema = z.strictObject({
+  runId,
+  sessionId,
+  recordedAt: instant,
+  verdict: reviewVerdictSchema,
+});
+
+/**
+ * What `autopilot review` records for one head of one pull request. It lives
+ * where any agent on the machine can write, so it is admitted like any other
+ * judgment, and a verdict must name a run one of its attempts started and the
+ * head the record is for.
+ */
+const localReviewSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    ticketId,
+    pullRequest: z.int().positive().max(2_147_483_647),
+    headSha: commitSha,
+    attempts: z.array(reviewAttemptSchema).max(REVIEW_ATTEMPTS_RECORDED_MAX),
+    verdict: recordedVerdictSchema.optional(),
+  })
+  .superRefine((review, context) => {
+    if (review.verdict === undefined) return;
+    if (review.verdict.verdict.headSha !== review.headSha) {
+      context.addIssue({ code: 'custom', path: ['verdict', 'verdict', 'headSha'],
+        message: `judges another head than ${review.headSha}` });
+    }
+    const run = review.verdict.runId;
+    if (!review.attempts.some((attempt) => attempt.runId === run)) {
+      context.addIssue({ code: 'custom', path: ['verdict', 'runId'], message: 'names a run no attempt started' });
+    }
+  });
+export type LocalReview = z.infer<typeof localReviewSchema>;
+export type ReviewAttempt = LocalReview['attempts'][number];
+
 function describeIssue(issue: z.core.$ZodIssue): string {
   const field = issue.path.length === 0 ? '(root)' : issue.path.map(String).join('.');
   return `${field}: ${issue.message}`;
@@ -163,6 +222,74 @@ export function admitConflictClass(value: unknown): Admission<ConflictClass> {
 
 export function admitReviewVerdict(value: unknown): Admission<ReviewVerdict> {
   return admit('review verdict', reviewVerdictSchema, value);
+}
+
+export function admitLocalReview(value: unknown): Admission<LocalReview> {
+  return admit('local review', localReviewSchema, value);
+}
+
+/** The reviewer the loop delegates, whose completion contract its final message follows. */
+export const REVIEWER_SPECIALIST = 'core:independent-code-reviewer';
+
+const clip = (text: string): string => text.slice(0, REASON_MAX);
+
+function locationOf(finding: SpecialistFinding): string | undefined {
+  const evidence = finding.evidence[0];
+  return evidence === undefined ? undefined : `${evidence.path}:${String(evidence.line)}`;
+}
+
+function refusedCompletion(cause: string): Admission<ReviewVerdict> {
+  return { ok: false, reason: `review completion refused: ${cause}` };
+}
+
+/**
+ * The reviewer's final message, as its specialist contract defines it, read as
+ * the loop's verdict on `headSha`. The head and the round are the kernel's: the
+ * reviewer never states what it judged. A reviewer that could not judge, or
+ * whose verdict contradicts its own findings, gives no verdict at all, and a
+ * blocking finding the loop cannot locate is refused rather than dropped.
+ */
+export function admitReviewCompletion(
+  text: string,
+  headSha: string,
+  round: 1 | 2,
+): Admission<ReviewVerdict> {
+  let value: unknown;
+  try {
+    value = JSON.parse(text.trim());
+  } catch {
+    return refusedCompletion('the final message is not the JSON object the contract asks for');
+  }
+  const completion = parseSpecialistCompletionValue(value);
+  if (completion === undefined) return refusedCompletion('the completion breaks its contract');
+  if (completion.specialistId !== REVIEWER_SPECIALIST) {
+    return refusedCompletion(`signed by ${completion.specialistId}, not ${REVIEWER_SPECIALIST}`);
+  }
+  if (completion.verdict === 'degraded') {
+    return refusedCompletion(`the reviewer could not judge: ${completion.limitations.join('; ')}`);
+  }
+  const blocking = completion.findings.filter((finding) => finding.classification === 'blocking');
+  if ((completion.verdict === 'pass') !== (blocking.length === 0)) {
+    return refusedCompletion(`a ${completion.verdict} verdict with ${String(blocking.length)} blocking findings`);
+  }
+  const advisory = completion.findings.filter((finding) => finding.classification !== 'blocking');
+  const verdict = admitReviewVerdict({
+    headSha,
+    round,
+    blocking: blocking.map((finding) => ({
+      location: locationOf(finding) ?? '',
+      scenario: clip(`${finding.summary} ${finding.consequence ?? ''}`.trim()),
+      correction: clip(finding.resolutionCondition ?? finding.recommendation),
+    })),
+    advisory: advisory.map((finding) => {
+      const location = locationOf(finding);
+      return {
+        ...(location === undefined ? {} : { location }),
+        note: clip(`${finding.summary} ${finding.recommendation}`.trim()),
+      };
+    }),
+  });
+  return verdict.ok ? verdict : refusedCompletion(verdict.reason);
 }
 
 // The loop admits the tracker observation with the same two readings, so a

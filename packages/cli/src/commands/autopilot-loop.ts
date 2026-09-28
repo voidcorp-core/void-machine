@@ -8,12 +8,12 @@
 // never decides a merge. The command judges nothing: it admits what it is given
 // and returns the kernel's actions.
 //
-// Local state is three things under `.void/machine/autopilot/`, all written
+// Local state is four things under `.void/machine/autopilot/`, all written
 // only by an explicit command: the stop signal, one digest-only fingerprint per
-// ticket, recorded before its unit begins, and the head each ticket's
-// auto-merge was armed on, which GitHub does not keep. No secret lives here:
-// the review runs in GitHub Actions and publishes its verdict as a check only
-// that app can create.
+// ticket, recorded before its unit begins, the head each ticket's auto-merge
+// was armed on, which GitHub does not keep, and the review `autopilot review`
+// recorded for each head, which is the verdict the loop merges on. No secret
+// lives here.
 
 import {
   existsSync,
@@ -66,6 +66,7 @@ import {
   type SharedFingerprint,
   type SharedStateReading,
 } from '../lib/autopilot/shared-state.js';
+import { readLocalReviews } from './autopilot-review.js';
 import { flagValue } from './autopilot-usage.js';
 
 const LOOP_SUBCOMMANDS = [
@@ -116,6 +117,8 @@ export interface LoopCommandOutput {
 /** The two runners the loop observes through; injected so tests run on captures. */
 export interface LoopRunners {
   readonly root: string;
+  /** ISO instant of the tick: how long a recorded review has been running. */
+  readonly now?: string;
   readonly gh?: GhRunner;
   readonly git?: GitRunner;
 }
@@ -137,6 +140,17 @@ function runner<T>(value: T | undefined, name: string): T {
     `the loop has no ${name} runner`,
     'the command was invoked without an execution context that can observe',
     'invoke autopilot through the CLI entry point rather than calling it directly',
+  );
+}
+
+function instantOf(iso: string): number {
+  const instant = Date.parse(iso);
+  if (Number.isFinite(instant)) return instant;
+  throw autopilotFailure(
+    'AUTOPILOT_CONTRACT',
+    'the loop clock is unreadable',
+    `${JSON.stringify(iso.slice(0, 40))} is not an ISO instant`,
+    'invoke autopilot through the CLI entry point, which passes the current instant',
   );
 }
 
@@ -287,8 +301,8 @@ function renderAction(action: LoopAction, humanWaitLabel: string): string {
         `disable-auto-merge ${action.ticketId}: #${action.pullRequest} at ${action.headSha},` +
         ` armed on ${action.armedSha ?? 'an unrecorded head'}`
       );
-    case 'rerun-review-check':
-      return `rerun-review-check ${action.ticketId}: #${action.pullRequest}, run ${action.run}`;
+    case 'review':
+      return `review ${action.ticketId}: #${action.pullRequest} at ${action.headSha}, round ${action.round}`;
     case 'requeue':
       return (
         `requeue ${action.ticketId}: #${action.pullRequest} at ${action.headSha},` +
@@ -338,7 +352,9 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
     if (record !== undefined) armed.set(ticket.id, record);
   }
   const sharedState = { current, before };
-  const decision = decideLoop({ program, tracker, github, signal, sharedState, armed });
+  const reviews = readLocalReviews(context.root, tracker.tickets.map((ticket) => ticket.id));
+  const now = instantOf(runner(context.now, 'clock'));
+  const decision = decideLoop({ program, tracker, github, signal, sharedState, armed, reviews, now });
   return { value: decision, human: renderDecision(decision) };
 }
 
@@ -383,7 +399,10 @@ function freezeCommand(
     const record = recordedArm(context.root, ticket.id);
     if (record !== undefined) armed.set(ticket.id, record);
   }
-  const decision = decideLoop({ program, tracker, github, signal: 'now', sharedState, armed });
+  // A freeze disarms and stops: no review is read, none is delegated.
+  const decision = decideLoop({
+    program, tracker, github, signal: 'now', sharedState, armed, reviews: new Map(), now: 0,
+  });
   return { value: decision, human: renderDecision(decision) };
 }
 
@@ -615,8 +634,8 @@ export function disarmCommand(argv: readonly string[], context: LoopRunners): Lo
  * `autopilot judgment conflict-class`: the comment block for the conflict class
  * on stdin, admitted before it is printed. The worker posts exactly this, so the
  * kernel finds it on the pull request after a restart and admits it a second
- * time there. A review verdict is not rendered here: the review job in GitHub
- * Actions is the only one that posts it, beside the check it publishes.
+ * time there. A review verdict is not rendered here: `autopilot review` records
+ * it locally, bound to the session it delegated, and posts only a copy.
  */
 export function judgmentCommand(argv: readonly string[], stdin: string): LoopCommandOutput {
   const value = jsonFrom(stdin, 'judgment');
@@ -625,8 +644,8 @@ export function judgmentCommand(argv: readonly string[], stdin: string): LoopCom
     throw autopilotFailure(
       'AUTOPILOT_USAGE',
       'a review verdict is not rendered for posting by hand',
-      'the review job in GitHub Actions posts it beside the independent-review check',
-      'mark the pull request ready for review; the job reviews it and posts the verdict',
+      '`autopilot review` records it locally, from the reviewer it delegated on the head',
+      'answer the `review` action with `autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>`',
     );
   }
   const kinds = JUDGMENT_KINDS.filter((known) => known !== 'review-verdict');

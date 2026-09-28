@@ -5,13 +5,17 @@ import {
   subcommandWord,
   USAGE,
 } from './autopilot-usage.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { agentsContext } from '@voidcorp/void-machine/agents';
 import { isLoopSubcommand, judgmentCommand, type LoopCommandOutput, loopCommand } from './autopilot-loop.js';
+import { reviewCommand } from './autopilot-review.js';
 
 export { type AutopilotSubcommand, readsStdin, SUBCOMMANDS } from './autopilot-usage.js';
 
 import { autopilotFailure, renderAutopilotFailure, toAutopilotFailure } from '../lib/autopilot/errors.js';
 import { execGh, type GhRunner, type GitRunner, gitIn } from '../lib/autopilot/loop-observe.js';
-import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 
 export interface AutopilotCommandResult {
   readonly stdout: string;
@@ -103,6 +107,14 @@ export function runAutopilotCommand(
       );
     }
     if (isLoopSubcommand(subcommand)) return emit(json, loopCommand(subcommand, argv, stdin, context));
+    if (subcommand === 'review') {
+      throw autopilotFailure(
+        'AUTOPILOT_CONTRACT',
+        '`review` waits on a delegated reviewer and runs only from the CLI entry point',
+        'the synchronous surface cannot wait on an agent',
+        `run \`${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>\``,
+      );
+    }
     return unroutedSubcommand(subcommand);
   } catch (error) {
     return fail(renderAutopilotFailure(toAutopilotFailure(error), json));
@@ -116,8 +128,12 @@ export function runAutopilotCommand(
  * takes no pipe never hangs on a terminal waiting for input.
  */
 export async function autopilot(argv: readonly string[]): Promise<void> {
-  const stdin = readsStdin(argv) && !process.stdin.isTTY ? await readAllStdin() : '';
   const root = process.cwd();
+  if (subcommandWord(argv) === 'review' && !argv.includes('--help') && !argv.includes('-h')) {
+    await autopilotReview(argv, root);
+    return;
+  }
+  const stdin = readsStdin(argv) && !process.stdin.isTTY ? await readAllStdin() : '';
   const result = runAutopilotCommand(argv, stdin, {
     root,
     now: new Date().toISOString(),
@@ -127,6 +143,31 @@ export async function autopilot(argv: readonly string[]): Promise<void> {
   if (result.stdout !== '') process.stdout.write(result.stdout);
   if (result.stderr !== '') process.stderr.write(result.stderr);
   if (result.exitCode !== 0) process.exitCode = result.exitCode;
+}
+
+/**
+ * `autopilot review` in the shell: the kernel's delegation composed for this
+ * checkout, the durable worktree location, the real clock.
+ */
+async function autopilotReview(argv: readonly string[], root: string): Promise<void> {
+  const json = argv.includes('--json');
+  const env = process.env;
+  const home = homedir();
+  const agents = agentsContext({ cwd: root, env, home,
+    updateCommand: `npx ${PRODUCT_IDENTITY.packageName} update` });
+  try {
+    if (!('store' in agents)) {
+      throw autopilotFailure('AUTOPILOT_CONTRACT', 'the kernel delegation is unavailable here', agents.cause,
+        agents.action);
+    }
+    const data = env['XDG_DATA_HOME'] ?? join(home, '.local', 'share');
+    const worktrees = env['VOID_WORKTREES'] ?? join(data, 'git-worktrees');
+    const output = await reviewCommand(argv, { root, gh: execGh, git: gitIn, agents, now: Date.now, worktrees });
+    process.stdout.write(json ? `${JSON.stringify(output.value, null, 2)}\n` : output.human);
+  } catch (error) {
+    process.stderr.write(renderAutopilotFailure(toAutopilotFailure(error), json));
+    process.exitCode = 2;
+  }
 }
 
 function readAllStdin(): Promise<string> {

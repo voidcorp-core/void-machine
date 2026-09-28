@@ -61,9 +61,9 @@ function project(): string {
 }
 
 /**
- * Pull request 11, open on `work/DEV-1` against develop, reviewed on its head:
- * the `independent-review` check passed and the review job posted its verdict,
- * unless `reviewer` names another author for the comment.
+ * Pull request 11, open on `work/DEV-1` against develop, its checks passing and
+ * a verdict block posted beside them, by `reviewer` or the Actions bot: a copy
+ * for humans the loop never reads.
  */
 function reviewedPull(
   options: { head?: string; armed?: boolean; queued?: boolean; reviewer?: string } = {},
@@ -174,15 +174,35 @@ const HEAD = 'ca7fdc0008c5b597224c37b195e2a0ba0cd58e63';
 const cleanVerdict = { headSha: HEAD, round: 1, blocking: [], advisory: [] };
 const queuedTicket = { id: 'DEV-2', status: 'Todo', humanWait: false, readiness: ready };
 
+const RUN = 'run_00000000-0000-4000-8000-000000000001';
+const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+
+/** What `autopilot review` records once a reviewer passed pull request 11 on `head`. */
+function recordLocalVerdict(root: string, head = HEAD, verdict: unknown = { ...cleanVerdict, headSha: head }): string {
+  const directory = join(root, '.void', 'machine', 'autopilot', 'reviews', 'DEV-1');
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, `${head}.json`);
+  writeFileSync(path, JSON.stringify({
+    schemaVersion: 1,
+    ticketId: 'DEV-1',
+    pullRequest: 11,
+    headSha: head,
+    attempts: [{ runId: RUN, startedAt: 1, endedAt: 2 }],
+    verdict: { runId: RUN, sessionId: SESSION, recordedAt: 2, verdict },
+  }));
+  return path;
+}
+
 function next(root: string, stdin: string, runner?: (args: readonly string[]) => string) {
   const result = runAutopilotCommand(['next', '--json'], stdin, context(root, runner));
   return { ...result, decision: result.exitCode === 0 ? JSON.parse(result.stdout) : undefined };
 }
 
 describe('autopilot next', () => {
-  it('seats the head of the queue and arms the merge of a reviewed unit', () => {
+  it('seats the head of the queue and arms the merge of a unit with a clean local verdict', () => {
     const root = project();
     expect(runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root)).exitCode).toBe(0);
+    recordLocalVerdict(root);
     const { decision } = next(root, trackerJson([heldTicket, queuedTicket], ['DEV-2']), gh);
     expect(decision.actions).toEqual([
       {
@@ -198,6 +218,7 @@ describe('autopilot next', () => {
   it('withholds the merge of a unit that changed the shared Git state', () => {
     const root = project();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    recordLocalVerdict(root);
     git(root, 'tag', 'stray');
     const { decision } = next(root, trackerJson([heldTicket], []), gh);
     expect(decision.actions[0]).toMatchObject({
@@ -207,13 +228,26 @@ describe('autopilot next', () => {
     });
   });
 
-  it('arms nothing on a verdict another author posted beside a passing check', () => {
-    // A worker's token can post the same comment block; only the review job's
-    // counts. The check itself comes from GitHub Actions alone.
+  it('delegates a review, whatever verdict GitHub shows, while none is recorded for the head', () => {
+    // On a public repository anyone can comment, and any workflow can post a
+    // check under the review's name: the loop decides on its local verdict.
     const root = project();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
-    const forged = (args: readonly string[]) => answer(args, reviewedPull({ reviewer: 'folpe' }));
-    const { decision } = next(root, trackerJson([heldTicket], []), forged);
+    for (const reviewer of ['github-actions', 'folpe']) {
+      const posted = (args: readonly string[]) => answer(args, reviewedPull({ reviewer }));
+      const { decision } = next(root, trackerJson([heldTicket], []), posted);
+      expect(decision.actions[0]).toEqual({ kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: HEAD, round: 1 });
+    }
+    recordLocalVerdict(root, 'b'.repeat(40));
+    const { decision } = next(root, trackerJson([heldTicket], []), gh);
+    expect(decision.actions[0]).toMatchObject({ kind: 'review', headSha: HEAD });
+  });
+
+  it('sends a local record it cannot read to a human, never to a merge', () => {
+    const root = project();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    writeFileSync(recordLocalVerdict(root), '{ half a record');
+    const { decision } = next(root, trackerJson([heldTicket], []), gh);
     expect(decision.actions[0]).toMatchObject({ kind: 'mark-human-wait', reason: 'verdict-unproven' });
   });
 
@@ -253,10 +287,10 @@ describe('autopilot judgment', () => {
     expect(unknown.stderr).toMatch(/conflict-class/);
   });
 
-  it('renders no review verdict: the review job in GitHub Actions is its only writer', () => {
+  it('renders no review verdict: `autopilot review` is its only writer', () => {
     const result = runAutopilotCommand(['judgment', 'review-verdict'], JSON.stringify(cleanVerdict));
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toMatch(/review job/);
+    expect(result.stderr).toMatch(/autopilot review/);
   });
 });
 
@@ -386,6 +420,7 @@ describe('autopilot arm and disarm', () => {
   it('has next disarm and hand back a pull request pushed after it was armed', () => {
     const root = project();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    recordLocalVerdict(root);
     const arming = sequence([reviewedPull(), reviewedPull({ armed: true })]);
     const argv = ['arm', '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD];
     expect(runAutopilotCommand(argv, '', { ...context(root), gh: arming.run }).exitCode).toBe(0);

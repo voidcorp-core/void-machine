@@ -13,7 +13,6 @@ import {
   PULL_REQUEST_FILE_PAGES_MAX,
   parseEjections,
   parseQueueTimeline,
-  parseRunAttempt,
   PULL_REQUEST_FIELDS,
   readSharedState,
   resolveLoopBase,
@@ -77,8 +76,6 @@ describe('parsePullRequestView', () => {
       behind: false,
       autoMerge: false,
       checks: 'passing',
-      review: 'absent',
-      reviewFailures: 0,
       changedFiles: 15,
     });
   });
@@ -121,25 +118,20 @@ describe('parsePullRequestView', () => {
     expect(parsePullRequestView(withRollup(view, [failed])).checks).toBe('failing');
   });
 
-  it('reads the review from its check, apart from the checks, with the run to re-run', () => {
+  it('reads the review check a repository runs on GitHub as one more check', () => {
+    // The loop's verdict is local; a review check is a check that must pass.
     const view = openView();
     const passing = view.statusCheckRollup as Raw[];
-    for (const [conclusion, review] of [
-      ['SUCCESS', 'success'],
-      ['FAILURE', 'failure'],
+    for (const [conclusion, checks] of [
+      ['SUCCESS', 'passing'],
+      ['FAILURE', 'failing'],
       ['PENDING', 'pending'],
     ] as const) {
-      const read = parsePullRequestView(withRollup(view, [...passing, reviewCheck(conclusion)]));
-      expect(read.review).toBe(review);
-      // The review is the reviewer's, not a check a worker has to repair.
-      expect(read.checks).toBe('passing');
-      // The run id of the captured `detailsUrl`, which `gh run rerun` takes.
-      expect(read.reviewCheckRun).toBe(35694132291);
+      expect(parsePullRequestView(withRollup(view, [...passing, reviewCheck(conclusion)])).checks).toBe(checks);
     }
-    expect(parsePullRequestView(viewText('pr-view-open.json')).review).toBe('absent');
   });
 
-  it('reads the latest verdict and conflict class posted as comment blocks', () => {
+  it('reads the latest conflict class posted as a comment block, and no review verdict at all', () => {
     const base = openView();
     const head = 'ca7fdc0008c5b597224c37b195e2a0ba0cd58e63';
     const verdictJudgment = { headSha: head, round: 1, blocking: [], advisory: [] };
@@ -151,70 +143,10 @@ describe('parsePullRequestView', () => {
     const rollup = [...(base.statusCheckRollup as Raw[]), reviewCheck('SUCCESS')];
     const comments = [...(base.comments as Raw[]), ...posted];
     const read = parsePullRequestView(JSON.stringify({ ...base, statusCheckRollup: rollup, comments }));
-    expect(read.verdict).toEqual(verdictJudgment);
     expect(read.conflict).toEqual(conflictJudgment);
-    const bare = parsePullRequestView(viewText('pr-view-open.json'));
-    expect(bare.verdict).toBeUndefined();
-    expect(bare.conflict).toBeUndefined();
-  });
-
-  it('believes the latest verdict of the review job on the head only when its check agrees', () => {
-    // The check is what branch protection trusts, from GitHub Actions alone;
-    // the comment carries the findings. One that disagrees is believed nowhere.
-    const base = openView();
-    const head = 'ca7fdc0008c5b597224c37b195e2a0ba0cd58e63';
-    const clean = { headSha: head, round: 1, blocking: [], advisory: [] };
-    const finding = { location: 'a.ts:1', scenario: 'It merges red.', correction: 'Refuse it.' };
-    const blocking = { ...clean, blocking: [finding] };
-    const read = (check: string | undefined, ...judgments: unknown[]) => {
-      const rollup = [...(base.statusCheckRollup as Raw[]), ...(check === undefined ? [] : [reviewCheck(check)])];
-      const comments = judgments.map((judgment) =>
-        typeof judgment === 'string' ? commentBy(judgment) : commentBy(renderJudgmentComment('review-verdict', judgment)));
-      return parsePullRequestView(JSON.stringify({ ...base, statusCheckRollup: rollup, comments })).verdict;
-    };
-    expect(read('SUCCESS', clean)).toEqual(clean);
-    expect(read('FAILURE', blocking)).toEqual(blocking);
-    expect(read('SUCCESS', blocking, clean)).toEqual(clean);
-    expect(read('FAILURE', blocking, clean)).toBeUndefined();
-    expect(read('FAILURE', clean)).toBeUndefined();
-    expect(read('SUCCESS', blocking)).toBeUndefined();
-    expect(read(undefined, clean)).toBeUndefined();
-    expect(read('PENDING', clean)).toBeUndefined();
-    expect(read('SUCCESS', { ...clean, headSha: 'b'.repeat(40) })).toBeUndefined();
-    const malformed = '<!-- void-autopilot:review-verdict -->\n```json\n{ nope\n```\n<!-- /void-autopilot:review-verdict -->';
-    expect(read('SUCCESS', clean, malformed)).toEqual(clean);
-  });
-
-  it('believes a verdict only from the review job, never from another author', () => {
-    const base = openView();
-    const head = 'ca7fdc0008c5b597224c37b195e2a0ba0cd58e63';
-    const clean = { headSha: head, round: 1, blocking: [], advisory: [] };
-    const rollup = [...(base.statusCheckRollup as Raw[]), reviewCheck('SUCCESS')];
-    const parse = (comment: Raw) =>
-      parsePullRequestView(JSON.stringify({ ...base, statusCheckRollup: rollup, comments: [comment] })).verdict;
-    const body = renderJudgmentComment('review-verdict', clean);
-    expect(parse(commentBy(body))).toEqual(clean);
-    // The same block posted by a person or a worker's token is text, not a verdict.
-    expect(parse(commentBy(body, 'folpe'))).toBeUndefined();
-    expect(parse({ ...commentBy(body), author: null })).toBeUndefined();
-  });
-
-  // The rounds are what GitHub holds, not what a reviewer remembers: every head
-  // the review job blocked counts once, and a crash without a verdict is not one.
-  it('counts the review rounds as the distinct heads the review job blocked', () => {
-    const base = openView();
-    const finding = { location: 'a.ts:1', scenario: 'It merges red.', correction: 'Refuse it.' };
-    const blocked = (sha: string) =>
-      commentBy(renderJudgmentComment('review-verdict', { headSha: sha, round: 1, blocking: [finding], advisory: [] }));
-    const clean = commentBy(renderJudgmentComment('review-verdict', { headSha: 'c'.repeat(40), round: 2, blocking: [], advisory: [] }));
-    const rounds = (comments: readonly Raw[]) =>
-      parsePullRequestView(JSON.stringify({ ...base, comments })).reviewFailures;
-    expect(rounds([])).toBe(0);
-    expect(rounds([blocked('a'.repeat(40)), blocked('a'.repeat(40)), clean])).toBe(1);
-    expect(rounds([blocked('a'.repeat(40)), blocked('b'.repeat(40))])).toBe(2);
-    expect(rounds([commentBy(renderJudgmentComment('review-verdict', {
-      headSha: 'a'.repeat(40), round: 1, blocking: [finding], advisory: [],
-    }), 'folpe')])).toBe(0);
+    // A verdict block on GitHub is a copy for humans: the observation carries none.
+    expect(Object.values(read)).not.toContainEqual(verdictJudgment);
+    expect(parsePullRequestView(viewText('pr-view-open.json')).conflict).toBeUndefined();
   });
 
   it('reads a conflict and a branch behind its base', () => {
@@ -235,21 +167,6 @@ describe('parsePullRequestView', () => {
   it('asks gh for exactly the fields it reads', () => {
     const keys = Object.keys(openView()).sort();
     expect([...PULL_REQUEST_FIELDS].sort()).toEqual(keys);
-  });
-});
-
-describe('parseRunAttempt', () => {
-  // How many times a run was started on its head: GitHub's count, which a
-  // restart cannot reset. zed run 35748516084 was re-run once.
-  it('reads the attempt of a run', () => {
-    expect(parseRunAttempt(fixture('run-view-attempt.json'))).toBe(2);
-  });
-
-  it('refuses an answer without a usable attempt', () => {
-    const answer = JSON.parse(fixture('run-view-attempt.json')) as Raw;
-    expect(() => parseRunAttempt(JSON.stringify({ ...answer, attempt: 0 }))).toThrow(/attempt/);
-    const { attempt: _dropped, ...bare } = answer;
-    expect(() => parseRunAttempt(JSON.stringify(bare))).toThrow(/attempt/);
   });
 });
 
@@ -374,7 +291,6 @@ describe('observeGithub', () => {
       headSha: expect.any(String),
       queue: 'none',
       ejections: 2,
-      reviewFailures: 0,
     });
     expect(calls.filter((call) => call.includes('view'))).toHaveLength(1);
     // argv, never a shell string: the PR number and fields travel as separate words.
@@ -407,7 +323,7 @@ describe('observeGithub', () => {
     expect(observe(ejected, 'pr-queue-membership-queued.json')).toBe('queued');
   });
 
-  it('reads the attempt of the run whose review job failed, and only then', () => {
+  it('never reads an Actions run: a failed review check is a failed check, not a job to re-run', () => {
     const view = openView();
     const [run] = view.statusCheckRollup as Raw[];
     const failed = { ...run, name: 'independent-review', conclusion: 'FAILURE' };
@@ -416,23 +332,11 @@ describe('observeGithub', () => {
       'pr view 381': withRollup(view, [...(view.statusCheckRollup as Raw[]), failed]),
       'timelineItems': fixture('timeline-requeued-after-ejections.json'),
       'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
-      'run view 35694132291': fixture('run-view-attempt.json'),
       'pulls/381/files': fixture('pulls-files-rest.json'),
     });
-    const observed = observeGithub(gh, { base: 'develop', pullRequests: [381] });
-    expect(observed.pullRequests.get(381)).toMatchObject({ reviewCheckAttempt: 2 });
-    expect(calls.find((call) => call[0] === 'run')).toEqual([
-      'run', 'view', '35694132291', '--json', 'attempt',
-    ]);
-    const quiet = runner({
-      'mergeQueue(branch': fixture('queue-present.json'),
-      'pr view 381': viewText('pr-view-open.json'),
-      'timelineItems': fixture('timeline-requeued-after-ejections.json'),
-      'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
-      'pulls/381/files': fixture('pulls-files-rest.json'),
-    });
-    expect(observeGithub(quiet.run, { base: 'develop', pullRequests: [381] }).pullRequests.get(381))
-      .not.toHaveProperty('reviewCheckAttempt');
+    expect(observeGithub(gh, { base: 'develop', pullRequests: [381] }).pullRequests.get(381))
+      .toMatchObject({ checks: 'failing' });
+    expect(calls.find((call) => call[0] === 'run')).toBeUndefined();
   });
 
   describe('the files of a pull request', () => {

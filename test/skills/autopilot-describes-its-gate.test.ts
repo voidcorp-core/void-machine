@@ -32,9 +32,10 @@ describe('the autopilot skill describes the gate the loop applies', () => {
     expect(FLAT).toMatch(/autopilot disarm --pr <n>`, before the action that follows it/);
   });
 
-  it('names the merge queue and the required review check that gate the merge', () => {
+  it('names the merge queue and the local review verdict that gate the merge', () => {
     expect(FLAT).toMatch(/merge queue/i);
-    expect(FLAT).toMatch(/`independent-review`/);
+    expect(FLAT).toMatch(/autopilot review --ticket <id> --pr <n> --head <headSha> --round <round>/);
+    expect(FLAT).toMatch(/`next` decides on that record alone/);
   });
 
   it('keeps a serial fallback where no merge queue exists', () => {

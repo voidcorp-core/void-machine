@@ -681,7 +681,7 @@ describe('a held ticket and its pull request', () => {
   describe('the local verdict on the head', () => {
     const finding = { location: 'packages/cli/src/a.ts:3', scenario: 'A merged ticket keeps its slot.', correction: 'Free the slot on merge.' };
     const blockingOn = (headSha: string, round: 1 | 2 = 1) => ({ headSha, round, blocking: [finding], advisory: [] });
-    const review = { kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11) };
+    const review = { kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11), round: 1 };
 
     it('delegates a review when no verdict is recorded for the head', () => {
       expect(one({}, {}, { reviews: { 'DEV-1': [] } })).toEqual(review);
@@ -690,6 +690,9 @@ describe('a held ticket and its pull request', () => {
     it('ignores a verdict recorded on another head: a head moved after its verdict is reviewed again', () => {
       const older = localReview('DEV-1', 11, { headSha: headOf(12) });
       expect(one({}, {}, { reviews: { 'DEV-1': [older] } })).toEqual(review);
+      // After a blocked head, the next one is reviewed as round 2.
+      const blocked = localReview('DEV-1', 11, { headSha: headOf(12), verdict: blockingOn(headOf(12)) });
+      expect(one({}, {}, { reviews: { 'DEV-1': [blocked] } })).toEqual({ ...review, round: 2 });
     });
 
     it('arms the auto-merge on the exact head a clean verdict was recorded on', () => {
@@ -1073,6 +1076,16 @@ describe('protected paths', () => {
     const renamed = { '.github/workflows/new.yml': 'docs/a.yml' };
     const pulls = [touching(['.github/workflows/new.yml'], { renamed })];
     expect(actionFor(decide({ tickets }, { pulls }), 'DEV-1')).toMatchObject({ reason: 'protected-path' });
+  });
+
+  it('hands a protected path to a person before any review: the reviewer would run its configuration', () => {
+    // The reviewer runs in a worktree of the head, where Claude loads the
+    // project's agents, settings, hooks and MCP servers: a head that changes
+    // them is never checked out for a review.
+    for (const file of ['.claude/settings.json', '.claude/agents/independent-code-reviewer.md', '.mcp.json']) {
+      const action = actionFor(decide({ tickets }, { pulls: [touching([file])], reviews: { 'DEV-1': [] } }), 'DEV-1');
+      expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
+    }
   });
 
   it('treats a file list GitHub cut short as touching a protected path', () => {

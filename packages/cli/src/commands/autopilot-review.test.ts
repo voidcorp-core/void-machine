@@ -5,13 +5,21 @@ import { join } from 'node:path';
 import {
   type AgentsContext,
   agentsContext,
+  dispatchAgent,
   type AgentRuntimePort,
   type LaunchPlan,
 } from '@voidcorp/void-machine/agents';
 import { afterEach, describe, expect, it } from 'vitest';
 import { admitLocalReview } from '../lib/autopilot/judgments.js';
 import { gitIn } from '../lib/autopilot/loop-observe.js';
-import { readLocalReviews, reviewBrief, reviewCommand, reviewPath, type ReviewRunners } from './autopilot-review.js';
+import {
+  readLocalReviews,
+  reviewBrief,
+  reviewCommand,
+  reviewMissionId,
+  reviewPath,
+  type ReviewRunners,
+} from './autopilot-review.js';
 
 // `autopilot review` runs against a real repository and its origin, so the
 // worktree, the HEAD checks and the diff are git's own. The runtime is
@@ -21,6 +29,30 @@ import { readLocalReviews, reviewBrief, reviewCommand, reviewPath, type ReviewRu
 const FIXTURES = new URL('../lib/autopilot/__fixtures__/gh/', import.meta.url);
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
 const OTHER_SESSION = '0f0f0f0f-764f-4463-b733-8b94509eb25e';
+
+const PROGRAM = `---
+schemaVersion: 1
+status: executing
+program: loop
+plan: docs/plans/p.md
+spec: docs/specs/s.md
+progress:
+  provider: linear
+  scope: voidcorp/DEV
+  order: [DEV-1]
+  states:
+    ready: [Todo]
+    started: [In Progress]
+    review: [In Review]
+    done: [Done]
+autopilot:
+  schemaVersion: 1
+  clusterSize: 4
+  base: develop
+  mergeGate: union-reviewed
+  deployBranch: main
+---
+`;
 
 const scratch: string[] = [];
 afterEach(() => {
@@ -48,6 +80,8 @@ function repository(): Repository {
   git(home, 'clone', '-q', origin, root);
   writeFileSync(join(root, '.gitignore'), '.void/machine/\n');
   writeFileSync(join(root, 'loop.ts'), 'export const slots = 4;\n');
+  mkdirSync(join(root, '.void'));
+  writeFileSync(join(root, '.void', 'program.md'), PROGRAM);
   git(root, 'add', '.');
   git(root, 'commit', '-q', '-m', 'base');
   git(root, 'push', '-q', 'origin', 'HEAD:develop');
@@ -61,15 +95,17 @@ function repository(): Repository {
   return { root, worktrees: join(home, 'git-worktrees'), head, base };
 }
 
-/** `gh pr view 11`, open on `head`, from a real capture; every other call is recorded. */
-function github(head: string, calls: string[][] = []) {
+/** `gh pr view 11` (then 12, ...), open on each of `heads`, from a real capture; every call is recorded. */
+function github(heads: readonly string[], calls: string[][] = []) {
   const view = JSON.parse(readFileSync(new URL('pr-view-open.json', FIXTURES), 'utf8')) as Record<string, unknown>;
   return {
     calls,
     run: (args: readonly string[]): string => {
       calls.push([...args]);
       if (args[0] === 'pr' && args[1] === 'view') {
-        return JSON.stringify({ ...view, number: 11, headRefOid: head, headRefName: 'work/DEV-1',
+        const number = Number(args[2]);
+        const head = heads[number - 11] ?? '';
+        return JSON.stringify({ ...view, number, headRefOid: head, headRefName: `work/DEV-${number - 10}`,
           baseRefName: 'develop', comments: [], changedFiles: 1 });
       }
       if (args[0] === 'pr' && args[1] === 'comment') return '';
@@ -98,41 +134,49 @@ interface Script {
   readonly meanwhile?: (plan: LaunchPlan) => void;
 }
 
-/** A runtime whose reviewer ends its turn on the second observation with `answer`. */
+/** The native session of the n-th reviewer launched, as `claude agents` would list it. */
+const sessionOf = (index: number): string => (index === 0 ? SESSION : `${String(index).padStart(8, '0')}-764f-4463-b733-8b94509eb25e`);
+
+/** A runtime whose reviewers each end their turn on their second observation with `answer`. */
 function scriptedRuntime(machine: string, clock: { value: number }, script: Script = {}) {
   const launches: LaunchPlan[] = [];
-  let observations = 0;
+  const stops: string[] = [];
+  const seen = new Map<string, number>();
   const runtime: AgentRuntimePort = {
     preflight: async () => ({ ok: true }),
     dispatch: async (plan) => {
       launches.push(plan);
-      return { kind: 'acknowledged', handle: '6d5ea8bb' };
+      return { kind: 'acknowledged', handle: sessionOf(launches.length - 1).slice(0, 8) };
     },
     observe: async (refs) => {
-      observations += 1;
-      const plan = launches[0];
-      if (observations === 2 && plan !== undefined) {
-        script.meanwhile?.(plan);
-        const claim = JSON.parse(readFileSync(join(machine, 'agents', 'sessions', `${SESSION}.json`), 'utf8'));
-        writeFileSync(claim.resultPath, JSON.stringify({ schemaVersion: 1,
-          sessionId: script.resultSession ?? SESSION, recordedAt: clock.value,
-          lastAssistantMessage: script.answer ?? JSON.stringify(clean), truncated: false }));
-      }
-      const sessions = new Map(refs.map((ref) => [ref.name, {
-        observation: { kind: 'present' as const, state: observations >= 2 ? 'done' as const : 'working' as const,
-          status: 'idle' as const },
-        binding: { handle: '6d5ea8bb', sessionId: SESSION },
-      }]));
+      const sessions = new Map(refs.flatMap((ref) => {
+        const index = launches.findIndex((plan) => plan.name === ref.name);
+        const plan = launches[index];
+        if (plan === undefined || stops.includes(ref.name)) return [];
+        const count = (seen.get(ref.name) ?? 0) + 1;
+        seen.set(ref.name, count);
+        const sessionId = sessionOf(index);
+        if (count === 2) {
+          script.meanwhile?.(plan);
+          const claim = JSON.parse(readFileSync(join(machine, 'agents', 'sessions', `${sessionId}.json`), 'utf8'));
+          writeFileSync(claim.resultPath, JSON.stringify({ schemaVersion: 1,
+            sessionId: script.resultSession ?? sessionId, recordedAt: clock.value,
+            lastAssistantMessage: script.answer ?? JSON.stringify(clean), truncated: false }));
+        }
+        const state = count >= 2 ? 'done' as const : 'working' as const;
+        return [[ref.name, { observation: { kind: 'present' as const, state, status: 'idle' as const },
+          binding: { handle: sessionId.slice(0, 8), sessionId } }]] as const;
+      }));
       return { kind: 'read', sessions };
     },
     send: async () => ({ kind: 'refused', cause: 'not scripted', action: 'none' }),
-    stop: async () => ({ ok: true }),
+    stop: async (ref) => { stops.push(ref.name); return { ok: true }; },
     attachCommand: () => undefined,
   };
-  return { runtime, launches };
+  return { runtime, launches, stops };
 }
 
-function runners(repo: Repository, script: Script = {}, calls: string[][] = []) {
+function runners(repo: Repository, script: Script = {}, calls: string[][] = [], heads: readonly string[] = [repo.head]) {
   const clock = { value: 1_790_000_000_000 };
   const composed = agentsContext({ cwd: repo.root, env: {}, home: repo.root, updateCommand: 'update' });
   if (!('store' in composed)) throw new Error(composed.cause);
@@ -143,17 +187,18 @@ function runners(repo: Repository, script: Script = {}, calls: string[][] = []) 
     runtime: scripted.runtime,
     clock: { now: () => clock.value, sleep: async (ms) => { clock.value += ms; } },
   };
-  const gh = github(repo.head, calls);
+  const gh = github(heads, calls);
   const built: ReviewRunners = {
     root: repo.root, gh: gh.run, git: gitIn, agents, now: () => clock.value, worktrees: repo.worktrees,
   };
-  return { runners: built, launches: scripted.launches, calls: gh.calls, clock };
+  return { runners: built, launches: scripted.launches, stops: scripted.stops, calls: gh.calls, clock, agents };
 }
 
-const argv = (head: string) => ['review', '--ticket', 'DEV-1', '--pr', '11', '--head', head];
+const argv = (head: string, ticket = 'DEV-1', pr = 11) =>
+  ['review', '--ticket', ticket, '--pr', String(pr), '--head', head, '--round', '1'];
 const worktreeOf = (repo: Repository) => join(repo.worktrees, 'checkout', 'review', 'DEV-1', repo.head);
-const recorded = (repo: Repository) => {
-  const admission = admitLocalReview(JSON.parse(readFileSync(reviewPath(repo.root, 'DEV-1', repo.head), 'utf8')));
+const recorded = (repo: Repository, ticket = 'DEV-1', head = repo.head) => {
+  const admission = admitLocalReview(JSON.parse(readFileSync(reviewPath(repo.root, ticket, head), 'utf8')));
   if (!admission.ok) throw new Error(admission.reason);
   return admission.value;
 };
@@ -201,6 +246,8 @@ describe('autopilot review', () => {
     const output = await reviewCommand(argv(repo.head), built);
     expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining(`not ${repo.head}`) });
     expect(launches).toHaveLength(0);
+    // Recorded as a failed attempt, so the kernel bounds it rather than asking forever.
+    expect(recorded(repo).attempts[0]?.failure).toContain(`not ${repo.head}`);
   });
 
   it('refuses a result recorded for a session the runtime does not list under the run', async () => {
@@ -260,6 +307,95 @@ describe('autopilot review', () => {
     expect(record.attempts[0]).toMatchObject({ failure: expect.stringContaining('interrupted') });
     expect(record.verdict).toBeDefined();
     expect(launches).toHaveLength(1);
+  });
+});
+
+describe('autopilot review, around a crash and beside other reviews', () => {
+  it('reuses a review worktree a crash left at the head, and finishes the review there', async () => {
+    const repo = repository();
+    const path = worktreeOf(repo);
+    mkdirSync(join(path, '..'), { recursive: true });
+    git(repo.root, 'worktree', 'add', '-q', '--detach', path, repo.head);
+    const { runners: built, launches } = runners(repo);
+    await reviewCommand(argv(repo.head), built);
+    expect(launches).toHaveLength(1);
+    expect(recorded(repo).verdict).toBeDefined();
+    expect(git(repo.root, 'worktree', 'list', '--porcelain')).toContain(`worktree ${path}`);
+  });
+
+  it('stops a reviewer an interrupted command left past its deadline, and never waits a second window', async () => {
+    const repo = repository();
+    const { runners: built, launches, stops, agents, clock } = runners(repo);
+    const receipt = await dispatchAgent(agents, { role: 'review', agentType: 'independent-code-reviewer',
+      cwd: repo.root, brief: 'Review.', missionId: reviewMissionId({ ticket: 'DEV-1', head: repo.head }) });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    const path = reviewPath(repo.root, 'DEV-1', repo.head);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, JSON.stringify({ schemaVersion: 1, ticketId: 'DEV-1', pullRequest: 11, headSha: repo.head,
+      attempts: [{ runId: receipt.runId, startedAt: clock.value - 31 * 60_000 }] }));
+    const before = clock.value;
+    const output = await reviewCommand(argv(repo.head), built);
+    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('ran out of time') });
+    expect(stops).toEqual([`vm-${receipt.runId}`]);
+    expect(launches).toHaveLength(1);
+    expect(clock.value).toBe(before);
+  });
+
+  it('stops a reviewer orphaned before its run id was recorded, then delegates one reviewer', async () => {
+    const repo = repository();
+    const { runners: built, launches, stops, agents, clock } = runners(repo);
+    const orphan = await dispatchAgent(agents, { role: 'review', agentType: 'independent-code-reviewer',
+      cwd: repo.root, brief: 'Review.', missionId: reviewMissionId({ ticket: 'DEV-1', head: repo.head }) });
+    if (!orphan.ok) throw new Error(orphan.cause);
+    const path = reviewPath(repo.root, 'DEV-1', repo.head);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, JSON.stringify({ schemaVersion: 1, ticketId: 'DEV-1', pullRequest: 11, headSha: repo.head,
+      attempts: [{ startedAt: clock.value }] }));
+    await reviewCommand(argv(repo.head), built);
+    // The orphan is stopped before the new reviewer starts; the new one stops once accepted.
+    expect(stops[0]).toBe(`vm-${orphan.runId}`);
+    expect(launches).toHaveLength(2);
+    expect(recorded(repo).verdict?.runId).not.toBe(orphan.runId);
+    expect(recorded(repo).attempts[0]?.failure).toContain('interrupted');
+    expect(recorded(repo).verdict).toBeDefined();
+  });
+
+  it('never checks out for review a change to the configuration the reviewer loads', async () => {
+    const repo = repository();
+    git(repo.root, 'checkout', '-q', 'work/DEV-1');
+    mkdirSync(join(repo.root, '.claude'), { recursive: true });
+    writeFileSync(join(repo.root, '.claude', 'settings.json'), '{"hooks":{}}\n');
+    git(repo.root, 'add', '.claude/settings.json');
+    git(repo.root, 'commit', '-q', '-m', 'reconfigure the reviewer');
+    const head = git(repo.root, 'rev-parse', 'HEAD').trim();
+    git(repo.root, 'checkout', '-q', 'develop');
+    const { runners: built, launches } = runners(repo, {}, [], [head]);
+    const output = await reviewCommand(argv(head), built);
+    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('.claude/settings.json') });
+    expect(launches).toHaveLength(0);
+  });
+
+  it('keeps two reviews run side by side apart, each on its own head and session', async () => {
+    const repo = repository();
+    git(repo.root, 'checkout', '-q', '-b', 'work/DEV-2', 'develop');
+    writeFileSync(join(repo.root, 'other.ts'), 'export const other = 1;\n');
+    git(repo.root, 'add', 'other.ts');
+    git(repo.root, 'commit', '-q', '-m', 'another change');
+    git(repo.root, 'push', '-q', 'origin', 'work/DEV-2');
+    const second = git(repo.root, 'rev-parse', 'HEAD').trim();
+    git(repo.root, 'checkout', '-q', 'develop');
+    const { runners: built, launches } = runners(repo, {}, [], [repo.head, second]);
+    await Promise.all([
+      reviewCommand(argv(repo.head), built),
+      reviewCommand(argv(second, 'DEV-2', 12), built),
+    ]);
+    expect(launches).toHaveLength(2);
+    const first = recorded(repo);
+    const other = recorded(repo, 'DEV-2', second);
+    expect([first.headSha, other.headSha]).toEqual([repo.head, second]);
+    expect(new Set([first.verdict?.sessionId, other.verdict?.sessionId]).size).toBe(2);
+    expect(git(join(repo.worktrees, 'checkout', 'review', 'DEV-2', second), 'rev-parse', 'HEAD').trim()).toBe(second);
+    expect(readLocalReviews(repo.root, ['DEV-1', 'DEV-2']).get('DEV-2')?.has(second)).toBe(true);
   });
 });
 

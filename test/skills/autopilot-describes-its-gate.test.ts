@@ -34,7 +34,7 @@ describe('the autopilot skill describes the gate the loop applies', () => {
 
   it('names the merge queue and the local review verdict that gate the merge', () => {
     expect(FLAT).toMatch(/merge queue/i);
-    expect(FLAT).toMatch(/autopilot review --ticket <id> --pr <n> --head <headSha>/);
+    expect(FLAT).toMatch(/autopilot review --ticket <id> --pr <n> --head <headSha> --round <round>/);
     expect(FLAT).toMatch(/`next` decides on that record alone/);
   });
 

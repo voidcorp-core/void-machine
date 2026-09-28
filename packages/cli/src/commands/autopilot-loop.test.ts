@@ -236,7 +236,7 @@ describe('autopilot next', () => {
     for (const reviewer of ['github-actions', 'folpe']) {
       const posted = (args: readonly string[]) => answer(args, reviewedPull({ reviewer }));
       const { decision } = next(root, trackerJson([heldTicket], []), posted);
-      expect(decision.actions[0]).toEqual({ kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: HEAD });
+      expect(decision.actions[0]).toEqual({ kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: HEAD, round: 1 });
     }
     recordLocalVerdict(root, 'b'.repeat(40));
     const { decision } = next(root, trackerJson([heldTicket], []), gh);

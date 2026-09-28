@@ -330,6 +330,8 @@ export type LoopAction =
       readonly ticketId: string;
       readonly pullRequest: number;
       readonly headSha: string;
+      /** The round the kernel counted: 2 once another head of this pull request was blocked. */
+      readonly round: 1 | 2;
     }
   | {
       readonly kind: 'requeue';
@@ -644,7 +646,8 @@ function unjudgedOutcome(
     const cause = attempts.at(-1)?.failure ?? 'the review was interrupted';
     return toHuman(ticket.id, 'review-failed', `#${pr.number} at ${pr.headSha}: ${cause}`);
   }
-  return held({ kind: 'review', ticketId: ticket.id, pullRequest: pr.number, headSha: pr.headSha });
+  const round = reviewRoundsOf(ticket, pr, input) === 0 ? 1 : 2;
+  return held({ kind: 'review', ticketId: ticket.id, pullRequest: pr.number, headSha: pr.headSha, round });
 }
 
 function localReviewOutcome(
@@ -653,6 +656,11 @@ function localReviewOutcome(
   context: SlotContext,
 ): SlotOutcome {
   const { input } = context;
+  // Checked before a review, not only before a merge: the reviewer runs in a
+  // worktree of the head, where its runtime loads the project's agents,
+  // settings, hooks and MCP servers. A head that changes them is never run.
+  const guarded = protectedPathReason(pr, input.program.autopilot);
+  if (guarded !== undefined) return toHuman(ticket.id, 'protected-path', guarded);
   const head = headReviewOf(ticket, pr, input);
   if (head.kind === 'unproven') return toHuman(ticket.id, 'verdict-unproven', head.detail);
   const verdict = head.kind === 'recorded' ? head.review.verdict?.verdict : undefined;

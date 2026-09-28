@@ -302,7 +302,7 @@ function renderAction(action: LoopAction, humanWaitLabel: string): string {
         ` armed on ${action.armedSha ?? 'an unrecorded head'}`
       );
     case 'review':
-      return `review ${action.ticketId}: #${action.pullRequest} at ${action.headSha}`;
+      return `review ${action.ticketId}: #${action.pullRequest} at ${action.headSha}, round ${action.round}`;
     case 'requeue':
       return (
         `requeue ${action.ticketId}: #${action.pullRequest} at ${action.headSha},` +

@@ -15,6 +15,7 @@
 // to the branch that deploys. A verdict block posted on the pull request is a
 // copy for humans; nothing reads it back.
 
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
@@ -26,6 +27,7 @@ import {
   waitAgents,
 } from '@voidcorp/void-machine/agents';
 import { autopilotFailure } from '../lib/autopilot/errors.js';
+import { areaClaims, compileArea } from '../lib/autopilot/footprint-area.js';
 import { renderJudgmentComment } from '../lib/autopilot/judgment-comment.js';
 import {
   admitLocalReview,
@@ -36,8 +38,9 @@ import {
   type TicketId,
   ticketIdSchema,
 } from '../lib/autopilot/judgments.js';
-import { REVIEW_ATTEMPTS_MAX } from '../lib/autopilot/loop.js';
+import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX } from '../lib/autopilot/loop.js';
 import { type GhRunner, type GitRunner, PULL_REQUEST_FIELDS, parsePullRequestView } from '../lib/autopilot/loop-observe.js';
+import { readProgramDescriptor } from '../lib/autopilot/program.js';
 import { flagValue } from './autopilot-usage.js';
 
 /** Where each head's review is recorded, one directory per ticket. */
@@ -49,6 +52,8 @@ const REVIEWED_HEADS_MAX = 64;
 /** How long one reviewer may run; the kernel believes an attempt running for longer. */
 export const REVIEW_TIMEOUT_MS = 30 * 60_000;
 const WAIT_SLICE_MS = 5 * 60_000;
+/** Consecutive status reads that may fail before the reviewer is given up and stopped. */
+const UNREADABLE_READS_MAX = 3;
 /** The part of the brief a diff may take; a larger one is summarised and read file by file. */
 const DIFF_BYTES_MAX = 256 * 1024;
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
@@ -136,8 +141,10 @@ function writeRecord(path: string, record: LocalReview): void {
   const admission = admitLocalReview(record);
   if (!admission.ok) throw new Error(admission.reason);
   mkdirSync(dirname(path), { recursive: true });
-  const temporary = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify(admission.value, undefined, 2)}\n`, 'utf8');
+  // An unpredictable name, created exclusively: the directory is writable by
+  // any agent on the machine, and a link planted there must not be followed.
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(admission.value, undefined, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
   renameSync(temporary, path);
 }
 
@@ -172,13 +179,11 @@ function endAttempt(record: LocalReview, at: number, failure?: string): LocalRev
 }
 
 /**
- * The round this head is reviewed in, and the blocking findings of the round
- * before: the latest verdict that blocked another head of the same pull request.
+ * The blocking findings a round 2 checks: those of the latest verdict that
+ * blocked another head of the same pull request. The round itself is the
+ * kernel's, which counts it.
  */
-function previousRound(
-  root: string,
-  target: ReviewTarget,
-): { readonly round: 1 | 2; readonly previous: readonly BlockingFinding[] } {
+function previousBlocking(root: string, target: ReviewTarget): readonly BlockingFinding[] {
   const heads = readLocalReviews(root, [target.ticket]).get(target.ticket) ?? new Map<string, unknown>();
   const blocked = [...heads.values()].flatMap((raw) => {
     const admission = admitLocalReview(raw);
@@ -189,7 +194,7 @@ function previousRound(
     return counts && verdict !== undefined && verdict.verdict.blocking.length > 0 ? [verdict] : [];
   });
   const latest = blocked.sort((left, right) => left.recordedAt - right.recordedAt).at(-1);
-  return latest === undefined ? { round: 1, previous: [] } : { round: 2, previous: latest.verdict.blocking };
+  return latest?.verdict.blocking ?? [];
 }
 
 // Target ------------------------------------------------------------------------------------
@@ -198,24 +203,26 @@ interface ReviewTarget {
   readonly ticket: TicketId;
   readonly pullRequest: number;
   readonly head: string;
+  readonly round: 1 | 2;
 }
 
 function targetOf(argv: readonly string[]): ReviewTarget {
   const ticket = flagValue(argv, '--ticket');
   const head = flagValue(argv, '--head');
   const number = flagValue(argv, '--pr');
+  const round = flagValue(argv, '--round');
   if (ticket === undefined || head === undefined || !SHA_PATTERN.test(head) || number === undefined
-    || !/^[1-9][0-9]{0,9}$/.test(number)) {
+    || !/^[1-9][0-9]{0,9}$/.test(number) || (round !== '1' && round !== '2')) {
     throw autopilotFailure(
       'AUTOPILOT_USAGE',
       'autopilot review needs the ticket, the pull request and the full head SHA the kernel named',
-      'one of --ticket, --pr or --head is missing or malformed',
-      'copy them from the `review` action: `--ticket <id> --pr <n> --head <sha>`',
+      'one of --ticket, --pr, --head or --round is missing or malformed',
+      'copy them from the `review` action: `--ticket <id> --pr <n> --head <sha> --round <1|2>`',
     );
   }
   const parsed = ticketIdSchema.safeParse(ticket);
   if (!parsed.success) ticketDirectory('.', ticket);
-  return { ticket: ticketIdSchema.parse(ticket), pullRequest: Number(number), head };
+  return { ticket: ticketIdSchema.parse(ticket), pullRequest: Number(number), head, round: round === '1' ? 1 : 2 };
 }
 
 // Worktree ----------------------------------------------------------------------------------
@@ -287,7 +294,7 @@ function fenced(text: string, language: string): string {
 }
 
 interface BriefInput {
-  readonly target: ReviewTarget;
+  readonly target: Pick<ReviewTarget, 'ticket' | 'pullRequest' | 'head'>;
   readonly base: string;
   readonly mergeBase: string;
   readonly diff: string;
@@ -340,7 +347,15 @@ ${change}
 `;
 }
 
-function diffOf(runners: ReviewRunners, path: string, base: string) {
+interface Change {
+  readonly mergeBase: string;
+  readonly diff: string;
+  readonly summarised: boolean;
+  /** Every path the change touches, a rename by its source and its destination. */
+  readonly paths: readonly string[];
+}
+
+function changeOf(runners: ReviewRunners, path: string, base: string): Change {
   if (!BRANCH_PATTERN.test(base)) {
     throw autopilotFailure(
       'AUTOPILOT_INPUT',
@@ -353,38 +368,75 @@ function diffOf(runners: ReviewRunners, path: string, base: string) {
   const git = runners.git(path);
   const mergeBase = git(['merge-base', 'HEAD', `refs/remotes/origin/${base}`]).trim();
   const range = [mergeBase, 'HEAD'];
+  const paths = git(['diff', '--name-only', '--no-renames', ...range]).split('\n').filter((line) => line !== '');
   const full = git(['diff', '--no-color', '--no-ext-diff', '--no-textconv', ...range]);
-  if (Buffer.byteLength(full, 'utf8') <= DIFF_BYTES_MAX) return { mergeBase, diff: full, summarised: false };
-  return { mergeBase, diff: git(['diff', '--no-color', '--stat=200', ...range]), summarised: true };
+  if (Buffer.byteLength(full, 'utf8') <= DIFF_BYTES_MAX) return { mergeBase, diff: full, summarised: false, paths };
+  return { mergeBase, diff: git(['diff', '--no-color', '--stat=200', ...range]), summarised: true, paths };
+}
+
+/**
+ * The first protected path the change touches. The kernel already hands such a
+ * head to a person before any review; this is the same floor, read on the
+ * checked-out head itself, because the reviewer's runtime loads the head's
+ * agents, settings, hooks and MCP servers the moment it starts there.
+ */
+function protectedPathOf(root: string, paths: readonly string[]): string | undefined {
+  const descriptor = readProgramDescriptor(root);
+  if (descriptor === undefined) return paths[0] ?? '.void/program.md';
+  const areas = protectedPathsOf(loopProgramOf(descriptor).autopilot).map(compileArea);
+  return paths.find((path) => areas.some((area) => areaClaims(area, path)));
+}
+
+/** One mission per reviewed head: its runs are found again after a crash, and nothing else shares it. */
+export function reviewMissionId(target: { readonly ticket: string; readonly head: string }): string {
+  return `mis_review-${target.ticket.replace(/[^A-Za-z0-9_-]/g, '_')}-${target.head.slice(0, 16)}`;
 }
 
 // Run ---------------------------------------------------------------------------------------
 
 type TurnEnd = { readonly ended: true } | { readonly ended: false; readonly failure: string };
 
-async function runState(agents: AgentsContext, runId: string): Promise<string> {
+/** The run's state, or undefined when the kernel cannot read it now. */
+async function runState(agents: AgentsContext, runId: string): Promise<string | undefined> {
   const status = await agentStatus(agents, runId);
-  return status.ok ? (status.runs[0]?.status.state ?? 'unknown') : 'unknown';
+  return status.ok ? status.runs[0]?.status.state : undefined;
 }
 
-/** Waits for the reviewer's turn to end, bounded; a run that cannot end one is stopped. */
+/**
+ * Stops a run the command gives up on, and says so when it could not: a
+ * reviewer left running is named in the failure a person reads.
+ */
+async function stopped(agents: AgentsContext, runId: string): Promise<string> {
+  const state = await runState(agents, runId);
+  if (state !== undefined && !OPEN_RUN_STATES.has(state)) return '';
+  const receipt = await stopAgent(agents, runId);
+  return receipt.ok ? '' : `; reviewer ${runId} was not stopped: ${receipt.cause}`;
+}
+
+/**
+ * Waits for the reviewer's turn to end, until the attempt's own deadline; a
+ * run that cannot end one is stopped. A status that cannot be read is retried
+ * a few times, never taken for an end.
+ */
 async function awaitTurn(runners: ReviewRunners, runId: string, deadline: number): Promise<TurnEnd> {
   const { agents } = runners;
-  const slices = Math.ceil((runners.timeoutMs ?? REVIEW_TIMEOUT_MS) / WAIT_SLICE_MS) + 2;
+  const slices = Math.ceil((runners.timeoutMs ?? REVIEW_TIMEOUT_MS) / WAIT_SLICE_MS) + UNREADABLE_READS_MAX + 2;
+  let unreadable = 0;
   for (let slice = 0; slice < slices; slice += 1) {
     const state = await runState(agents, runId);
     if (state === 'turn-ended') return { ended: true };
-    if (!OPEN_RUN_STATES.has(state)) return { ended: false, failure: `the review run is ${state}` };
-    const remaining = deadline - runners.now();
-    if (state === 'waiting-human' || remaining <= 0) {
-      await stopAgent(agents, runId);
-      const cause = state === 'waiting-human' ? 'the reviewer asked for a person' : 'the reviewer ran out of time';
-      return { ended: false, failure: cause };
+    if (state !== undefined && !OPEN_RUN_STATES.has(state)) {
+      return { ended: false, failure: `the review run is ${state}` };
     }
+    unreadable = state === undefined ? unreadable + 1 : 0;
+    const remaining = deadline - runners.now();
+    const cause = state === 'waiting-human' ? 'the reviewer asked for a person'
+      : remaining <= 0 ? 'the reviewer ran out of time'
+      : unreadable >= UNREADABLE_READS_MAX ? 'the review run could not be read' : undefined;
+    if (cause !== undefined) return { ended: false, failure: `${cause}${await stopped(agents, runId)}` };
     await waitAgents(agents, [runId], { any: false, timeoutMs: Math.min(remaining, WAIT_SLICE_MS) });
   }
-  await stopAgent(agents, runId);
-  return { ended: false, failure: 'the reviewer ran out of time' };
+  return { ended: false, failure: `the reviewer ran out of time${await stopped(agents, runId)}` };
 }
 
 function failed(path: string, record: LocalReview, at: number, cause: string): ReviewCommandOutput {
@@ -396,23 +448,47 @@ function failed(path: string, record: LocalReview, at: number, cause: string): R
   };
 }
 
-/** Starts a reviewer on the head, or finds the one an interrupted command left running. */
+interface Started {
+  readonly record: LocalReview;
+  readonly runId?: string;
+  readonly failure?: string;
+}
+
+/**
+ * Closes an attempt an interrupted command left open. Its run is resumed when
+ * it is still the one open run of the head's mission; every other open run,
+ * a reviewer orphaned before its id was recorded included, is stopped.
+ */
+async function reconciled(runners: ReviewRunners, path: string, target: ReviewTarget, record: LocalReview)
+  : Promise<Started> {
+  const last = record.attempts.at(-1);
+  if (last === undefined || last.endedAt !== undefined) return { record };
+  const runs = await runners.agents.store.list(reviewMissionId(target));
+  const open = runs.filter((run) => OPEN_RUN_STATES.has(run.transitions.at(-1)?.to ?? 'unknown'));
+  const resumable = open.find((run) => run.runId === last.runId);
+  let unstopped = '';
+  for (const run of open) {
+    if (run !== resumable) unstopped += await stopped(runners.agents, run.runId);
+  }
+  if (resumable !== undefined && unstopped === '') return { record, runId: resumable.runId };
+  const cause = `the review was interrupted before it recorded a verdict${unstopped}`;
+  const closed = endAttempt(record, runners.now(), cause);
+  writeRecord(path, closed);
+  return { record: closed };
+}
+
+/** Starts a reviewer on the head, or resumes the one an interrupted command left running. */
 async function startedRun(
   runners: ReviewRunners,
   path: string,
   worktree: string,
   target: ReviewTarget,
-  record: LocalReview,
+  existing: LocalReview,
   base: string,
-): Promise<{ readonly record: LocalReview; readonly runId?: string; readonly failure?: string }> {
-  const last = record.attempts.at(-1);
-  if (last !== undefined && last.endedAt === undefined) {
-    if (last.runId !== undefined && OPEN_RUN_STATES.has(await runState(runners.agents, last.runId))) {
-      return { record, runId: last.runId };
-    }
-    record = endAttempt(record, runners.now(), 'the review was interrupted before it recorded a verdict');
-    writeRecord(path, record);
-  }
+): Promise<Started> {
+  const resumed = await reconciled(runners, path, target, existing);
+  if (resumed.runId !== undefined) return resumed;
+  let record = resumed.record;
   if (record.attempts.length >= REVIEW_ATTEMPTS_MAX) {
     throw autopilotFailure(
       'AUTOPILOT_CONTRACT',
@@ -428,8 +504,13 @@ async function startedRun(
     ensureWorktree(runners, worktree, target);
     const drift = worktreeDrift(runners, worktree, target.head);
     if (drift !== undefined) return { record, failure: drift };
-    const { mergeBase, diff, summarised } = diffOf(runners, worktree, base);
-    brief = reviewBrief({ target, base, mergeBase, diff, summarised, ...previousRound(runners.root, target) });
+    const change = changeOf(runners, worktree, base);
+    const guarded = protectedPathOf(runners.root, change.paths);
+    if (guarded !== undefined) {
+      return { record, failure: `the change touches ${guarded}, which only a person reviews and merges` };
+    }
+    const previous = target.round === 1 ? [] : previousBlocking(runners.root, target);
+    brief = reviewBrief({ target, base, ...change, round: target.round, previous });
   } catch (error) {
     // Counted as a failed attempt, so the kernel bounds it like a reviewer that failed.
     const cause = error instanceof Error ? error.message.split('\n')[0] ?? error.message : String(error);
@@ -437,6 +518,7 @@ async function startedRun(
   }
   const receipt = await dispatchAgent(runners.agents, {
     role: 'review', agentType: REVIEWER_AGENT, cwd: worktree, ticket: target.ticket, brief,
+    missionId: reviewMissionId(target),
   });
   if (!receipt.ok) return { record, failure: `${receipt.cause} (${receipt.action})` };
   const attempts = record.attempts.map((attempt, index) =>
@@ -476,22 +558,19 @@ export async function reviewCommand(argv: readonly string[], runners: ReviewRunn
   let record = started.record;
   if (started.runId === undefined) return failed(path, record, runners.now(), started.failure ?? 'no run');
   const runId = started.runId;
-  const deadline = runners.now() + (runners.timeoutMs ?? REVIEW_TIMEOUT_MS);
-  const turn = await awaitTurn(runners, runId, deadline);
+  // The deadline belongs to the attempt, not to this invocation: a resumed
+  // reviewer never outlives the window in which the kernel believes it runs.
+  const startedAt = record.attempts.at(-1)?.startedAt ?? runners.now();
+  const turn = await awaitTurn(runners, runId, startedAt + (runners.timeoutMs ?? REVIEW_TIMEOUT_MS));
   if (!turn.ended) return failed(path, record, runners.now(), turn.failure);
   const drift = worktreeDrift(runners, worktree, target.head);
-  if (drift !== undefined) {
-    await stopAgent(runners.agents, runId);
-    return failed(path, record, runners.now(), drift);
-  }
+  if (drift !== undefined) return failed(path, record, runners.now(), `${drift}${await stopped(runners.agents, runId)}`);
   const accepted = await acceptReview(runners.agents, runId);
   if (!accepted.ok) {
-    await stopAgent(runners.agents, runId);
-    return failed(path, record, runners.now(), accepted.cause);
+    return failed(path, record, runners.now(), `${accepted.cause}${await stopped(runners.agents, runId)}`);
   }
   if (accepted.result.truncated) return failed(path, record, runners.now(), 'the reviewer answer was truncated');
-  const round = previousRound(runners.root, target).round;
-  const verdict = admitReviewCompletion(accepted.result.text, target.head, round);
+  const verdict = admitReviewCompletion(accepted.result.text, target.head, target.round);
   if (!verdict.ok) return failed(path, record, runners.now(), verdict.reason);
   const recordedAt = runners.now();
   record = { ...endAttempt(record, recordedAt),

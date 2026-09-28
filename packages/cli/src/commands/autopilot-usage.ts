@@ -23,7 +23,7 @@ Usage:
   ${PRODUCT_COMMAND} autopilot fingerprint [--before <ticket> | --after <ticket>] [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
-  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> [--json]
+  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop

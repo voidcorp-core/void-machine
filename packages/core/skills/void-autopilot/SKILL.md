@@ -151,7 +151,7 @@ Act on each returned action, then ask again:
 | `mark-human-wait` | record it in `recent` with its `reason`, which `recent` requires and the recap repeats, put the decision's `humanWaitLabel` on the ticket, comment the reason and detail, free the slot; keep reporting its pull request and footprint, which hold its ground until that pull request merges or closes |
 | `enable-auto-merge` | `void-machine autopilot arm --ticket <id> --pr <n> --head <headSha>`: it records the head, arms on exactly that head and reads GitHub back; never `gh pr merge --auto` by hand, never `--admin` |
 | `disable-auto-merge` | `void-machine autopilot disarm --pr <n>`, before the action that follows it for the same ticket; it turns its auto-merge off, then takes it out of the merge queue, and fails while GitHub still shows either; never `gh pr merge --disable-auto` alone, which leaves a queued pull request in the queue |
-| `review` | `void-machine autopilot review --ticket <id> --pr <n> --head <headSha>`, in the background: it may run for up to 30 minutes, and `next` answers `wait awaiting-review` meanwhile; a reviewer that fails is delegated again once, then `review-failed` |
+| `review` | `void-machine autopilot review --ticket <id> --pr <n> --head <headSha> --round <round>`, in the background: it may run for up to 30 minutes, and `next` answers `wait awaiting-review` meanwhile; a reviewer that fails is delegated again once, then `review-failed` |
 | `requeue` | the same command, to put an ejected head back in the queue; the kernel bounds how often |
 | `drain` | take nothing new; keep acting on the tickets in flight |
 | `freeze` | stop acting, once the disarms before it succeeded |
@@ -206,7 +206,8 @@ hand-back, a human wait and an immediate stop all come with the disarm. Disarm f
 
 **The review is local.** `autopilot review` checks out the head in a detached worktree at the
 durable worktree location (`<repository>/review/<ticket>/<head>`, reused when git lists it, never
-removed blindly), checks its `HEAD` before and after the run, and delegates the reviewer there
+removed blindly), checks its `HEAD` before and after the run, refuses a change that touches a
+protected path, whose configuration the reviewer would load, and delegates the reviewer there
 through the kernel. It takes the reviewer's answer only from the native session the runtime lists
 under that run, binds the verdict to the head itself, and records it in
 `.void/machine/autopilot/reviews/<ticket>/<head>.json`; `next` decides on that record alone. A

@@ -154,7 +154,7 @@ describe('the review is local, bound to the head and to the session it delegated
   // A verdict read on GitHub can be written by anyone who comments; the loop
   // merges on the record the kernel wrote after delegating the reviewer itself.
   it('delegates the reviewer on the exact head and records its verdict locally', () => {
-    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after the run, and delegates the reviewer there/);
+    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after the run, refuses a change that touches a protected path, whose configuration the reviewer would load, and delegates the reviewer there/);
     expect(flat(body(SKILL))).toMatch(/only from the native session the runtime lists under that run/);
     expect(flat(body(SKILL))).toMatch(/`\.void\/machine\/autopilot\/reviews\/<ticket>\/<head>\.json`; `next` decides on that record alone/);
     expect(flat(body(SKILL))).toMatch(/A verdict posted on the pull request is a copy for people/);

@@ -1,7 +1,7 @@
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
+import { machineRootOf } from './delegation-kernel.js';
 import { type LifecycleExecution, record, within } from './executor-shared.js';
 
 /**
@@ -17,14 +17,6 @@ const MAX_CLAIM_BYTES = 4_096;
 const PARKING_WINDOW_MS = 600_000;
 
 const skipped = (reason: string): LifecycleExecution => ({ status: 'skipped', details: { reason } });
-
-/** `<main checkout>/.void/machine`, the kernel's rule: the parent of the common `.git`. */
-export function machineRootOf(cwd: string): string | undefined {
-  const result = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-    { cwd, shell: false, encoding: 'utf8', timeout: 5_000 });
-  const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, '') : '';
-  return common !== '' && basename(common) === '.git' ? join(dirname(common), '.void', 'machine') : undefined;
-}
 
 /** The claimed result path, only when it is a `result.json` inside a real run directory. */
 function claimedPath(root: string, sessionId: string): string | undefined {

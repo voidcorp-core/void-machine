@@ -22,6 +22,13 @@ describe('harnessBlock', () => {
     },
   );
 
+  it('tells the coordinator to delegate through the kernel, and only Claude about the capture hook', () => {
+    expect(harnessBlock(input, 'claude')).toContain('`void-machine agents dispatch`');
+    expect(harnessBlock(input, 'claude')).toContain('refuses the native call with its runId');
+    expect(harnessBlock(input, 'codex')).toContain('`void-machine agents dispatch`');
+    expect(harnessBlock(input, 'codex')).not.toContain('`Agent` call');
+  });
+
   it('uses @imports for the Claude runtime', () => {
     const block = harnessBlock(input, 'claude');
     expect(block).toContain('@.void/installed/PHILOSOPHY.md');

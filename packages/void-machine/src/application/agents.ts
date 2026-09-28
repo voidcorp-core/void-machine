@@ -9,22 +9,29 @@ import {
   sendRun, stopRun,
 } from '../core/delegation.js';
 import {
-  type AgentRuntimePort, type DelegationClock, type DelegationStore, type LaunchPlan, type RunRecord,
+  type AgentRuntimePort, type DelegationClock, type DelegationStore, type LaunchOutcome, type LaunchPlan,
+  type RunRecord,
   type WaitOutcome, currentResult, refOf, statusOf, waitForTransitions,
 } from '../runtime/delegation.js';
+import type { SurfaceClosing, SurfaceRecord } from '../runtime/presentation.js';
+import {
+  type SurfaceContext, type SurfaceSummary, type Surfaces, closeRunSurface, plannedSurface, showRun,
+  surfaceSummaries, surfacesFor,
+} from './surfaces.js';
 
 /** The ports a caller composes a context from, for a runtime of its own or a test double. */
 export type { AgentRuntimePort, LaunchPlan } from '../runtime/delegation.js';
 
 /**
  * `void-machine agents`: the one path by which a coordinator launches, follows and closes a
- * delegated agent. Presentation is `none` here: a run is visible through `status` and
- * `claude agents`, and `retire` has no surface to close.
+ * delegated agent. When a multiplexer hosts the caller, each run is also shown in a surface of
+ * its own, opened at dispatch and closed when the run retires or stops; the surface is only a view.
  */
 
 export interface AgentsContext {
   readonly store: DelegationStore;
   readonly runtime: AgentRuntimePort;
+  readonly surfaces: Surfaces;
   readonly clock: DelegationClock;
   /** Identifies this process in mission locks. */
   readonly owner: string;
@@ -42,6 +49,7 @@ export interface RunSummary {
   readonly status: RunStatus;
   readonly result?: { readonly text: string; readonly truncated: boolean };
   readonly attach?: string;
+  readonly surface?: SurfaceSummary;
 }
 
 const AGENT_TYPE = /^[A-Za-z0-9][A-Za-z0-9_:.-]{0,99}$/;
@@ -111,8 +119,14 @@ function plan(run: Pick<RunRecord, 'name' | 'role' | 'agentType' | 'model' | 'cw
     instructionPath: file.path, instructionDirectory: file.directory };
 }
 
+function surfaceContext(context: AgentsContext): SurfaceContext {
+  return { store: context.store, surfaces: context.surfaces, clock: context.clock,
+    locked: (missionId, action) => withMissionLock(context, missionId, action) };
+}
+
 export type DispatchReceipt =
-  | { readonly ok: true; readonly runId: string; readonly missionId: string; readonly status: RunStatus }
+  | { readonly ok: true; readonly runId: string; readonly missionId: string; readonly status: RunStatus;
+    readonly surface: SurfaceRecord }
   | Refusal;
 
 export async function dispatchAgent(context: AgentsContext, input: DispatchInput): Promise<DispatchReceipt> {
@@ -125,12 +139,17 @@ export async function dispatchAgent(context: AgentsContext, input: DispatchInput
   const runId = context.newRunId();
   const run = { runId, missionId, name: `vm-${runId}`, role: input.role, runtime: 'claude' as const, cwd,
     agentType: input.agentType, ticket: input.ticket, model: input.model };
+  let launched: LaunchOutcome | undefined;
+  // The runtime's display command exists once the launch is acknowledged with a handle.
+  const display = (launch: LaunchOutcome | undefined) => launch?.kind === 'acknowledged'
+    ? context.runtime.attachCommand({ name: run.name, handle: launch.handle }) : undefined;
   const outcome = await withMissionLock(context, missionId, async (): Promise<DispatchReceipt> => {
     const open = (await context.store.list(missionId)).filter((known) => isOpen(runView(known.transitions).state));
     const admission = admitRun(open.length, context.clock.now());
     if (!admission.ok) return refusal(admission.cause, admission.action);
     const brief = await context.store.create(run, admission.transition, input.brief);
     const launch = await context.runtime.dispatch(plan(run, brief));
+    launched = launch;
     if (launch.kind !== 'lost' && launch.handle !== undefined) {
       await context.store.bind(runId, { handle: launch.handle });
     }
@@ -142,11 +161,17 @@ export async function dispatchAgent(context: AgentsContext, input: DispatchInput
       if (launch.handle !== undefined) await context.runtime.stop({ name: run.name, handle: launch.handle });
       return refusal(launch.cause, launch.action);
     }
+    const surface = plannedSurface(context.surfaces, display(launch), context.clock.now());
+    await context.store.writeSurface(runId, surface);
     const latest = await context.store.read(runId);
     return latest === undefined ? refusal('the run record could not be read back', 'inspect .void/machine/runs')
-      : { ok: true, runId, missionId, status: statusOf(latest, undefined) };
+      : { ok: true, runId, missionId, status: statusOf(latest, undefined), surface };
   });
-  return outcome;
+  const command = outcome.ok ? display(launched) : undefined;
+  if (!outcome.ok || outcome.surface.state !== 'opening' || command === undefined) return outcome;
+  // A slow multiplexer never holds the mission: the surface opens once the lock is released.
+  return { ...outcome, surface: await showRun(surfaceContext(context), { runId, missionId, role: input.role,
+    ticket: input.ticket, cwd }, command) };
 }
 
 async function readRun(context: AgentsContext, runId: string): Promise<RunRecord | Refusal> {
@@ -161,7 +186,8 @@ export async function waitAgents(context: AgentsContext, runIds: readonly string
     clock: context.clock, owner: context.owner });
 }
 
-async function summary(context: AgentsContext, run: RunRecord): Promise<RunSummary> {
+async function summary(context: AgentsContext, run: RunRecord, surface: SurfaceSummary | undefined)
+  : Promise<RunSummary> {
   const result = currentResult(run, await context.store.result(run.runId));
   const attach = context.runtime.attachCommand(refOf(run));
   return { runId: run.runId, missionId: run.missionId, role: run.role,
@@ -169,25 +195,30 @@ async function summary(context: AgentsContext, run: RunRecord): Promise<RunSumma
     ...(run.agentType === undefined ? {} : { agentType: run.agentType }),
     status: statusOf(run, result),
     ...(result === undefined ? {} : { result: { text: result.text, truncated: result.truncated } }),
-    ...(attach === undefined ? {} : { attach: attach.join(' ') }) };
+    ...(attach === undefined ? {} : { attach: attach.join(' ') }),
+    ...(surface === undefined ? {} : { surface }) };
 }
 
 export async function agentStatus(context: AgentsContext, runId?: string)
   : Promise<{ readonly ok: true; readonly runs: readonly RunSummary[] } | Refusal> {
   const ids = runId === undefined ? await context.store.runIds() : [runId];
-  const runs: RunSummary[] = [];
+  const records: RunRecord[] = [];
   for (const id of ids) {
     const run = await readRun(context, id);
     if ('ok' in run) {
       if (runId !== undefined) return run;
       continue;
     }
-    runs.push(await summary(context, run));
+    records.push(run);
   }
+  const surfaces = await surfaceSummaries(surfaceContext(context), records.map((run) => run.runId));
+  const runs: RunSummary[] = [];
+  for (const run of records) runs.push(await summary(context, run, surfaces.get(run.runId)));
   return { ok: true, runs };
 }
 
-export type CommandReceipt = { readonly ok: true; readonly runId: string; readonly status: RunStatus } | Refusal;
+export type CommandReceipt = { readonly ok: true; readonly runId: string; readonly status: RunStatus;
+  readonly surface?: SurfaceClosing } | Refusal;
 
 export async function sendAgent(context: AgentsContext, runId: string, message: string): Promise<CommandReceipt> {
   if (message.length === 0 || Buffer.byteLength(message, 'utf8') > MAX_BRIEF_BYTES) {
@@ -218,15 +249,36 @@ export async function sendAgent(context: AgentsContext, runId: string, message: 
 }
 
 export type AcceptReceipt = { readonly ok: true; readonly runId: string; readonly state: 'retired';
-  readonly result: { readonly text: string; readonly truncated: boolean } } | Refusal;
+  readonly result: { readonly text: string; readonly truncated: boolean }; readonly surface?: SurfaceClosing }
+  | Refusal;
 
+/** Closes what a closed run still shows, once its transition is recorded and the lock released. */
+async function withSurfaceClosed<T extends { readonly ok: boolean }>(context: AgentsContext, runId: string,
+  receipt: T): Promise<T | (T & { readonly surface: SurfaceClosing })> {
+  if (!receipt.ok) return receipt;
+  const closing = await closeRunSurface(surfaceContext(context), runId);
+  return closing === undefined ? receipt : { ...receipt, surface: closing };
+}
+
+/** Checks a run's record against what the runtime lists, before its result is taken. */
+type TakeGuard = (run: RunRecord) => Promise<Refusal | undefined>;
+
+/** Accepts a run's result; a review's only through the session check that `acceptReview` runs. */
 export async function acceptAgent(context: AgentsContext, runId: string): Promise<AcceptReceipt> {
+  return takeResult(context, runId, (run) => run.role === 'review'
+    ? sessionGuard(context, runId)(run) : Promise.resolve(undefined));
+}
+
+async function takeResult(context: AgentsContext, runId: string, guard: TakeGuard): Promise<AcceptReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;
-  return withMissionLock(context, known.missionId, async (): Promise<AcceptReceipt> => {
+  return withSurfaceClosed(context, runId, await withMissionLock(context, known.missionId, async (): Promise<AcceptReceipt> => {
     const run = await readRun(context, runId);
     if ('ok' in run) return run;
     const result = currentResult(run, await context.store.result(runId));
+    // The guard runs on the record and the result already read: nothing written after it counts.
+    const guarded = await guard(run);
+    if (guarded !== undefined) return guarded;
     const now = context.clock.now();
     const accepted = acceptRun(runView(run.transitions),
       result === undefined ? undefined : { recordedAt: result.recordedAt, pendingWork: result.pendingWork }, now);
@@ -241,42 +293,62 @@ export async function acceptAgent(context: AgentsContext, runId: string): Promis
     // A review session has nothing left to do once its verdict is taken.
     if (run.role === 'review') await context.runtime.stop(refOf(run));
     return { ok: true, runId, state: 'retired', result: { text: result.text, truncated: result.truncated } };
-  });
+  }));
 }
 
 export type ReviewReceipt = { readonly ok: true; readonly runId: string; readonly sessionId: string;
   readonly result: { readonly text: string; readonly truncated: boolean } } | Refusal;
 
+// The optional chain comes first, so the `&&` never dereferences an unbound record.
+const sameBinding = (left: RunRecord['binding'], right: { readonly handle: string; readonly sessionId: string }) =>
+  left?.handle === right.handle && left.sessionId === right.sessionId;
+
+/**
+ * Refuses a record whose session is not the one the runtime lists under the run now. It runs
+ * under the mission lock on the very record the result is bound to, then reads the record again:
+ * a run rebound before, during or after the runtime reading is refused.
+ */
+function sessionGuard(context: AgentsContext, runId: string,
+  verified: (sessionId: string) => void = () => undefined): TakeGuard {
+  return async (run) => {
+    const reading = await context.runtime.observe([refOf(run)]);
+    if (reading.kind === 'unreadable') {
+      return refusal(`the runtime cannot be read: ${reading.cause}`, 'retry once the runtime answers');
+    }
+    const live = reading.sessions.get(run.name)?.binding;
+    if (live === undefined) {
+      return refusal(`the runtime no longer lists the session of ${runId}`, 'dispatch a new review');
+    }
+    const again = await readRun(context, runId);
+    if ('ok' in again) return again;
+    if (!sameBinding(run.binding, live) || !sameBinding(again.binding, live)) {
+      return refusal(`the run record names ${String(again.binding?.sessionId)}, not the session the runtime lists`,
+        'stop the run and dispatch a new review; the record was changed outside the kernel');
+    }
+    verified(live.sessionId);
+    return undefined;
+  };
+}
+
 /**
  * Accepts a review run's result only from the native session the runtime lists under that run
  * now. The record and the result live where a delegated work agent can write, so the session is
- * read from the runtime, never from the record: a run rebound to another session, or a result
- * recorded for one, is refused. The result text itself stays untrusted input.
+ * read from the runtime, never from the record. The result text itself stays untrusted input.
  */
 export async function acceptReview(context: AgentsContext, runId: string): Promise<ReviewReceipt> {
-  const run = await readRun(context, runId);
-  if ('ok' in run) return run;
-  if (run.role !== 'review') return refusal(`run ${runId} is not a review`, 'dispatch a run with --role review');
-  const reading = await context.runtime.observe([refOf(run)]);
-  if (reading.kind === 'unreadable') {
-    return refusal(`the runtime cannot be read: ${reading.cause}`, 'retry once the runtime answers');
-  }
-  const live = reading.sessions.get(run.name)?.binding;
-  if (live === undefined) {
-    return refusal(`the runtime no longer lists the session of ${runId}`, 'dispatch a new review');
-  }
-  if (run.binding?.handle !== live.handle || run.binding.sessionId !== live.sessionId) {
-    return refusal(`the run record names ${String(run.binding?.sessionId)}, not the session the runtime lists`,
-      'stop the run and dispatch a new review; the record was changed outside the kernel');
-  }
-  const accepted = await acceptAgent(context, runId);
-  return accepted.ok ? { ok: true, runId, sessionId: live.sessionId, result: accepted.result } : accepted;
+  let sessionId: string | undefined;
+  const check = sessionGuard(context, runId, (verified) => { sessionId = verified; });
+  const accepted = await takeResult(context, runId, (run) => run.role === 'review' ? check(run)
+    : Promise.resolve(refusal(`run ${runId} is not a review`, 'dispatch a run with --role review')));
+  if (!accepted.ok) return accepted;
+  if (sessionId === undefined) return refusal('the review session was not verified', 'dispatch a new review');
+  return { ok: true, runId, sessionId, result: accepted.result };
 }
 
 export async function stopAgent(context: AgentsContext, runId: string): Promise<CommandReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;
-  return withMissionLock(context, known.missionId, async (): Promise<CommandReceipt> => {
+  return withSurfaceClosed(context, runId, await withMissionLock(context, known.missionId, async (): Promise<CommandReceipt> => {
     const run = await readRun(context, runId);
     if ('ok' in run) return run;
     const decision = stopRun(runView(run.transitions), context.clock.now());
@@ -295,7 +367,7 @@ export async function stopAgent(context: AgentsContext, runId: string): Promise<
     if (failed !== undefined) return failed;
     const latest = await readRun(context, runId);
     return 'ok' in latest ? latest : { ok: true, runId, status: statusOf(latest, undefined) };
-  });
+  }));
 }
 
 export async function attachAgent(context: AgentsContext, runId: string)
@@ -317,6 +389,7 @@ export function agentsContext(options: { readonly cwd: string; readonly env: Nod
     store: createRunRegistry({ machineRoot: root.root }),
     runtime: createClaudeSessionRuntime({ executable: 'claude', env: options.env, home: options.home,
       updateCommand: options.updateCommand }),
+    surfaces: surfacesFor(options.env),
     clock: { now: Date.now, sleep: (ms) => new Promise((done) => { setTimeout(done, ms); }) },
     owner: `agents-${String(process.pid)}-${randomUUID()}`,
     newRunId: () => `run_${randomUUID()}`,

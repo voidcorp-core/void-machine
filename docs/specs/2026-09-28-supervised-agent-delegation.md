@@ -214,16 +214,36 @@ reste visible par `void-machine agents status` ou `claude agents`.
 
 Fermer une surface ne touche jamais le run, la worktree ni les preuves.
 
+*Correctif du 2026-09-28 (DEV-925)* : la revue d'avant implémentation a changé le port livré
+(`runtime/presentation.ts`, sans dépendance vers la délégation) :
+
+- le libellé `WORK-n`/`REVIEW-n` est choisi par l'adaptateur, seul à voir les libellés déjà
+  affichés ; la vue porte le `runId`, que l'adaptateur appose sur la surface comme marque ;
+- chaque réponse est une valeur (`open` → `ref` ou cause, `close` → `closed`,
+  `already-absent`, `skipped` ou `failed`), jamais une exception : un multiplexeur en panne
+  n'échoue jamais le run ;
+- `inspect(ref)` s'ajoute, pour que `status` dise qu'un humain a fermé le pane
+  (`closed` seulement si le multiplexeur a répondu sans la surface ; sans réponse : `unknown`) ;
+- la référence enregistre le serveur (socket) de la surface, et `close` n'agit qu'après avoir
+  relu le libellé et la marque du run sur ce serveur ; le pane de l'appelant n'est jamais fermé ;
+- la surface s'ouvre hors du verrou de mission, après un `opening` écrit sous verrou, et se
+  ferme à `retired` comme à `stopped` : un run arrêté n'atteint jamais `retired`, et sa surface
+  n'aurait sinon plus de propriétaire. Un run `failed` garde sa vue, qui montre l'échec.
+
 ## Capture
 
 **Claude** : hook `PreToolUse` sur `Agent`, moins de 100 lignes, sans logique propre :
 
 - il laisse passer si aucune surface n'est détectée, si `subagent_type` vaut `fork`, ou si
-  l'appelant est lui-même un run délégué (`VOID_MACHINE_RUN_ID` présent) ;
+  l'appelant est lui-même un run délégué, reconnu par son `session_id` (réclamé par le registre,
+  ou lancé sous un handle qui en est le premier bloc) comme le hook `delegation-result`, et non
+  par l'environnement, qu'une session `--bg` hérite du superviseur ;
 - sinon il appelle `void-machine agents dispatch` avec `prompt`, `subagent_type` et `model`,
   le rôle `review` pour un type en lecture seule et `work` sinon, et le ticket de la mission ;
 - il refuse l'appel natif avec un `permissionDecisionReason` qui donne le `runId` et la
-  commande `wait`.
+  commande `wait` ;
+- il n'élargit jamais l'autorité : un run `work` agissant en mode `auto`, un coordinateur dans un
+  autre mode que `auto` ou `bypassPermissions` garde son sous-agent natif, avec la cause signalée.
 
 **Codex** : même hook sur `spawn_agent`, livré seulement si la sonde prouve que le refus tient.
 Sinon, un coordinateur Codex appelle le CLI par l'instruction de son skill, et la capacité est

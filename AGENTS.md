@@ -25,6 +25,8 @@ If `.void/program.md` exists with `status: executing`, read it and its linked pl
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
+Delegate a subagent that should run on its own with `void-machine agents dispatch`, then `wait` and `accept` its run.
+
 Run `void-machine doctor` to verify the install.
 
 <!-- void-machine:end -->
@@ -69,13 +71,14 @@ automatic selection. Human gates and merges remain human.
 
 ## Visible mission workspace
 
-For a request to code on a named project, use the optional presentation adapter
-as described in `docs/NATIVE-SUPERVISION.md`: resolve the project and mission,
-reuse their workspace, keep the coordinator left and native terminal workers
-stacked right. Use `scripts/mission-presentation.mjs` from this harness checkout;
-never assume cmux exists in the target project. Runtime-native delegation remains
-the executor. Do not duplicate an agent to give it a pane, and do not turn a
-presentation failure into a changed permission, proof or merge policy.
+For a request to code on a named project, follow `docs/NATIVE-SUPERVISION.md`:
+resolve the project and mission and keep the coordinator in its own pane. A run
+delegated through `void-machine agents dispatch` opens its own surface when the
+caller runs inside herdr, cmux or tmux, labelled `WORK-n` or `REVIEW-n`, and the
+surface closes when the run retires or stops; without a multiplexer the run is the
+same native session. Runtime-native delegation remains the executor. Do not
+duplicate an agent to give it a pane, and do not turn a presentation failure into
+a changed permission, proof or merge policy.
 
 ## Anti-bloat discipline
 

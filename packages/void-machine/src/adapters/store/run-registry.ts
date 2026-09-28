@@ -2,19 +2,21 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { link, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, open, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { RUN_STATES, type RunTransition, isOpen } from '../../core/delegation.js';
+import { SURFACE_KINDS } from '../../core/presentation.js';
 import type {
-  DelegationStore, InstructionFile, MissionLock, RunRecord, RunResult, SessionBinding,
+  DelegationStore, InstructionFile, MissionLock, RunRecord, RunResult, SessionBinding, SurfaceReading,
 } from '../../runtime/delegation.js';
+import type { SurfaceRecord } from '../../runtime/presentation.js';
 
 /**
  * Delegated runs on disk, under `<main checkout>/.void/machine`, found from any worktree through
  * the common Git directory:
  *
- *   runs/<missionId>/agents/<runId>/{run.json, transitions/NNNNNN.json, brief/, result.json}
+ *   runs/<missionId>/agents/<runId>/{run.json, transitions/NNNNNN.json, brief/, result.json, surface.json}
  *   agents/index/<runId>.json      the mission of each run
  *   agents/pending/<runId>          { cwd, createdAt } of a run whose session is not bound yet
  *   agents/sessions/<sessionId>.json  the claim the Stop hook follows: { resultPath }
@@ -71,6 +73,22 @@ const transitionSchema = z.strictObject({
 const resultSchema = z.strictObject({ schemaVersion: z.literal(1), sessionId: z.string().regex(SESSION_ID),
   recordedAt: z.number(), lastAssistantMessage: z.string(), truncated: z.boolean(),
   pendingWork: z.number().int().min(0).max(10_000).optional() });
+const causeSchema = z.strictObject({ code: z.enum(['not-detected', 'no-display-command', 'not-representable',
+  'unreachable', 'timeout', 'deadline', 'exit-nonzero', 'parse-failed', 'output-overflow', 'needs-reconciliation',
+  'identity-mismatch', 'own-pane', 'record-corrupt', 'kind-unavailable']),
+  step: z.string().max(200).exactOptional(), detail: z.string().max(400).exactOptional() });
+const surfaceRefSchema = z.strictObject({ kind: z.enum(SURFACE_KINDS), scope: z.string().regex(/^\/.{0,1023}$/),
+  container: z.string().max(200).exactOptional(), id: z.string().regex(/^[A-Za-z0-9:%_-]{1,100}$/),
+  label: z.string().regex(/^(WORK|REVIEW)-[1-9]\d{0,5}$/), runId: z.string().regex(RUN_ID) });
+const closingSchema = z.union([z.strictObject({ outcome: z.enum(['closed', 'already-absent']) }),
+  z.strictObject({ outcome: z.enum(['skipped', 'failed']), cause: causeSchema })]);
+const surfaceSchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('opening'), at: z.number() }),
+  z.strictObject({ state: z.literal('open'), ref: surfaceRefSchema, lastClose: closingSchema.exactOptional() }),
+  z.strictObject({ state: z.literal('closed'), ref: surfaceRefSchema, outcome: z.enum(['closed', 'already-absent']) }),
+  z.strictObject({ state: z.literal('none'), cause: causeSchema }),
+  z.strictObject({ state: z.literal('failed'), cause: causeSchema, orphan: surfaceRefSchema.exactOptional() }),
+]);
 const indexSchema = z.strictObject({ missionId: z.string().regex(MISSION_ID) });
 const lockSchema = z.strictObject({ owner: z.string(), pid: z.number().int(), token: z.string(),
   acquiredAt: z.number() });
@@ -304,6 +322,25 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
         MAX_RESULT_BYTES);
       return stored === undefined ? undefined : { sessionId: stored.sessionId, recordedAt: stored.recordedAt,
         pendingWork: stored.pendingWork ?? 0, text: stored.lastAssistantMessage, truncated: stored.truncated };
+    },
+    async readSurface(runId): Promise<SurfaceReading> {
+      const missionId = await missionOf(runId);
+      if (missionId === undefined) return { kind: 'absent' };
+      const path = join(runDirectory(missionId, runId), 'surface.json');
+      const text = await readSmall(path, MAX_RECORD_BYTES);
+      if (text === undefined) return errorCode(await stat(path).catch((error: unknown) => error)) === 'ENOENT'
+        ? { kind: 'absent' } : { kind: 'corrupt' };
+      try {
+        const parsed = surfaceSchema.safeParse(JSON.parse(text));
+        return parsed.success ? { kind: 'recorded', record: parsed.data satisfies SurfaceRecord } : { kind: 'corrupt' };
+      } catch {
+        return { kind: 'corrupt' };
+      }
+    },
+    async writeSurface(runId, record) {
+      const missionId = await missionOf(runId);
+      if (missionId === undefined) throw new Error('unknown run');
+      await replaceFile(join(runDirectory(missionId, runId), 'surface.json'), JSON.stringify(record));
     },
     async lock(missionId, owner) {
       if (!MISSION_ID.test(missionId)) return undefined;

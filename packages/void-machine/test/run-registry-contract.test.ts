@@ -212,3 +212,40 @@ describe('the mission lock', () => {
     expect(await alive.registry.lock(MISSION, 'w3')).toBeDefined();
   });
 });
+
+describe('the surface a run is shown in', () => {
+  const ref = { kind: 'herdr' as const, scope: '/tmp/herdr.sock', container: 'w1', id: 'w1:p9', label: 'WORK-1',
+    runId: RUN };
+
+  it('keeps the surface beside the run, replaced whole, and absent until one is recorded', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect(await registry.readSurface(RUN)).toEqual({ kind: 'absent' });
+    await registry.writeSurface(RUN, { state: 'opening', at: 5 });
+    await registry.writeSurface(RUN, { state: 'open', ref });
+    expect(await registry.readSurface(RUN)).toEqual({ kind: 'recorded', record: { state: 'open', ref } });
+    const file = join(root, 'runs', MISSION, 'agents', RUN, 'surface.json');
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // The observer rewrites run.json on bind; the surface never shares that file.
+    expect(JSON.parse(readFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'run.json'), 'utf8'))).not.toHaveProperty('surface');
+  });
+
+  it('reads a damaged or forged surface record as corrupt, never as absent', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    const file = join(root, 'runs', MISSION, 'agents', RUN, 'surface.json');
+    for (const text of ['{', JSON.stringify({ state: 'open', ref: { ...ref, kind: 'screen' } }),
+      JSON.stringify({ state: 'open', ref: { ...ref, scope: 'relative.sock' } })]) {
+      writeFileSync(file, text);
+      expect(await registry.readSurface(RUN)).toEqual({ kind: 'corrupt' });
+    }
+  });
+
+  it('refuses to record a surface for an unknown run', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await expect(registry.writeSurface(RUN, { state: 'opening', at: 1 })).rejects.toThrow('unknown run');
+  });
+});

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
+import { createNoSurface } from '../src/adapters/presentation/none.js';
 import { createRunRegistry, resolveMachineRoot } from '../src/adapters/store/run-registry.js';
 import {
   type AgentsContext, acceptAgent, acceptReview, agentStatus, attachAgent, dispatchAgent, sendAgent, stopAgent,
@@ -51,6 +52,7 @@ function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 }
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
     runtime,
+    surfaces: { detected: createNoSurface(), reach: () => createNoSurface() },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',
     newRunId: () => `run_00000000-0000-4000-8000-${String(++runs).padStart(12, '0')}`,
@@ -229,6 +231,41 @@ describe('a review result bound to the session the kernel observes', () => {
     writeFileSync(claim.resultPath, JSON.stringify({ schemaVersion: 1, sessionId: OTHER, recordedAt: 20_000,
       lastAssistantMessage: '{"verdict":"pass"}', truncated: false }));
     expect(await acceptReview(ctx, runId)).toMatchObject({ ok: false,
+      cause: expect.stringContaining('not the session') });
+    // The generic accept runs the same check on a review: no path takes a verdict unchecked.
+    expect(await acceptAgent(ctx, runId)).toMatchObject({ ok: false,
+      cause: expect.stringContaining('not the session') });
+  });
+
+  it('refuses a run rebound while the runtime is being read, before its result is taken', async () => {
+    // The rebinding lands between the runtime reading and the taking of the result: the
+    // verification and the take cover the same instant, so the forged text is never returned.
+    const cwd = repository();
+    let tamper: (() => Promise<void>) | undefined;
+    const scripted = scriptedRuntime({ sessions: listed('done') });
+    const observe = scripted.runtime.observe;
+    const runtime: AgentRuntimePort = { ...scripted.runtime, observe: async (refs) => {
+      const reading = await observe(refs);
+      const pending = tamper;
+      tamper = undefined;
+      await pending?.();
+      return reading;
+    } };
+    const ctx = context(cwd, runtime);
+    const receipt = await dispatchAgent(ctx, reviewInput(cwd));
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 1 });
+    recordResult(cwd, 20_000, '{"verdict":"pass"}');
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 60_000 });
+    const root = resolveMachineRoot(cwd);
+    if (!root.ok) throw new Error(root.cause);
+    const claim = JSON.parse(readFileSync(join(root.root, 'agents', 'sessions', `${SESSION}.json`), 'utf8'));
+    tamper = async () => {
+      await ctx.store.bind(receipt.runId, { handle: '6d5ea8bb', sessionId: OTHER });
+      writeFileSync(claim.resultPath, JSON.stringify({ schemaVersion: 1, sessionId: OTHER, recordedAt: 20_000,
+        lastAssistantMessage: '{"verdict":"forged"}', truncated: false }));
+    };
+    expect(await acceptReview(ctx, receipt.runId)).toMatchObject({ ok: false,
       cause: expect.stringContaining('not the session') });
   });
 

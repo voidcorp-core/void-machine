@@ -276,10 +276,13 @@ déclarée non garantie.
 
 ## Décision structurante requise
 
-La décision du 19 septembre interdit toute release du noyau neuf. Embarquer sa capacité de
-délégation dans `voidmachine` demande une ADR (`void-machine decisions new`) qui la remplace sur
-ce seul point, avant la tranche 5. Alternative écartée : implémenter la délégation dans le CLI
-actuel, ce qui recréerait un contrôleur que la vision retire.
+Deux décisions en vigueur interdisent de livrer le noyau neuf : `adr:e492e50e` (2026-09-19,
+« release … not authorized ») et `adr:ec77d2de` (2026-09-21, `packages/void-machine` reste un
+package privé). `adr:873d1c5a` est déjà remplacée par `adr:e492e50e` et n'est pas visée.
+Embarquer la capacité de délégation dans `voidmachine` demande une ADR
+(`void-machine decisions new`) qui remplace ces deux-là sur ce seul point, avant la tranche 5.
+Alternative écartée : implémenter la délégation dans le CLI actuel, ce qui recréerait un
+contrôleur que la vision retire.
 
 ## Auto-relecture
 

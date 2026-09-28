@@ -56,7 +56,8 @@ plan déplace l'autorité de merge.
 ### Step 2 - Deux décisions structurantes
 
 - **Goal**: enregistrer (a) la livraison de la capacité de délégation du noyau dans le CLI
-  publié, en remplacement ciblé de la clause « ni release » du 19 septembre ; (b) le mode de merge
+  publié, en remplacement ciblé de `adr:e492e50e` (clause « release not authorized ») et de
+  `adr:ec77d2de` (clause « package privé »), `adr:873d1c5a` étant déjà remplacée ; (b) le mode de merge
   unique, en remplacement de `03e82acc`, avec le risque résiduel écrit tel quel.
 - **Depends on**: none
 - **TDD mode**: exploratory (documentation)

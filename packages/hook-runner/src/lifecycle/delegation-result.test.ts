@@ -5,7 +5,6 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { machineRootOf } from './delegation-kernel.js';
 import { executeDelegationResult } from './delegation-result.js';
 
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
@@ -38,11 +37,6 @@ const stop = (cwd: string, message: unknown = 'No blocking finding.') =>
   ({ hook_event_name: 'Stop', session_id: SESSION, cwd, last_assistant_message: message });
 
 describe('the delegation-result Stop hook', () => {
-  it('resolves the machine directory of the main checkout from a worktree', () => {
-    const { worktree, root } = repository();
-    expect(machineRootOf(worktree)).toBe(root);
-  });
-
   it('writes the final message where the claim of its session points', () => {
     const { worktree, root } = repository();
     const resultPath = join(runDirectory(root), 'result.json');

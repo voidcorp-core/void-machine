@@ -193,11 +193,35 @@ The harness assumes **TypeScript + web**. The core is not framework-agnostic acr
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
-The private TypeScript package `packages/void-machine/` is the Machine foundation and ships in no
-tarball. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
+The private TypeScript package `packages/void-machine/` is the Machine foundation. Only its
+delegation capability reaches users, embedded in the published CLI as `void-machine agents`
+([decision](decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md));
+the package itself is never published. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
 and collision rules, the shared-state fingerprint and the merge refusals) lives in
 `packages/cli/src/lib/autopilot/`. A future independent Rust/Go/Python product could still live in
 a sibling repo, reusing mechanics not skills.
+
+## Delegated agent runs
+
+`void-machine agents` (`packages/cli/src/commands/agents.ts`) is the one path by which a
+coordinator launches, follows and closes a delegated agent. The CLI only parses and prints; the
+kernel owns the rest, in its layers: `core/delegation.ts` (run states, admission, transitions,
+pure), `runtime/delegation.ts` (ports and the observation loop, pure), `adapters/runtime/claude-session.ts`
+(Claude Code background sessions), `adapters/store/run-registry.ts` (files) and
+`application/agents.ts` (composition). A run is a `claude --bg` session named `vm-<runId>`; its
+live state is read from `claude agents --json --all` every five seconds, one observation at a
+time per mission. The brief travels in a file the session is pointed at, never on argv, and the
+role fixes the permissions (`work`: `auto`; `review`: the native `--agent` type with `dontAsk`).
+
+Runs are recorded under `<main checkout>/.void/machine/runs/<mission-id>/agents/<runId>/`,
+resolved from the common Git directory so a run dispatched from a worktree lands where the
+coordinator reads it. Each transition is linked under its sequence number, so it is recorded
+once even when two processes observe. The final message comes from the `lifecycle
+delegation-result` Stop hook, which follows a claim keyed by the native session id
+([decision](decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)).
+`dispatch` refuses, with the repairing command, when Claude Code is missing or older than
+2.1.257, the workspace is not trusted, or that hook is not installed. Presentation is `none` for
+now: a run is visible through `agents status` and `claude agents`.
 
 ## Stack profile compilation
 

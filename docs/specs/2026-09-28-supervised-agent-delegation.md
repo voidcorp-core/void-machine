@@ -173,7 +173,12 @@ interface AgentRuntime {
 [--model M]` dans `cwd`, avec `VOID_MACHINE_RUN_ID` dans l'environnement. `observe` :
 `claude agents --json --all`, filtré sur l'identifiant de la session. Résultat : le hook Stop du
 harnais, quand `VOID_MACHINE_RUN_ID` est présent, écrit `session_id` et
-`last_assistant_message` dans le dossier du run ; un hook ne décide rien. `send` :
+`last_assistant_message` dans le dossier du run ; un hook ne décide rien.
+*Correctif du 2026-09-28 (DEV-923)* : une sonde a montré qu'une session `--bg` hérite de
+l'environnement du superviseur, pas de la commande qui la lance ; `VOID_MACHINE_RUN_ID` ne
+distingue donc pas deux runs. Le hook suit une réclamation indexée par `session_id`, écrite par
+le noyau dès que la session est listée
+([décision](../decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)). `send` :
 `claude --resume <sessionId> --bg "<message>"`, qui reprend la session sur place (2.1.257 et
 plus). `stop` : `claude stop <id>`. `attachCommand` : `claude attach <id>`.
 

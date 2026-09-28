@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/application/doctor.d.ts",
       "import": "./dist/application/doctor.js"
+    },
+    "./agents": {
+      "types": "./dist/application/agents.d.ts",
+      "import": "./dist/application/agents.js"
     }
   },
   "engines": {

@@ -11,7 +11,6 @@ variants from them by overriding fields; no shape here was written by hand.
 | `pr-view-comments.json` | `gh pr view 378 --json comments` (this repository); tests add it to the views above, as gh prints both when both are requested |
 | `pr-view-files.json` | `gh pr view 392 --json files,changedFiles` (this repository): a real change list, `.void/program.md` among it |
 | `pulls-files-rest.json` | `gh api 'repos/{owner}/{repo}/pulls/395/files?per_page=100&page=1' --jq '[.[] \| del(.patch)]'` (this repository): the REST file list, two renames with their `previous_filename`; `patch` dropped for size |
-| `run-view-attempt.json` | `gh run view 35748516084 -R zed-industries/zed --json attempt,databaseId,headSha,status,conclusion`: a run re-run once |
 | `check-run-queued.json` | one `statusCheckRollup` entry of zed-industries/zed PR 64608: a check run not yet completed |
 | `status-contexts.json` | two `statusCheckRollup` entries of kubernetes/kubernetes PR 142315: commit statuses, the shape `void/independent-review` takes |
 | `pr-view-queued.json` | `gh pr view 192072 -R flutter/flutter --json autoMergeRequest,state`: a pull request sitting in a merge queue, with no auto-merge request |

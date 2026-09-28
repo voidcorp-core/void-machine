@@ -13,6 +13,9 @@ import {
   type WaitOutcome, currentResult, refOf, statusOf, waitForTransitions,
 } from '../runtime/delegation.js';
 
+/** The ports a caller composes a context from, for a runtime of its own or a test double. */
+export type { AgentRuntimePort, LaunchPlan } from '../runtime/delegation.js';
+
 /**
  * `void-machine agents`: the one path by which a coordinator launches, follows and closes a
  * delegated agent. Presentation is `none` here: a run is visible through `status` and

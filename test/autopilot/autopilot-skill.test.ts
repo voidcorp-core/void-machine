@@ -19,7 +19,7 @@ const LOOP_ACTION_KINDS = [
   'mark-human-wait',
   'enable-auto-merge',
   'disable-auto-merge',
-  'rerun-review-check',
+  'review',
   'requeue',
   'drain',
   'freeze',
@@ -94,7 +94,7 @@ describe('remote effects stay with the roles that own them', () => {
     const mayNot = /May not:([\s\S]*?)\n\n/.exec(body(SKILL))?.[1] ?? '';
     expect(mayNot).toMatch(/enable auto-merge/i);
     expect(mayNot).toMatch(/merge anything/i);
-    expect(mayNot).toMatch(/post a verdict or re-run the review job/);
+    expect(mayNot).toMatch(/post or record a verdict, run `autopilot review`/);
     expect(mayNot).toMatch(/Done/);
     expect(mayNot).toMatch(/close or cancel/i);
   });
@@ -150,21 +150,20 @@ describe('the curator ranks, and never disposes', () => {
   });
 });
 
-describe('the review runs in GitHub, out of the reach of every worker', () => {
-  // A verdict the orchestration checkout signed could be signed by anything
-  // running there; a check only GitHub Actions can create cannot.
-  it('names the job, its trigger and the check only the review App creates', () => {
-    expect(flat(body(SKILL))).toMatch(/`\.github\/workflows\/independent-review\.yml` reviews every ready pull request/);
-    expect(flat(body(SKILL))).toMatch(/on `pull_request_target`/);
-    expect(flat(body(SKILL))).toMatch(/Branch protection requires the check from that App/);
-    expect(flat(body(SKILL))).toMatch(/`independent-review-queue\.yml`, on `workflow_run` of `ci`/);
-    expect(flat(body(SKILL))).toMatch(/No key or secret for it lives on this machine/);
+describe('the review is local, bound to the head and to the session it delegated', () => {
+  // A verdict read on GitHub can be written by anyone who comments; the loop
+  // merges on the record the kernel wrote after delegating the reviewer itself.
+  it('delegates the reviewer on the exact head and records its verdict locally', () => {
+    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after the run, and delegates the reviewer there/);
+    expect(flat(body(SKILL))).toMatch(/only from the native session the runtime lists under that run/);
+    expect(flat(body(SKILL))).toMatch(/`\.void\/machine\/autopilot\/reviews\/<ticket>\/<head>\.json`; `next` decides on that record alone/);
+    expect(flat(body(SKILL))).toMatch(/A verdict posted on the pull request is a copy for people/);
   });
 
-  it('lets no agent post a verdict, and re-runs a crash rather than approving it', () => {
-    expect(flat(body(SKILL))).toMatch(/The verdict is posted only by the review job/);
-    expect(flat(body(SKILL))).toMatch(/May not: enable auto-merge, merge anything, post a verdict or re-run the review job/);
-    expect(flat(body(SKILL))).toMatch(/a job that failed without a verdict is a crash it re-runs, not a round/);
+  it('lets no agent post a verdict, and delegates a failed review again rather than approving it', () => {
+    expect(flat(body(SKILL))).toMatch(/The review verdict is the local record above, never a comment/);
+    expect(flat(body(SKILL))).toMatch(/May not: enable auto-merge, merge anything, post or record a verdict, run `autopilot review`/);
+    expect(flat(body(SKILL))).toMatch(/a reviewer that failed without a verdict is an attempt it delegates again, not a round/);
   });
 
   it('blocks only on a scenario, files advisories once, and stops at two rounds', () => {

@@ -3,6 +3,7 @@ import {
   DELEGATION_LIMITS, type RunObservation, type RunRole, type RunStatus, type RunTransition,
   type RuntimeName, describeRun, isOpen, observeRun, runView,
 } from '../core/delegation.js';
+import type { SurfaceRecord } from './presentation.js';
 
 /**
  * The delegation driver: ports it needs and the bounded observation loop. Pure: the registry,
@@ -68,7 +69,15 @@ export interface DelegationStore extends RunRegistry {
   writeMessage(runId: string, text: string): Promise<InstructionFile>;
   /** Every recorded run identifier, bounded, for a status without a run. */
   runIds(): Promise<readonly string[]>;
+  /** The surface a run is shown in; a record that does not parse is corrupt, never absent. */
+  readSurface(runId: string): Promise<SurfaceReading>;
+  /** Replaces the surface record whole; readers see the old or the new one, never half. */
+  writeSurface(runId: string, record: SurfaceRecord): Promise<void>;
 }
+
+export type SurfaceReading =
+  | { readonly kind: 'recorded'; readonly record: SurfaceRecord }
+  | { readonly kind: 'absent' | 'corrupt' };
 
 export interface NativeRunRef {
   readonly name: string;

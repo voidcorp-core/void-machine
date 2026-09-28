@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
+import { createNoSurface } from '../src/adapters/presentation/none.js';
 import { createRunRegistry, resolveMachineRoot } from '../src/adapters/store/run-registry.js';
 import {
   type AgentsContext, acceptAgent, agentStatus, attachAgent, dispatchAgent, sendAgent, stopAgent, waitAgents,
@@ -50,6 +51,7 @@ function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 }
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
     runtime,
+    surfaces: { detected: createNoSurface(), reach: () => createNoSurface() },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',
     newRunId: () => `run_00000000-0000-4000-8000-${String(++runs).padStart(12, '0')}`,

@@ -17,7 +17,7 @@
     "backlog:index": "node scripts/backlog-index.mjs",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || exit 0",
     "build": "pnpm -r --filter '!void-harness' build",
-    "build:cli": "pnpm --filter @voidcorp/mission-engine build && pnpm --filter @voidcorp/harness-graph build && pnpm --filter @voidcorp/hook-runner build && pnpm --filter ./packages/cli build",
+    "build:cli": "pnpm --filter @voidcorp/mission-engine build && pnpm --filter @voidcorp/harness-graph build && pnpm --filter @voidcorp/hook-runner build && pnpm --filter @voidcorp/void-machine build && pnpm --filter ./packages/cli build",
     "cli": "pnpm build:cli >/dev/null && node packages/cli/bin/void-machine.mjs",
     "benchmark:project": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph/run.mjs",
     "benchmark:query": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph-query/run.mjs",

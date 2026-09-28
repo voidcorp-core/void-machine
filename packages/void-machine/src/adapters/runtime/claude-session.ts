@@ -2,9 +2,10 @@
 import { spawn as nodeSpawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { RunObservation } from '../../core/delegation.js';
+import { resolveMachineRoot } from '../store/run-registry.js';
 import type {
   AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, RuntimeReading, SessionReading,
   SessionState,
@@ -255,7 +256,11 @@ function resultHookPreflight(cwd: string, home: string): Preflight {
   const root = projectRoot(cwd);
   const wirings = [join(root, '.claude', 'settings.json'), join(root, '.claude', 'settings.local.json'),
     join(home, '.claude', 'settings.json')].map((path) => resultHookWiring(readBounded(path) ?? ''));
-  const update = `run npx voidmachine update in ${root}, commit the refreshed hooks, then dispatch again`;
+  // Refresh from the main checkout: an update run inside a worktree installs nothing it keeps.
+  const machine = resolveMachineRoot(cwd);
+  const main = machine.ok ? dirname(dirname(machine.root)) : root;
+  const update = `run npx voidmachine update in ${main}, commit the refreshed hooks, `
+    + 'then dispatch from a checkout that has them';
   if (wirings.every((wiring) => wiring === 'missing')) {
     return { ok: false, action: update,
       cause: 'the delegation-result Stop hook is not installed, so no result would ever be collected' };

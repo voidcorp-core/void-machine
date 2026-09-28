@@ -1,8 +1,11 @@
 # Void Machine (private workspace)
 
-Private Machine foundation. Any future distribution uses the existing voidmachine
-CLI; the former A5 cutover is deferred under the clean-sheet mandate. No separate
-publication, controller, provider or coordinator API.
+Private Machine foundation, never published on its own. One capability reaches users: agent
+delegation, embedded in the voidmachine CLI as `void-machine agents` through the `./agents`
+export ([decision](../../docs/decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md)).
+Its layers and contracts are described in `docs/ARCHITECTURE.md`, "Delegated agent runs"; the
+Claude background-session contract is replayed from captures in `test/fixtures/claude-session/`.
+Every other capability stays private until a consumer asks.
 
 A1 candidate entry after build: `node dist/application/cli.js doctor --json`.
 There is no public launcher; the Rust one was removed without a port. Direct application callers

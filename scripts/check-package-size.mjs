@@ -62,7 +62,11 @@ export const PACKAGE_LIMITS = Object.freeze({
   // step 7 of the native loop plan removed that engine: 1942.1 kB on
   // 2026-09-24 (develop: 2018.6 kB). The ceiling comes back down with it, to
   // the same 45 kB of headroom the compiler worker was given.
-  [PRODUCT_IDENTITY.packageName]: 1_985_000,
+  // The kernel's delegation capability ships in the CLI (DEV-923, decision
+  // 0cfd77e6): 1995.2 kB on 2026-09-28, with the CLI aligned on the kernel's
+  // zod 4.6.5 so the bundle carries one zod, not two (2075.5 kB before). The
+  // same 45 kB of headroom again.
+  [PRODUCT_IDENTITY.packageName]: 2_040_000,
   '@voidcorp/harness-graph': 120_000,
   '@voidcorp/pack-monorepo': 20_000,
   '@voidcorp/pack-nextjs': 20_000,

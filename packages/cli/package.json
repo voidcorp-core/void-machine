@@ -63,6 +63,7 @@
     "@voidcorp/harness-graph": "workspace:*",
     "@voidcorp/hook-runner": "workspace:*",
     "@voidcorp/mission-engine": "workspace:*",
+    "@voidcorp/void-machine": "workspace:*",
     "esbuild": "^0.28.0",
     "picomatch": "^4.0.5",
     "tsup": "^8.0.0",
@@ -70,6 +71,6 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.1",
     "yaml": "^2.5.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }

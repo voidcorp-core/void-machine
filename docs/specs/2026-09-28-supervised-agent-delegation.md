@@ -1,7 +1,7 @@
 ---
 title: Délégation supervisée d'agents, agnostique du runtime et de l'affichage
 date: 2026-09-28
-status: in-design
+status: approved
 author: Folpe + Claude
 ticket: DEV-902
 related:

@@ -4,7 +4,7 @@ import { socketReady } from '../adapters/presentation/command.js';
 import { createHerdrSurface } from '../adapters/presentation/herdr.js';
 import { createNoSurface } from '../adapters/presentation/none.js';
 import { createTmuxSurface } from '../adapters/presentation/tmux.js';
-import { type RunRole, isOpen, runView } from '../core/delegation.js';
+import { type RunRole, type RunState, runView } from '../core/delegation.js';
 import {
   PRESENTATION_LIMITS, type SurfaceCause, type SurfaceKind, detectSurface, surfaceCause,
 } from '../core/presentation.js';
@@ -41,6 +41,9 @@ export function plannedSurface(surfaces: Surfaces, command: readonly string[] | 
   return { state: 'opening', at: now };
 }
 
+/** The only run states whose closer closes the surface: retiring and stopping, never failing. */
+const CLOSES_SURFACE: ReadonlySet<RunState> = new Set(['retired', 'stopped']);
+
 export interface ShownRun {
   readonly runId: string;
   readonly missionId: string;
@@ -50,8 +53,9 @@ export interface ShownRun {
 }
 
 /**
- * Opens the planned surface and records it. A run that closed while the surface was opening gets
- * it closed at once: its closer found `opening` and left the surface to this call.
+ * Opens the planned surface and records it. A run retired or stopped while the surface was opening
+ * gets it closed at once: its closer found `opening` and left the surface to this call. A failed run
+ * keeps its view, like everywhere else, so a person can read what went wrong.
  */
 export async function showRun(context: SurfaceContext, run: ShownRun, command: readonly string[])
   : Promise<SurfaceRecord> {
@@ -62,7 +66,8 @@ export async function showRun(context: SurfaceContext, run: ShownRun, command: r
   const written = await context.locked(run.missionId, async () => {
     await context.store.writeSurface(run.runId, record);
     const current = await context.store.read(run.runId);
-    return { ok: true as const, closed: current === undefined || !isOpen(runView(current.transitions).state) };
+    const closed = current === undefined || CLOSES_SURFACE.has(runView(current.transitions).state);
+    return { ok: true as const, closed };
   });
   if (!written.ok) {
     // Unrecorded, the surface would have no owner left to close it: close it now, and keep it as an

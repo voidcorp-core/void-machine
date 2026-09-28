@@ -214,6 +214,22 @@ describe('closing the surface of a closed run', () => {
     expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, surface: { state: 'closed' } });
     expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
   });
+
+  it('keeps open a surface whose run failed while it was opening: a failed run keeps its view', async () => {
+    const cwd = repository();
+    let ctx: AgentsContext | undefined;
+    const failing = () => new Map([[`vm-${RUN}`, { observation: { kind: 'present' as const, state: 'failed' as const },
+      binding: { handle: '6d5ea8bb', sessionId: SESSION } }]]);
+    const surface = scriptedSurface('herdr', { beforeOpen: async () => {
+      if (ctx !== undefined) await waitAgents(ctx, [RUN], { any: true, timeoutMs: 10_000 });
+    } });
+    ctx = context(cwd, runtime({ sessions: failing }), surface.port);
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, surface: { state: 'open' } });
+    expect(surface.closed).toEqual([]);
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'failed' },
+      surface: { state: 'open' } }] });
+  });
+
   it('closes and records as failed a surface opened while the mission stayed busy', async () => {
     const cwd = repository();
     let ctx: AgentsContext | undefined;

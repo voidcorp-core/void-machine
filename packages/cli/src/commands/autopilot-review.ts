@@ -382,7 +382,14 @@ function changeOf(runners: ReviewRunners, path: string, base: string): Change {
  */
 function protectedPathOf(root: string, paths: readonly string[]): string | undefined {
   const descriptor = readProgramDescriptor(root);
-  if (descriptor === undefined) return paths[0] ?? '.void/program.md';
+  if (descriptor === undefined) {
+    throw autopilotFailure(
+      'AUTOPILOT_PROGRAM',
+      'the loop reviews only under a programme, and this project declares none',
+      '`.void/program.md` is absent, so the protected paths cannot be read',
+      'declare the programme, with its `autopilot` block, before the loop reviews anything',
+    );
+  }
   const areas = protectedPathsOf(loopProgramOf(descriptor).autopilot).map(compileArea);
   return paths.find((path) => areas.some((area) => areaClaims(area, path)));
 }

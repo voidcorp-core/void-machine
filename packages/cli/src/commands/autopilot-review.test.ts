@@ -375,6 +375,15 @@ describe('autopilot review, around a crash and beside other reviews', () => {
     expect(launches).toHaveLength(0);
   });
 
+  it('reviews nothing outside a programme, and says that is why', async () => {
+    const repo = repository();
+    rmSync(join(repo.root, '.void', 'program.md'));
+    const { runners: built, launches } = runners(repo);
+    const output = await reviewCommand(argv(repo.head), built);
+    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('programme') });
+    expect(launches).toHaveLength(0);
+  });
+
   it('keeps two reviews run side by side apart, each on its own head and session', async () => {
     const repo = repository();
     git(repo.root, 'checkout', '-q', '-b', 'work/DEV-2', 'develop');

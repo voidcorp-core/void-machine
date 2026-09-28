@@ -115,7 +115,6 @@ const DECLARED = [
   { name: 'void-layout', reason: 'module owning the void directory layout' },
   { name: 'void-machine-legacy', reason: 'portable legacy conformance contract family' },
   { name: 'void-machine', reason: 'private TypeScript Machine package, `packages/void-machine/`' },
-  { name: 'void-mission-presentation-v1', reason: 'presentation workspace owner metadata' },
   { name: 'void-migration', reason: 'name of the void layout migration check' },
   { name: 'void-probe', reason: 'observed write path written by the hook probe' },
   { name: 'void-project-benchmark', reason: 'project-graph benchmark fixture prefix' },

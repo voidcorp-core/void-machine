@@ -1,0 +1,269 @@
+{
+ "requests": [
+  {
+   "method": "initialize",
+   "id": 1,
+   "params": {
+    "clientInfo": {
+     "name": "void_machine",
+     "title": "Void Machine",
+     "version": "0.0.0"
+    }
+   }
+  },
+  {
+   "method": "initialized",
+   "params": {}
+  },
+  {
+   "method": "thread/start",
+   "id": 2,
+   "params": {
+    "cwd": "/work/review",
+    "approvalPolicy": "never",
+    "sandbox": "read-only",
+    "serviceName": "void_machine"
+   }
+  },
+  {
+   "method": "turn/start",
+   "id": 3,
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "input": [
+     {
+      "type": "text",
+      "text": "Reply with verdict pass and a one-sentence summary saying hello. Do not run any command."
+     }
+    ],
+    "outputSchema": {
+     "type": "object",
+     "properties": {
+      "verdict": {
+       "type": "string",
+       "enum": [
+        "pass",
+        "fail"
+       ]
+      },
+      "summary": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "verdict",
+      "summary"
+     ],
+     "additionalProperties": false
+    }
+   }
+  }
+ ],
+ "frames": [
+  {
+   "id": 1,
+   "result": {
+    "userAgent": "void_machine/0.155.1 (Mac OS 26.6.2; arm64) ghostty/1.3.1 (void_machine; 0.0.0)",
+    "codexHome": "/home/user/.codex",
+    "platformFamily": "unix",
+    "platformOs": "macos"
+   }
+  },
+  {
+   "method": "remoteControl/status/changed",
+   "params": {
+    "status": "disabled",
+    "serverName": "host",
+    "installationId": "00000000-0000-4000-8000-000000000000",
+    "environmentId": null
+   },
+   "emittedAtMs": 1790631697731
+  },
+  {
+   "id": 2,
+   "result": {
+    "thread": {
+     "id": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+     "environments": [
+      {
+       "environmentId": "local",
+       "cwd": "/work/review",
+       "runtimeWorkspaceRoots": [
+        "/work/review"
+       ]
+      }
+     ],
+     "extra": null,
+     "sessionId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+     "forkedFromId": null,
+     "parentThreadId": null,
+     "preview": "",
+     "ephemeral": false,
+     "section": null,
+     "sectionEnteredAt": null,
+     "projectId": null,
+     "historyMode": "paginated",
+     "modelProvider": "openai",
+     "model": "gpt-5.6-sol",
+     "reasoningEffort": "high",
+     "createdAt": 1790631697,
+     "updatedAt": 1790631697,
+     "recencyAt": 1790631697,
+     "status": {
+      "type": "idle"
+     },
+     "path": "/home/user/.codex/sessions/2026/09/28/rollout-2026-09-28T23-41-37-01a0e9f7-5d5e-7c92-b856-0c2782407fda.jsonl",
+     "cwd": "/work/review",
+     "cliVersion": "0.155.1",
+     "originator": "void_machine",
+     "source": "vscode",
+     "canAcceptDirectInput": true,
+     "threadSource": null,
+     "agentNickname": null,
+     "agentRole": null,
+     "gitInfo": null,
+     "name": null,
+     "daybreakEnabled": null,
+     "turns": []
+    },
+    "model": "gpt-5.6-sol",
+    "modelProvider": "openai",
+    "serviceTier": "default",
+    "cwd": "/work/review",
+    "runtimeWorkspaceRoots": [
+     "/work/review"
+    ],
+    "instructionSources": [],
+    "approvalPolicy": "never",
+    "approvalsReviewer": "auto_review",
+    "sandbox": {
+     "type": "readOnly",
+     "networkAccess": false
+    },
+    "activePermissionProfile": null,
+    "reasoningEffort": "high",
+    "multiAgentMode": "explicitRequestOnly"
+   }
+  },
+  {
+   "method": "thread/started",
+   "params": {
+    "thread": {
+     "id": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+     "environments": [
+      {
+       "environmentId": "local",
+       "cwd": "/work/review",
+       "runtimeWorkspaceRoots": [
+        "/work/review"
+       ]
+      }
+     ],
+     "extra": null,
+     "sessionId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+     "forkedFromId": null,
+     "parentThreadId": null,
+     "preview": "",
+     "ephemeral": false,
+     "section": null,
+     "sectionEnteredAt": null,
+     "projectId": null,
+     "historyMode": "paginated",
+     "modelProvider": "openai",
+     "model": "gpt-5.6-sol",
+     "reasoningEffort": "high",
+     "createdAt": 1790631697,
+     "updatedAt": 1790631697,
+     "recencyAt": 1790631697,
+     "status": {
+      "type": "idle"
+     },
+     "path": "/home/user/.codex/sessions/2026/09/28/rollout-2026-09-28T23-41-37-01a0e9f7-5d5e-7c92-b856-0c2782407fda.jsonl",
+     "cwd": "/work/review",
+     "cliVersion": "0.155.1",
+     "originator": "void_machine",
+     "source": "vscode",
+     "canAcceptDirectInput": true,
+     "threadSource": null,
+     "agentNickname": null,
+     "agentRole": null,
+     "gitInfo": null,
+     "name": null,
+     "daybreakEnabled": null,
+     "turns": []
+    }
+   },
+   "emittedAtMs": 1790631697945
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "name": "cua_repl",
+    "status": "starting",
+    "error": null,
+    "failureReason": null
+   },
+   "emittedAtMs": 1790631697945
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "name": "linear-voidcorp",
+    "status": "starting",
+    "error": null,
+    "failureReason": null
+   },
+   "emittedAtMs": 1790631697946
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "name": "node_repl",
+    "status": "starting",
+    "error": null,
+    "failureReason": null
+   },
+   "emittedAtMs": 1790631697946
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "name": "codex_apps",
+    "status": "starting",
+    "error": null,
+    "failureReason": null
+   },
+   "emittedAtMs": 1790631697946
+  },
+  {
+   "method": "mcpServer/startupStatus/updated",
+   "params": {
+    "threadId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+    "name": "openaiDeveloperDocs",
+    "status": "starting",
+    "error": null,
+    "failureReason": null
+   },
+   "emittedAtMs": 1790631697946
+  },
+  {
+   "id": 3,
+   "result": {
+    "turn": {
+     "id": "01a0e9f7-5e20-7812-b9d7-920fabee855c",
+     "items": [],
+     "itemsView": "notLoaded",
+     "status": "inProgress",
+     "error": null,
+     "startedAt": null,
+     "completedAt": null,
+     "durationMs": null
+    }
+   }
+  }
+ ]
+}

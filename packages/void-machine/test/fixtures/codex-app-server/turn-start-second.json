@@ -1,0 +1,15 @@
+{
+ "id": 6,
+ "result": {
+  "turn": {
+   "id": "01a0ea07-9537-71e3-b352-fb4a81be9c1b",
+   "items": [],
+   "itemsView": "notLoaded",
+   "status": "inProgress",
+   "error": null,
+   "startedAt": null,
+   "completedAt": null,
+   "durationMs": null
+  }
+ }
+}

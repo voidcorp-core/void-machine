@@ -10,7 +10,7 @@ import {
   waitAgents,
 } from '../src/application/agents.js';
 import type {
-  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, SessionState,
+  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, RuntimeCapabilities, SessionState,
 } from '../src/runtime/delegation.js';
 
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
@@ -23,6 +23,13 @@ function repository(): string {
   return base;
 }
 
+/** What a Claude-like runtime declares: a view, a capture, no schema. */
+const capabilities: RuntimeCapabilities = {
+  view: { available: true, provenance: 'verified', note: 'attach' },
+  capture: { available: true, provenance: 'verified', note: 'hook' },
+  structuredOutput: { available: false, provenance: 'documented', note: 'none' },
+};
+
 /** A runtime whose every answer the test chooses, and which records what it was asked. */
 function scriptedRuntime(script: {
   preflight?: Preflight; launch?: LaunchOutcome; resume?: LaunchOutcome;
@@ -31,7 +38,10 @@ function scriptedRuntime(script: {
   const launches: LaunchPlan[] = [];
   const stops: NativeRunRef[] = [];
   const resumes: Array<{ ref: NativeRunRef; plan: LaunchPlan }> = [];
+  const released: NativeRunRef[] = [];
   const runtime: AgentRuntimePort = {
+    capabilities,
+    release: async (ref) => { released.push(ref); },
     preflight: async () => script.preflight ?? { ok: true },
     dispatch: async (plan) => { launches.push(plan); return script.launch ?? { kind: 'acknowledged', handle: '6d5ea8bb' }; },
     observe: async () => ({ kind: 'read', sessions: script.sessions?.() ?? new Map() }),
@@ -42,16 +52,17 @@ function scriptedRuntime(script: {
     stop: async (ref) => { stops.push(ref); return { ok: true }; },
     attachCommand: (ref) => ref.handle === undefined ? undefined : ['claude', 'attach', ref.handle],
   };
-  return { runtime, launches, stops, resumes };
+  return { runtime, launches, stops, resumes, released };
 }
 
-function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 }): AgentsContext {
+function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 },
+  codex: AgentRuntimePort = runtime): AgentsContext {
   const root = resolveMachineRoot(cwd);
   if (!root.ok) throw new Error(root.cause);
   let runs = 0;
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
-    runtime,
+    runtimes: { claude: runtime, codex },
     surfaces: { detected: createNoSurface(), reach: () => createNoSurface() },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',
@@ -282,5 +293,93 @@ describe('a review result bound to the session the kernel observes', () => {
     if (!receipt.ok) throw new Error(receipt.cause);
     expect(await acceptReview(ctx, receipt.runId)).toMatchObject({ ok: false,
       cause: expect.stringContaining('not a review') });
+  });
+});
+
+describe('a run delegated to Codex', () => {
+  const THREAD = '01a0e9f7-5d5e-7c92-b856-0c2782407fda';
+  const RUN_1 = 'vm-run_00000000-0000-4000-8000-000000000001';
+  const verdict = { type: 'object', properties: { verdict: { type: 'string', enum: ['pass', 'fail'] } },
+    required: ['verdict'], additionalProperties: false };
+  const codexCapabilities: RuntimeCapabilities = {
+    view: { available: false, provenance: 'unknown', note: 'not proven in a pane' },
+    capture: { available: false, provenance: 'observed', note: 'brief encrypted' },
+    structuredOutput: { available: true, provenance: 'verified', note: 'outputSchema' },
+  };
+
+  /** A Codex-like port: no view, a schema, and whatever sessions the test lists. */
+  function codexRuntime(sessions: () => ReadonlyMap<string, SessionState> = () => new Map()) {
+    const scripted = scriptedRuntime({ launch: { kind: 'acknowledged', handle: THREAD.slice(-8) }, sessions });
+    const runtime: AgentRuntimePort = { ...scripted.runtime, capabilities: codexCapabilities,
+      attachCommand: () => undefined };
+    return { ...scripted, runtime };
+  }
+
+  const done = (text: string) => () => new Map([[RUN_1, {
+    observation: { kind: 'present' as const, state: 'done' as const, status: 'idle' as const },
+    binding: { handle: THREAD.slice(-8), sessionId: THREAD },
+    result: { turnId: 'turn-1', text, truncated: false } }]]);
+
+  it('launches through the Codex port only, and says the run has no view and why', async () => {
+    const cwd = repository();
+    const claude = scriptedRuntime();
+    const codex = codexRuntime();
+    const ctx = context(cwd, claude.runtime, undefined, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(codex.launches).toHaveLength(1);
+    expect(claude.launches).toHaveLength(0);
+    const status = await agentStatus(ctx, receipt.runId);
+    expect(status).toMatchObject({ ok: true, runs: [{ runtime: 'codex',
+      view: { available: false, provenance: 'unknown', note: 'not proven in a pane' } }] });
+    expect(await attachAgent(ctx, receipt.runId)).toMatchObject({ ok: false,
+      cause: 'the codex runtime offers no view of this run: not proven in a pane' });
+  });
+
+  it('holds a run to its output schema: refused where the runtime cannot, stored and resent where it can', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(done('{"verdict":"pass"}'));
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, codex.runtime);
+    expect(await dispatchAgent(ctx, { ...reviewInput(cwd), outputSchema: verdict })).toMatchObject({ ok: false,
+      cause: 'the claude runtime cannot hold a run to an output schema' });
+    expect(await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex', outputSchema: ['not', 'a', 'schema'] }))
+      .toMatchObject({ ok: false, cause: 'the output schema must be a JSON object' });
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex', outputSchema: verdict });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(codex.launches[0]?.outputSchema).toEqual(verdict);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 10_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'turn-ended' },
+      result: { text: '{"verdict":"pass"}', conformance: { state: 'valid' } } }] });
+    await sendAgent(ctx, receipt.runId, 'Say why.');
+    expect(codex.resumes[0]?.plan.outputSchema).toEqual(verdict);
+  });
+
+  it('frees the app-server of a worker once its result is accepted', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(done('done'));
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { role: 'work', cwd, brief: 'Implement it.', missionId: MISSION,
+      runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 10_000 });
+    expect(await acceptAgent(ctx, receipt.runId)).toMatchObject({ ok: true, state: 'retired' });
+    expect(codex.released.map((ref) => ref.name)).toEqual([RUN_1]);
+    expect(codex.stops).toHaveLength(0);
+  });
+
+  it('never claims to supervise a run whose app-server is gone: it reconciles, then fails', async () => {
+    const cwd = repository();
+    const now = { value: 10_000 };
+    const codex = codexRuntime(() => new Map());
+    const ctx = context(cwd, scriptedRuntime().runtime, now, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 5_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'reconciling',
+      cause: 'the session is no longer listed by its runtime' } }] });
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 120_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'failed',
+      action: expect.stringContaining('inspect the runtime') } }] });
+    expect(codex.released.map((ref) => ref.name)).toEqual([RUN_1]);
   });
 });

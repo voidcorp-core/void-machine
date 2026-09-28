@@ -1,0 +1,82 @@
+{
+ "id": 4,
+ "result": {
+  "thread": {
+   "id": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+   "environments": [
+    {
+     "environmentId": "local",
+     "cwd": "/work/review",
+     "runtimeWorkspaceRoots": [
+      "/work/review"
+     ]
+    }
+   ],
+   "extra": null,
+   "sessionId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+   "forkedFromId": null,
+   "parentThreadId": null,
+   "preview": "Reply with verdict pass and a one-sentence summary saying hello. Do not run any command.",
+   "ephemeral": false,
+   "section": null,
+   "sectionEnteredAt": null,
+   "projectId": null,
+   "historyMode": "paginated",
+   "modelProvider": "openai",
+   "model": "gpt-5.6-sol",
+   "reasoningEffort": "high",
+   "createdAt": 1790631697,
+   "updatedAt": 1790631702,
+   "recencyAt": 1790631697,
+   "status": {
+    "type": "idle"
+   },
+   "path": "/home/user/.codex/sessions/2026/09/28/rollout-2026-09-28T23-41-37-01a0e9f7-5d5e-7c92-b856-0c2782407fda.jsonl",
+   "cwd": "/work/review",
+   "cliVersion": "0.155.1",
+   "originator": "void_machine",
+   "source": "vscode",
+   "canAcceptDirectInput": true,
+   "threadSource": null,
+   "agentNickname": null,
+   "agentRole": null,
+   "gitInfo": null,
+   "name": null,
+   "daybreakEnabled": null,
+   "turns": [
+    {
+     "id": "01a0e9f7-5e20-7812-b9d7-920fabee855c",
+     "items": [
+      {
+       "type": "userMessage",
+       "id": "01a0e9f7-682d-77c2-a26b-403f495f9b82",
+       "clientId": null,
+       "content": [
+        {
+         "type": "text",
+         "text": "Reply with verdict pass and a one-sentence summary saying hello. Do not run any command.",
+         "text_elements": []
+        }
+       ]
+      },
+      {
+       "type": "agentMessage",
+       "id": "msg_048f3ad303edcacc016abadf15ee7487d2aaa31e9650b2c8db",
+       "text": "{\"verdict\":\"pass\",\"summary\":\"Hello.\"}",
+       "phase": "final_answer",
+       "memoryCitation": null,
+       "delivery": null,
+       "questions": null
+      }
+     ],
+     "itemsView": "full",
+     "status": "completed",
+     "error": null,
+     "startedAt": 1790631697,
+     "completedAt": 1790631702,
+     "durationMs": 4345
+    }
+   ]
+  }
+ }
+}

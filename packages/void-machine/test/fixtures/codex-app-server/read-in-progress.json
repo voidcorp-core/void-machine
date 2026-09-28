@@ -1,0 +1,61 @@
+{
+ "id": 2,
+ "result": {
+  "thread": {
+   "id": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+   "environments": [
+    {
+     "environmentId": "local",
+     "cwd": "/work/review",
+     "runtimeWorkspaceRoots": [
+      "/work/review"
+     ]
+    }
+   ],
+   "extra": null,
+   "sessionId": "01a0e9f7-5d5e-7c92-b856-0c2782407fda",
+   "forkedFromId": null,
+   "parentThreadId": null,
+   "preview": "",
+   "ephemeral": false,
+   "section": null,
+   "sectionEnteredAt": null,
+   "projectId": null,
+   "historyMode": "paginated",
+   "modelProvider": "openai",
+   "model": "gpt-5.6-sol",
+   "reasoningEffort": "high",
+   "createdAt": 1790631697,
+   "updatedAt": 1790631697,
+   "recencyAt": 1790631697,
+   "status": {
+    "type": "active",
+    "activeFlags": []
+   },
+   "path": "/home/user/.codex/sessions/2026/09/28/rollout-2026-09-28T23-41-37-01a0e9f7-5d5e-7c92-b856-0c2782407fda.jsonl",
+   "cwd": "/work/review",
+   "cliVersion": "0.155.1",
+   "originator": "void_machine",
+   "source": "vscode",
+   "canAcceptDirectInput": true,
+   "threadSource": null,
+   "agentNickname": null,
+   "agentRole": null,
+   "gitInfo": null,
+   "name": null,
+   "daybreakEnabled": null,
+   "turns": [
+    {
+     "id": "01a0e9f7-5e20-7812-b9d7-920fabee855c",
+     "items": [],
+     "itemsView": "full",
+     "status": "inProgress",
+     "error": null,
+     "startedAt": 1790631697,
+     "completedAt": null,
+     "durationMs": null
+    }
+   ]
+  }
+ }
+}

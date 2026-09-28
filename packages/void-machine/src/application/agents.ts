@@ -1,17 +1,19 @@
 // tdd-cover: e2e packages/void-machine/test/agents-application.test.ts
 import { randomUUID } from 'node:crypto';
 import { realpathSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createClaudeSessionRuntime } from '../adapters/runtime/claude-session.js';
+import { createCodexAppServerRuntime } from '../adapters/runtime/codex-app-server.js';
 import { MISSION_ID, RUN_ID, createRunRegistry, resolveMachineRoot } from '../adapters/store/run-registry.js';
 import {
-  type Decision, type RunRole, type RunStatus, acceptRun, admitRun, isOpen, recordDispatch, retireRun, runView,
-  sendRun, stopRun,
+  type Decision, type RunRole, type RunStatus, type RuntimeName, acceptRun, admitRun, isOpen, recordDispatch,
+  retireRun, runView, sendRun, stopRun,
 } from '../core/delegation.js';
+import { type Conformance, outputSchemaRefusal } from '../core/output-conformance.js';
 import {
-  type AgentRuntimePort, type DelegationClock, type DelegationStore, type LaunchOutcome, type LaunchPlan,
-  type RunRecord,
-  type WaitOutcome, currentResult, refOf, statusOf, waitForTransitions,
+  type AgentRuntimePort, type Capability, type DelegationClock, type DelegationStore, type LaunchOutcome,
+  type LaunchPlan, type RunRecord, type RuntimePorts, type WaitOutcome, currentResult, refOf, statusOf,
+  waitForTransitions,
 } from '../runtime/delegation.js';
 import type { SurfaceClosing, SurfaceRecord } from '../runtime/presentation.js';
 import {
@@ -20,7 +22,7 @@ import {
 } from './surfaces.js';
 
 /** The ports a caller composes a context from, for a runtime of its own or a test double. */
-export type { AgentRuntimePort, LaunchPlan } from '../runtime/delegation.js';
+export type { AgentRuntimePort, LaunchPlan, RuntimePorts } from '../runtime/delegation.js';
 
 /**
  * `void-machine agents`: the one path by which a coordinator launches, follows and closes a
@@ -30,7 +32,8 @@ export type { AgentRuntimePort, LaunchPlan } from '../runtime/delegation.js';
 
 export interface AgentsContext {
   readonly store: DelegationStore;
-  readonly runtime: AgentRuntimePort;
+  /** One port per runtime; each run is always served by the one it was dispatched to. */
+  readonly runtimes: RuntimePorts;
   readonly surfaces: Surfaces;
   readonly clock: DelegationClock;
   /** Identifies this process in mission locks. */
@@ -44,11 +47,14 @@ export interface RunSummary {
   readonly runId: string;
   readonly missionId: string;
   readonly ticket?: string;
+  readonly runtime: RuntimeName;
   readonly role: RunRole;
   readonly agentType?: string;
   readonly status: RunStatus;
-  readonly result?: { readonly text: string; readonly truncated: boolean };
+  readonly result?: { readonly text: string; readonly truncated: boolean; readonly conformance?: Conformance };
   readonly attach?: string;
+  /** Why the run has no view, when its runtime cannot show it. */
+  readonly view?: Capability;
   readonly surface?: SurfaceSummary;
 }
 
@@ -64,6 +70,7 @@ function refusal(cause: string, action: string): Refusal {
 }
 
 export interface DispatchInput {
+  readonly runtime?: RuntimeName | undefined;
   readonly role: RunRole;
   readonly agentType?: string | undefined;
   readonly model?: string | undefined;
@@ -71,9 +78,11 @@ export interface DispatchInput {
   readonly missionId?: string | undefined;
   readonly cwd: string;
   readonly brief: string;
+  /** A JSON Schema every final message of the run must follow. */
+  readonly outputSchema?: unknown;
 }
 
-function invalidInput(input: DispatchInput): Refusal | undefined {
+function invalidInput(input: DispatchInput, port: AgentRuntimePort): Refusal | undefined {
   const usage = 'correct the option and dispatch again';
   if (input.role === 'review' && input.agentType === undefined) {
     return refusal('a review run needs the native agent type whose tools it keeps (--type)', usage);
@@ -82,6 +91,14 @@ function invalidInput(input: DispatchInput): Refusal | undefined {
   if (input.model !== undefined && !MODEL.test(input.model)) return refusal('--model is not a model name', usage);
   if (input.ticket !== undefined && !TICKET.test(input.ticket)) return refusal('--ticket is not a ticket key', usage);
   if (input.missionId !== undefined && !MISSION_ID.test(input.missionId)) return refusal('--mission is not a mission id', usage);
+  if (input.outputSchema !== undefined) {
+    if (!port.capabilities.structuredOutput.available) {
+      return refusal(`the ${input.runtime ?? 'claude'} runtime cannot hold a run to an output schema`,
+        'dispatch with --runtime codex, or without --output-schema');
+    }
+    const schema = outputSchemaRefusal(input.outputSchema);
+    if (schema !== undefined) return refusal(schema, usage);
+  }
   const size = Buffer.byteLength(input.brief, 'utf8');
   if (size === 0 || size > MAX_BRIEF_BYTES) return refusal('the brief must hold 1 byte to 1 MiB', usage);
   try {
@@ -114,10 +131,18 @@ async function record(context: AgentsContext, runId: string, decision: Decision)
 }
 
 function plan(run: Pick<RunRecord, 'name' | 'role' | 'agentType' | 'model' | 'cwd'>,
-  file: { readonly path: string; readonly directory: string }): LaunchPlan {
+  file: { readonly path: string; readonly directory: string }, outputSchema: unknown): LaunchPlan {
   return { name: run.name, role: run.role, agentType: run.agentType, model: run.model, cwd: run.cwd,
-    instructionPath: file.path, instructionDirectory: file.directory };
+    instructionPath: file.path, instructionDirectory: file.directory,
+    ...(isSchema(outputSchema) ? { outputSchema } : {}) };
 }
+
+function isSchema(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const portOf = (context: AgentsContext, run: Pick<RunRecord, 'runtime'>): AgentRuntimePort =>
+  context.runtimes[run.runtime];
 
 function surfaceContext(context: AgentsContext): SurfaceContext {
   return { store: context.store, surfaces: context.surfaces, clock: context.clock,
@@ -130,25 +155,28 @@ export type DispatchReceipt =
   | Refusal;
 
 export async function dispatchAgent(context: AgentsContext, input: DispatchInput): Promise<DispatchReceipt> {
-  const invalid = invalidInput(input);
+  const runtime = input.runtime ?? 'claude';
+  const port = context.runtimes[runtime];
+  const invalid = invalidInput(input, port);
   if (invalid !== undefined) return invalid;
   const cwd = realpathSync(resolve(input.cwd));
-  const ready = await context.runtime.preflight(cwd);
+  const ready = await port.preflight(cwd);
   if (!ready.ok) return refusal(ready.cause, ready.action);
   const missionId = input.missionId ?? context.newMissionId();
   const runId = context.newRunId();
-  const run = { runId, missionId, name: `vm-${runId}`, role: input.role, runtime: 'claude' as const, cwd,
+  const run = { runId, missionId, name: `vm-${runId}`, role: input.role, runtime, cwd,
     agentType: input.agentType, ticket: input.ticket, model: input.model };
+  const schema = isSchema(input.outputSchema) ? input.outputSchema : undefined;
   let launched: LaunchOutcome | undefined;
   // The runtime's display command exists once the launch is acknowledged with a handle.
   const display = (launch: LaunchOutcome | undefined) => launch?.kind === 'acknowledged'
-    ? context.runtime.attachCommand({ name: run.name, handle: launch.handle }) : undefined;
+    ? port.attachCommand({ name: run.name, handle: launch.handle }) : undefined;
   const outcome = await withMissionLock(context, missionId, async (): Promise<DispatchReceipt> => {
     const open = (await context.store.list(missionId)).filter((known) => isOpen(runView(known.transitions).state));
     const admission = admitRun(open.length, context.clock.now());
     if (!admission.ok) return refusal(admission.cause, admission.action);
-    const brief = await context.store.create(run, admission.transition, input.brief);
-    const launch = await context.runtime.dispatch(plan(run, brief));
+    const brief = await context.store.create(run, admission.transition, input.brief, schema);
+    const launch = await port.dispatch(plan(run, brief, schema));
     launched = launch;
     if (launch.kind !== 'lost' && launch.handle !== undefined) {
       await context.store.bind(runId, { handle: launch.handle });
@@ -158,7 +186,7 @@ export async function dispatchAgent(context: AgentsContext, input: DispatchInput
     const failed = await record(context, runId, recordDispatch(runView(recorded.transitions), launch, context.clock.now()));
     if (failed !== undefined) return failed;
     if (launch.kind === 'refused') {
-      if (launch.handle !== undefined) await context.runtime.stop({ name: run.name, handle: launch.handle });
+      if (launch.handle !== undefined) await port.stop({ name: run.name, handle: launch.handle });
       return refusal(launch.cause, launch.action);
     }
     const surface = plannedSurface(context.surfaces, display(launch), context.clock.now());
@@ -182,20 +210,23 @@ async function readRun(context: AgentsContext, runId: string): Promise<RunRecord
 
 export async function waitAgents(context: AgentsContext, runIds: readonly string[],
   options: { readonly any: boolean; readonly timeoutMs: number }): Promise<WaitOutcome> {
-  return waitForTransitions(runIds, options, { registry: context.store, runtime: context.runtime,
+  return waitForTransitions(runIds, options, { registry: context.store, runtimes: context.runtimes,
     clock: context.clock, owner: context.owner });
 }
 
 async function summary(context: AgentsContext, run: RunRecord, surface: SurfaceSummary | undefined)
   : Promise<RunSummary> {
   const result = currentResult(run, await context.store.result(run.runId));
-  const attach = context.runtime.attachCommand(refOf(run));
-  return { runId: run.runId, missionId: run.missionId, role: run.role,
+  const port = portOf(context, run);
+  const attach = port.attachCommand(refOf(run));
+  return { runId: run.runId, missionId: run.missionId, runtime: run.runtime, role: run.role,
     ...(run.ticket === undefined ? {} : { ticket: run.ticket }),
     ...(run.agentType === undefined ? {} : { agentType: run.agentType }),
     status: statusOf(run, result),
-    ...(result === undefined ? {} : { result: { text: result.text, truncated: result.truncated } }),
+    ...(result === undefined ? {} : { result: { text: result.text, truncated: result.truncated,
+      ...(result.conformance === undefined ? {} : { conformance: result.conformance }) } }),
     ...(attach === undefined ? {} : { attach: attach.join(' ') }),
+    ...(attach === undefined && !port.capabilities.view.available ? { view: port.capabilities.view } : {}),
     ...(surface === undefined ? {} : { surface }) };
 }
 
@@ -232,14 +263,15 @@ export async function sendAgent(context: AgentsContext, runId: string, message: 
     const decision = sendRun(runView(run.transitions), context.clock.now());
     if (!decision.ok) return refusal(decision.cause, decision.action);
     const file = await context.store.writeMessage(runId, message);
-    const launch = await context.runtime.send(refOf(run), plan(run, file));
+    const port = portOf(context, run);
+    const launch = await port.send(refOf(run), plan(run, file, await context.store.outputSchema(runId)));
     if (launch.kind === 'refused') return refusal(launch.cause, launch.action);
     // A session continued as a copy answers under a new handle: follow it, and let the next
     // observation bind its session and claim its result.
     if (launch.kind === 'acknowledged' && launch.handle !== run.binding?.handle) {
       await context.store.bind(runId, { handle: launch.handle });
       // The original would idle beside its copy until the supervisor reclaims it.
-      if (run.binding !== undefined) await context.runtime.stop(refOf(run));
+      if (run.binding !== undefined) await port.stop(refOf(run));
     }
     const failed = await record(context, runId, decision);
     if (failed !== undefined) return failed;
@@ -290,8 +322,10 @@ async function takeResult(context: AgentsContext, runId: string, guard: TakeGuar
     if ('ok' in after) return after;
     const retiredFailure = await record(context, runId, retireRun(runView(after.transitions), now));
     if (retiredFailure !== undefined) return retiredFailure;
-    // A review session has nothing left to do once its verdict is taken.
-    if (run.role === 'review') await context.runtime.stop(refOf(run));
+    // A review session has nothing left to do once its verdict is taken; a worker's is kept,
+    // and its adapter frees only what it holds for the run.
+    if (run.role === 'review') await portOf(context, run).stop(refOf(run));
+    else await portOf(context, run).release(refOf(run));
     return { ok: true, runId, state: 'retired', result: { text: result.text, truncated: result.truncated } };
   }));
 }
@@ -311,7 +345,7 @@ const sameBinding = (left: RunRecord['binding'], right: { readonly handle: strin
 function sessionGuard(context: AgentsContext, runId: string,
   verified: (sessionId: string) => void = () => undefined): TakeGuard {
   return async (run) => {
-    const reading = await context.runtime.observe([refOf(run)]);
+    const reading = await portOf(context, run).observe([refOf(run)]);
     if (reading.kind === 'unreadable') {
       return refusal(`the runtime cannot be read: ${reading.cause}`, 'retry once the runtime answers');
     }
@@ -354,13 +388,14 @@ export async function stopAgent(context: AgentsContext, runId: string): Promise<
     const decision = stopRun(runView(run.transitions), context.clock.now());
     if (!decision.ok) return refusal(decision.cause, decision.action);
     let ref = refOf(run);
+    const port = portOf(context, run);
     if (ref.handle === undefined) {
-      const reading = await context.runtime.observe([ref]);
+      const reading = await port.observe([ref]);
       const found = reading.kind === 'read' ? reading.sessions.get(run.name)?.binding : undefined;
       if (found !== undefined) ref = { ...ref, ...found };
     }
     if (ref.handle !== undefined) {
-      const stopped = await context.runtime.stop(ref);
+      const stopped = await port.stop(ref);
       if (!stopped.ok) return refusal(stopped.cause, stopped.action);
     }
     const failed = await record(context, runId, decision);
@@ -374,21 +409,29 @@ export async function attachAgent(context: AgentsContext, runId: string)
   : Promise<{ readonly ok: true; readonly command: readonly string[] } | Refusal> {
   const run = await readRun(context, runId);
   if ('ok' in run) return run;
-  const command = context.runtime.attachCommand(refOf(run));
-  return command === undefined
+  const port = portOf(context, run);
+  const command = port.attachCommand(refOf(run));
+  if (command !== undefined) return { ok: true, command };
+  return port.capabilities.view.available
     ? refusal('the run has no native session to attach yet', 'wait with void-machine agents wait <runId>')
-    : { ok: true, command };
+    : refusal(`the ${run.runtime} runtime offers no view of this run: ${port.capabilities.view.note}`,
+      'follow it with void-machine agents status or wait');
 }
 
-/** Composes the file registry and the Claude runtime for a process running in `cwd`. */
+/** Composes the file registry and every runtime's adapter for a process running in `cwd`. */
 export function agentsContext(options: { readonly cwd: string; readonly env: NodeJS.ProcessEnv;
   readonly home: string; readonly updateCommand: string }): AgentsContext | Refusal {
   const root = resolveMachineRoot(options.cwd);
   if (!root.ok) return refusal(root.cause, root.action);
   return {
     store: createRunRegistry({ machineRoot: root.root }),
-    runtime: createClaudeSessionRuntime({ executable: 'claude', env: options.env, home: options.home,
-      updateCommand: options.updateCommand }),
+    runtimes: {
+      claude: createClaudeSessionRuntime({ executable: 'claude', env: options.env, home: options.home,
+        updateCommand: options.updateCommand }),
+      // The socket directory sits in the home, outside every writable root a Codex sandbox grants.
+      codex: createCodexAppServerRuntime({ command: ['codex'], env: options.env,
+        stateDirectory: join(root.root, 'agents', 'codex'), socketDirectory: join(options.home, '.void-machine', 's') }),
+    },
     surfaces: surfacesFor(options.env),
     clock: { now: Date.now, sleep: (ms) => new Promise((done) => { setTimeout(done, ms); }) },
     owner: `agents-${String(process.pid)}-${randomUUID()}`,

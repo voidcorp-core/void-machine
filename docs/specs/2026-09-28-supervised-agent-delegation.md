@@ -63,7 +63,9 @@ Codex CLI 0.155.1, herdr 0.9.0, macOS, Ghostty).
 | `codex app-server` (stdio JSON-RPC) : `thread/start`, `turn/start` avec `outputSchema`, `turn/steer`, `turn/interrupt`, `turn/completed`, `thread/read` | learn.chatgpt.com/docs/app-server | vérifié (sonde stdio, sortie structurée conforme) |
 | Daemon app-server partagé de Codex : le proxy ne répond pas ; daemon 0.153.4 contre CLI 0.155.1 | sonde | non fiable, écarté |
 | Codex non interactif : `--sandbox workspace-write --ask-for-approval never` ; relecture : `--sandbox read-only` | agent-approvals-security | documenté |
-| Hook Codex `PreToolUse` sur `spawn_agent` (alias `Agent`) : observable, refus non garanti | learn.chatgpt.com/docs/hooks | inconnu |
+| Hook Codex `PreToolUse` sur `spawn_agent` (alias `Agent`) : observable, refus non garanti | learn.chatgpt.com/docs/hooks | observé (DEV-926) : le hook voit `collaborationspawn_agent`, le refus tient, mais le brief arrive chiffré |
+| `codex app-server --listen unix://PATH` : WebSocket sur socket Unix ; un tour survit à la déconnexion du client qui l'a lancé | sonde DEV-926 | vérifié |
+| `codex resume <thread> --remote unix://PATH` montre le thread en direct | sonde DEV-926 hors pane | inconnu : le TUI exige un vrai terminal |
 | Agent teams Claude : panes natifs mais tmux ou iTerm2 seulement, pas Ghostty, expérimental, Claude seul | agent-teams | écarté |
 
 ## Rôles
@@ -104,8 +106,8 @@ interface AgentRunRequest {
 
 | Rôle | Claude | Codex |
 |---|---|---|
-| `work` | `--permission-mode auto`, `cwd` = worktree du ticket | `sandbox: workspaceWrite`, `approvalPolicy: never` |
-| `review` | `--agent <type>` + `--permission-mode dontAsk` | `sandbox: readOnly`, `approvalPolicy: never` |
+| `work` | `--permission-mode auto`, `cwd` = worktree du ticket | `sandbox: workspace-write`, `approvalPolicy: never` |
+| `review` | `--agent <type>` + `--permission-mode dontAsk` | `sandbox: read-only`, `approvalPolicy: never` |
 
 ### États
 
@@ -191,6 +193,23 @@ pendant un tour, `turn/start` sinon. `stop` : `turn/interrupt`. `attachCommand` 
 n'est pas faite ; sans elle, un run Codex n'a pas de vue, ce que `status` dit explicitement.
 La vie de ce processus est liée au driver : un driver arrêté ne prétend pas superviser.
 
+*Correctif du 2026-09-28 (DEV-926)* : les sondes sur Codex 0.155.1 ont changé trois points
+([décision](../decisions-log/2026-09-28-codex-run-owns-detached-app-server--35ca0269-ba56-45da-8621-898d9e3a0fca.md)) :
+
+- chaque commande `agents` est un processus bref, donc aucune ne peut tenir un app-server en
+  stdio pour tout le run : le run possède un app-server détaché, `--listen unix://<socket>`, que
+  chaque commande joint le temps d'un échange borné. Le driver est ce processus : absent, ou
+  remplacé par un autre sous le même pid (heure de départ et ligne de commande vérifiées), le run
+  n'est plus listé et passe par `reconciling` puis `failed` ;
+- le socket ne tient pas dans le dossier du run (104 octets d'adresse sous macOS) et ne va pas
+  dans les dossiers temporaires, inscriptibles par un worker Codex : il vit dans
+  `~/.void-machine/s/` (0700), nommé d'après le run, jamais relu d'un fichier ; l'état du
+  processus vit dans `<machine>/agents/codex/`, écrit avant chaque étape faillible du lancement ;
+- le runtime rend lui-même le message final : le noyau l'enregistre une fois par tour et le
+  vérifie contre le schéma de sortie du run (`--output-schema`), un résultat non conforme étant
+  gardé et marqué. `attachCommand` ne rend rien tant que la vue n'est pas prouvée en pane, et
+  `status` dit pourquoi le run n'a pas de vue.
+
 Ajouter un runtime demande un adaptateur et ses tests de conformité, rien dans le noyau.
 
 ## Adaptateurs de présentation
@@ -248,6 +267,12 @@ Fermer une surface ne touche jamais le run, la worktree ni les preuves.
 **Codex** : même hook sur `spawn_agent`, livré seulement si la sonde prouve que le refus tient.
 Sinon, un coordinateur Codex appelle le CLI par l'instruction de son skill, et la capacité est
 déclarée non garantie.
+
+*Correctif du 2026-09-28 (DEV-926)* : sonde faite. Le hook reçoit `tool_name:
+"collaborationspawn_agent"` (le matcher documenté `spawn_agent|Agent` ne se déclenche jamais) ;
+avec un matcher qui le couvre, le refus tient. Mais `tool_input.message` arrive chiffré : aucune
+capture ne peut transmettre le brief au noyau. Aucun hook n'est livré, la capacité est déclarée
+non disponible (provenance observée), et un coordinateur Codex délègue par le CLI.
 
 ## Appelants migrés
 

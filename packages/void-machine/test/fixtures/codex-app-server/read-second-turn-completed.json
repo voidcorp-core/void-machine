@@ -1,0 +1,114 @@
+{
+ "id": 2,
+ "result": {
+  "thread": {
+   "id": "01a0ea07-757f-7d61-b031-0222fd5007f8",
+   "environments": [
+    {
+     "environmentId": "local",
+     "cwd": "/work/review",
+     "runtimeWorkspaceRoots": [
+      "/work/review"
+     ]
+    }
+   ],
+   "extra": null,
+   "sessionId": "01a0ea07-757f-7d61-b031-0222fd5007f8",
+   "forkedFromId": null,
+   "parentThreadId": null,
+   "preview": "Run the shell command `sleep 40` and then say done.",
+   "ephemeral": false,
+   "section": null,
+   "sectionEnteredAt": null,
+   "projectId": null,
+   "historyMode": "paginated",
+   "modelProvider": "openai",
+   "model": "gpt-5.6-sol",
+   "reasoningEffort": "high",
+   "createdAt": 1790632752,
+   "updatedAt": 1790632763,
+   "recencyAt": 1790632760,
+   "status": {
+    "type": "idle"
+   },
+   "path": "/home/user/.codex/sessions/2026/09/28/rollout-2026-09-28T23-59-12-01a0ea07-757f-7d61-b031-0222fd5007f8.jsonl",
+   "cwd": "/work/review",
+   "cliVersion": "0.155.1",
+   "originator": "void_machine",
+   "source": "vscode",
+   "canAcceptDirectInput": true,
+   "threadSource": null,
+   "agentNickname": null,
+   "agentRole": null,
+   "gitInfo": null,
+   "name": null,
+   "daybreakEnabled": null,
+   "turns": [
+    {
+     "id": "01a0ea07-75d5-75b1-a49b-be6ab0097121",
+     "items": [
+      {
+       "type": "userMessage",
+       "id": "01a0ea07-7d72-7a92-af5d-28b4aaf5bca3",
+       "clientId": null,
+       "content": [
+        {
+         "type": "text",
+         "text": "Run the shell command `sleep 40` and then say done.",
+         "text_elements": []
+        }
+       ]
+      },
+      {
+       "type": "agentMessage",
+       "id": "msg_05ca517e3c19f13c016abae333b57087d29d85a2053b46a6e6",
+       "text": "Je lance la commande et j’attends sa fin.",
+       "phase": "commentary",
+       "memoryCitation": null,
+       "delivery": null,
+       "questions": null
+      }
+     ],
+     "itemsView": "full",
+     "status": "interrupted",
+     "error": null,
+     "startedAt": 1790632752,
+     "completedAt": 1790632758,
+     "durationMs": 6026
+    },
+    {
+     "id": "01a0ea07-9537-71e3-b352-fb4a81be9c1b",
+     "items": [
+      {
+       "type": "userMessage",
+       "id": "01a0ea07-9559-78a1-bace-b292967a9164",
+       "clientId": null,
+       "content": [
+        {
+         "type": "text",
+         "text": "Reply with the single word ok.",
+         "text_elements": []
+        }
+       ]
+      },
+      {
+       "type": "agentMessage",
+       "id": "msg_05ca517e3c19f13c016abae33b642c87d2b0ce9841a05f4090",
+       "text": "ok",
+       "phase": "final_answer",
+       "memoryCitation": null,
+       "delivery": null,
+       "questions": null
+      }
+     ],
+     "itemsView": "full",
+     "status": "completed",
+     "error": null,
+     "startedAt": 1790632760,
+     "completedAt": 1790632763,
+     "durationMs": 2895
+    }
+   ]
+  }
+ }
+}

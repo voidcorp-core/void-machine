@@ -189,6 +189,51 @@ describe('binding and results', () => {
   });
 });
 
+describe('a run of another runtime', () => {
+  const THREAD = '01a0e9f7-5d5e-7c92-b856-0c2782407fda';
+  const schema = { type: 'object', properties: { verdict: { type: 'string' } }, required: ['verdict'] };
+  const codex = (cwd: string) => ({ ...run(cwd), runtime: 'codex' as const });
+
+  it('records a Codex run beside a Claude one, bound to its thread', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief');
+    // A Codex thread id is a UUIDv7: the same session shape the registry already binds.
+    await registry.bind(RUN, { handle: THREAD.slice(-8), sessionId: THREAD });
+    expect(await registry.read(RUN)).toMatchObject({ runtime: 'codex',
+      binding: { handle: '82407fda', sessionId: THREAD } });
+  });
+
+  it('keeps the output schema beside the run, under its own bound', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief', schema);
+    const path = join(root, 'runs', MISSION, 'agents', RUN, 'output-schema.json');
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(await registry.outputSchema(RUN)).toEqual(schema);
+    writeFileSync(path, '{"type":');
+    await expect(registry.outputSchema(RUN)).rejects.toThrow(/output schema/);
+  });
+
+  it('reads no output schema for a run dispatched without one', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect(await registry.outputSchema(RUN)).toBeUndefined();
+  });
+
+  it('keeps a result the runtime reported, with its turn and its conformance', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief', schema);
+    const reported = { sessionId: THREAD, turnId: '01a0e9f7-5e20-7812-b9d7-920fabee855c', recordedAt: 700,
+      pendingWork: 0, text: '{"verdict":"pass"}', truncated: false,
+      conformance: { state: 'invalid' as const, cause: 'verdict: expected string' } };
+    await registry.recordResult(RUN, reported);
+    expect(await registry.result(RUN)).toEqual(reported);
+  });
+});
+
 describe('the mission lock', () => {
   it('admits one holder, and a second only after release', async () => {
     const { main } = repository();

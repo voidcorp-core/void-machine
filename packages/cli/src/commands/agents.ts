@@ -23,8 +23,9 @@ import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
  */
 
 const USAGE = `usage: void-machine agents <command>
-  dispatch --role work|review --brief-file F [--runtime claude] [--type T] [--model M]
-           [--ticket DEV-123] [--mission ID] [--cwd PATH]      -> runId, at once
+  dispatch --role work|review --brief-file F [--runtime claude|codex] [--type T] [--model M]
+           [--output-schema F] [--ticket DEV-123] [--mission ID] [--cwd PATH]
+                                                               -> runId, at once
   wait <runId...> [--any] [--timeout S]                        -> next transitions (JSON)
   status [<runId>]                                             -> state, cause, action, result
   send <runId> --message-file F
@@ -88,6 +89,17 @@ function readText(path: string): string | undefined {
 	}
 }
 
+/** A JSON document from a bounded file; undefined when it cannot be read or parsed. */
+function readJson(path: string): unknown {
+	const text = readText(path);
+	if (text === undefined) return undefined;
+	try {
+		return JSON.parse(text) as unknown;
+	} catch {
+		return undefined;
+	}
+}
+
 function context(io: AgentsIo, cwd = io.cwd): AgentsContext | AgentsOutcome {
 	const composed = agentsContext({ cwd, env: io.env, home: io.home,
 		updateCommand: `npx ${PRODUCT_IDENTITY.packageName} update` });
@@ -101,16 +113,22 @@ async function dispatch(parsed: Parsed, io: AgentsIo): Promise<AgentsOutcome> {
 		return usage('dispatch needs --role work|review and --brief-file');
 	}
 	const runtime = parsed.options.get('--runtime') ?? 'claude';
-	if (runtime !== 'claude') {
-		return answer({ ok: false, cause: `the ${runtime} runtime has no delegation adapter yet`,
-			action: 'dispatch with --runtime claude' });
+	if (runtime !== 'claude' && runtime !== 'codex') {
+		return answer({ ok: false, cause: `the ${runtime} runtime has no delegation adapter`,
+			action: 'dispatch with --runtime claude|codex' });
 	}
 	const brief = readText(resolve(io.cwd, briefFile));
 	if (brief === undefined) return usage(`cannot read ${briefFile} (a regular file of at most 1 MiB)`);
+	const schemaFile = parsed.options.get('--output-schema');
+	const outputSchema = schemaFile === undefined ? undefined : readJson(resolve(io.cwd, schemaFile));
+	if (schemaFile !== undefined && outputSchema === undefined) {
+		return usage(`cannot read --output-schema ${schemaFile} as JSON (a regular file of at most 1 MiB)`);
+	}
 	const cwd = resolve(io.cwd, parsed.options.get('--cwd') ?? '.');
 	const composed = context(io, cwd);
 	if (!('store' in composed)) return composed;
-	return answer(await dispatchAgent(composed, { role, cwd, brief, agentType: parsed.options.get('--type'),
+	return answer(await dispatchAgent(composed, { runtime, role, cwd, brief, outputSchema,
+		agentType: parsed.options.get('--type'),
 		model: parsed.options.get('--model'), ticket: parsed.options.get('--ticket'),
 		missionId: parsed.options.get('--mission') ?? io.env['VOID_MISSION_ID'] }));
 }

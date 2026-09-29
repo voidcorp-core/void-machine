@@ -66,7 +66,11 @@ export const PACKAGE_LIMITS = Object.freeze({
   // 0cfd77e6): 1995.2 kB on 2026-09-28, with the CLI aligned on the kernel's
   // zod 4.6.5 so the bundle carries one zod, not two (2075.5 kB before). The
   // same 45 kB of headroom again.
-  [PRODUCT_IDENTITY.packageName]: 2_040_000,
+  // Delegation to Codex (DEV-926, proposed decision 5dd5306b) bundles the ws
+  // client the adapter needs to reach the Codex daemon on its Unix socket:
+  // 2050.5 kB on 2026-09-29, no fixture or test code packed. The same 45 kB of
+  // headroom.
+  [PRODUCT_IDENTITY.packageName]: 2_095_000,
   '@voidcorp/harness-graph': 120_000,
   '@voidcorp/pack-monorepo': 20_000,
   '@voidcorp/pack-nextjs': 20_000,

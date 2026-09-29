@@ -219,6 +219,9 @@ cockpit. `void-verify`, puis signal.
   - `feat(hooks): capture spawn_agent when the runtime honours the refusal` (seulement si prouvé)
 - **Notes**: processus app-server possédé par le driver, socket dans le dossier du run ; le daemon
   partagé n'est pas utilisé. Une capacité non prouvée reste `inconnue` et `status` le dit.
+  *Réorienté le 2026-09-29 (DEV-926)* : le run est un thread du daemon natif de Codex, que chaque
+  commande joint sur son socket de contrôle ; le noyau ne possède aucun processus (spec, correctif
+  Codex ; décision proposée 5dd5306b).
 
 ### Step 9 - Appelants sur le socle
 

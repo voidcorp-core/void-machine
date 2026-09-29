@@ -44,13 +44,36 @@ describe('void-machine agents', () => {
 		expect(outcome.stdout).toBe('');
 	});
 
-	it('refuses a runtime that has no adapter yet with its cause and action', async () => {
+	it('refuses a runtime that has no adapter with its cause and action', async () => {
 		const cwd = repository();
 		writeFileSync(join(cwd, 'brief.md'), 'Do it.');
-		const outcome = await runAgents(['dispatch', '--runtime', 'codex', '--role', 'work',
+		const outcome = await runAgents(['dispatch', '--runtime', 'gemini', '--role', 'work',
 			'--brief-file', join(cwd, 'brief.md')], io(cwd));
 		expect(outcome.code).toBe(1);
-		expect(JSON.parse(outcome.stdout)).toMatchObject({ ok: false, cause: expect.stringContaining('codex') });
+		expect(JSON.parse(outcome.stdout)).toMatchObject({ ok: false, cause: expect.stringContaining('gemini'),
+			action: expect.stringContaining('--runtime claude|codex') });
+	});
+
+	it('dispatches to Codex only once Codex itself answers, naming the repair otherwise', async () => {
+		const cwd = repository();
+		writeFileSync(join(cwd, 'brief.md'), 'Review.');
+		writeFileSync(join(cwd, 'schema.json'), '{"type":"object","properties":{"verdict":{"type":"string"}}}');
+		// No PATH: codex cannot be found, so the dispatch is refused before anything is recorded.
+		const outcome = await runAgents(['dispatch', '--runtime', 'codex', '--role', 'review', '--type', 'reviewer',
+			'--output-schema', join(cwd, 'schema.json'), '--brief-file', join(cwd, 'brief.md')], io(cwd));
+		expect(outcome.code).toBe(1);
+		expect(JSON.parse(outcome.stdout)).toMatchObject({ ok: false,
+			action: expect.stringContaining('Codex CLI') });
+	});
+
+	it('refuses an output schema file that is not JSON as a usage error', async () => {
+		const cwd = repository();
+		writeFileSync(join(cwd, 'brief.md'), 'Review.');
+		writeFileSync(join(cwd, 'schema.json'), '{"type":');
+		const outcome = await runAgents(['dispatch', '--runtime', 'codex', '--role', 'work',
+			'--output-schema', join(cwd, 'schema.json'), '--brief-file', join(cwd, 'brief.md')], io(cwd));
+		expect(outcome.code).toBe(2);
+		expect(outcome.stderr).toContain('--output-schema');
 	});
 
 	it('refuses an invalid dispatch as JSON with exit 1, before any runtime call', async () => {

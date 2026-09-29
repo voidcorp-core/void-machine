@@ -10,7 +10,7 @@ import {
   waitAgents,
 } from '../src/application/agents.js';
 import type {
-  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, SessionState,
+  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, RuntimeCapabilities, SessionState,
 } from '../src/runtime/delegation.js';
 
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
@@ -23,6 +23,13 @@ function repository(): string {
   return base;
 }
 
+/** What a Claude-like runtime declares: a view, a capture, no schema. */
+const capabilities: RuntimeCapabilities = {
+  view: { available: true, provenance: 'verified', note: 'attach' },
+  capture: { available: true, provenance: 'verified', note: 'hook' },
+  structuredOutput: { available: false, provenance: 'documented', note: 'none' },
+};
+
 /** A runtime whose every answer the test chooses, and which records what it was asked. */
 function scriptedRuntime(script: {
   preflight?: Preflight; launch?: LaunchOutcome; resume?: LaunchOutcome;
@@ -32,6 +39,7 @@ function scriptedRuntime(script: {
   const stops: NativeRunRef[] = [];
   const resumes: Array<{ ref: NativeRunRef; plan: LaunchPlan }> = [];
   const runtime: AgentRuntimePort = {
+    capabilities,
     preflight: async () => script.preflight ?? { ok: true },
     dispatch: async (plan) => { launches.push(plan); return script.launch ?? { kind: 'acknowledged', handle: '6d5ea8bb' }; },
     observe: async () => ({ kind: 'read', sessions: script.sessions?.() ?? new Map() }),
@@ -45,13 +53,14 @@ function scriptedRuntime(script: {
   return { runtime, launches, stops, resumes };
 }
 
-function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 }): AgentsContext {
+function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 },
+  codex: AgentRuntimePort = runtime): AgentsContext {
   const root = resolveMachineRoot(cwd);
   if (!root.ok) throw new Error(root.cause);
   let runs = 0;
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
-    runtime,
+    runtimes: { claude: runtime, codex },
     surfaces: { detected: createNoSurface(), reach: () => createNoSurface() },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',
@@ -282,5 +291,141 @@ describe('a review result bound to the session the kernel observes', () => {
     if (!receipt.ok) throw new Error(receipt.cause);
     expect(await acceptReview(ctx, receipt.runId)).toMatchObject({ ok: false,
       cause: expect.stringContaining('not a review') });
+  });
+});
+
+describe('a run delegated to Codex', () => {
+  const THREAD = '01a0e9f7-5d5e-7c92-b856-0c2782407fda';
+  const RUN_1 = 'vm-run_00000000-0000-4000-8000-000000000001';
+  const verdict = { type: 'object', properties: { verdict: { type: 'string', enum: ['pass', 'fail'] } },
+    required: ['verdict'], additionalProperties: false };
+  const codexCapabilities: RuntimeCapabilities = {
+    view: { available: false, provenance: 'unknown', note: 'not proven in a pane' },
+    capture: { available: false, provenance: 'observed', note: 'brief encrypted' },
+    structuredOutput: { available: true, provenance: 'verified', note: 'outputSchema' },
+  };
+
+  /** A Codex-like port: no view, a schema, and whatever sessions the test lists. */
+  function codexRuntime(sessions: () => ReadonlyMap<string, SessionState> = () => new Map()) {
+    const scripted = scriptedRuntime({ launch: { kind: 'acknowledged', handle: THREAD.slice(-8) }, sessions });
+    const runtime: AgentRuntimePort = { ...scripted.runtime, capabilities: codexCapabilities,
+      attachCommand: () => undefined };
+    return { ...scripted, runtime };
+  }
+
+  const done = (text: string) => () => new Map([[RUN_1, {
+    observation: { kind: 'present' as const, state: 'done' as const, status: 'idle' as const },
+    binding: { handle: THREAD.slice(-8), sessionId: THREAD },
+    result: { turnId: 'turn-1', text, truncated: false } }]]);
+
+  it('launches through the Codex port only, and says the run has no view and why', async () => {
+    const cwd = repository();
+    const claude = scriptedRuntime();
+    const codex = codexRuntime();
+    const ctx = context(cwd, claude.runtime, undefined, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(codex.launches).toHaveLength(1);
+    expect(claude.launches).toHaveLength(0);
+    const status = await agentStatus(ctx, receipt.runId);
+    expect(status).toMatchObject({ ok: true, runs: [{ runtime: 'codex',
+      view: { available: false, provenance: 'unknown', note: 'not proven in a pane' } }] });
+    expect(await attachAgent(ctx, receipt.runId)).toMatchObject({ ok: false,
+      cause: 'the codex runtime offers no view of this run: not proven in a pane' });
+  });
+
+  it('binds the whole session a runtime names at launch, so its view exists from the dispatch on', async () => {
+    const cwd = repository();
+    const codex = codexRuntime();
+    const named: AgentRuntimePort = { ...codex.runtime,
+      dispatch: async (plan) => { codex.launches.push(plan);
+        return { kind: 'acknowledged', handle: THREAD.slice(-8), sessionId: THREAD }; },
+      attachCommand: (ref) => ref.sessionId === undefined ? undefined : ['codex', 'resume', ref.sessionId] };
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, named);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(await attachAgent(ctx, receipt.runId)).toEqual({ ok: true, command: ['codex', 'resume', THREAD] });
+  });
+
+  it('holds a run to its output schema: refused where the runtime cannot, stored and resent where it can', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(done('{"verdict":"pass"}'));
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, codex.runtime);
+    expect(await dispatchAgent(ctx, { ...reviewInput(cwd), outputSchema: verdict })).toMatchObject({ ok: false,
+      cause: 'the claude runtime cannot hold a run to an output schema' });
+    expect(await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex', outputSchema: ['not', 'a', 'schema'] }))
+      .toMatchObject({ ok: false, cause: 'the output schema must be a JSON object' });
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex', outputSchema: verdict });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(codex.launches[0]?.outputSchema).toEqual(verdict);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 10_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'turn-ended' },
+      result: { text: '{"verdict":"pass"}', conformance: { state: 'valid' } } }] });
+    await sendAgent(ctx, receipt.runId, 'Say why.');
+    expect(codex.resumes[0]?.plan.outputSchema).toEqual(verdict);
+  });
+
+  it('keeps the thread of a worker once its result is accepted', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(done('done'));
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { role: 'work', cwd, brief: 'Implement it.', missionId: MISSION,
+      runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 10_000 });
+    expect(await acceptAgent(ctx, receipt.runId)).toMatchObject({ ok: true, state: 'retired' });
+    expect(codex.stops).toHaveLength(0);
+  });
+
+  it('stops a run whose launch was lost through the thread its runtime finds by name', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(() => new Map([[RUN_1, {
+      observation: { kind: 'present' as const, state: 'working' as const, status: 'busy' as const },
+      binding: { handle: THREAD.slice(-8), sessionId: THREAD } }]]));
+    const lost: AgentRuntimePort = { ...codex.runtime,
+      dispatch: async () => ({ kind: 'lost', cause: 'codex did not confirm the turn in time' }) };
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, lost);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(await stopAgent(ctx, receipt.runId)).toMatchObject({ ok: true, status: { state: 'stopped' } });
+    expect(codex.stops).toEqual([{ name: RUN_1, handle: THREAD.slice(-8), sessionId: THREAD }]);
+  });
+
+  it('never reads a daemon it cannot reach as runs gone: they stay as they were, and the wait says why', async () => {
+    const cwd = repository();
+    const cause = 'the Codex daemon does not answer on /s.sock: ECONNREFUSED; start it with codex app-server daemon start';
+    const down: AgentRuntimePort = { ...codexRuntime().runtime, observe: async () => ({ kind: 'unreadable', cause }) };
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, down);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    expect(await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 120_000 })).toMatchObject({
+      kind: 'timed-out', lastObservationError: cause });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'dispatched' } }] });
+  });
+
+  it('keeps a Codex answer that breaks the run schema, marked invalid', async () => {
+    const cwd = repository();
+    const codex = codexRuntime(done('{"verdict":"maybe"}'));
+    const ctx = context(cwd, scriptedRuntime().runtime, undefined, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex', outputSchema: verdict });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 10_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'turn-ended' },
+      result: { text: '{"verdict":"maybe"}', conformance: { state: 'invalid' } } }] });
+  });
+
+  it('never claims to supervise a run its daemon no longer lists: it reconciles, then fails', async () => {
+    const cwd = repository();
+    const now = { value: 10_000 };
+    const codex = codexRuntime(() => new Map());
+    const ctx = context(cwd, scriptedRuntime().runtime, now, codex.runtime);
+    const receipt = await dispatchAgent(ctx, { ...reviewInput(cwd), runtime: 'codex' });
+    if (!receipt.ok) throw new Error(receipt.cause);
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 5_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'reconciling',
+      cause: 'the session is no longer listed by its runtime' } }] });
+    await waitAgents(ctx, [receipt.runId], { any: false, timeoutMs: 120_000 });
+    expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'failed',
+      action: expect.stringContaining('inspect the runtime') } }] });
   });
 });

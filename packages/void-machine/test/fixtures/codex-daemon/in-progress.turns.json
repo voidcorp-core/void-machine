@@ -1,0 +1,47 @@
+{
+ "id": 4,
+ "result": {
+  "data": [
+   {
+    "id": "01a0ea7c-0dca-7c00-9c0b-b879856bbeec",
+    "items": [
+     {
+      "type": "userMessage",
+      "id": "01a0ea7c-104f-7861-932e-5c181799e22f",
+      "clientId": null,
+      "content": [
+       {
+        "type": "text",
+        "text": "Run the shell command `sleep 6`, then reply with verdict pass and a one-sentence summary saying hello.",
+        "text_elements": []
+       }
+      ]
+     },
+     {
+      "type": "reasoning",
+      "id": "rs_047877be1d2c6c32016abb010b3a8087d2b4fd1111fe147620",
+      "summary": [],
+      "content": []
+     },
+     {
+      "type": "agentMessage",
+      "id": "msg_047877be1d2c6c32016abb010bfb5c87d2b05126fbbd24d712",
+      "text": "{\"verdict\":\"pass\",\"summary\":\"I’ll run the requested command, then confirm completion.\"}",
+      "phase": "commentary",
+      "memoryCitation": null,
+      "delivery": null,
+      "questions": null
+     }
+    ],
+    "itemsView": "full",
+    "status": "inProgress",
+    "error": null,
+    "startedAt": 1790640393,
+    "completedAt": null,
+    "durationMs": null
+   }
+  ],
+  "nextCursor": null,
+  "backwardsCursor": "{\"requestedThreadId\":\"01a0ea7c-0a16-7d92-a048-70f5effc1707\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+ }
+}

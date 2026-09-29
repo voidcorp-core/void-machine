@@ -200,6 +200,15 @@ offers: Codex spawns a worker per `assign` through its **native subagents**,
 Claude through its own delegation. Neither runtime decides anything the kernel
 did not, so the two cannot drift into deciding different things.
 
+A coordinator on either runtime can also delegate one agent to Codex with
+`void-machine agents dispatch --runtime codex`: the run is a thread of Codex's
+own app-server daemon (`codex app-server daemon`), with an optional
+`--output-schema` its final answer is held to, shown live in a pane by
+`codex resume <thread> --remote unix://<socket>` (see `ARCHITECTURE.md`,
+"Delegated agent runs"). Codex's own `spawn_agent` is not captured into the
+kernel: a refusal on it holds, but the hook receives the sub-agent's brief
+encrypted, so a Codex coordinator dispatches through the CLI itself.
+
 What is still open is BEHAVIOURAL parity of a real Codex run, which needs an
 execution conformance gate and belongs to the certification range. The loop was
 proved on Claude; runtime equivalence on Codex is asserted, not measured.

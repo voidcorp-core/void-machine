@@ -4,7 +4,8 @@ Private Machine foundation, never published on its own. One capability reaches u
 delegation, embedded in the voidmachine CLI as `void-machine agents` through the `./agents`
 export ([decision](../../docs/decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md)).
 Its layers and contracts are described in `docs/ARCHITECTURE.md`, "Delegated agent runs"; the
-Claude background-session contract is replayed from captures in `test/fixtures/claude-session/`.
+Claude background-session contract is replayed from captures in `test/fixtures/claude-session/`,
+and the Codex daemon contract from captures in `test/fixtures/codex-daemon/`.
 Every other capability stays private until a consumer asks.
 
 A1 candidate entry after build: `node dist/application/cli.js doctor --json`.
@@ -40,6 +41,16 @@ Source grounding:
   CLI test dependency tsx 4.22.4 through Node --import, as the repository stdin
   process test does. Installed tsx package.json exports and dist/loader.mjs are
   the version-specific references; no dependency or configuration was added.
+- Codex CLI 0.158.0 [app-server](https://learn.chatgpt.com/docs/app-server) (transports, daemon,
+  threads, turns), checked against the installed version's own bindings
+  (`codex app-server generate-ts`, `--experimental` for `thread/backgroundTerminals/clean`) and
+  `codex app-server daemon --help`, `codex resume --help`: the sandbox modes are `read-only` and
+  `workspace-write`, `thread/start` takes no name (`thread/name/set` does), `thread/turns/list`
+  reads the last turn alone, and the daemon speaks WebSocket on its control socket.
+- ws 8.21.0 [client API](https://github.com/websockets/ws/blob/8.21.0/doc/ws.md):
+  `ws+unix://<path>:/` IPC addresses, `handshakeTimeout`, `maxPayload`, `perMessageDeflate: false`.
+- Zod 4.6.5 `fromJSONSchema` is marked semi-experimental and refuses external `$ref`: an output
+  schema is compiled when it is admitted, and an answer it cannot check is never called valid.
 - Node 24 [filesystem API](https://nodejs.org/docs/latest-v24.x/api/fs.html):
   openSync, fstatSync, readSync and closeSync bound the actual file read.
 

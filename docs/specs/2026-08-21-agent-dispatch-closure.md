@@ -59,6 +59,19 @@ Cette tranche ferme la boucle sans transformer les hooks en orchestrateur :
 - Une absence d'usage ne provoque jamais une suppression. Après vingt sessions humaines, elle peut
   seulement produire une revue de retrait que `void-learn` soumet à un humain.
 
+*Correctif du 2026-09-30 (DEV-929)* : le lancement d'une enveloppe ne passe plus par la primitive
+native du coordinateur (`Agent`, `spawn_agent`) mais par `void-machine agents dispatch`, rôle
+`review`, avec `agentName`, `runtime` et `missionId` recopiés de l'enveloppe
+([spec de délégation](2026-09-28-supervised-agent-delegation.md), « Appelants migrés » ;
+[décision](../decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md)).
+Les invariants « Codex exécute avec `spawn_agent` ; Claude Code avec `Agent` » et « le dispatcher
+n'exécute ni shell ni modèle », ainsi que l'exclusion « lancer un modèle depuis le CLI », sont
+remplacés sur ce seul point : le contrôleur de mission n'exécute toujours rien, c'est le noyau de
+délégation qui lance la session native. Le contrat de dispatch, le cycle de vie `specialist.*` et
+la validation de `mission specialist-event` ne changent pas ; `contextId` porte l'identifiant du
+run. Conséquence sur la télémétrie : un spécialiste lancé ainsi n'émet plus d'événement
+`runtime.tool.*` de catégorie `agent` ; sa preuve d'exécution est l'enregistrement du run.
+
 ## Contrat de dispatch
 
 Pour chaque action `invoke-specialists`, le contrôleur produit une enveloppe par spécialiste :

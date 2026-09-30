@@ -5,34 +5,38 @@ Local presentation integration for the approved
 presentation port of the delegation kernel
 ([spec](specs/2026-09-28-supervised-agent-delegation.md), "Adaptateurs de présentation").
 
-## Procedure (independent of the multiplexer)
+## Procedure
+
+One procedure, for every caller: the coordinator, `void-autopilot` (workers and reviewers) and
+`void-implement` (specialists). None of its steps asks the agent whether a display exists.
 
 1. Resolve the target project through the existing project discovery and read its
    rules. Resolve the mission through the provider or the explicit user objective.
    Record Git branch/status; preserve unrelated changes. Reuse native continuity.
-2. Work in the multiplexer the coordinator already runs in; nothing creates a
-   workspace for display. Without a multiplexer nothing is shown and native
-   execution is unchanged.
-3. If this mission has no coordinator, launch the authorized native runtime in the
-   returned coordinator surface, with target project cwd and complete brief. Choose
-   the user's runtime preference first. Never spawn a second coordinator solely for
-   display. Native runtime invocation, permissions and sessions remain owned by the
-   existing runtime adapter. A shell surface is not a running agent.
-4. When the coordinator delegates an independently runnable terminal worker, first
-   create its isolated worktree through the existing execution workflow, then
-   dispatch it with `void-machine agents dispatch`. The kernel opens the run's
-   surface itself once the launch is acknowledged, typing the runtime's display
-   command (`claude attach <id>`) into it; the surface never launches anything.
-   Native subagents without a terminal remain in the overview; do not simulate them
-   with duplicate runtime sessions.
-5. Update status from actual native execution or canonical mission observations.
-   RUN/REVIEW/WAIT/FAILED/STOPPED are observations; VERIFIED requires fresh delivery
-   proofs. Missing observations are UNKNOWN. Model, ctx and quota remain unknown
-   unless available from the runtime. An idle screen is not proof of a stalled task.
-6. Close only owned, completed display resources after native process termination
-   is observed and the return and useful proof artifacts have been recovered.
-   Preserve unfinished work and native resume references. No automatic
-   process kill, worktree deletion or branch cleanup belongs to presentation.
+2. The coordinator stays in the terminal it already runs in. Nothing creates a
+   workspace for display, and no second coordinator is ever launched for one.
+3. A work run gets its isolated worktree first, through the existing execution
+   workflow; a review run gets the checkout it judges.
+4. Every delegated agent is launched with `void-machine agents dispatch`, and no
+   other way. The kernel admits the run, launches the native session, and opens
+   the run's view itself once the launch is acknowledged, typing the runtime's
+   display command (`claude attach <id>`, `codex resume <thread> --remote ...`)
+   into it; a view never launches anything. The same run exists whatever the
+   terminal can show, so the caller has nothing to decide. A refused dispatch is
+   reported with its cause and repair; it is never replaced by another launch path.
+5. Follow runs with `agents wait` and `agents status`, which report actual native
+   execution: working, turn-ended, waiting-human, failed, stopped, reconciling.
+   Missing observations are unknown, never inferred; an idle screen is not proof
+   of a stalled task. A run `waiting-human` is answered by the person in that
+   agent's own session: no other session can approve in their place.
+6. `agents accept` collects a result and retires the run; `agents stop` ends one.
+   Either closes the view the kernel owns, and nothing else: the worktree, the
+   branch and the proofs keep their own lifecycle, and no process kill, worktree
+   deletion or branch cleanup belongs to presentation.
+
+What stays outside this path, by construction rather than by choice: a Claude `fork`
+subagent, which inherits the coordinator's context, and agents the `Workflow` tool
+launches. Both remain native and are not shown.
 
 ## Adapter boundary
 
@@ -55,8 +59,7 @@ tmux, anything else gives none. The adapters live in
 - **tmux**: `split-window` beside the caller, then below the last run pane, the
   display command passed as argv; the title is the label and the pane option
   `@void_run` carries the run.
-- **cmux**: the logic of the former mission presentation script: beside the
-  coordinator, then stacked below the last run; the new surface is found by diffing
+- **cmux**: beside the coordinator, then stacked below the last run; the new surface is found by diffing
   the workspace tree, and nothing is attributed when that diff is ambiguous. Its
   title `WORK-n | <runId>` is its ownership mark.
 

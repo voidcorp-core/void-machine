@@ -187,6 +187,15 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
+  "agents": {
+    "aliases": [],
+    "help": [
+      {
+        "signature": "agents <sub>",
+        "description": "Delegate to an agent through the kernel: dispatch a Claude background session, wait for its next transition, read its status and result, send, accept, stop or attach it."
+      }
+    ]
+  },
   "security": {
     "aliases": [],
     "help": [

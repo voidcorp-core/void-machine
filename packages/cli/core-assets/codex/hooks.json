@@ -1,5 +1,5 @@
 {
-  "description": "Codex CLI hooks manifest — the Codex-side mirror of the Claude Code hooks wired in ../.claude-plugin/plugin.json. Both runtimes invoke the same portable Node rules; the runner normalizes Claude single-file Edit/Write and Codex multi-file apply_patch. `void-machine init` stages the runner and compiles absolute paths so sessions started in subdirectories still work. NOT mirrored, deliberately: trim-large-output, whose PostToolUse output rewriting is unconfirmed on Codex. See ../../../docs/CODEX.md.",
+  "description": "Codex CLI hooks manifest — the Codex-side mirror of the Claude Code hooks wired in ../.claude-plugin/plugin.json. Both runtimes invoke the same portable Node rules; the runner normalizes Claude single-file Edit/Write and Codex multi-file apply_patch. `void-machine init` stages the runner and compiles each command into a Node bootstrap that finds it from the session directory, so the versioned manifest holds no machine path. NOT mirrored, deliberately: trim-large-output, whose PostToolUse output rewriting is unconfirmed on Codex. See ../../../docs/CODEX.md.",
   "hooks": {
     "PreToolUse": [
       {

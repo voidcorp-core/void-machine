@@ -10,6 +10,7 @@ import {
   CODEX_HOOKS_DIR,
   codexFloorDrift,
   codexFloorHealth,
+  codexHookBootstrap,
   compileCodexHooksManifest,
   referencedScripts,
   refreshCodexFloor,
@@ -25,11 +26,14 @@ const templatePath = resolve(CORE_ROOT, 'codex', 'hooks.json');
 const template = readFileSync(templatePath, 'utf8');
 
 describe('compileCodexHooksManifest', () => {
-  it('substitutes every VOID_HOOKS_DIR placeholder with the staged dir', () => {
+  it('replaces every VOID_HOOKS_DIR placeholder with a runner lookup from the session cwd', () => {
     const out = compileCodexHooksManifest(template);
     // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting the literal placeholder is gone.
     expect(out).not.toContain('${VOID_HOOKS_DIR}');
-    expect(out).toContain(`${CODEX_HOOKS_DIR}/_void-hook.mjs`);
+    for (const command of compiledCommands(out)) {
+      expect(command.startsWith('node -e "')).toBe(true);
+      expect(command).toContain(codexHookBootstrap('_void-hook.mjs'));
+    }
     expect(out).toContain('enforce dangerous-command');
   });
 
@@ -44,30 +48,51 @@ describe('compileCodexHooksManifest', () => {
     expect(manifest).not.toHaveProperty('$comment');
   });
 
-  it('honors a custom hooks dir', () => {
-    const out = compileCodexHooksManifest(template, '/abs/hooks');
-    expect(out).toContain('/abs/hooks/_void-hook.mjs');
-  });
-
   it('throws on a template that is valid JSON but not an object', () => {
     expect(() => compileCodexHooksManifest('42')).toThrow(/not a JSON object/);
     expect(() => compileCodexHooksManifest('null')).toThrow(/not a JSON object/);
     expect(() => compileCodexHooksManifest('[1,2]')).toThrow(/not a JSON object/);
   });
 
-  it('quotes an absolute hook path containing spaces', () => {
-    const out = compileCodexHooksManifest(template, '/tmp/project with spaces/.void/hooks');
-    expect(out).toContain('node \\"/tmp/project with spaces/.void/hooks/_void-hook.mjs\\"');
+  it('refuses a placeholder outside the node-runner command shape', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a placeholder shape to refuse.
+    const command = 'sh "${VOID_HOOKS_DIR}/x.sh"';
+    const corrupt = JSON.stringify({
+      hooks: { Stop: [{ hooks: [{ type: 'command', command }] }] },
+    });
+    expect(() => compileCodexHooksManifest(corrupt)).toThrow(/unsupported hook command/);
   });
 
-  it('escapes a Windows hook path as valid JSON', () => {
-    const out = compileCodexHooksManifest(template, 'C:\\work tree\\.void\\hooks');
-    expect(() => JSON.parse(out)).not.toThrow();
-    expect(JSON.parse(out).hooks.PreToolUse[0].hooks[0].command).toContain(
-      'C:\\work tree\\.void\\hooks/_void-hook.mjs',
-    );
+  // DEV-918: the manifest is versioned, so a path that belongs to the machine
+  // that ran init breaks every other clone, worktree and CI checkout.
+  it('never embeds an absolute path', () => {
+    for (const command of compiledCommands(compileCodexHooksManifest(template))) {
+      expect(command).not.toMatch(ABSOLUTE_PATH);
+    }
+    expect(JSON.parse(compileCodexHooksManifest(template)).description).not.toMatch(ABSOLUTE_PATH);
+  });
+
+  // Codex runs a hook through the session shell: sh, bash or zsh on POSIX,
+  // PowerShell or cmd.exe on Windows. A command that uses none of their
+  // expansion characters means the same thing to all five.
+  it('uses no character that any Codex hook shell would expand', () => {
+    for (const command of compiledCommands(compileCodexHooksManifest(template))) {
+      expect(command).not.toMatch(/[$%`\\!]/);
+      expect(command.split('"')).toHaveLength(3);
+    }
   });
 });
+
+const ABSOLUTE_PATH = /(^|[\s"'(=,])(\/|[A-Za-z]:[\\/]|\\\\)/;
+
+function compiledCommands(manifest: string): string[] {
+  const parsed = JSON.parse(manifest) as {
+    hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+  };
+  return Object.values(parsed.hooks).flatMap((groups) =>
+    groups.flatMap((group) => group.hooks.map((hook) => hook.command)),
+  );
+}
 
 describe('safety-floor matcher coverage', () => {
   /** PreToolUse entries as (rule or script basename -> matcher) pairs. */
@@ -129,7 +154,7 @@ describe('safety-floor matcher coverage', () => {
   it('runs every inline rule through the portable Node bundle', () => {
     const manifest = compileCodexHooksManifest(template);
     for (const rule of RULE_NAMES) {
-      expect(manifest).toContain(`_void-hook.mjs\\" enforce ${rule}`);
+      expect(manifest).toContain(`\\" enforce ${rule} codex`);
     }
   });
 });
@@ -168,8 +193,7 @@ describe('wireCodexFloor', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting the literal placeholder is gone.
     expect(manifest).not.toContain('${VOID_HOOKS_DIR}');
     expect(() => JSON.parse(manifest)).not.toThrow();
-    expect(manifest).toContain('.void/hooks/_void-hook.mjs');
-    expect(manifest).toContain(project);
+    expect(manifest).not.toContain(project);
     expect(manifest).not.toContain('$(git rev-parse');
     // every referenced script actually landed on disk (no wired-but-absent hook)
     for (const script of referencedScripts(manifest)) {
@@ -206,6 +230,45 @@ describe('wireCodexFloor', () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
+  });
+
+  it('writes the same manifest whatever the checkout it runs in', async () => {
+    const first = mkdtempSync(join(tmpdir(), 'void codex clone a '));
+    const second = mkdtempSync(join(tmpdir(), 'void-codex-clone-b-'));
+    await wireCodexFloor(first, CORE_ROOT);
+    await wireCodexFloor(second, CORE_ROOT);
+    expect(readFileSync(join(first, '.codex', 'hooks.json'), 'utf8')).toBe(
+      readFileSync(join(second, '.codex', 'hooks.json'), 'utf8'),
+    );
+  });
+
+  it('fails closed on enforcement and open on lifecycle when no runner is staged', () => {
+    const project = mkdtempSync(join(tmpdir(), 'void codex unstaged '));
+    const commands = compiledCommands(compileCodexHooksManifest(template));
+    const enforce = commands.find((command) => command.endsWith('enforce dangerous-command codex'));
+    const lifecycle = commands.find(
+      (command) => command.endsWith('lifecycle checkpoint-audit codex'),
+    );
+    const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } });
+
+    const options = { cwd: project, shell: true, input, encoding: 'utf8' } as const;
+    const blocked = spawnSync(enforce ?? '', options);
+    // Exit 0 with a denial: the only refusal PowerShell, Codex's default shell on
+    // Windows, does not turn into a failed hook that lets the call through.
+    expect(blocked.status).toBe(0);
+    expect(blocked.stdout).toMatch(/^[\x20-\x7e]*\n$/);
+    expect(JSON.parse(blocked.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: expect.stringContaining('HOOK_RUNNER_MISSING'),
+      },
+    });
+    expect(blocked.stderr).toContain('HOOK_RUNNER_MISSING');
+    const passed = spawnSync(lifecycle ?? '', options);
+    expect(passed.status).toBe(0);
+    expect(passed.stdout).toBe('');
+    expect(passed.stderr).toContain('HOOK_RUNNER_MISSING');
   });
 
   it('returns the staged-script count and is idempotent', async () => {

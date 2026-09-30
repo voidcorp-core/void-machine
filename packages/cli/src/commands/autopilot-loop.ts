@@ -1,5 +1,5 @@
-// `autopilot next | stop | fingerprint | arm | disarm | judgment`: the
-// continuous loop's operator surface.
+// `autopilot next | stop | fingerprint | merges | merge | update-branch | arm |
+// disarm | judgment`: the continuous loop's operator surface.
 //
 // Unlike the cluster subcommands, `next` observes GitHub and git itself. GitHub
 // is the authority on a merge and the shared Git state is what a unit must not
@@ -8,12 +8,12 @@
 // never decides a merge. The command judges nothing: it admits what it is given
 // and returns the kernel's actions.
 //
-// Local state is three things under `.void/machine/autopilot/`, all written
-// only by an explicit command: the stop signal, one digest-only fingerprint per
-// ticket, recorded before its unit begins, and the head each ticket's
-// auto-merge was armed on, which GitHub does not keep. No secret lives here:
-// the review runs in GitHub Actions and publishes its verdict as a check only
-// that app can create.
+// Local state is five things under `.void/machine/autopilot/`, all written
+// only by an explicit command: the stop signal, the human hold on merges, one
+// digest-only fingerprint per ticket, recorded before its unit begins, the head
+// each ticket's auto-merge was armed on, which GitHub does not keep, and the
+// review `autopilot review` recorded for each head, which is the verdict the
+// loop merges on. No secret lives here.
 
 import {
   existsSync,
@@ -21,6 +21,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -44,16 +45,28 @@ import {
   loopProgramOf,
   parseStopSignal,
   protectedBranches,
+  provesCleanVerdict,
   type PullRequestObservation,
   pullRequestsToObserve,
   type StopSignal,
 } from '../lib/autopilot/loop.js';
+import { sameBranch } from '../lib/autopilot/branch-identity.js';
+import {
+  MERGE_HOLD_PATH,
+  type MergeHold,
+  mergeHoldRecord,
+  parseMergeHold,
+} from '../lib/autopilot/merge-hold.js';
 import {
   type GhRunner,
   type GitRunner,
   observeGithub,
+  type MergeMethodFlag,
   PULL_REQUEST_FIELDS,
   parsePullRequestView,
+  readBehind,
+  readDefaultBranch,
+  readMergeMethod,
   readQueueMembership,
   readSharedState,
   resolveLoopBase,
@@ -66,12 +79,16 @@ import {
   type SharedFingerprint,
   type SharedStateReading,
 } from '../lib/autopilot/shared-state.js';
+import { readLocalReviews } from './autopilot-review.js';
 import { flagValue } from './autopilot-usage.js';
 
 const LOOP_SUBCOMMANDS = [
   'next',
   'stop',
   'fingerprint',
+  'merges',
+  'merge',
+  'update-branch',
   'arm',
   'disarm',
 ] as const;
@@ -98,6 +115,12 @@ export function loopCommand(
       return stopCommand(argv, context);
     case 'fingerprint':
       return fingerprintCommand(argv, context);
+    case 'merges':
+      return mergesCommand(argv, context);
+    case 'merge':
+      return mergeCommand(argv, context);
+    case 'update-branch':
+      return updateBranchCommand(argv, context);
     case 'arm':
       return armCommand(argv, context);
     case 'disarm':
@@ -116,6 +139,8 @@ export interface LoopCommandOutput {
 /** The two runners the loop observes through; injected so tests run on captures. */
 export interface LoopRunners {
   readonly root: string;
+  /** ISO instant of the tick: how long a recorded review has been running. */
+  readonly now?: string;
   readonly gh?: GhRunner;
   readonly git?: GitRunner;
 }
@@ -140,8 +165,31 @@ function runner<T>(value: T | undefined, name: string): T {
   );
 }
 
+function instantOf(iso: string): number {
+  const instant = Date.parse(iso);
+  if (Number.isFinite(instant)) return instant;
+  throw autopilotFailure(
+    'AUTOPILOT_CONTRACT',
+    'the loop clock is unreadable',
+    `${JSON.stringify(iso.slice(0, 40))} is not an ISO instant`,
+    'invoke autopilot through the CLI entry point, which passes the current instant',
+  );
+}
+
 function readIfPresent(path: string): string | undefined {
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+}
+
+/** The hold as the file states it; a file that cannot be opened is a hold too. */
+function readMergeHold(root: string): MergeHold {
+  try {
+    return parseMergeHold({ kind: 'text', text: readFileSync(join(root, MERGE_HOLD_PATH), 'utf8') });
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return parseMergeHold({ kind: 'absent' });
+    }
+    return parseMergeHold({ kind: 'unreadable', cause: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 /** Write through a temporary file, so a reader never sees half a record. */
@@ -280,15 +328,17 @@ function renderAction(action: LoopAction, humanWaitLabel: string): string {
         `mark-human-wait ${action.ticketId} [${humanWaitLabel}]: ` +
         `${action.reason} - ${action.detail}`
       );
+    case 'merge':
+    case 'update-branch':
     case 'enable-auto-merge':
-      return `enable-auto-merge ${action.ticketId}: #${action.pullRequest} at ${action.headSha}`;
+      return `${action.kind} ${action.ticketId}: #${action.pullRequest} at ${action.headSha}`;
     case 'disable-auto-merge':
       return (
         `disable-auto-merge ${action.ticketId}: #${action.pullRequest} at ${action.headSha},` +
         ` armed on ${action.armedSha ?? 'an unrecorded head'}`
       );
-    case 'rerun-review-check':
-      return `rerun-review-check ${action.ticketId}: #${action.pullRequest}, run ${action.run}`;
+    case 'review':
+      return `review ${action.ticketId}: #${action.pullRequest} at ${action.headSha}, round ${action.round}`;
     case 'requeue':
       return (
         `requeue ${action.ticketId}: #${action.pullRequest} at ${action.headSha},` +
@@ -308,9 +358,13 @@ function renderAction(action: LoopAction, humanWaitLabel: string): string {
 }
 
 function renderDecision(decision: LoopDecision): string {
-  const lines = decision.actions.map((action) => renderAction(action, decision.humanWaitLabel));
+  const lines = [
+    `merges: ${decision.merges}`,
+    ...decision.actions.map((action) => renderAction(action, decision.humanWaitLabel)),
+  ];
   for (const refusal of decision.refusals) lines.push(`refused: ${refusal}`);
-  return `${lines.length === 0 ? 'nothing to do' : lines.join('\n')}\n`;
+  if (decision.actions.length === 0 && decision.refusals.length === 0) lines.push('nothing to do');
+  return `${lines.join('\n')}\n`;
 }
 
 /**
@@ -326,7 +380,8 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
   const gh = runner(context.gh, 'gh');
   const base = resolveLoopBase(gh, program.autopilot.base);
   const pullRequests = pullRequestsToObserve(program, tracker);
-  const github = observeGithub(gh, { base, pullRequests });
+  const defaultBranch = program.autopilot.deployBranch === undefined;
+  const github = observeGithub(gh, { base, pullRequests, defaultBranch });
   const before = new Map<string, SharedFingerprint>();
   for (const ticket of tracker.tickets) {
     const recorded = recordedFingerprint(context.root, ticket.id);
@@ -338,7 +393,10 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
     if (record !== undefined) armed.set(ticket.id, record);
   }
   const sharedState = { current, before };
-  const decision = decideLoop({ program, tracker, github, signal, sharedState, armed });
+  const reviews = readLocalReviews(context.root, tracker.tickets.map((ticket) => ticket.id));
+  const now = instantOf(runner(context.now, 'clock'));
+  const mergeHold = readMergeHold(context.root);
+  const decision = decideLoop({ program, tracker, github, signal, sharedState, armed, reviews, now, mergeHold });
   return { value: decision, human: renderDecision(decision) };
 }
 
@@ -376,14 +434,18 @@ function freezeCommand(
         .join('; ')}, then stop acting`,
     );
   }
-  const github = { base: program.autopilot.base, mergeQueue: false, pullRequests };
+  const github = { base: program.autopilot.base, defaultBranch: undefined, mergeQueue: false, pullRequests };
   const sharedState = { current, before: new Map<string, SharedFingerprint>() };
   const armed = new Map<string, ArmedRecord>();
   for (const ticket of tracker.tickets) {
     const record = recordedArm(context.root, ticket.id);
     if (record !== undefined) armed.set(ticket.id, record);
   }
-  const decision = decideLoop({ program, tracker, github, signal: 'now', sharedState, armed });
+  // A freeze disarms and stops: no review is read, none is delegated.
+  const decision = decideLoop({
+    program, tracker, github, signal: 'now', sharedState, armed, reviews: new Map(), now: 0,
+    mergeHold: readMergeHold(context.root),
+  });
   return { value: decision, human: renderDecision(decision) };
 }
 
@@ -518,48 +580,247 @@ function stopMerge(gh: (args: readonly string[]) => string, pr: ArmedState): voi
 }
 
 /**
- * `autopilot arm --ticket <id> --pr <n> --head <sha>`: the kernel's
- * `enable-auto-merge`. GitHub keeps no armed head, so it is recorded first,
- * then the merge is armed on exactly that head, then GitHub is read back: a
- * pull request neither holding an auto-merge nor sitting in the merge queue is
- * a failure, and one whose head moved while arming is disarmed at once. The
- * kernel disarms later whatever this record no longer vouches for.
+ * `autopilot merges [--by-human | --automatic]`: the one instruction a person
+ * gives the loop about merges. `--by-human` writes the hold, `--automatic`
+ * removes it, a damaged one included, and bare prints the state `next` reads
+ * on its next tick.
  */
-export function armCommand(argv: readonly string[], context: LoopRunners): LoopCommandOutput {
+export function mergesCommand(argv: readonly string[], context: LoopRunners): LoopCommandOutput {
+  const byHuman = argv.includes('--by-human');
+  const automatic = argv.includes('--automatic');
+  if (byHuman && automatic) {
+    throw autopilotFailure(
+      'AUTOPILOT_USAGE',
+      'autopilot merges takes --by-human or --automatic, not both',
+      'one invocation says who merges',
+      'pass --by-human to merge yourself, --automatic to hand the merges back to the loop',
+    );
+  }
+  const path = join(context.root, MERGE_HOLD_PATH);
+  if (byHuman) {
+    writeAtomically(path, mergeHoldRecord(runner(context.now, 'clock')));
+    return {
+      value: { merges: 'by-human', path: MERGE_HOLD_PATH },
+      human: `merges: by-human, from the next tick (${MERGE_HOLD_PATH})\n`,
+    };
+  }
+  if (automatic) {
+    const removed = existsSync(path);
+    rmSync(path, { force: true });
+    return {
+      value: { merges: 'automatic', removed },
+      human: 'merges: automatic, from the next tick\n',
+    };
+  }
+  const hold = readMergeHold(context.root);
+  return hold.held
+    ? { value: { merges: 'by-human', detail: hold.detail }, human: `merges: by-human (${hold.detail})\n` }
+    : { value: { merges: 'automatic' }, human: 'merges: automatic\n' };
+}
+
+interface MergeTarget {
+  readonly ticket: string;
+  readonly number: number;
+  readonly head: string;
+}
+
+function mergeTargetOf(argv: readonly string[], command: string, action: string): MergeTarget {
   const ticket = flagValue(argv, '--ticket');
   const head = flagValue(argv, '--head');
   if (ticket === undefined || head === undefined || !SHA_PATTERN.test(head)) {
     throw autopilotFailure(
       'AUTOPILOT_USAGE',
-      'autopilot arm needs the ticket, the pull request and the full head SHA the kernel named',
+      `${command} needs the ticket, the pull request and the full head SHA the kernel named`,
       ticket === undefined ? '--ticket was not given' : '--head is missing or not a full SHA',
-      'copy them from the `enable-auto-merge` action: `--ticket <id> --pr <n> --head <sha>`',
+      `copy them from the \`${action}\` action: \`--ticket <id> --pr <n> --head <sha>\``,
     );
   }
-  const number = pullRequestNumber(argv, 'autopilot arm');
-  const path = armedPath(context.root, ticket);
+  return { ticket, number: pullRequestNumber(argv, command), head };
+}
+
+/**
+ * What `merge` and `arm` prove again where the merge happens, rather than
+ * trust the tick that asked for it: the programme is migrated, no person holds
+ * the merges, a clean local verdict holds exactly this head, the pull request
+ * is open on it, and it targets the loop's base, never the branch that deploys.
+ * The local checks run first, so a refusal asks GitHub nothing.
+ */
+function guardedMerge(target: MergeTarget, context: LoopRunners) {
+  const { ticket, number, head } = target;
+  const program = loopProgram(context.root);
+  const hold = readMergeHold(context.root);
+  if (hold.held) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} is not the loop's to merge`,
+      hold.detail,
+      `hand the pull request to the person, or run \`autopilot merges --automatic\` if they gave the merges back`,
+    );
+  }
+  const raw = readLocalReviews(context.root, [ticket]).get(ticket)?.get(head);
+  if (!provesCleanVerdict(raw, { ticketId: ticket, pullRequest: number, headSha: head })) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} has no clean local verdict on ${head}`,
+      `no record under .void/machine/autopilot/reviews/${ticket}/ passes exactly that head of #${number}`,
+      'ask `autopilot next` again; it merges only a head `autopilot review` passed',
+    );
+  }
   const gh = runner(context.gh, 'gh');
-  const before = viewOf(gh, number);
-  if (before.state !== 'open' || before.headSha !== head) {
+  const view = viewOf(gh, number);
+  if (view.state !== 'open' || view.headSha !== head) {
     throw autopilotFailure(
       'AUTOPILOT_CONTRACT',
       `#${number} is not the pull request the kernel approved`,
-      before.state !== 'open'
-        ? `#${number} is ${before.state}`
-        : `its head is ${before.headSha}, not ${head}`,
-      'ask `autopilot next` again; it arms only the head it just read',
+      view.state !== 'open' ? `#${number} is ${view.state}` : `its head moved to ${view.headSha}, not ${head}`,
+      'ask `autopilot next` again; it merges only the head it just read',
     );
   }
-  writeAtomically(path, `${JSON.stringify({ pullRequest: number, headSha: head })}\n`);
-  gh(['pr', 'merge', String(number), '--auto', '--match-head-commit', head]);
+  // A check registered since the tick read the head: a failing one goes back
+  // to the worker, a pending one is waited for, never merged past.
+  if (view.checks === 'failing' || view.checks === 'pending') {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} has a ${view.checks} check on ${head}`,
+      'the checks changed since the kernel named this head',
+      'ask `autopilot next` again; it waits for pending checks and hands failing ones back',
+    );
+  }
+  const base = resolveLoopBase(gh, program.autopilot.base);
+  const deploying = program.autopilot.deployBranch ?? readDefaultBranch(gh);
+  if (view.baseRef !== base || sameBranch(view.baseRef, deploying) !== 'different') {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} targets ${view.baseRef}, which the loop does not merge into`,
+      view.baseRef !== base
+        ? `the loop merges into ${base}`
+        : `${view.baseRef} is the branch that deploys, or cannot be told apart from it`,
+      'hand the pull request to a person',
+    );
+  }
+  return { gh, base };
+}
+
+/**
+ * `autopilot merge --ticket <id> --pr <n> --head <sha>`: the kernel's `merge`,
+ * on a base with no merge queue. It merges exactly the reviewed head, and
+ * GitHub refuses if that head moved. A base whose policy refuses a direct
+ * merge, required checks or reviews, gets the native auto-merge on the same
+ * head instead; a refusal because the head moved never does, since that head
+ * was never reviewed.
+ */
+export function mergeCommand(argv: readonly string[], context: LoopRunners): LoopCommandOutput {
+  const target = mergeTargetOf(argv, 'autopilot merge', 'merge');
+  const { number, head } = target;
+  const { gh, base } = guardedMerge(target, context);
+  if (readBehind(gh, base, head)) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `the base moved since the kernel named ${head}`,
+      `${base} has commits #${number} lacks`,
+      'ask `autopilot next` again; it updates the branch and has the new head reviewed',
+    );
+  }
+  const method = readMergeMethod(gh);
+  let refusal: string | undefined;
+  try {
+    gh(['pr', 'merge', String(number), '--match-head-commit', head, method]);
+  } catch (error) {
+    refusal = error instanceof Error ? error.message : String(error);
+  }
+  const after = armedStateOf(gh, number);
+  if (after.state === 'merged' && after.headSha === head) return armedOutput(target, true);
+  if (after.state !== 'open' || after.headSha !== head) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} was not merged on ${head}`,
+      after.state !== 'open' ? `#${number} is ${after.state}` : `its head moved to ${after.headSha}`,
+      'ask `autopilot next` again; a moved head is reviewed before anything merges it',
+    );
+  }
+  const merged = armOn(gh, context, target, [method]);
+  const cause = refusal ?? 'gh reported no error and GitHub shows it still open';
+  const output = armedOutput(target, merged);
+  return {
+    value: { ...output.value, armed: !merged, directRefusal: cause },
+    human: `${output.human.trimEnd()} (the base refused a direct merge: ${cause})\n`,
+  };
+}
+
+/**
+ * `autopilot update-branch --pr <n> --head <sha>`: the kernel's `update-branch`.
+ * GitHub merges the base into the branch, only if its head is still the one
+ * named, which moves the head: the kernel has the new one reviewed.
+ * https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request-branch
+ */
+export function updateBranchCommand(argv: readonly string[], context: LoopRunners): LoopCommandOutput {
+  const head = flagValue(argv, '--head');
+  if (head === undefined || !SHA_PATTERN.test(head)) {
+    throw autopilotFailure(
+      'AUTOPILOT_USAGE',
+      'autopilot update-branch needs the full head SHA the kernel named',
+      '--head is missing or not a full SHA',
+      'copy it from the `update-branch` action: `--pr <n> --head <sha>`',
+    );
+  }
+  const number = pullRequestNumber(argv, 'autopilot update-branch');
+  const gh = runner(context.gh, 'gh');
+  const view = viewOf(gh, number);
+  if (view.state !== 'open' || view.headSha !== head) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT',
+      `#${number} is not the pull request the kernel named`,
+      view.state !== 'open' ? `#${number} is ${view.state}` : `its head moved to ${view.headSha}, not ${head}`,
+      'ask `autopilot next` again',
+    );
+  }
+  const endpoint = `repos/{owner}/{repo}/pulls/${number}/update-branch`;
+  gh(['api', '-X', 'PUT', endpoint, '-f', `expected_head_sha=${head}`]);
+  return {
+    value: { pullRequest: number, headSha: head, updating: true },
+    human: `#${number}: the base is being merged into ${head}; the new head is reviewed next\n`,
+  };
+}
+
+/**
+ * `autopilot arm --ticket <id> --pr <n> --head <sha>`: the kernel's
+ * `enable-auto-merge`, on a base with a merge queue. The same guards as
+ * `merge`, then the head is recorded, since GitHub keeps no armed head, the
+ * merge armed on exactly that head, and GitHub read back.
+ */
+export function armCommand(argv: readonly string[], context: LoopRunners): LoopCommandOutput {
+  const target = mergeTargetOf(argv, 'autopilot arm', 'enable-auto-merge');
+  const { gh } = guardedMerge(target, context);
+  return armedOutput(target, armOn(gh, context, target, []));
+}
+
+function armedOutput(target: MergeTarget, merged: boolean) {
+  const { ticket, number, head } = target;
+  return {
+    value: { ticketId: ticket, pullRequest: number, headSha: head, merged },
+    human: merged ? `#${number} merged on ${head}\n` : `#${number} armed on ${head}\n`,
+  };
+}
+
+/**
+ * Record the head, arm on exactly that head, then read GitHub back: a pull
+ * request neither holding an auto-merge nor sitting in the merge queue is a
+ * failure, and one whose head moved while arming is disarmed at once. The
+ * kernel disarms later whatever this record no longer vouches for. Returns
+ * whether GitHub already merged it.
+ */
+function armOn(
+  gh: (args: readonly string[]) => string,
+  context: LoopRunners,
+  target: MergeTarget,
+  method: readonly MergeMethodFlag[],
+): boolean {
+  const { ticket, number, head } = target;
+  writeAtomically(armedPath(context.root, ticket), `${JSON.stringify({ pullRequest: number, headSha: head })}\n`);
+  gh(['pr', 'merge', String(number), '--auto', '--match-head-commit', head, ...method]);
   const after = armedStateOf(gh, number);
   // The queue can merge the head between the arming and this read.
-  if (after.state === 'merged' && after.headSha === head) {
-    return {
-      value: { ticketId: ticket, pullRequest: number, headSha: head, merged: true },
-      human: `#${number} merged on ${head}\n`,
-    };
-  }
+  if (after.state === 'merged' && after.headSha === head) return true;
   if (after.armed && after.headSha !== head) stopMerge(gh, after);
   if (!after.armed || after.headSha !== head) {
     throw autopilotFailure(
@@ -571,10 +832,7 @@ export function armCommand(argv: readonly string[], context: LoopRunners): LoopC
       'ask `autopilot next` again before arming anything',
     );
   }
-  return {
-    value: { ticketId: ticket, pullRequest: number, headSha: head, merged: false },
-    human: `#${number} armed on ${head}\n`,
-  };
+  return false;
 }
 
 /**
@@ -615,8 +873,8 @@ export function disarmCommand(argv: readonly string[], context: LoopRunners): Lo
  * `autopilot judgment conflict-class`: the comment block for the conflict class
  * on stdin, admitted before it is printed. The worker posts exactly this, so the
  * kernel finds it on the pull request after a restart and admits it a second
- * time there. A review verdict is not rendered here: the review job in GitHub
- * Actions is the only one that posts it, beside the check it publishes.
+ * time there. A review verdict is not rendered here: `autopilot review` records
+ * it locally, bound to the session it delegated, and posts only a copy.
  */
 export function judgmentCommand(argv: readonly string[], stdin: string): LoopCommandOutput {
   const value = jsonFrom(stdin, 'judgment');
@@ -625,8 +883,8 @@ export function judgmentCommand(argv: readonly string[], stdin: string): LoopCom
     throw autopilotFailure(
       'AUTOPILOT_USAGE',
       'a review verdict is not rendered for posting by hand',
-      'the review job in GitHub Actions posts it beside the independent-review check',
-      'mark the pull request ready for review; the job reviews it and posts the verdict',
+      '`autopilot review` records it locally, from the reviewer it delegated on the head',
+      'answer the `review` action with `autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>`',
     );
   }
   const kinds = JUDGMENT_KINDS.filter((known) => known !== 'review-verdict');

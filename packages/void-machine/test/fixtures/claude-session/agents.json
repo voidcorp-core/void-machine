@@ -1,0 +1,61 @@
+[
+  {
+    "pid": 40433,
+    "cwd": "/work/other",
+    "kind": "interactive",
+    "startedAt": 1790262187372,
+    "sessionId": "432ccb7f-8081-4cec-8479-81fd36b99dbe",
+    "name": "coordinator-d1",
+    "status": "busy"
+  },
+  {
+    "id": "72a1ec84",
+    "cwd": "/work/project-wt",
+    "kind": "background",
+    "startedAt": 1790592675463,
+    "sessionId": "72a1ec84-bc61-434e-af80-48ddf8542c5e",
+    "name": "vm-probe-working",
+    "state": "working"
+  },
+  {
+    "pid": 63526,
+    "id": "00d01c20",
+    "cwd": "/work/project-wt",
+    "kind": "background",
+    "startedAt": 1790591207234,
+    "sessionId": "00d01c20-dfb6-4979-bd94-5bc6de2e2e1a",
+    "name": "vm-probe-env",
+    "status": "waiting",
+    "waitingFor": "permission prompt",
+    "state": "blocked"
+  },
+  {
+    "pid": 70473,
+    "id": "6d5ea8bb",
+    "cwd": "/work/project-wt",
+    "kind": "background",
+    "startedAt": 1790591276512,
+    "sessionId": "6d5ea8bb-764f-4463-b733-8b94509eb25e",
+    "name": "vm-probe-env2",
+    "status": "idle",
+    "state": "done"
+  },
+  {
+    "id": "e4c0c72c",
+    "cwd": "/work/project-wt",
+    "kind": "background",
+    "startedAt": 1790592611139,
+    "sessionId": "e4c0c72c-1797-44c2-9ede-6c2bc178b953",
+    "name": "vm-probe-agent",
+    "state": "failed"
+  },
+  {
+    "id": "82512fdf",
+    "cwd": "/work/project-wt",
+    "kind": "background",
+    "startedAt": 1790591616749,
+    "sessionId": "82512fdf-f8fe-4b7c-9cb5-715d391b9605",
+    "name": "vm-probe-hold",
+    "state": "stopped"
+  }
+]

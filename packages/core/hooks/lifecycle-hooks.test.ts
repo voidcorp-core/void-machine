@@ -50,3 +50,17 @@ describe.each([
     expect(command).not.toMatch(/write|generate|llm/i);
   });
 });
+
+describe('Claude Code delegation hooks', () => {
+  it('records a delegated run\'s final message on Stop, beside the session telemetry', () => {
+    const stop = commands(manifest('packages/core/.claude-plugin/plugin.json'), 'Stop').join('\n');
+    expect(stop).toContain('lifecycle delegation-result claude');
+    expect(stop).toContain('stop claude');
+  });
+
+  it('routes the coordinator\'s Agent tool through the kernel before it runs', () => {
+    const capture = (manifest('packages/core/.claude-plugin/plugin.json').hooks.PreToolUse ?? [])
+      .filter((entry) => entry.matcher === 'Agent').flatMap((entry) => entry.hooks.map((hook) => hook.command));
+    expect(capture).toEqual([expect.stringContaining('lifecycle delegation-capture claude')]);
+  });
+});

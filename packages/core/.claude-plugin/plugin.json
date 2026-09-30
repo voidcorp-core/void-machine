@@ -142,6 +142,15 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" enforce secret-content claude"
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" lifecycle delegation-capture claude"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -245,6 +254,14 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" lifecycle typecheck claude"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" lifecycle delegation-result claude"
           }
         ]
       }

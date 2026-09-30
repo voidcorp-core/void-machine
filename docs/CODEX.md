@@ -127,9 +127,22 @@ runtime (auto-detected from a `.codex/` dir or `AGENTS.md`, or forced with
    `CODEX_FLOOR_SCRIPTS` is explicit and a drift guard proves every manifest
    command resolves to that asset.
 2. Compiles `<project>/.codex/hooks.json` from `packages/core/codex/hooks.json`,
-   substituting `${VOID_HOOKS_DIR}` with the final project's absolute
-   `.void/hooks` path. The path is JSON-escaped and shell-quoted, so Windows,
-   spaces and sessions started in a subdirectory do not weaken the floor.
+   turning each `node "${VOID_HOOKS_DIR}/<asset>"` into `node -e "<bootstrap>"`.
+   The file is versioned, so it holds no machine path: the bootstrap walks up
+   from the session directory to the nearest `.void/hooks/<asset>` and runs it.
+   Codex launches a hook through the session shell (`sh`, `bash`, `zsh`,
+   PowerShell, `cmd.exe`); the bootstrap uses none of their expansion
+   characters, so one form holds on every OS and from any subdirectory.
+   A Codex refusal is exit 0 with the documented PreToolUse denial on stdout
+   (`hookSpecificOutput.permissionDecision: "deny"`), never exit 2:
+   PowerShell, Codex's default shell on Windows, turns any non-zero native exit
+   into 1, which Codex reads as a failed hook and lets the call through. The
+   runner refuses that way for `enforce ... codex`, and so does the bootstrap
+   when no runner is found (fail closed); elsewhere a missing runner exits 0.
+   Claude Code keeps exit 2. The hook conformance runs the installed commands
+   through each of these launchers, from the root and a subdirectory, on Linux,
+   macOS and Windows, and reads the refusal the way Codex parses it. See the
+   decision `codex-hooks-shell-neutral-bootstrap`.
 
 The one remaining human step is to **trust the project-local `.codex/` layer**
 per Codex's config. `void-machine doctor` verifies the floor by executing the
@@ -186,6 +199,15 @@ GitHub and git, and the skill acts on those actions with whatever the runtime
 offers: Codex spawns a worker per `assign` through its **native subagents**,
 Claude through its own delegation. Neither runtime decides anything the kernel
 did not, so the two cannot drift into deciding different things.
+
+A coordinator on either runtime can also delegate one agent to Codex with
+`void-machine agents dispatch --runtime codex`: the run is a thread of Codex's
+own app-server daemon (`codex app-server daemon`), with an optional
+`--output-schema` its final answer is held to, shown live in a pane by
+`codex resume <thread> --remote unix://<socket>` (see `ARCHITECTURE.md`,
+"Delegated agent runs"). Codex's own `spawn_agent` is not captured into the
+kernel: a refusal on it holds, but the hook receives the sub-agent's brief
+encrypted, so a Codex coordinator dispatches through the CLI itself.
 
 What is still open is BEHAVIOURAL parity of a real Codex run, which needs an
 execution conformance gate and belongs to the certification range. The loop was

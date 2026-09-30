@@ -1,8 +1,8 @@
 # AGENTS.md — void-machine
 
-<!-- void-harness:begin -->
+<!-- void-machine:begin -->
 
-## void-harness (managed by `void-harness init`)
+## Void Machine (managed by `void-machine init`)
 
 Codex doctrine active in this project:
 
@@ -13,7 +13,7 @@ Codex doctrine active in this project:
 - `.void/installed/PHILOSOPHY.md`
 - `.void/PROJECT-DOCTRINE.md`
 
-`PHILOSOPHY.md` is the universal void-harness doctrine (managed — overwritten on init). `PROJECT-DOCTRINE.md` holds project-specific rules: context, ADRs, in-flight decisions (yours; init never overwrites what you have written in it).
+`PHILOSOPHY.md` is the universal Void Machine doctrine (managed — overwritten on init). `PROJECT-DOCTRINE.md` holds project-specific rules: context, ADRs, in-flight decisions (yours; init never overwrites what you have written in it).
 
 To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.
 
@@ -21,11 +21,15 @@ Every skill is invoked by its name: `$void-implement`, `$void-tdd`. A skill that
 
 ### Program — when present
 
-If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human gates and merges remain human. Declaring an `autopilot` block IS the consent to autonomous execution, and consent is never inferred from anything else: an absent block, or an unreadable one, forbids autonomous selection entirely. A declared progress provider is not consent either.
+If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human gates and merges remain human. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
 
-Run `void-harness doctor` to verify the install.
+An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
-<!-- void-harness:end -->
+Delegate a subagent that should run on its own with `void-machine agents dispatch`, then `wait` and `accept` its run.
+
+Run `void-machine doctor` to verify the install.
+
+<!-- void-machine:end -->
 
 > **Sister doc**: `CLAUDE.md` is the Claude Code-flavored mirror of this file. The two are maintained in sync — any change to one MUST be reflected in the other in the same commit. CI enforces this on every push (`pnpm sync:docs`, which compares section headings after terminology normalization); the pre-commit hook in `.githooks/` refuses a commit that stages one sister doc without the other, and `pnpm install` wires it through the root `prepare` script so a fresh clone inherits the check instead of having to opt in. Adapted terminology only (Codex/tools ↔ Claude/Skill tool); the doctrine is identical.
 
@@ -67,13 +71,14 @@ automatic selection. Human gates and merges remain human.
 
 ## Visible mission workspace
 
-For a request to code on a named project, use the optional presentation adapter
-as described in `docs/NATIVE-SUPERVISION.md`: resolve the project and mission,
-reuse their workspace, keep the coordinator left and native terminal workers
-stacked right. Use `scripts/mission-presentation.mjs` from this harness checkout;
-never assume cmux exists in the target project. Runtime-native delegation remains
-the executor. Do not duplicate an agent to give it a pane, and do not turn a
-presentation failure into a changed permission, proof or merge policy.
+For a request to code on a named project, follow `docs/NATIVE-SUPERVISION.md`:
+resolve the project and mission and keep the coordinator in its own pane. A run
+delegated through `void-machine agents dispatch` opens its own surface when the
+caller runs inside herdr, cmux or tmux, labelled `WORK-n` or `REVIEW-n`, and the
+surface closes when the run retires or stops; without a multiplexer the run is the
+same native session. Runtime-native delegation remains the executor. Do not
+duplicate an agent to give it a pane, and do not turn a presentation failure into
+a changed permission, proof or merge policy.
 
 ## Anti-bloat discipline
 
@@ -163,4 +168,4 @@ The harness improves from real project usage, never auto-applied.
 
 ## Autonomous mode (opt-in)
 
-`void-autopilot` (core skill) is the single, **in-session** delivery loop. It replaced the cluster engine at the 2026-09-24 cutover, which deleted that engine rather than deprecating it — two engines in one release means two answers to "how does autonomous work reach `develop`". A human launches `void-autopilot`; it keeps up to four tickets in flight, one worker and one pull request each, and leaves every merge to GitHub. A curator ranks the ready work; the loop admits a ticket only with a footprint that names its ground, runs disjoint footprints in parallel and colliding ones in sequence (lockfiles and migrations always sequential), and gives each worker its own worktree, where it runs `void-implement` whole. The review runs in GitHub, not on the machine: the `independent-review` job reviews every ready pull request on `pull_request_target`, in a fresh context on the exact head, reading it as data with read-only tools, and publishes its verdict as the `independent-review` check, posted by a GitHub App of its own whose key only jobs run from `main` can read; branch protection requires that App's check, on each head and, through a `workflow_run` job, on each merge group, so nothing a worker runs can produce it. The deterministic kernel is the CLI `void-machine autopilot` (`next`, `stop`, `arm`, `disarm`, `fingerprint`, `judgment`): `next` rebuilds the state from the tracker, GitHub and git on every tick and decides; the skill acts. Durable boundaries: consent is the programme's `autopilot` block, never a run flag; **there is no `--auto-merge` flag, on any path**; a merge is armed only on a head the review job passed, through the merge queue or an auto-merge request, re-read afterwards, and disarmed the moment the loop can no longer vouch for it; never into the branch that deploys; never on a pull request that touches the machinery that judges merges (the protected-paths floor), which goes to a person; workers are **commit-only** and write nothing the repository shares across worktrees (`refs/stash`, tags, notes, remotes, config), which a fingerprint before and after each unit proves; server-side protection is required on the base, with a merge queue or, failing one, a branch that must be up to date, which the loop then merges serially; security hooks live; skip-permissions full-auto sandbox-gated. Promotion to the deploying branch stays human, and what a person judges there is the feature, not the code. A **headless backend** (walk-away/cron) is reserved and deferred. See `docs/specs/2026-09-22-autopilot-native-loop.md`, `docs/plans/2026-09-22-autopilot-native-loop-plan.md`, and the continuous-loop ADR.
+`void-autopilot` (core skill) is the single, **in-session** delivery loop. It replaced the cluster engine at the 2026-09-24 cutover, which deleted that engine rather than deprecating it — two engines in one release means two answers to "how does autonomous work reach `develop`". A human launches `void-autopilot`; it keeps up to four tickets in flight, one worker and one pull request each. A curator ranks the ready work; the loop admits a ticket only with a footprint that names its ground, runs disjoint footprints in parallel and colliding ones in sequence (lockfiles and migrations always sequential), and gives each worker its own worktree, where it runs `void-implement` whole. There is **one merge mode**, with no key to configure: the loop merges into the integration branch on a local verdict, and `autopilot review` produces it by delegating a fresh-context, read-only reviewer through the kernel in a worktree detached at the exact head, checking that worktree's `HEAD` before and after the run, and recording the verdict bound to that head and to the native session the runtime listed; nothing read on GitHub decides a merge. A head merges once that verdict is clean, no check on it fails or is pending, no protected path is touched and its branch is up to date with the base: `autopilot merge` merges exactly that head with `gh pr merge --match-head-commit`, falling back to the native auto-merge on the same head when the base's policy refuses a direct merge, and `autopilot arm` enters it in the merge queue where the base has one. When a person says they merge themselves, `void-machine autopilot merges --by-human` writes a hold in the machine's local state (`.void/machine/autopilot/merge-hold.json`, never the protected programme), read on every tick: each pull request then goes to that person after its review, never before, and `--automatic` removes the hold. A consumer project sets up nothing on GitHub. In this repository the `independent-review` job also reviews every ready pull request and posts its check through a GitHub App of its own, which branch protection requires on each head and merge group: a native GitHub layer GitHub enforces at merge time. The deterministic kernel is the CLI `void-machine autopilot` (`next`, `review`, `merges`, `merge`, `update-branch`, `stop`, `arm`, `disarm`, `fingerprint`, `judgment`): `next` rebuilds the state from the tracker, GitHub, git and the hold on every tick and decides; the skill acts. Durable boundaries: consent is the programme's `autopilot` block, never a run flag; **there is no `--auto-merge` flag, on any path**; a merge happens only on a head a clean local verdict holds, which `merge` and `arm` prove again themselves, re-read afterwards, and an armed merge is disarmed the moment the loop can no longer vouch for it or a person takes the merges; never into the branch that deploys (`autopilot.deployBranch`, or the repository default branch); never on a pull request that touches the machinery that judges merges (the protected-paths floor), which goes to a person; workers are **commit-only** and write nothing the repository shares across worktrees (`refs/stash`, tags, notes, remotes, config), which a fingerprint before and after each unit proves; without a merge queue the loop merges one pull request at a time and brings the base into a head it moved past, whose new head is reviewed again; security hooks live; skip-permissions full-auto sandbox-gated. Promotion to the deploying branch stays human, and what a person judges there is the feature, not the code. A **headless backend** (walk-away/cron) is reserved and deferred. See `docs/specs/2026-09-22-autopilot-native-loop.md`, `docs/plans/2026-09-22-autopilot-native-loop-plan.md`, the continuous-loop ADR, and `docs/specs/2026-09-28-autopilot-merge-without-consumer-setup.md` with its ADR for the single merge mode.

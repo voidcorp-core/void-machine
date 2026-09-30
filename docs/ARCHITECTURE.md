@@ -193,11 +193,54 @@ The harness assumes **TypeScript + web**. The core is not framework-agnostic acr
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
-The private TypeScript package `packages/void-machine/` is the Machine foundation and ships in no
-tarball. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
+The private TypeScript package `packages/void-machine/` is the Machine foundation. Only its
+delegation capability reaches users, embedded in the published CLI as `void-machine agents`
+([decision](decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md));
+the package itself is never published. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
 and collision rules, the shared-state fingerprint and the merge refusals) lives in
 `packages/cli/src/lib/autopilot/`. A future independent Rust/Go/Python product could still live in
 a sibling repo, reusing mechanics not skills.
+
+## Delegated agent runs
+
+`void-machine agents` (`packages/cli/src/commands/agents.ts`) is the one path by which a
+coordinator launches, follows and closes a delegated agent. The CLI only parses and prints; the
+kernel owns the rest, in its layers: `core/delegation.ts` (run states, admission, transitions,
+pure), `runtime/delegation.ts` (ports and the observation loop, pure), `adapters/runtime/claude-session.ts`
+(Claude Code background sessions), `adapters/store/run-registry.ts` (files) and
+`application/agents.ts` (composition). A run is a `claude --bg` session named `vm-<runId>`; its
+live state is read from `claude agents --json --all` every five seconds, one observation at a
+time per mission. The brief travels in a file the session is pointed at, never on argv, and the
+role fixes the permissions (`work`: `auto`; `review`: the native `--agent` type with `dontAsk`).
+
+Runs are recorded under `<main checkout>/.void/machine/runs/<mission-id>/agents/<runId>/`,
+resolved from the common Git directory so a run dispatched from a worktree lands where the
+coordinator reads it. Each transition is linked under its sequence number, so it is recorded
+once even when two processes observe. The final message comes from the `lifecycle
+delegation-result` Stop hook, which follows a claim keyed by the native session id
+([decision](decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)).
+`dispatch` refuses, with the repairing command, when Claude Code is missing or older than
+2.1.257, the workspace is not trusted, or that hook is not installed. Under a multiplexer, the
+`lifecycle delegation-capture` PreToolUse hook on `Agent` turns the coordinator's native delegation
+into a `dispatch` and refuses the native call with the runId and the `wait` command; it passes
+without a surface, for a `fork`, for a session the kernel launched (same session-id rule), and on
+any failure, which it reports instead of blocking. How a run is shown in a multiplexer is described
+in `NATIVE-SUPERVISION.md`.
+
+Each run keeps the runtime it was dispatched to (`--runtime claude|codex`), and every command
+reaches it through that runtime's port; one runtime that cannot be read never holds another's
+runs. A Codex run (`adapters/runtime/codex-daemon.ts`, `adapters/runtime/codex-thread.ts`) is a
+thread of Codex's own app-server daemon, named after the run and reached on the daemon's control
+socket for one bounded exchange per command
+([proposed decision](decisions-log/2026-09-28-codex-runs-are-threads-of-native-daemon--5dd5306b-721f-4e9b-b592-c765c8eb823e.md)): the
+daemon supervises the thread, and the kernel owns no Codex process. The role fixes the thread's
+sandbox (`work`: `workspace-write`; `review`: `read-only`) with `approvalPolicy: never`; an
+approval asked anyway is surfaced as `waiting-human`, never answered. The runtime reports the
+final message itself: the kernel records it once per turn and checks it against the output schema
+the run was dispatched with (`--output-schema`), keeping an answer that does not conform, marked
+so. A launch acknowledgement may carry the whole native session id, so the run's view exists from
+the dispatch on. Each adapter declares its view, capture and structured-output capabilities with
+their provenance, and `status` says why a run has no view.
 
 ## Stack profile compilation
 
@@ -337,7 +380,9 @@ evidence live only in the provider.
 
 `packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
 validates every field on read and refuses a file that is present but wrong, rather than falling
-back to a default: a typo in `mergeGate` must never be what hands a merge to a machine. Paths
+back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
+place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by
+the loop with its migration, so a former human gate never becomes consent to merge. Paths
 declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
 a YAML syntax.
 

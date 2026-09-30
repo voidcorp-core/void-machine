@@ -1,11 +1,12 @@
 /**
- * The loop arms a merge in exactly one place, one way, and merges nowhere.
+ * The loop merges in exactly one place, and only on the head a verdict proves.
  *
- * GitHub performs every merge: the loop only arms one, through its merge queue
- * or an auto-merge request, on a head the review job passed. Arming is the
- * boundary most likely to be crossed by a helpful edit -- dropping
- * `--match-head-commit` "because the head was just read", or adding `--admin`
- * to get past a slow check, reads as a convenience and removes the proof.
+ * Since the single merge mode the loop merges itself, `gh pr merge
+ * --match-head-commit`, or arms the merge queue or an auto-merge request on the
+ * same head, always on a head a local verdict passed. That argv is the boundary
+ * most likely to be crossed by a helpful edit -- dropping `--match-head-commit`
+ * "because the head was just read", or adding `--admin` to get past a slow
+ * check, reads as a convenience and removes the proof.
  *
  * So it is a gate. What it inspects is the argv the code can actually emit, not
  * the words it uses: a comment saying "never merge" and a guard refusing
@@ -92,24 +93,26 @@ describe('the argv the autopilot surface can emit', () => {
     expect(COMMANDS.filter(MERGES).length).toBeGreaterThan(0);
   });
 
-  it('arms and disarms a merge from one file only', () => {
+  it('merges, arms and disarms from one file only', () => {
     expect(violating((command) => MERGES(command) && command.file !== MERGE_SOURCE)).toEqual([]);
   });
 
-  // `--admin` bypasses the protection the verdict check is part of, and the
-  // rewrite flags destroy the head the verdict was bound to.
-  it('binds every arming to the head the verdict proves, and never bypasses or rewrites', () => {
+  // `--admin` bypasses the protection a repository adds on top of the verdict,
+  // and deleting the branch removes the head a person may still need to read.
+  // The merge method is the one the repository allows, read from its settings,
+  // so no method is written into the argv by hand.
+  it('binds every merge and arming to the head the verdict proves, and never bypasses', () => {
     for (const merge of COMMANDS.filter(MERGES)) {
       if (!merge.tokens.includes('--disable-auto')) {
-        expect(merge.tokens, merge.source).toEqual(expect.arrayContaining(['--auto', '--match-head-commit']));
+        expect(merge.tokens, merge.source).toContain('--match-head-commit');
       }
-      for (const forbidden of ['--admin', '--squash', '--rebase', '--delete-branch']) {
+      for (const forbidden of ['--admin', '--merge', '--squash', '--rebase', '--delete-branch']) {
         expect(merge.tokens, `${merge.source} ${forbidden}`).not.toContain(forbidden);
       }
     }
   });
 
-  it('never merges through the API, only through the queue or an auto-merge request', () => {
+  it('never merges through the API, only through gh pr merge on the head', () => {
     const direct = (command: Argv): boolean =>
       command.tokens.some((token) => /\/merge\b|mergePullRequest|enablePullRequestAutoMerge/.test(token));
     expect(violating(direct)).toEqual([]);
@@ -117,7 +120,7 @@ describe('the argv the autopilot surface can emit', () => {
     expect(mutations.map((file) => file.path)).toEqual([]);
   });
 
-  it('pushes nothing: a worker pushes its own branch, the loop only reads and arms', () => {
+  it('pushes nothing: a worker pushes its own branch, the loop only reads and merges', () => {
     expect(violating((command) => command.tokens[0] === 'push')).toEqual([]);
   });
 });

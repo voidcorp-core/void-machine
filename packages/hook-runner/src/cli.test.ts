@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   utimesSync,
@@ -209,6 +210,56 @@ describe('enforce', () => {
     });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('HOOK_INPUT_REJECTED:');
+  });
+
+  // Codex runs a hook through the session shell, PowerShell by default on
+  // Windows, and `powershell -Command` turns every non-zero exit into 1, which
+  // Codex reads as a failed hook, not a refusal. The one decision every shell
+  // carries is exit 0 with the documented PreToolUse JSON on stdout.
+  function enforceCodex(rule: string, input: string): { code: number; stdout: string } {
+    const result = spawnSync(process.execPath, [hook, 'enforce', rule, 'codex'], {
+      input,
+      encoding: 'utf8',
+      env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+    });
+    return { code: result.status ?? -1, stdout: result.stdout ?? '' };
+  }
+
+  // Codex rejects unknown fields, so the denial is compared whole.
+  function expectCodexDenial(stdout: string, reason: string): void {
+    expect(JSON.parse(stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: expect.stringContaining(reason),
+      },
+    });
+  }
+
+  it('refuses a Codex tool call with a denial every shell passes through intact', () => {
+    const { code, stdout } = enforceCodex(
+      'no-any',
+      JSON.stringify(write('src/café.ts', 'const a: any = 1;')),
+    );
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/^[\x20-\x7e]*\n$/);
+    expectCodexDenial(stdout, 'TYPESCRIPT_ANY:');
+    expectCodexDenial(stdout, 'src/café.ts');
+  });
+
+  it('refuses a Codex payload it cannot parse through the same denial', () => {
+    const { code, stdout } = enforceCodex('no-any', 'not json');
+    expect(code).toBe(0);
+    expectCodexDenial(stdout, 'HOOK_INPUT_REJECTED:');
+  });
+
+  it('lets a clean Codex tool call through without any decision', () => {
+    const { code, stdout } = enforceCodex(
+      'no-any',
+      JSON.stringify(write('src/x.ts', 'const a: number = 1;')),
+    );
+    expect(code).toBe(0);
+    expect(stdout).toBe('');
   });
 });
 
@@ -459,6 +510,69 @@ describe('lifecycle context', () => {
         /void-checkpoint/i,
       );
       expect(result.stdout).not.toContain('continue the implementation');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('delegation-result lifecycle', () => {
+  it('records the claimed result of a delegated session without writing stdout', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-delegation-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      const session = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+      const run = join(root, '.void', 'machine', 'runs', 'mis_cli-contract', 'agents', 'run_x');
+      mkdirSync(run, { recursive: true });
+      mkdirSync(join(root, '.void', 'machine', 'agents', 'sessions'), { recursive: true });
+      writeFileSync(join(root, '.void', 'machine', 'agents', 'sessions', `${session}.json`),
+        JSON.stringify({ schemaVersion: 1, resultPath: join(run, 'result.json') }));
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-result', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'Stop', session_id: session, cwd: root,
+          last_assistant_message: 'Done.' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('');
+      expect(JSON.parse(readFileSync(join(run, 'result.json'), 'utf8')))
+        .toMatchObject({ sessionId: session, lastAssistantMessage: 'Done.' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('delegation-capture lifecycle', () => {
+  it('lets the native Agent call through, with nothing on stdout, when no multiplexer shows the caller', () => {
+    const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: workspace,
+        session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'], VOID_PROJECT_ROOT: workspace },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('refuses the native Agent call on stdout once the kernel has dispatched the run', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-capture-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+      const runId = 'run_0f1e2d3c-4b5a-4968-8776-655443322110';
+      writeFileSync(join(root, 'node_modules', '.bin', 'void-machine'),
+        `#!/bin/sh\necho '${JSON.stringify({ ok: true, runId })}'\n`, { mode: 0o755 });
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: root, permission_mode: 'auto',
+          session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'], HERDR_ENV: '1', VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout ?? '{}').hookSpecificOutput;
+      expect(output).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' });
+      expect(output.permissionDecisionReason).toContain(`agents wait ${runId}`);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -1,0 +1,5 @@
+backgrounded · 6d5ea8bb · vm-probe-env2
+  claude agents             list sessions
+  claude attach 6d5ea8bb    open in this terminal
+  claude logs 6d5ea8bb      show recent output
+  claude stop 6d5ea8bb      stop this session

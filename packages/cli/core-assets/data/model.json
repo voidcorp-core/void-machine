@@ -1686,7 +1686,7 @@
       "type": "skill"
     },
     {
-      "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a bounded review gates the GitHub merge queue until drained or stopped.",
+      "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a local review verdict gates each merge until drained or stopped.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 358,
+      "lines": 387,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 6056,
+      "staticTokens": 6790,
       "type": "skill"
     },
     {
@@ -2730,7 +2730,7 @@
         }
       ],
       "id": "skill:void-ticket",
-      "lines": 239,
+      "lines": 238,
       "name": "void-ticket",
       "owner": "folpe",
       "pack": null,
@@ -2739,7 +2739,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-ticket/SKILL.md",
-      "staticTokens": 3276,
+      "staticTokens": 3317,
       "type": "skill"
     },
     {

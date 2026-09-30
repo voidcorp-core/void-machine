@@ -105,8 +105,10 @@ declared progress provider is the execution ledger:
 - move to the declared done role only after merge and final verification;
 - never auto-complete a human gate.
 
-The `autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 1`,
-an explicit `enabled`, and `mergeGate: human`. A program that does not want autopilot declares
+The `autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 2`
+and an explicit `enabled`. It declares no merge gate: the loop merges into the integration branch on
+a local verdict, never into `deployBranch` or the repository default branch, and a person who merges
+themselves runs `void-machine autopilot merges --by-human`. A program that does not want autopilot declares
 `enabled: false` rather than omitting the block, because consent is never inferred from silence.
 `packages/cli/src/lib/autopilot/program.ts` is the single parser of this contract, and its tests
 validate this repository's own `.void/program.md` so the schema and the file cannot drift.

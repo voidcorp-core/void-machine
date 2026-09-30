@@ -3,8 +3,8 @@ schemaVersion: 1
 id: "adr:5dd5306b-721f-4e9b-b592-c765c8eb823e"
 createdAt: "2026-09-28T23:57:29.685Z"
 title: "Codex runs are threads of the native Codex daemon"
-status: proposed
-deciders: []
+status: accepted
+deciders: ["folpe"]
 supersedes: []
 ---
 

@@ -16,7 +16,7 @@
  * renaming it.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
@@ -73,5 +73,32 @@ describe('the implement cycle briefs before it writes', () => {
     // pack existed the prose promised "bounded context pack" and nothing carried
     // one, which is the promise-without-a-mechanism this repository keeps paying for.
     expect(SKILL).toContain('contextPack');
+  });
+
+  it('launches each envelope through the delegation kernel, from the envelope alone', () => {
+    const convene = passMatching(/invoke-specialists|convene/i)?.body ?? '';
+    expect(convene).toMatch(/agents dispatch --role review/);
+    // Runtime, type and mission are copied, never chosen: the skill keeps no agent list.
+    for (const field of ['agentName', 'runtime', 'missionId']) expect(convene).toContain(field);
+  });
+
+  it('never replaces a refused dispatch with a native subagent, nor a full mission with a subset', () => {
+    const convene = passMatching(/invoke-specialists|convene/i)?.body ?? '';
+    expect(convene).toMatch(/refus[^.]*never[^.]*native subagent/i);
+    expect(convene).toMatch(/at most four/i);
+  });
+});
+
+describe('no shipped skill decides how an agent is launched from what displays it', () => {
+  const root = new URL('../../packages/core/skills/', import.meta.url);
+  const skills = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => [entry.name, readFileSync(new URL(`${entry.name}/SKILL.md`, root), 'utf8')] as const);
+
+  it.each(skills)('%s', (_name, text) => {
+    const flat = text.replace(/\s+/g, ' ');
+    expect(flat).not.toMatch(/mission-presentation|cockpit presentation|workers are native subagents/i);
+    // A multiplexer may be named as a view; it is never the condition of a launch path.
+    expect(flat).not.toMatch(/\b(if|when|without|unless)\b[^.]{0,80}\b(multiplexer|herdr|tmux|cmux)\b/i);
   });
 });

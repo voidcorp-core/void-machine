@@ -128,3 +128,13 @@ interruption, or abandonment. This prevents ticket substitution and forged write
 giving the audit an honest boundary for distinguishing unfinished work from an agent that never
 launched. Runtime identity is derived from native session markers rather than a caller option;
 unknown shells are degraded and Codex markers take precedence over a coincident Claude marker.
+
+## Specialists through the delegation kernel (DEV-929, 2026-09-30)
+
+Each `invoke-specialists` envelope is launched as one `void-machine agents dispatch --role review`
+run, with `agentName`, `runtime` and `missionId` copied from the envelope and the `contextPack`
+as its brief file, instead of the coordinator's native `Agent` or `spawn_agent` call. The
+specialist lifecycle events keep their shape; `contextId` is the run's id. The kernel's bound of
+four open runs per mission is met by dispatching in waves, never by dropping a specialist, and a
+refused dispatch stops the cycle: a native subagent in its place would be the silent subset the
+dispatch contract forbids.

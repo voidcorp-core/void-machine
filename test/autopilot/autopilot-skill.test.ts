@@ -131,6 +131,20 @@ describe('remote effects stay with the roles that own them', () => {
     expect(flat(body(SKILL))).toMatch(/never chooses its own checkout and never works in the main one/i);
   });
 
+  it('launches every worker through the delegation kernel, whatever displays it', () => {
+    const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
+    expect(spawning).toMatch(/agents dispatch --role work/);
+    expect(spawning).toMatch(/--cwd/);
+    // The sentence this replaced let the agent choose between two launch paths.
+    expect(spawning).not.toMatch(/native subagents|cockpit presentation|\bwhen the project uses\b/i);
+  });
+
+  it('hands a ticket back to the run that holds it, and never seats a second one', () => {
+    const respawning = flat(body(SKILL)).match(/\*\*Respawning\.\*\*.*?(?=\*\*The fingerprint\.\*\*)/)?.[0] ?? '';
+    expect(respawning).toMatch(/agents send/);
+    expect(respawning).toMatch(/never a second run/i);
+  });
+
   it('keeps migrations out of production', () => {
     expect(flat(body(SKILL))).toMatch(/dev\/local/i);
   });

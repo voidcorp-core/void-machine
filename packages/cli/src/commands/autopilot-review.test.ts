@@ -142,6 +142,11 @@ function scriptedRuntime(machine: string, clock: { value: number }, script: Scri
   const stops: string[] = [];
   const seen = new Map<string, number>();
   const runtime: AgentRuntimePort = {
+    capabilities: {
+      view: { available: false, provenance: 'unknown', note: 'scripted' },
+      capture: { available: false, provenance: 'unknown', note: 'scripted' },
+      structuredOutput: { available: false, provenance: 'unknown', note: 'scripted' },
+    },
     preflight: async () => ({ ok: true }),
     dispatch: async (plan) => {
       launches.push(plan);
@@ -183,7 +188,7 @@ function runners(repo: Repository, script: Script = {}, calls: string[][] = [], 
   const scripted = scriptedRuntime(machine, clock, script);
   const agents: AgentsContext = {
     ...composed,
-    runtime: scripted.runtime,
+    runtimes: { ...composed.runtimes, claude: scripted.runtime },
     clock: { now: () => clock.value, sleep: async (ms) => { clock.value += ms; } },
   };
   const gh = github(heads, calls);

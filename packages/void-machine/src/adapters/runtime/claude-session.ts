@@ -7,8 +7,8 @@ import { z } from 'zod';
 import type { RunObservation } from '../../core/delegation.js';
 import { resolveMachineRoot } from '../store/run-registry.js';
 import type {
-  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, RuntimeReading, SessionReading,
-  SessionState,
+  AgentRuntimePort, LaunchOutcome, LaunchPlan, NativeRunRef, Preflight, RuntimeCapabilities, RuntimeReading,
+  SessionReading, SessionState,
 } from '../../runtime/delegation.js';
 
 /**
@@ -360,9 +360,18 @@ function resultHookPreflight(cwd: string, config: ClaudeSessionConfig): Prefligh
   return { ok: true };
 }
 
+const CAPABILITIES: RuntimeCapabilities = {
+  view: { available: true, provenance: 'verified', note: 'claude attach <handle>, shown in a herdr pane (2026-09-28)' },
+  capture: { available: true, provenance: 'verified', note: 'the PreToolUse hook on Agent hands the call to the '
+    + 'kernel and refuses the native one (DEV-928 proof)' },
+  structuredOutput: { available: false, provenance: 'documented', note: 'a background session takes no JSON '
+    + 'Schema; its result is the final message as written' },
+};
+
 export function createClaudeSessionRuntime(config: ClaudeSessionConfig): AgentRuntimePort {
   const launchTimeout = config.launchTimeoutMs ?? LAUNCH_TIMEOUT_MS;
   return {
+    capabilities: CAPABILITIES,
     async preflight(cwd) {
       const run = await runBounded(config, ['--version'], cwd, PROBE_TIMEOUT_MS);
       const version = run.kind === 'exited' && run.code === 0 ? parseClaudeVersion(run.stdout) : undefined;

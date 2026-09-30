@@ -1,0 +1,45 @@
+{
+ "id": 2,
+ "result": {
+  "thread": {
+   "id": "01a0ea69-9c4f-7b71-9da6-ea92497403e1",
+   "environments": null,
+   "extra": null,
+   "sessionId": "01a0ea69-9c4f-7b71-9da6-ea92497403e1",
+   "forkedFromId": null,
+   "parentThreadId": null,
+   "preview": "Relis sum.ts dans ce dépôt. Donne un verdict pass si la fonction additionne correctement, fail sinon, et un résumé d'une phrase. Ne modifie aucun fichier.",
+   "ephemeral": false,
+   "section": null,
+   "sectionEnteredAt": null,
+   "projectId": null,
+   "historyMode": "paginated",
+   "modelProvider": "openai",
+   "model": "gpt-5.6-sol",
+   "reasoningEffort": "high",
+   "createdAt": 1790639185,
+   "updatedAt": 1790639250,
+   "recencyAt": 1790639185,
+   "status": {
+    "type": "notLoaded"
+   },
+   "path": "/home/user/.codex/sessions/2026/09/29/rollout-2026-09-29T01-46-25-01a0ea69-9c4f-7b71-9da6-ea92497403e1.jsonl",
+   "cwd": "/work/review",
+   "cliVersion": "0.158.0",
+   "originator": "void_machine_probe",
+   "source": "vscode",
+   "canAcceptDirectInput": null,
+   "threadSource": null,
+   "agentNickname": null,
+   "agentRole": null,
+   "gitInfo": {
+    "sha": "dd246a8972ef8b8ee787ffdf880a80b840c725d5",
+    "branch": "probe/dev-928-agent-capture",
+    "originUrl": "/home/user/.local/share/void-dev923-probe/consumer-origin.git"
+   },
+   "name": "vm-run_b4a3244a-472f-4fd0-8b8f-f54da29e38c0",
+   "daybreakEnabled": null,
+   "turns": []
+  }
+ }
+}

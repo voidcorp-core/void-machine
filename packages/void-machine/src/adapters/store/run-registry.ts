@@ -5,7 +5,8 @@ import { constants } from 'node:fs';
 import { link, mkdir, open, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
-import { RUN_STATES, type RunTransition, isOpen } from '../../core/delegation.js';
+import { RUNTIME_NAMES, RUN_STATES, type RunTransition, isOpen } from '../../core/delegation.js';
+import { MAX_OUTPUT_SCHEMA_BYTES } from '../../core/output-conformance.js';
 import { SURFACE_KINDS } from '../../core/presentation.js';
 import type {
   DelegationStore, InstructionFile, MissionLock, RunRecord, RunResult, SessionBinding, SurfaceReading,
@@ -16,7 +17,8 @@ import type { SurfaceRecord } from '../../runtime/presentation.js';
  * Delegated runs on disk, under `<main checkout>/.void/machine`, found from any worktree through
  * the common Git directory:
  *
- *   runs/<missionId>/agents/<runId>/{run.json, transitions/NNNNNN.json, brief/, result.json, surface.json}
+ *   runs/<missionId>/agents/<runId>/{run.json, transitions/NNNNNN.json, brief/, result.json, surface.json,
+ *                                    output-schema.json}
  *   agents/index/<runId>.json      the mission of each run
  *   agents/pending/<runId>          { cwd, createdAt } of a run whose session is not bound yet
  *   agents/sessions/<sessionId>.json  the claim the Stop hook follows: { resultPath }
@@ -60,7 +62,7 @@ const bindingSchema = z.strictObject({ handle: z.string().regex(/^[0-9a-f]{8}$/)
   sessionId: z.string().regex(SESSION_ID).optional() });
 const runSchema = z.strictObject({
   schemaVersion: z.literal(1), runId: z.string().regex(RUN_ID), missionId: z.string().regex(MISSION_ID),
-  name: z.string().min(1).max(200), role: z.enum(['work', 'review']), runtime: z.literal('claude'),
+  name: z.string().min(1).max(200), role: z.enum(['work', 'review']), runtime: z.enum(RUNTIME_NAMES),
   cwd: z.string().min(1), agentType: z.string().optional(), ticket: z.string().optional(),
   model: z.string().optional(), binding: bindingSchema.optional(),
 });
@@ -70,9 +72,16 @@ const transitionSchema = z.strictObject({
     'sent', 'accepted', 'retired', 'stopped']),
   cause: z.string().max(2_000), action: z.string().max(2_000), waitingFor: z.string().max(200).optional(),
 });
+const conformanceSchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.enum(['valid', 'not-applicable']) }),
+  z.strictObject({ state: z.enum(['invalid', 'unchecked']), cause: z.string().max(400) }),
+]);
+// The Stop hook writes the first shape; the kernel adds the turn and conformance of a runtime-reported result.
 const resultSchema = z.strictObject({ schemaVersion: z.literal(1), sessionId: z.string().regex(SESSION_ID),
   recordedAt: z.number(), lastAssistantMessage: z.string(), truncated: z.boolean(),
-  pendingWork: z.number().int().min(0).max(10_000).optional() });
+  pendingWork: z.number().int().min(0).max(10_000).optional(),
+  turnId: z.string().min(1).max(100).exactOptional(), conformance: conformanceSchema.exactOptional() });
+const outputSchemaDocument = z.record(z.string(), z.unknown());
 const causeSchema = z.strictObject({ code: z.enum(['not-detected', 'no-display-command', 'not-representable',
   'unreachable', 'timeout', 'deadline', 'exit-nonzero', 'parse-failed', 'output-overflow', 'needs-reconciliation',
   'identity-mismatch', 'own-pane', 'record-corrupt', 'kind-unavailable']),
@@ -257,11 +266,15 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       return names.map((name) => name.replace(/\.json$/, '')).filter((name) => RUN_ID.test(name))
         .sort().slice(0, MAX_INDEX);
     },
-    async create(run, first, brief) {
+    async create(run, first, brief, outputSchema) {
       const directory = runDirectory(run.missionId, run.runId);
       await mkdir(join(directory, 'transitions'), { recursive: true, mode: 0o700 });
       await writeFile(join(directory, 'run.json'), JSON.stringify({ schemaVersion: 1, ...run }),
         { mode: 0o600, flag: 'wx' });
+      if (outputSchema !== undefined) {
+        await writeFile(join(directory, 'output-schema.json'), JSON.stringify(outputSchema),
+          { mode: 0o600, flag: 'wx' });
+      }
       await replaceFile(agents('index', `${run.runId}.json`), JSON.stringify({ missionId: run.missionId }));
       await replaceFile(agents('pending', run.runId), JSON.stringify({ cwd: run.cwd, createdAt: now() }));
       if (await linkFile(join(directory, 'transitions', recordName(1)), JSON.stringify(first)) !== 'appended') {
@@ -320,8 +333,33 @@ export function createRunRegistry(options: RunRegistryOptions): DelegationStore 
       if (missionId === undefined) return undefined;
       const stored = await readJson(join(runDirectory(missionId, runId), 'result.json'), resultSchema,
         MAX_RESULT_BYTES);
-      return stored === undefined ? undefined : { sessionId: stored.sessionId, recordedAt: stored.recordedAt,
-        pendingWork: stored.pendingWork ?? 0, text: stored.lastAssistantMessage, truncated: stored.truncated };
+      if (stored === undefined) return undefined;
+      return { sessionId: stored.sessionId, recordedAt: stored.recordedAt, pendingWork: stored.pendingWork ?? 0,
+        text: stored.lastAssistantMessage, truncated: stored.truncated,
+        ...(stored.turnId === undefined ? {} : { turnId: stored.turnId }),
+        ...(stored.conformance === undefined ? {} : { conformance: stored.conformance }) };
+    },
+    async recordResult(runId, result) {
+      const missionId = await missionOf(runId);
+      if (missionId === undefined) throw new Error('unknown run');
+      const { text, ...rest } = result;
+      await replaceFile(join(runDirectory(missionId, runId), 'result.json'),
+        JSON.stringify({ schemaVersion: 1, ...rest, lastAssistantMessage: text }));
+    },
+    async outputSchema(runId) {
+      const missionId = await missionOf(runId);
+      if (missionId === undefined) return undefined;
+      const path = join(runDirectory(missionId, runId), 'output-schema.json');
+      const text = await readSmall(path, MAX_OUTPUT_SCHEMA_BYTES);
+      if (text === undefined) {
+        if (errorCode(await stat(path).catch((error: unknown) => error)) === 'ENOENT') return undefined;
+        throw new Error(`the output schema of ${runId} cannot be read`);
+      }
+      try {
+        const parsed = outputSchemaDocument.safeParse(JSON.parse(text));
+        if (parsed.success) return parsed.data;
+      } catch { /* Reported below: a schema that does not parse is never read as absent. */ }
+      throw new Error(`the output schema of ${runId} is not a JSON object`);
     },
     async readSurface(runId): Promise<SurfaceReading> {
       const missionId = await missionOf(runId);

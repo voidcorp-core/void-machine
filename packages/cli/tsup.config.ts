@@ -28,6 +28,7 @@ export default defineConfig({
     '@voidcorp/mission-engine',
     '@voidcorp/void-machine',
     'picomatch',
+    'ws',
     'yaml',
     'zod',
   ],

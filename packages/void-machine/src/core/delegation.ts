@@ -8,7 +8,8 @@ export const RUN_STATES = ['admitted', 'dispatched', 'working', 'turn-ended', 'w
   'accepted', 'retired', 'failed', 'stopped', 'reconciling'] as const;
 export type RunState = typeof RUN_STATES[number];
 export type RunRole = 'work' | 'review';
-export type RuntimeName = 'claude';
+export const RUNTIME_NAMES = ['claude', 'codex'] as const;
+export type RuntimeName = typeof RUNTIME_NAMES[number];
 
 export const DELEGATION_LIMITS = {
   /** Open runs one mission may hold; the caller bounds its own parallelism below it. */
@@ -149,7 +150,7 @@ function observedAbsent(view: RunView, now: number): ObservationStep {
     if (now - since < DELEGATION_LIMITS.reconcileWindowMs) return {};
     return { transition: next(view, now, 'failed', 'observed',
       `${lost} after ${String(DELEGATION_LIMITS.reconcileWindowMs / 1000)} s of reconciliation`,
-      'inspect claude agents; stop the run, and dispatch a new one only once no session remains') };
+      'inspect the runtime; stop the run, and dispatch a new one only once no session remains') };
   }
   return { transition: next(view, now, 'reconciling', 'observed', lost,
     'the session is looked up by name; it is never launched twice') };

@@ -61,9 +61,14 @@ Codex CLI 0.155.1, herdr 0.9.0, macOS, Ghostty).
 | `auto` (tâches longues, sans demande de routine) et `dontAsk` (refuse ce qui demanderait, n'attend jamais d'entrée) ; les règles deny et les refus de `PreToolUse` s'appliquent dans tous les modes | permission-modes | vérifié |
 | Un message venu d'une autre session ne peut jamais approuver une permission à la place de l'humain | agent-teams, cross-session-messaging | documenté |
 | `codex app-server` (stdio JSON-RPC) : `thread/start`, `turn/start` avec `outputSchema`, `turn/steer`, `turn/interrupt`, `turn/completed`, `thread/read` | learn.chatgpt.com/docs/app-server | vérifié (sonde stdio, sortie structurée conforme) |
-| Daemon app-server partagé de Codex : le proxy ne répond pas ; daemon 0.153.4 contre CLI 0.155.1 | sonde | non fiable, écarté |
+| Daemon app-server partagé de Codex : le proxy ne répond pas ; daemon 0.153.4 contre CLI 0.155.1 | sonde | non fiable, écarté ; infirmé le 2026-09-29, voir le correctif Codex |
+| Daemon 0.158.0 aligné sur le CLI : WebSocket sur `app-server-control.sock` ; cycle complet avec `outputSchema` ; un tour survit à la déconnexion du client qui l'a lancé ; `thread/list` retrouve un thread par son nom | sonde DEV-926 (2026-09-29) | vérifié |
+| `codex resume <thread> --remote unix://<socket>` montre le thread en direct dans un pane herdr ; la reprise par nom est refusée en `--remote` | sonde DEV-926 | vérifié |
+| `turn/interrupt` laisse vivre les commandes d'arrière-plan du tour ; `thread/backgroundTerminals/clean` (API expérimentale) les termine | sonde DEV-926 | vérifié |
+| Le daemon décharge un thread inactif (`notLoaded`) ; `turn/start` y répond `thread not found` jusqu'à un `thread/resume`, qui reprend `approvalPolicy` et `sandbox` passés | sonde DEV-926 | vérifié |
+| Depuis un thread `workspace-write`, `connect` sur le socket de contrôle est refusé (`EPERM`) : un agent ne peut pas ouvrir de thread hors sandbox | sonde DEV-926 | vérifié |
 | Codex non interactif : `--sandbox workspace-write --ask-for-approval never` ; relecture : `--sandbox read-only` | agent-approvals-security | documenté |
-| Hook Codex `PreToolUse` sur `spawn_agent` (alias `Agent`) : observable, refus non garanti | learn.chatgpt.com/docs/hooks | inconnu |
+| Hook Codex `PreToolUse` sur `spawn_agent` (alias `Agent`) : observable, refus non garanti | learn.chatgpt.com/docs/hooks | observé (DEV-926, Codex 0.155.1) : le hook voit `collaborationspawn_agent`, le refus tient, mais le brief arrive chiffré |
 | Agent teams Claude : panes natifs mais tmux ou iTerm2 seulement, pas Ghostty, expérimental, Claude seul | agent-teams | écarté |
 
 ## Rôles
@@ -191,6 +196,32 @@ pendant un tour, `turn/start` sinon. `stop` : `turn/interrupt`. `attachCommand` 
 n'est pas faite ; sans elle, un run Codex n'a pas de vue, ce que `status` dit explicitement.
 La vie de ce processus est liée au driver : un driver arrêté ne prétend pas superviser.
 
+*Correctif du 2026-09-29 (DEV-926)* : un run Codex est un thread du daemon app-server natif de
+Codex, pas d'un processus possédé ([décision proposée](../decisions-log/2026-09-28-codex-runs-are-threads-of-native-daemon--5dd5306b-721f-4e9b-b592-c765c8eb823e.md)). Le
+daemon supervise les threads, comme le superviseur de `claude --bg` les sessions ; le noyau ne
+lance, ne possède et n'arrête aucun processus Codex :
+
+- chaque commande `agents` joint le socket de contrôle (`$CODEX_HOME/app-server-control/`) le
+  temps d'un échange borné ; `preflight` lance le daemon s'il ne tourne pas
+  (`codex app-server daemon start`) et refuse, en nommant la réparation, un daemon injoignable ou
+  d'une autre version que le CLI ;
+- `dispatch` : `thread/start`, `thread/name/set` au nom du run, `turn/start` ; l'accusé porte l'id
+  complet du thread, donc la vue existe dès le dispatch. Un lancement perdu se retrouve par son
+  nom (`thread/list`), jamais relancé ; deux threads du même nom ne sont jamais départagés ;
+- `observe` : `thread/read` sans tours (statut, nom), puis `thread/turns/list` du seul dernier
+  tour, pour qu'une réponse ne grossisse jamais avec le run ; le runtime rend lui-même le message final, que le
+  noyau enregistre une fois par tour et vérifie contre le schéma du run (`--output-schema`), un
+  résultat non conforme étant gardé et marqué. Daemon injoignable : runs illisibles, jamais absents ;
+- `send` : `turn/steer` pendant un tour, `turn/start` sinon (`thread/resume` d'abord pour un thread
+  déchargé, avec l'approbation et le sandbox du rôle) ; `stop` : `turn/interrupt`, puis
+  `thread/backgroundTerminals/clean`, seul appel qui demande l'API expérimentale, car une
+  interruption laisse vivre les commandes d'arrière-plan ;
+- une écriture ni confirmée ni refusée (délai, connexion perdue) rend `lost`, jamais `refused` : le
+  run est retrouvé par son nom, jamais relancé ; un thread dont le tour est refusé est archivé ;
+- le socket doit être un socket de l'utilisateur courant, et ce que dit le daemon est réduit au
+  texte imprimable avant d'entrer dans une cause ;
+- `attachCommand` : `codex resume <threadId> --remote unix://<socket>`, prouvé dans un pane herdr.
+
 Ajouter un runtime demande un adaptateur et ses tests de conformité, rien dans le noyau.
 
 ## Adaptateurs de présentation
@@ -249,6 +280,12 @@ Fermer une surface ne touche jamais le run, la worktree ni les preuves.
 Sinon, un coordinateur Codex appelle le CLI par l'instruction de son skill, et la capacité est
 déclarée non garantie.
 
+*Correctif du 2026-09-29 (DEV-926)* : sonde faite sur Codex 0.155.1. Le hook reçoit `tool_name:
+"collaborationspawn_agent"` (le matcher documenté `spawn_agent|Agent` ne se déclenche jamais) ;
+avec un matcher qui le couvre, le refus tient. Mais `tool_input.message` arrive chiffré : aucune
+capture ne peut transmettre le brief au noyau. Aucun hook n'est livré, la capacité est déclarée
+non disponible (provenance observée), et un coordinateur Codex délègue par le CLI.
+
 ## Appelants migrés
 
 - **Coordinateur** : la capture, plus une consigne d'une ligne dans `CLAUDE.md` et `AGENTS.md`.
@@ -295,7 +332,8 @@ déclarée non garantie.
    hook Stop, présentation `none`. Déjà utilisable, visible dans `claude agents`.
 2. **Présentation et capture** : port `Surface`, adaptateurs herdr, tmux et cmux (script
    supprimé), hook `Agent`. Ferme le besoin d'origine.
-3. **Adaptateur Codex** : app-server possédé, capacités déclarées, sonde de vue et de capture.
+3. **Adaptateur Codex** : thread du daemon natif (correctif du 2026-09-29), capacités déclarées,
+   sonde de vue et de capture.
 4. **Appelants** : autopilot, implement, `NATIVE-SUPERVISION.md`, consignes coordinateur.
 5. **Livraison** : `@voidcorp/void-machine` embarqué dans le CLI publié, preuves réelles, 4.1.0.
 

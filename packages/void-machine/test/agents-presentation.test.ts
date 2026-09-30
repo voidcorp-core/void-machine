@@ -9,7 +9,7 @@ import {
   type AgentsContext, acceptAgent, agentStatus, dispatchAgent, stopAgent, waitAgents,
 } from '../src/application/agents.js';
 import type { SurfaceKind } from '../src/core/presentation.js';
-import type { AgentRuntimePort, SessionState } from '../src/runtime/delegation.js';
+import type { AgentRuntimePort, RuntimeCapabilities, SessionState } from '../src/runtime/delegation.js';
 import type {
   SurfaceClosing, SurfaceOpening, SurfacePort, SurfacePresence, SurfaceRef, SurfaceView,
 } from '../src/runtime/presentation.js';
@@ -25,8 +25,16 @@ function repository(): string {
   return base;
 }
 
+/** What a Claude-like runtime declares: a view, a capture, no schema. */
+const capabilities: RuntimeCapabilities = {
+  view: { available: true, provenance: 'verified', note: 'attach' },
+  capture: { available: true, provenance: 'verified', note: 'hook' },
+  structuredOutput: { available: false, provenance: 'documented', note: 'none' },
+};
+
 function runtime(options: { attach?: boolean; sessions?: () => ReadonlyMap<string, SessionState> } = {}): AgentRuntimePort {
   return {
+    capabilities,
     preflight: async () => ({ ok: true }),
     dispatch: async () => ({ kind: 'acknowledged', handle: '6d5ea8bb' }),
     observe: async () => ({ kind: 'read', sessions: options.sessions?.() ?? new Map() }),
@@ -63,7 +71,7 @@ function context(cwd: string, runtimePort: AgentRuntimePort, surface: SurfacePor
   let runs = 0;
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
-    runtime: runtimePort,
+    runtimes: { claude: runtimePort, codex: runtimePort },
     surfaces: { detected: surface, reach: () => surface },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',

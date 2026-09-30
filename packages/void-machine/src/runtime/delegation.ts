@@ -3,6 +3,7 @@ import {
   DELEGATION_LIMITS, type RunObservation, type RunRole, type RunStatus, type RunTransition,
   type RuntimeName, describeRun, isOpen, observeRun, runView,
 } from '../core/delegation.js';
+import { type Conformance, checkConformance } from '../core/output-conformance.js';
 import type { SurfaceRecord } from './presentation.js';
 
 /**
@@ -31,7 +32,10 @@ export interface RunRecord {
   readonly transitions: readonly RunTransition[];
 }
 
-/** A Stop-hook result as read back: untrusted text, bounded, tied to one native session. */
+/**
+ * A run's final message as read back: untrusted text, bounded, tied to one native session. The
+ * Stop hook writes it for a runtime that has one; the kernel writes the one a runtime reports.
+ */
 export interface RunResult {
   readonly sessionId: string;
   readonly recordedAt: number;
@@ -39,6 +43,10 @@ export interface RunResult {
   readonly pendingWork: number;
   readonly text: string;
   readonly truncated: boolean;
+  /** The native turn the message ends, when the runtime names its turns. */
+  readonly turnId?: string;
+  /** Checked against the run's output schema; absent on a result nothing checked. */
+  readonly conformance?: Conformance;
 }
 
 export interface MissionLock { release(): Promise<void> }
@@ -50,6 +58,10 @@ export interface RunRegistry {
   append(runId: string, transition: RunTransition): Promise<'appended' | 'conflict'>;
   bind(runId: string, binding: SessionBinding): Promise<void>;
   result(runId: string): Promise<RunResult | undefined>;
+  /** Replaces the run's result whole with one the runtime reported. */
+  recordResult(runId: string, result: RunResult): Promise<void>;
+  /** The output schema the run was dispatched with, undefined when it has none. */
+  outputSchema(runId: string): Promise<unknown>;
   /** Tries once; undefined while another owner holds a live lease on the mission. */
   lock(missionId: string, owner: string): Promise<MissionLock | undefined>;
 }
@@ -62,9 +74,9 @@ export interface InstructionFile {
 
 /** The registry a command writes through: creation and instruction files, beside the driver's needs. */
 export interface DelegationStore extends RunRegistry {
-  /** Records the run and its first transition, and writes its brief. */
-  create(run: Omit<RunRecord, 'transitions' | 'binding'>, first: RunTransition, brief: string)
-    : Promise<InstructionFile>;
+  /** Records the run and its first transition, and writes its brief and its output schema. */
+  create(run: Omit<RunRecord, 'transitions' | 'binding'>, first: RunTransition, brief: string,
+    outputSchema?: Readonly<Record<string, unknown>>): Promise<InstructionFile>;
   /** Writes the next message of a run as a new instruction file. */
   writeMessage(runId: string, text: string): Promise<InstructionFile>;
   /** Every recorded run identifier, bounded, for a status without a run. */
@@ -84,9 +96,16 @@ export interface NativeRunRef {
   readonly handle?: string;
   readonly sessionId?: string;
 }
+/** A final message a runtime reports itself, for the turn its adapter last started. */
+export interface RuntimeResult {
+  readonly turnId: string;
+  readonly text: string;
+  readonly truncated: boolean;
+}
 export interface SessionState {
   readonly observation: RunObservation;
   readonly binding?: { readonly handle: string; readonly sessionId: string };
+  readonly result?: RuntimeResult;
 }
 /** Sessions keyed by run name; a run missing from the map is absent. */
 export type SessionReading = ReadonlyMap<string, SessionState>;
@@ -103,16 +122,36 @@ export interface LaunchPlan {
   /** A file the agent reads first; the prompt itself never carries caller text. */
   readonly instructionPath: string;
   readonly instructionDirectory: string;
+  /** The JSON Schema every final message of the run must follow, when the caller set one. */
+  readonly outputSchema?: Readonly<Record<string, unknown>>;
 }
 export type LaunchOutcome =
-  | { readonly kind: 'acknowledged'; readonly handle: string }
+  /** A runtime that names the whole session at launch binds it at once, and its view exists from then on. */
+  | { readonly kind: 'acknowledged'; readonly handle: string; readonly sessionId?: string }
   | { readonly kind: 'lost'; readonly cause: string }
   | { readonly kind: 'refused'; readonly cause: string; readonly action: string; readonly handle?: string };
 export type Preflight =
   | { readonly ok: true }
   | { readonly ok: false; readonly cause: string; readonly action: string };
 
+/** How a capability is known: read in the runtime's documentation, seen once, proven, or not at all. */
+export type Provenance = 'documented' | 'observed' | 'verified' | 'unknown';
+export interface Capability {
+  readonly available: boolean;
+  readonly provenance: Provenance;
+  readonly note: string;
+}
+export interface RuntimeCapabilities {
+  /** A command that shows the live session in a terminal. */
+  readonly view: Capability;
+  /** Redirecting the coordinator's native delegation to the kernel. */
+  readonly capture: Capability;
+  /** A final message held to a JSON Schema by the runtime itself. */
+  readonly structuredOutput: Capability;
+}
+
 export interface AgentRuntimePort {
+  readonly capabilities: RuntimeCapabilities;
   preflight(cwd: string): Promise<Preflight>;
   dispatch(plan: LaunchPlan): Promise<LaunchOutcome>;
   observe(refs: readonly NativeRunRef[]): Promise<RuntimeReading>;
@@ -120,6 +159,10 @@ export interface AgentRuntimePort {
   stop(ref: NativeRunRef): Promise<Preflight>;
   attachCommand(ref: NativeRunRef): readonly string[] | undefined;
 }
+
+/** One port per runtime: every run is served by the runtime it was dispatched to. */
+export type RuntimePorts<K extends keyof AgentRuntimePort = keyof AgentRuntimePort> =
+  { readonly [N in RuntimeName]: Pick<AgentRuntimePort, K> };
 
 export interface DelegationClock {
   now(): number;
@@ -150,7 +193,7 @@ export function statusOf(run: RunRecord, result: RunResult | undefined): RunStat
 
 export interface ObserveDependencies {
   readonly registry: RunRegistry;
-  readonly runtime: Pick<AgentRuntimePort, 'observe'>;
+  readonly runtimes: RuntimePorts<'observe'>;
   readonly clock: DelegationClock;
   /** First time each run's turn was seen done without its result, kept across ticks. */
   readonly doneSince: Map<string, number>;
@@ -166,16 +209,58 @@ async function bindIfNew(registry: RunRegistry, run: RunRecord,
   return { ...run, binding: found };
 }
 
+/**
+ * Keeps the final message a runtime reports for its current turn, once: the adapter only ever
+ * reports the turn it last started, so a new turn id is a new result, stamped when first seen.
+ */
+async function keepReported(registry: RunRegistry, run: RunRecord, state: SessionState | undefined,
+  now: number): Promise<void> {
+  const reported = state?.result;
+  const sessionId = run.binding?.sessionId;
+  if (reported === undefined || sessionId === undefined || state?.binding?.sessionId !== sessionId) return;
+  const kept = await registry.result(run.runId);
+  if (kept?.sessionId === sessionId && kept.turnId === reported.turnId) return;
+  const schema = await registry.outputSchema(run.runId);
+  await registry.recordResult(run.runId, { sessionId, turnId: reported.turnId, recordedAt: now, pendingWork: 0,
+    text: reported.text, truncated: reported.truncated,
+    conformance: checkConformance(schema, reported.text, reported.truncated) });
+}
+
+type Reading = { readonly sessions: SessionReading } | { readonly cause: string };
+
+/** Reads each runtime's runs with its own port; one that throws or cannot be read holds only its own. */
+async function readByRuntime(open: readonly RunRecord[], runtimes: ObserveDependencies['runtimes'])
+  : Promise<ReadonlyMap<RuntimeName, Reading>> {
+  const readings = new Map<RuntimeName, Reading>();
+  for (const runtime of new Set(open.map((run) => run.runtime))) {
+    const refs = open.filter((run) => run.runtime === runtime).map(refOf);
+    try {
+      const reading = await runtimes[runtime].observe(refs);
+      readings.set(runtime, reading.kind === 'read' ? { sessions: reading.sessions } : { cause: reading.cause });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      readings.set(runtime, { cause: `the ${runtime} runtime could not be read: ${detail}` });
+    }
+  }
+  return readings;
+}
+
 /** One tick for one mission. The caller holds the mission lock. */
 export async function observeMission(missionId: string, deps: ObserveDependencies): Promise<ObserveOutcome> {
   const open = (await deps.registry.list(missionId))
     .filter((run) => isOpen(runView(run.transitions).state));
   if (open.length === 0) return { kind: 'observed' };
-  const reading = await deps.runtime.observe(open.map(refOf));
-  if (reading.kind === 'unreadable') return reading;
+  const readings = await readByRuntime(open, deps.runtimes);
+  let unreadable: string | undefined;
   for (const listed of open) {
+    const reading = readings.get(listed.runtime);
+    if (reading === undefined || 'cause' in reading) {
+      unreadable = reading?.cause ?? unreadable;
+      continue;
+    }
     const state = reading.sessions.get(listed.name);
     const run = await bindIfNew(deps.registry, listed, state);
+    await keepReported(deps.registry, run, state, deps.clock.now());
     const result = boundResult(run, await deps.registry.result(run.runId));
     const since = deps.doneSince.get(run.runId);
     const step = observeRun(runView(run.transitions), {
@@ -188,7 +273,7 @@ export async function observeMission(missionId: string, deps: ObserveDependencie
     else deps.doneSince.set(run.runId, step.doneSince);
     if (step.transition !== undefined) await deps.registry.append(run.runId, step.transition);
   }
-  return { kind: 'observed' };
+  return unreadable === undefined ? { kind: 'observed' } : { kind: 'unreadable', cause: unreadable };
 }
 
 export interface RunProgress {
@@ -204,7 +289,7 @@ export type WaitOutcome =
 
 export interface WaitDependencies {
   readonly registry: RunRegistry;
-  readonly runtime: Pick<AgentRuntimePort, 'observe'>;
+  readonly runtimes: RuntimePorts<'observe'>;
   readonly clock: DelegationClock;
   /** Identifies this waiter in the mission lock. */
   readonly owner: string;

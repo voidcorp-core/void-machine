@@ -227,6 +227,21 @@ without a surface, for a `fork`, for a session the kernel launched (same session
 any failure, which it reports instead of blocking. How a run is shown in a multiplexer is described
 in `NATIVE-SUPERVISION.md`.
 
+Each run keeps the runtime it was dispatched to (`--runtime claude|codex`), and every command
+reaches it through that runtime's port; one runtime that cannot be read never holds another's
+runs. A Codex run (`adapters/runtime/codex-daemon.ts`, `adapters/runtime/codex-thread.ts`) is a
+thread of Codex's own app-server daemon, named after the run and reached on the daemon's control
+socket for one bounded exchange per command
+([proposed decision](decisions-log/2026-09-28-codex-runs-are-threads-of-native-daemon--5dd5306b-721f-4e9b-b592-c765c8eb823e.md)): the
+daemon supervises the thread, and the kernel owns no Codex process. The role fixes the thread's
+sandbox (`work`: `workspace-write`; `review`: `read-only`) with `approvalPolicy: never`; an
+approval asked anyway is surfaced as `waiting-human`, never answered. The runtime reports the
+final message itself: the kernel records it once per turn and checks it against the output schema
+the run was dispatched with (`--output-schema`), keeping an answer that does not conform, marked
+so. A launch acknowledgement may carry the whole native session id, so the run's view exists from
+the dispatch on. Each adapter declares its view, capture and structured-output capabilities with
+their provenance, and `status` says why a run has no view.
+
 ## Stack profile compilation
 
 `packages/core/profiles/*.yaml` is the certified stack-knowledge catalog. Consumer extensions use

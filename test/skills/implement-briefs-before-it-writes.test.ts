@@ -89,6 +89,45 @@ describe('the implement cycle briefs before it writes', () => {
   });
 });
 
+// The three rules below follow the kernel and the controller as they are, so
+// each reads the fact it depends on from the module that owns it.
+const DISPATCH = readFileSync(
+  new URL('../../packages/mission-engine/src/orchestration/dispatch.ts', import.meta.url), 'utf8');
+const DELEGATION = readFileSync(
+  new URL('../../packages/void-machine/src/core/delegation.ts', import.meta.url), 'utf8');
+const KERNEL = readFileSync(
+  new URL('../../packages/void-machine/src/application/agents.ts', import.meta.url), 'utf8');
+
+describe('a kernel run carries the whole envelope contract and follows the run, not the wait', () => {
+  const convene = () => (passMatching(/invoke-specialists|convene/i)?.body ?? '').replace(/\s+/g, ' ');
+
+  it('hands a reviewer its subject and scope, which travel beside the pack', () => {
+    // Envelope fields outside `contextPack`: a reviewer that never sees them
+    // cannot echo the receipt `specialist-event` requires.
+    expect(DISPATCH).toMatch(/reviewSubject: input\.reviewSubject[\s\S]*contextPack: compileContextPack/);
+    expect(convene()).toMatch(/reviewSubject/);
+    expect(convene()).toMatch(/reviewScope/);
+    expect(convene()).not.toMatch(/pack is the whole brief/i);
+  });
+
+  it('accepts only a run whose turn ended, and never fails a specialist on a wait that timed out', () => {
+    // `accept` refuses every state but `turn-ended`; `timed-out` ends an observation, not a run.
+    expect(DELEGATION).toMatch(/export function acceptRun\([^{]*\{\s*if \(view\.state !== 'turn-ended'\)/);
+    expect(convene()).toMatch(/agents status/);
+    expect(convene()).toMatch(/accept[^.]*only[^.]*turn-ended|only[^.]*turn-ended[^.]*accept/i);
+    expect(convene()).toMatch(/tim(e|ed)[ -]?out[^.]*never[^.]*failed|never[^.]*failed[^.]*tim(e|ed)[ -]?out/i);
+  });
+
+  it('resumes the run an envelope already has before it ever dispatches another', () => {
+    // The kernel stores the run and its brief before the runtime launches, so a
+    // crash after the acknowledgement still leaves the run to find.
+    expect(KERNEL).toMatch(/store\.create\(run[\s\S]*port\.dispatch\(/);
+    expect(convene()).toMatch(/before[^.]*dispatch[^.]*(started|existing run|its run)/i);
+    expect(convene()).toMatch(/brief/);
+    expect(convene()).toMatch(/(uncertain|cannot be matched|unmatched)[^.]*(no|never)[^.]*(launch|dispatch)/i);
+  });
+});
+
 describe('no shipped skill decides how an agent is launched from what displays it', () => {
   const root = new URL('../../packages/core/skills/', import.meta.url);
   const skills = readdirSync(root, { withFileTypes: true })

@@ -657,7 +657,8 @@ export async function recoverStoppedMission(
   }
   const provenance = request.disposition.kind !== 'review-provenance' ? undefined
     : await readRecoveryReviewBindings(workRoot, request.disposition.resolutionArtifact.path);
-  const resolutionArtifact = provenance?.artifact ?? (request.disposition.kind === 'review-blocker'
+  const resolutionArtifact = provenance?.artifact ?? ((request.disposition.kind === 'review-blocker'
+    || request.disposition.kind === 'command-correction')
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
   const committedSubject = provenance === undefined ? undefined
     : await captureMissionReviewSubject(workRoot, stored.baseCommit, true);

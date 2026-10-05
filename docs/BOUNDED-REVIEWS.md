@@ -97,11 +97,55 @@ candidate dispatch remains `await-evidence` until that response permits the next
 To end unfinished work explicitly, use `mission close --id <same-id> --reason abandoned`
 (or `interrupted`); these human closures are not eligible for `mission recover`.
 
-This repair is limited to preparation obligations. Failed verification commands and
-post-implementation obligations retain their existing gates. Pass command arguments
+Post-implementation obligations retain their existing gates. Pass command arguments
 separately, for example `mission verify --id <id> -- pnpm typecheck`. A corrected argv
 has a different input hash: its success does not implicitly supersede another command's
 failed proof. An exit 127 is never treated as success or silently removed from history.
+
+### Correct an already recorded malformed command invocation
+
+If the stopped journal contains a mono-string invocation such as `["pnpm typecheck"]`
+with spawn ENOENT/127 and a later successful `["pnpm", "typecheck"]` proof, use the
+same `mission recover --id <same-id> --input <request.json> --json` boundary. Retain
+`schemaVersion`, the current `closureEventId` and canonical `expectedJournalHash`;
+use this disposition:
+
+```json
+{
+  "kind": "command-correction",
+  "pairs": [{
+    "failedEventId": "evt_original_failed_proof",
+    "replacementEventId": "evt_later_corrected_proof"
+  }],
+  "resolutionArtifact": {
+    "path": ".void/machine/command-resolution.md",
+    "sha256": "sha256:<actual-artifact-digest>"
+  }
+}
+```
+
+Explain the correction and identify the original proof pair in the resolution artifact.
+The CLI reads and hashes this file under the original native runtime. Admission checks
+both seals, source, mission, environment, diff and current dependencies; the replacement
+must still be the latest proof of its input and have passed. Up to 64 disjoint pairs may
+be named within the existing receipt size bound. No command runs during recovery.
+
+The complete corrected argv, joined by single spaces, must equal the original string,
+including the executable path. Arguments containing whitespace or shell syntax are not
+eligible. `pnpm` and `/tools/pnpm`, or two paths sharing a basename, are not assumed
+equivalent. The observed DEV-927 relative/absolute change remains refused without
+executable provenance; its journal was still open when inspected.
+
+Only the named original failure leaves the effective verdict; its event and hashes stay
+in the journal. The latest proof per input is selected before applying the correction,
+so an older superseded failure cannot reappear. A later failed rerun, security blocker, unknown effect, human closure or
+exhausted budget remains effective. Identical concurrent requests append one recovery
+receipt. Dispatch then observes the normal review and proof gates; recovery itself does
+not approve the mission. If the corrected proof is absent or stale, reconcile the
+missing evidence; this path does not authorize an unrecorded command or a new mission.
+
+See the [command correction decision](decisions-log/2026-10-05-bind-command-corrections-to-recovery--ded6f423-1c89-4676-a6bb-60eb181e4db9.md)
+for the authority boundary and rejected alternatives.
 
 ## Run the candidate without changing the installation
 

@@ -1,6 +1,7 @@
 import { type EventStreamState, initialEventStream, reduceEventStream } from '../events/reducer.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
 import { canonicalJson, canonicalJsonHash } from '../evidence/canonical-json.js';
+import { type CommandEvidenceCorrection, isCommandEvidenceCorrections, validCommandEvidenceCorrections } from '../evidence/command-correction.js';
 import { parseEvidence } from '../evidence/schema.js';
 import { parseSpecialistCompletionValue, type SpecialistCompletion } from '../specialist/completion.js';
 import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js';
@@ -20,6 +21,8 @@ export interface MissionRecoveryRequest {
   readonly expectedJournalHash: string;
   readonly disposition:
     | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' }
+    | { readonly kind: 'command-correction'; readonly pairs: readonly CommandEvidenceCorrection[];
+        readonly resolutionArtifact: RecoveryResolutionArtifact }
     | { readonly kind: 'review-blocker' | 'review-provenance'; readonly completionEventIds: readonly string[];
         readonly resolutionArtifact: RecoveryResolutionArtifact };
 }
@@ -298,6 +301,15 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   if (disposition.kind === 'review-provenance' && !validProvenanceRecovery(input, existing)) {
     return refuse('invalid-review-provenance', 'Preserve the actual independent invocation, exact subject, original passing result and contract; provenance cannot upgrade degraded evidence');
   }
+  if (disposition.kind === 'command-correction') {
+    if (observation.resolutionArtifact?.path !== disposition.resolutionArtifact.path
+      || observation.resolutionArtifact.sha256 !== disposition.resolutionArtifact.sha256) {
+      return refuse('stale-resolution-artifact', 'Read and hash the command correction artifact again before recovery');
+    }
+    if (!validCommandEvidenceCorrections(events, disposition.pairs, observation.evidenceDependencies ?? {})) {
+      return refuse('invalid-command-correction', 'Name intact fresh command proofs with exact argv correspondence; exit 127 or a matching basename cannot authorize replacement');
+    }
+  }
   if (disposition.kind === 'review-blocker') {
     let eligible = existing;
     if (observation.stage === 'post-implementation' && disposition.completionEventIds.some(id =>
@@ -384,7 +396,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, observation.maxRounds - consumedRounds),
     ...(disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
-    nextAction: disposition.kind === 'review-provenance' ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
+    nextAction: disposition.kind === 'review-provenance' || disposition.kind === 'command-correction' ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
   };
   if (new TextEncoder().encode(canonicalJson(receipt)).length > 16_384) {
     return refuse('recovery-receipt-too-large', 'Narrow the recovery scope to the supported bounded incident');
@@ -411,6 +423,10 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
     || typeof value['expectedJournalHash'] !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value['expectedJournalHash'])
     || value['disposition'] === undefined || !record(value['disposition'])) return false;
   const disposition = value['disposition'];
+  if (disposition['kind'] === 'command-correction') {
+    return exactKeys(disposition, ['kind', 'pairs', 'resolutionArtifact'])
+      && isCommandEvidenceCorrections(disposition['pairs']) && artifact(disposition['resolutionArtifact']);
+  }
   return disposition['kind'] === 'controller-defect'
     ? exactKeys(disposition, ['kind', 'defect'])
       && ['partial-fanout-round', 'stale-input-dispatch'].includes(String(disposition['defect']))
@@ -467,6 +483,8 @@ interface ValidatedRecovery {
 function projectRecoveries(events: readonly CanonicalEvent[], recoveries: readonly ValidatedRecovery[]): readonly CanonicalEvent[] {
   return recoveries.reduce((projected, item) => applyRoundCorrections(projected, item.receipt.roundCorrections)
     .filter((event) => !item.receipt.inadmissibleCompletionEventIds.includes(event.eventId))
+    .filter(event => item.receipt.request.disposition.kind !== 'command-correction'
+      || !item.receipt.request.disposition.pairs.some(pair => pair.failedEventId === event.eventId))
     .map(event => {
       const binding = item.receipt.observation.reviewBindings?.find(value => value.completionEventId === event.eventId);
       const completion = field(event, 'completion');

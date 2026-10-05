@@ -1,4 +1,5 @@
 import type { EventStreamState } from '../events/reducer.js';
+import { validatedRecoveredReviewEvents } from '../orchestration/mission-recovery.js';
 import { reduceFindings } from '../findings/reducer.js';
 import { assessEvidence } from './invalidation.js';
 import { parseEvidence } from './schema.js';
@@ -71,8 +72,12 @@ export function deriveMissionVerdict(
       context.missionId !== undefined
       && referenceMissionId !== context.missionId
     );
+  // Recovery admission never computes a verdict; its authenticated projection is the sole authority.
+  const recovered = stream.events.some(event => event.kind === 'mission.recovered')
+    ? validatedRecoveredReviewEvents(stream.events) : { ok: true as const, events: stream.events };
+  const effectiveEventIds = new Set(recovered.ok ? recovered.events.map(event => event.eventId) : []);
   const evidenceIds = new Set<string>();
-  const evidenceByInput = new Map<string, Evidence>();
+  const evidenceByInput = new Map<string, { readonly eventId: string; readonly proof: Evidence }>();
   let tamperedEvidence = 0;
   let duplicateEvidence = 0;
   for (const event of stream.events) {
@@ -94,9 +99,13 @@ export function deriveMissionVerdict(
       continue;
     }
     evidenceIds.add(parsed.value.evidenceId);
-    evidenceByInput.set(parsed.value.inputHash, parsed.value);
+    evidenceByInput.set(parsed.value.inputHash, { eventId: event.eventId, proof: parsed.value });
   }
-  const evidence = [...evidenceByInput.values()];
+  // Select current inputs before correction: an older superseded failure must not reappear.
+  // Every original proof above still undergoes integrity and duplicate checks.
+  const evidence = [...evidenceByInput.values()]
+    .filter(entry => !recovered.ok || effectiveEventIds.has(entry.eventId))
+    .map(entry => entry.proof);
   const assessments = evidence.map((proof) => ({
     proof,
     assessment: assessEvidence(proof, context),
@@ -118,6 +127,7 @@ export function deriveMissionVerdict(
     finding.status === 'excepted'
   ).length;
   const integrityIssues = [
+    ...(recovered.ok ? [] : recovered.reasons),
     ...(metadata.valid ? [] : ['mission metadata is absent or invalid']),
     ...(missionStartedCount === 1
       ? []

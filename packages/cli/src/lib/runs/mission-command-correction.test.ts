@@ -177,6 +177,23 @@ describe('explicit correction of command invocation evidence', () => {
       .toMatchObject({ status: 'blocked', failedEvidence: 1 });
   });
 
+  it('does not resurrect older same-input failures when correcting the current failure', async () => {
+    const path = await root();
+    const fixture = await commandIncident(path, { beforeClose: async () => {
+      await recordMissionEvidence(path, commandProof(20, true, ['pnpm typecheck']));
+      await recordMissionEvidence(path, commandProof(21, false, ['pnpm', 'typecheck']));
+    } });
+    const events = fixture.inspected.stream.events;
+    const request = { ...fixture.request, disposition: { ...fixture.request.disposition, pairs: [{
+      failedEventId: events.find(event => event.subject === 'evd_command_failed_20')!.eventId,
+      replacementEventId: events.find(event => event.subject === 'evd_command_passed_21')!.eventId,
+    }] } };
+    await recover(path, { ...fixture, request });
+    const after = await inspectMission(path, COMMAND_MISSION, fixture.context);
+    expect(after.stream.events.slice(0, -1)).toEqual(events);
+    expect(after.verdict).toMatchObject({ status: 'verified', failedEvidence: 0 });
+  });
+
   it('does not reopen another stopped episode without actual progress', async () => {
     const path = await root();
     const fixture = await commandIncident(path);

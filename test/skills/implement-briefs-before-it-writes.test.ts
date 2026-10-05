@@ -126,6 +126,16 @@ describe('a kernel run carries the whole envelope contract and follows the run, 
     expect(convene()).toMatch(/brief/);
     expect(convene()).toMatch(/(uncertain|cannot be matched|unmatched)[^.]*(no|never)[^.]*(launch|dispatch)/i);
   });
+
+  it('records a result already accepted from the run that holds it, without accepting it again', () => {
+    // An interruption between `accept` and `completed` leaves a closed run: a
+    // second accept is refused, yet its status still returns the collected result.
+    expect(DELEGATION).toMatch(/CLOSED[^\n]*'accepted', 'retired'/);
+    expect(KERNEL).toMatch(/async function summary[\s\S]*?currentResult\(run, await context\.store\.result\(run\.runId\)\)/);
+    expect(convene()).toMatch(/(accepted|retired)[^.]*agents status[^.]*result/i);
+    expect(convene()).toMatch(/never[^.]*accept[^.]*again|accept[^.]*never[^.]*twice/i);
+    expect(convene()).toMatch(/\b(no|without)\b[^.]*(collected|whole)[^.]*result[^.]*(stop|report)/i);
+  });
 });
 
 describe('no shipped skill decides how an agent is launched from what displays it', () => {

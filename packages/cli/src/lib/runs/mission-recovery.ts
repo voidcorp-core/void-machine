@@ -52,6 +52,13 @@ function hash(value: unknown): value is string {
 function invalid(): never {
   throw new Error('MISSION_RECOVERY_INVALID: provide the exact bounded recovery request without observations or overrides');
 }
+function correctionPairs(value: unknown): value is Extract<MissionRecoveryRequest['disposition'], {
+  readonly kind: 'command-correction';
+}>['pairs'] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 64
+    && value.every(pair => record(pair) && exact(pair, ['failedEventId', 'replacementEventId'])
+      && eventId(pair['failedEventId']) && eventId(pair['replacementEventId']));
+}
 export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequest {
   if (!record(value) || !exact(value, ['schemaVersion', 'closureEventId', 'expectedJournalHash', 'disposition'])
     || value['schemaVersion'] !== 1 || !eventId(value['closureEventId'])
@@ -65,16 +72,25 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
       || (defect !== 'partial-fanout-round' && defect !== 'stale-input-dispatch')) invalid();
     return { ...base, disposition: { kind: 'controller-defect', defect } };
   }
+  const commandCorrection = disposition['kind'] === 'command-correction';
   const ids = disposition['completionEventIds'];
   const artifact = disposition['resolutionArtifact'];
-  if ((disposition['kind'] !== 'review-blocker' && disposition['kind'] !== 'review-provenance')
-    || !exact(disposition, ['kind', 'completionEventIds', 'resolutionArtifact'])
-    || !Array.isArray(ids) || ids.length < 1 || ids.length > 64 || !ids.every(eventId)
-    || new Set(ids).size !== ids.length || !record(artifact) || !exact(artifact, ['path', 'sha256'])
+  if ((!commandCorrection && disposition['kind'] !== 'review-blocker' && disposition['kind'] !== 'review-provenance')
+    || !exact(disposition, ['kind', commandCorrection ? 'pairs' : 'completionEventIds', 'resolutionArtifact'])
+    || !record(artifact) || !exact(artifact, ['path', 'sha256'])
     || typeof artifact['path'] !== 'string' || artifact['path'].length < 1
     || artifact['path'].length > 500 || artifact['path'].includes('\0')
     || /^(?:[A-Za-z]:|[/\\])/.test(artifact['path'])
     || artifact['path'].replaceAll('\\', '/').split('/').includes('..') || !hash(artifact['sha256'])) invalid();
+  if (commandCorrection) {
+    const pairs = disposition['pairs'];
+    if (!correctionPairs(pairs)) invalid();
+    return { ...base, disposition: { kind: 'command-correction', pairs,
+      resolutionArtifact: { path: artifact['path'], sha256: artifact['sha256'] } } };
+  }
+  if ((disposition['kind'] !== 'review-blocker' && disposition['kind'] !== 'review-provenance')
+    || !Array.isArray(ids) || ids.length < 1 || ids.length > 64 || !ids.every(eventId)
+    || new Set(ids).size !== ids.length) invalid();
   return { ...base, disposition: { kind: disposition['kind'], completionEventIds: ids,
     resolutionArtifact: { path: artifact['path'], sha256: artifact['sha256'] } } };
 }

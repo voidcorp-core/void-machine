@@ -60,6 +60,14 @@ it('dispatches after a fresh author discharge and blocks again when its Git proo
     const obligation = reduceEvidenceObligations({ events, expectedSource: 'runtime:codex',
       phase: 'pre-implementation', proofs: [], evidenceContext: { dependencies: {} } }).obligations[0];
     if (!obligation) throw new Error('Expected original author obligation.');
+    // A dispatch before the author response must not make evidence-request impossible.
+    const pending = await dispatchMissionSpecialists(roots, input);
+    expect(pending.action).toMatchObject({ kind: 'await-evidence' });
+    expect(pending.envelopes).toHaveLength(0);
+    expect(await dispatchMissionSpecialists(roots, input)).toEqual(pending);
+    const waiting = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
+    expect(waiting).toEqual(events);
+    expect(waiting.some(value => value.kind === 'mission.closed')).toBe(false);
     const project = await computeProjectState(root);
     const proof = sealEvidence({ schemaVersion: 1,
       evidenceId: 'evd_00000000-0000-4000-8000-000000000001', missionId: ID,
@@ -89,7 +97,7 @@ it('dispatches after a fresh author discharge and blocks again when its Git proo
     await writeFile(join(root, 'runtime.ts'), 'export const ready = false;\n');
     expect((await computeProjectState(root)).diffHash).not.toBe(project.diffHash);
     const stale = await dispatchMissionSpecialists(roots, input);
-    expect(stale.action).toMatchObject({ kind: 'stop',
+    expect(stale.action).toMatchObject({ kind: 'await-evidence',
       reasons: expect.arrayContaining([expect.stringMatching(/evidence|proof|obligation/i)]) });
   } finally {
     vi.unstubAllEnvs();

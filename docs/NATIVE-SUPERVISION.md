@@ -34,7 +34,8 @@ One procedure, for every caller: the coordinator, `void-autopilot` (workers and 
    the run it already has before it dispatches, matched on mission, runtime, type
    and the brief it was given; a run it cannot match is reported, never doubled.
 6. `agents accept` collects a result and retires the run, and only a run whose
-   turn ended can be accepted; `agents stop` ends one.
+   turn ended can be accepted, once: a caller resumed after it reads the collected
+   result from `agents status`. `agents stop` ends a run.
    Either closes the view the kernel owns, and nothing else: the worktree, the
    branch and the proofs keep their own lifecycle, and no process kill, worktree
    deletion or branch cleanup belongs to presentation.

@@ -84,7 +84,10 @@ helper for obtaining canonical hashes appears below.
 If a previous clarification was immediately reclosed by `dispatch`, the same recovery
 may be admitted without a writer completion that the closed mission could not accept.
 This exception requires preparation, the same completion IDs and a still-blocking valid
-obligation. Any intervening event, unknown effect, human closure, incompatible observation
+obligation. It may be consumed once without writer progress: if the preceding recovery
+already used that exception, another closure refuses with `no-recovery-progress`.
+The authenticated journal determines this; no caller supplies an allowance or resets it.
+Any intervening event, unknown effect, human closure, incompatible observation
 or exhausted review budget still refuses. Identical concurrent requests append at most
 one recovery receipt. The existing schema and original journal are retained; this is
 neither review approval nor another correction round.

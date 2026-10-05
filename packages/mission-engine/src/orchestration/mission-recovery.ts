@@ -224,11 +224,17 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   });
 }
 
-/** A legacy dispatch could close clarification before its author could answer. */
+/** Admit one clarification reclosure; authenticated history proves whether it was spent. */
 function pendingPreparationClarification(
   input: MissionRecoveryInput, previousRecovery: CanonicalEvent,
 ): boolean {
   const { stream, request, observation } = input;
+  const precedingRecovery = stream.events.filter(event => event.kind === 'mission.recovered'
+    && event.seq < previousRecovery.seq).at(-1);
+  // Without a writer boundary, that admitted receipt already consumed the exception.
+  if (precedingRecovery !== undefined && !stream.events.some(event =>
+    event.kind === 'lead-writer.completed' && event.seq > precedingRecovery.seq
+      && event.seq < previousRecovery.seq)) return false;
   const priorRequest = field(previousRecovery, 'request');
   const priorDisposition = priorRequest !== undefined && record(priorRequest)
     ? priorRequest['disposition'] : undefined;
@@ -254,10 +260,9 @@ function pendingPreparationClarification(
     expectedSource: observation.expectedSource, phase: 'pre-implementation', proofs,
     evidenceContext: { dependencies: observation.evidenceDependencies ?? {} } });
   const blocking = new Set(obligations.blockingObligationIds);
+  const completionEventIds = request.disposition.completionEventIds;
   return obligations.issues.length === 0 && obligations.obligations.some(item =>
-    blocking.has(item.obligationId)
-      && request.disposition.kind === 'review-blocker'
-      && request.disposition.completionEventIds.includes(item.completionEventId));
+    blocking.has(item.obligationId) && completionEventIds.includes(item.completionEventId));
 }
 
 function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = input.stream.events): MissionRecoveryDecision {

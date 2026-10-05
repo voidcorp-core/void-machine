@@ -27,9 +27,14 @@ One procedure, for every caller: the coordinator, `void-autopilot` (workers and 
 5. Follow runs with `agents wait` and `agents status`, which report actual native
    execution: working, turn-ended, waiting-human, failed, stopped, reconciling.
    Missing observations are unknown, never inferred; an idle screen is not proof
-   of a stalled task. A run `waiting-human` is answered by the person in that
-   agent's own session: no other session can approve in their place.
-6. `agents accept` collects a result and retires the run; `agents stop` ends one.
+   of a stalled task. A wait returns on any transition or when its timeout ends:
+   that ends an observation, never a run, so the caller acts on the state it reads.
+   A run `waiting-human` is answered by the person in that agent's own session:
+   no other session can approve in their place. A caller that resumes looks for
+   the run it already has before it dispatches, matched on mission, runtime, type
+   and the brief it was given; a run it cannot match is reported, never doubled.
+6. `agents accept` collects a result and retires the run, and only a run whose
+   turn ended can be accepted; `agents stop` ends one.
    Either closes the view the kernel owns, and nothing else: the worktree, the
    branch and the proofs keep their own lifecycle, and no process kill, worktree
    deletion or branch cleanup belongs to presentation.

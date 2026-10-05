@@ -7,7 +7,7 @@ import { canonicalJsonHash, deriveMissionVerdict, projectMissionLifecycle,
 import { recordMissionClosure } from '../../commands/mission.js';
 import { appendMissionEvent, eventLogPath, inspectMission, recordMissionEvidence } from './store.js';
 import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from './mission-recovery.js';
-import { COMMAND_MISSION, COMMAND_DIFF, OTHER_DIFF, commandIncident, commandProof } from './fixtures/command-correction.js';
+import { COMMAND_MISSION, COMMAND_DIFF, OTHER_DIFF, commandIncident, commandProof } from './__fixtures__/command-correction.js';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true }))); });

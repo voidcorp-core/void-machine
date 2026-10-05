@@ -214,6 +214,15 @@ describe('former brands outside the identity source', () => {
       why: 'mission event sources: a wire format in every run journal, compared on read',
     },
     {
+      path: /^packages\/mission-engine\/src\/evidence\/command-correction\.ts$/,
+      token: new RegExp(
+        String.raw`void-harness(?:@[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.+-]+)?)?:mission\.verify`
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'g',
+      ),
+      why: 'the recovery reader validates the exact released command producer grammar, including its version',
+    },
+    {
       path: /^(package\.json|packages\/cli\/src\/lib\/self-repo\.ts|scripts\/backlog-index\.mjs)$/,
       token: /(['"])!?void-harness\1/g,
       why: 'the private root package name, which is how the CLI knows it runs in its own source',

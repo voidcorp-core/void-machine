@@ -227,6 +227,16 @@ without a surface, for a `fork`, for a session the kernel launched (same session
 any failure, which it reports instead of blocking. How a run is shown in a multiplexer is described
 in `NATIVE-SUPERVISION.md`.
 
+Three callers launch agents, and all three go through `agents dispatch`: the coordinator (that
+capture hook, or the CLI directly), `void-autopilot` (one `work` run per ticket in its worktree;
+its reviewers through `autopilot review`) and `void-implement` (one `review` run per
+`invoke-specialists` envelope, with the envelope's `agentName`, `runtime` and `missionId`). No
+skill chooses a launch path from what the terminal can display. The specialist lifecycle events
+of the [dispatch closure](specs/2026-08-21-agent-dispatch-closure.md) keep their shape; their
+`contextId` is the run's id. A specialist launched this way is a CLI call, not a native `Agent`
+or `spawn_agent` tool call, so the `runtime.tool.*` agent signal no longer sees it: the run
+record under `agents/<runId>/` is the proof that it ran.
+
 Each run keeps the runtime it was dispatched to (`--runtime claude|codex`), and every command
 reaches it through that runtime's port; one runtime that cannot be read never holds another's
 runs. A Codex run (`adapters/runtime/codex-daemon.ts`, `adapters/runtime/codex-thread.ts`) is a

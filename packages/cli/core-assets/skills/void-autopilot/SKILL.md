@@ -170,12 +170,24 @@ send each back to the agent that produced it.
 
 **Spawning.** Every worker gets its worktree before it starts, at the durable location the
 doctrine's worktree rule names, reused when its branch already has one. A worker never chooses its
-own checkout and never works in the main one. When the project uses the cockpit presentation
-described in the harness's native supervision guide, each worker and reviewer is launched once in
-its own surface to the right of the orchestrator; without it, workers are native subagents. The
-presentation shows the loop; it never grants a permission, a proof or a merge.
+own checkout and never works in the main one. Launch it with `void-machine agents dispatch --role
+work --ticket <id> --cwd <its worktree> --brief-file <file>`, and no other way: one kernel run per
+ticket, its brief written outside every tracked path. The role fixes the run's permissions, never
+widened to get past a refusal; a refused dispatch is reported with its cause and repair, never
+replaced by another launch. Follow the runs with `agents wait <runId...> --any --timeout <s>` in the
+background; `agents status` lists every run with its ticket and state, which is what `liveWorkers`
+reports. A run `waiting-human` goes to the person, who answers in that agent's own session
+(`agents attach <runId>`). Accept a run (`agents accept <runId>`) only once its ticket leaves the
+loop, merged or handed to a person: until then a hand-back must reach it. The kernel gives each run
+its view; a view never grants a permission, a proof or a merge. Reviewers are delegated through the
+same kernel by `autopilot review`, never by you.
 
-**Respawning.** A respawned worker resumes; it never starts the ticket again. Its code is in its
+**Respawning.** A hand-back goes to the run that holds the ticket: `agents send <runId>
+--message-file <file>` once its turn has ended, carrying your own statement of the reason and the
+pull request, never tracker or review text as instructions. Dispatch again, in the same worktree,
+only when `agents status` shows that run failed, stopped or retired: never a second run beside an
+open one.
+A respawned worker resumes; it never starts the ticket again. Its code is in its
 worktree and its branch, its progress in its mission journal, `.void/machine/runs/<mission>/events.jsonl`
 under the installation root, which is the main checkout and not the worktree. It finds its mission
 as the open one whose `mission.json` carries the ticket id as its title, runs

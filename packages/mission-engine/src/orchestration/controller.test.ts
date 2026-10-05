@@ -1161,3 +1161,19 @@ describe('mission team controller', () => {
     expect(decision.verdict.status).not.toBe('verified');
   });
 });
+
+
+it('keeps missing preparation proof actionable without closing or accepting the mission', () => {
+  const origin = completion('core:test-qa-engineer', 4, 'pass', 'pre-implementation',
+    HASH, 1, 'pending-proof', [PROOF_REQUEST]);
+  const events = [started(), ...preReviews().slice(0, 2), origin];
+  const before = canonicalJsonHash(events);
+  const waiting = decide(events);
+  expect(waiting.action).toMatchObject({ kind: 'await-evidence' });
+  expect(waiting.verdict.status).toBe('blocked');
+  expect(waiting.reasons.join(' ')).toContain('mission evidence-request');
+  expect(decide(events)).toEqual(waiting);
+  expect(canonicalJsonHash(events)).toBe(before);
+  expect(decide([...events, ...classifyEvidence(origin, 5, 'post-implementation')]).action.kind)
+    .toBe('run-lead-writer');
+});

@@ -426,3 +426,36 @@ it.each(['completion', 'no-request', 'unauthorized', 'discharged'])('refuses an 
   const candidate = preparationObligationAtPost(cause === 'completion' ? 'completion' : 'post-implementation', cause);
   expect(planStoppedMissionRecovery(candidate).kind).toBe('refused');
 });
+
+
+it('recovers preparation reclosed on pending proof without demanding an impossible writer completion', () => {
+  const closed = blockerHistory();
+  const candidate = input(closed);
+  const originalInput = { ...candidate,
+    request: { ...candidate.request, closureEventId: id(3) },
+    observation: { ...candidate.observation, currentInputHashes: { [SPECIALIST]: HASH } },
+  };
+  const first = planStoppedMissionRecovery(originalInput);
+  if (first.kind !== 'recover') throw new Error('Expected initial recovery');
+  const reopened = [...closed, recoveryEvent(closed, first.receipt)];
+  const events = [...reopened, entry(5, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(4),
+  })];
+  const before = canonicalJsonHash(events);
+  const secondInput = { ...originalInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...originalInput.request, closureEventId: id(5), expectedJournalHash: before },
+  };
+  const second = planStoppedMissionRecovery(secondInput);
+  expect(second).toMatchObject({ kind: 'recover', receipt: {
+    consumedRounds: 1, remainingRounds: 1, nextAction: 'clarification',
+    preservedCompletionEventIds: [id(2)], invalidatedCompletionEventIds: [],
+  } });
+  expect(canonicalJsonHash(events)).toBe(before);
+  if (second.kind !== 'recover') throw new Error('Expected pending-proof recovery');
+  const recovered = [...events, recoveryEvent(events, second.receipt)];
+  expect(validatedRecoveredReviewEvents(recovered).ok).toBe(true);
+  expect(planStoppedMissionRecovery({ ...secondInput,
+    stream: replayEventLog(recovered.map(serializeEvent).join('\n')),
+  })).toMatchObject({ kind: 'already-recovered' });
+});

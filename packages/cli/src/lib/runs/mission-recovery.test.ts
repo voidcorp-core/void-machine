@@ -76,3 +76,25 @@ describe('mission recovery append boundary', () => {
     })).toThrow('MISSION_RECOVERY_INVALID');
   });
 });
+
+
+it('appends one second recovery after premature evidence closure under concurrent requests', async () => {
+  const fixture = await incident();
+  await recordStoppedMissionRecovery(fixture.root, ID, fixture.request, fixture.observation);
+  await recordMissionClosure(fixture.root, ID, 'controller-stop');
+  const stream = (await inspectMission(fixture.root, ID, { dependencies: {} })).stream;
+  const closure = stream.events.at(-1);
+  if (!closure) throw new Error('Expected premature closure');
+  const request = { ...fixture.request, closureEventId: closure.eventId,
+    expectedJournalHash: canonicalJsonHash(stream.events) };
+  const path = await eventLogPath(fixture.root, ID);
+  const before = await readFile(path, 'utf8');
+  const results = await Promise.all([1, 2].map(() => recordStoppedMissionRecovery(
+    fixture.root, ID, request, fixture.observation)));
+  expect(results.filter(result => result.recorded)).toHaveLength(1);
+  expect(new Set(results.map(result => result.recoveryEventId)).size).toBe(1);
+  expect((await readFile(path, 'utf8')).startsWith(before)).toBe(true);
+  const after = (await inspectMission(fixture.root, ID, { dependencies: {} })).stream.events;
+  expect(after).toHaveLength(stream.events.length + 1);
+  expect(after.at(-1)?.payload).toMatchObject({ consumedRounds: 1, remainingRounds: 1 });
+});

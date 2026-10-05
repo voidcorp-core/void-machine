@@ -45,6 +45,21 @@ describe('offline discovery documents', () => {
     const added = { ...document, entries: [...document.entries, { ...first, id: 'skill:void-added', name: 'void-added' }] };
     expect(renderDocument(added, format)).toContain('void-added');
   });
+  // Moved from the CLI test with its extraction unchanged: the export carries the
+  // whole catalogue as JSON, and each readable format must carry every identity of
+  // it, in catalogue order, with no subprocess needed to say so.
+  it.each(['html', 'markdown'] as const)('renders every catalogue identity, in order, in %s', format => {
+    const first = document.entries[0];
+    if (first === undefined) throw new Error('fixture entry missing');
+    const kinds = [['agent:void-a', 'agent'], ['command:b', 'command'], ['core:c', 'specialist'],
+      ['hook:d', 'hook'], ['skill:void-e', 'skill']] as const;
+    const entries = kinds.map(([id, type]) => ({ ...first, id, type, name: id.slice(id.indexOf(':') + 1) }));
+    const rendered = renderDocument({ ...document, entries }, format);
+    const identities = format === 'html'
+      ? [...rendered.matchAll(/<p class="meta">([^<]+?) ·/g)].map(match => match[1])
+      : rendered.split('\n').filter(line => /^(skill|hook|agent|core|command):/.test(line)).map(line => line.split(' | ')[0]);
+    expect(identities).toEqual(kinds.map(([id]) => id));
+  });
   it('keeps metadata out of executable HTML and Markdown', () => {
     const html = renderDocument(document, 'html');
     expect(html).not.toContain('<img src=x');

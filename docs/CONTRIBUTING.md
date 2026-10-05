@@ -42,6 +42,10 @@ The release lane still runs `pnpm verify` once on the integrated result.
 checked-out SHA and exact argv. The final step rejects a missing, duplicate, stale or red report.
 Performance benchmarks remain explicit observations through `pnpm verify --observations`; shared
 PR runners do not authorize correctness from wall-clock thresholds.
+Install conformance proves the packed syntax worker by the identity the runtime verifies and two
+exact answers; its repeated latency campaign is printed as the `syntax-worker-latency` observation
+(`complete` or `latency-anomaly`) with every sample kept. Only a measured timeout is an anomaly; a
+wrong answer, a launch error or an incomplete campaign still fails the install.
 Repeated reliability stress is not a laptop gate. `.github/workflows/test-certification.yml` runs
 twenty seeded fast attempts and ten seeded complete attempts weekly or on explicit dispatch, with
 fixed worker budgets and exact-SHA JSON reports. A failure stops the campaign and remains red; the

@@ -469,10 +469,16 @@ describe('parseMissionArgs', () => {
       capability,
     );
     if (scenario === 'current evidence') {
-      expect(correction.action).toMatchObject({ kind: 'stop' });
-      expect(correction.action.kind === 'stop' ? correction.action.reasons.length : 0).toBeGreaterThan(0);
+      expect(correction.action).toMatchObject({ kind: 'await-evidence' });
+      expect(correction.action.kind === 'await-evidence' ? correction.action.reasons.length : 0)
+        .toBeGreaterThan(0);
+      const waiting = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+      expect(waiting.some(event => event.kind === 'mission.closed')).toBe(false);
+      expect(waiting.some(event => event.kind === 'lead-writer.requested')).toBe(false);
       await expect(recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true }))
-        .rejects.toThrow('MISSION_CLOSED');
+        .rejects.toThrow('MISSION_WRITER_EVENT_INVALID: no controller writer request is pending');
+      expect((await inspectMission(root, missionId, { dependencies: {} })).stream.events)
+        .toEqual(waiting);
       return;
     }
     expect(correction).toMatchObject({ planHash: plan.planHash,

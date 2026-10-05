@@ -68,6 +68,7 @@ export type MissionTeamAction =
       readonly writerId: string;
       readonly findingIds: readonly string[];
     }
+  | { readonly kind: 'await-evidence'; readonly reasons: readonly string[] }
   | { readonly kind: 'run-verification' }
   | { readonly kind: 'complete' }
   | { readonly kind: 'stop'; readonly reasons: readonly string[] };
@@ -537,6 +538,7 @@ function obligationStop(
   state: EvidenceObligationState,
   review: ReviewLoopState,
   verdict: MissionVerdict,
+  preparation = false,
 ): MissionTeamDecision | undefined {
   if (state.issues.length > 0) {
     return stopped('degraded', review, verdict,
@@ -545,10 +547,14 @@ function obligationStop(
   }
   const blocking = new Set(state.blockingObligationIds);
   if (blocking.size === 0) return undefined;
-  return stopped('blocked', review, verdict,
+  const decision = stopped('blocked', review, verdict,
     state.obligations.filter((item) => blocking.has(item.obligationId)).map((item) =>
       `Evidence obligation ${item.obligationId} (${item.due}): ${item.requestText}`),
-    'Classify or discharge the evidence obligation through its authorized specialist; a writer completion does not replace the required proof.');
+    'Use mission evidence-request, then record the authorized author response with mission evidence-event to classify or discharge the obligation; a writer completion does not replace the required proof.');
+  // Preparation proof can require an author response before any writer may run.
+  return preparation
+    ? { ...decision, action: { kind: 'await-evidence', reasons: decision.reasons } }
+    : decision;
 }
 
 export function orchestrateMissionTeam(
@@ -690,7 +696,9 @@ export function orchestrateMissionTeam(
       'Reconcile the invalid recovery receipt through the supported admission path without editing history.');
   }
   if (!migrated.ok) return stopped('degraded', preReview, baseVerdict, migrated.reasons);
-  const pendingEvidence = obligationStop(obligations, preReview, baseVerdict);
+  const pendingEvidence = obligationStop(
+    obligations, preReview, baseVerdict, firstImplementationSeq === undefined,
+  );
   const migration = migrated.migration;
   if (migration !== undefined) {
     const receipt = migration.receipt;

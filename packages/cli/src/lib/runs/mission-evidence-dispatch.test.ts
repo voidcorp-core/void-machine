@@ -97,7 +97,7 @@ it('dispatches after a fresh author discharge and blocks again when its Git proo
     await writeFile(join(root, 'runtime.ts'), 'export const ready = false;\n');
     expect((await computeProjectState(root)).diffHash).not.toBe(project.diffHash);
     const stale = await dispatchMissionSpecialists(roots, input);
-    expect(stale.action).toMatchObject({ kind: 'stop',
+    expect(stale.action).toMatchObject({ kind: 'await-evidence',
       reasons: expect.arrayContaining([expect.stringMatching(/evidence|proof|obligation/i)]) });
   } finally {
     vi.unstubAllEnvs();

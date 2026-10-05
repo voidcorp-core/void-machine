@@ -46,6 +46,60 @@ is not silently replaced by this candidate. The verified delivery must include t
 candidate command and recovery request demonstrated against an isolated existing mission.
 No claim of consumer activation is implied by this source document.
 
+## Preparation waiting for evidence
+
+Before implementation, `dispatch` returns `await-evidence` when a valid specialist
+obligation is still due. The verdict remains blocked. This action leaves the mission
+open and dispatches neither a writer nor another panel. Repeating it without new events
+has no journal effect. A PASS carrying an evidence request still needs its author response.
+
+Use `mission evidence-request --id <same-id> --input <request.json> --json`. For an
+unclassified request, the input identifies the original completion and a fresh actual
+native author context:
+
+```json
+{
+  "operation": "classification",
+  "completionEventId": "evt_original_completion",
+  "contextId": "actual-fresh-author-context"
+}
+```
+
+The original specialist determines the deadline; the writer must not infer it from
+prose. Record the actual `started` and `completed` responses with `mission evidence-event`.
+For proof already due, request `operation: "discharge"` with its `obligationIds` and
+submit the author's response referencing fresh canonical proof event IDs. The request
+alone discharges nothing. Dispatch again only after the response. Original findings,
+proofs and consumed rounds remain authoritative; a writer receipt cannot erase them.
+
+A legacy binary may already have closed the mission while prescribing this response.
+Use `mission recover` on the same mission with the existing `review-blocker` request:
+`schemaVersion: 1`, the active `closureEventId`, the canonical `expectedJournalHash`,
+and a disposition containing `kind: "review-blocker"`, the original
+`completionEventIds` and a `resolutionArtifact` with repository-relative `path` and
+`sha256`. The CLI re-observes the bound ticket, runtime, contracts and artifact. The
+journal hash uses `canonicalJsonHash(events)`, not a hash of JSONL bytes. A source
+helper for obtaining canonical hashes appears below.
+
+If a previous clarification was immediately reclosed by `dispatch`, the same recovery
+may be admitted without a writer completion that the closed mission could not accept.
+This exception requires preparation, the same completion IDs and a still-blocking valid
+obligation. Any intervening event, unknown effect, human closure, incompatible observation
+or exhausted review budget still refuses. Identical concurrent requests append at most
+one recovery receipt. The existing schema and original journal are retained; this is
+neither review approval nor another correction round.
+
+After recovery, obtain the author response through the evidence commands above. A fresh
+candidate dispatch remains `await-evidence` until that response permits the next action.
+To end unfinished work explicitly, use `mission close --id <same-id> --reason abandoned`
+(or `interrupted`); these human closures are not eligible for `mission recover`.
+
+This repair is limited to preparation obligations. Failed verification commands and
+post-implementation obligations retain their existing gates. Pass command arguments
+separately, for example `mission verify --id <id> -- pnpm typecheck`. A corrected argv
+has a different input hash: its success does not implicitly supersede another command's
+failed proof. An exit 127 is never treated as success or silently removed from history.
+
 ## Run the candidate without changing the installation
 
 Use a checkout whose CLI and bundled assets have been built and verified together.

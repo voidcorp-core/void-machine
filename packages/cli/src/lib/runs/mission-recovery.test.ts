@@ -81,7 +81,7 @@ describe('mission recovery append boundary', () => {
 it('appends one second recovery after premature evidence closure under concurrent requests', async () => {
   const fixture = await incident();
   await recordStoppedMissionRecovery(fixture.root, ID, fixture.request, fixture.observation);
-  await recordMissionClosure(fixture.root, ID, 'controller-stop');
+  await recordMissionClosure(fixture.root, ID, 'controller-stop', 'void-harness:mission.dispatch');
   const stream = (await inspectMission(fixture.root, ID, { dependencies: {} })).stream;
   const closure = stream.events.at(-1);
   if (!closure) throw new Error('Expected premature closure');

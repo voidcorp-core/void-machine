@@ -224,6 +224,42 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   });
 }
 
+/** A legacy dispatch could close clarification before its author could answer. */
+function pendingPreparationClarification(
+  input: MissionRecoveryInput, previousRecovery: CanonicalEvent,
+): boolean {
+  const { stream, request, observation } = input;
+  const priorRequest = field(previousRecovery, 'request');
+  const priorDisposition = priorRequest !== undefined && record(priorRequest)
+    ? priorRequest['disposition'] : undefined;
+  const priorObservation = field(previousRecovery, 'observation');
+  if (observation.stage !== 'pre-implementation' || request.disposition.kind !== 'review-blocker'
+    || field(previousRecovery, 'nextAction') !== 'clarification'
+    || priorObservation === undefined || !record(priorObservation)
+    || priorObservation['stage'] !== 'pre-implementation'
+    || priorDisposition === undefined || !record(priorDisposition)
+    || priorDisposition['kind'] !== 'review-blocker'
+    || canonicalJsonHash(priorDisposition['completionEventIds'])
+      !== canonicalJsonHash(request.disposition.completionEventIds)) return false;
+  // Any intervening work, human decision or unknown event requires reconciliation.
+  const intervening = stream.events.filter(event => event.seq > previousRecovery.seq);
+  if (intervening.length !== 1 || intervening[0]?.kind !== 'mission.closed'
+    || intervening[0].source !== 'void-harness:mission.dispatch') return false;
+  const proofs = stream.events.flatMap(event => {
+    if (event.kind !== 'evidence.recorded') return [];
+    const parsed = parseEvidence(field(event, 'evidence'));
+    return parsed.ok ? [{ eventId: event.eventId, evidence: parsed.value }] : [];
+  });
+  const obligations = reduceEvidenceObligations({ events: stream.events,
+    expectedSource: observation.expectedSource, phase: 'pre-implementation', proofs,
+    evidenceContext: { dependencies: observation.evidenceDependencies ?? {} } });
+  const blocking = new Set(obligations.blockingObligationIds);
+  return obligations.issues.length === 0 && obligations.obligations.some(item =>
+    blocking.has(item.obligationId)
+      && request.disposition.kind === 'review-blocker'
+      && request.disposition.completionEventIds.includes(item.completionEventId));
+}
+
 function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = input.stream.events): MissionRecoveryDecision {
   const { stream, request, observation } = input;
   const events = stream.events;
@@ -242,7 +278,8 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
-    && event.kind === 'lead-writer.completed')) {
+    && event.kind === 'lead-writer.completed')
+    && !pendingPreparationClarification(input, previousRecovery)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
   }
   const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);

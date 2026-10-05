@@ -428,7 +428,7 @@ it.each(['completion', 'no-request', 'unauthorized', 'discharged'])('refuses an 
 });
 
 
-it('recovers preparation reclosed on pending proof without demanding an impossible writer completion', () => {
+function reclosedPreparation() {
   const closed = blockerHistory();
   const candidate = input(closed);
   const originalInput = { ...candidate,
@@ -438,14 +438,20 @@ it('recovers preparation reclosed on pending proof without demanding an impossib
   const first = planStoppedMissionRecovery(originalInput);
   if (first.kind !== 'recover') throw new Error('Expected initial recovery');
   const reopened = [...closed, recoveryEvent(closed, first.receipt)];
-  const events = [...reopened, entry(5, 'mission.closed', {
+  const events = [...reopened, { ...entry(5, 'mission.closed', {
     reason: 'controller-stop', episodeId: id(4),
-  })];
-  const before = canonicalJsonHash(events);
-  const secondInput = { ...originalInput,
+  }), source: 'void-harness:mission.dispatch' }];
+  return { ...originalInput,
     stream: replayEventLog(events.map(serializeEvent).join('\n')),
-    request: { ...originalInput.request, closureEventId: id(5), expectedJournalHash: before },
+    request: { ...originalInput.request, closureEventId: id(5),
+      expectedJournalHash: canonicalJsonHash(events) },
   };
+}
+
+it('recovers preparation reclosed on pending proof without demanding an impossible writer completion', () => {
+  const secondInput = reclosedPreparation();
+  const events = secondInput.stream.events;
+  const before = canonicalJsonHash(events);
   const second = planStoppedMissionRecovery(secondInput);
   expect(second).toMatchObject({ kind: 'recover', receipt: {
     consumedRounds: 1, remainingRounds: 1, nextAction: 'clarification',
@@ -458,4 +464,43 @@ it('recovers preparation reclosed on pending proof without demanding an impossib
   expect(planStoppedMissionRecovery({ ...secondInput,
     stream: replayEventLog(recovered.map(serializeEvent).join('\n')),
   })).toMatchObject({ kind: 'already-recovered' });
+});
+
+
+it.each(['abandoned', 'interrupted'])('preserves explicit human closure after clarification: %s', reason => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, payload: { reason, episodeId: id(4) } } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'unsupported-closure' });
+});
+
+it.each(['human.decision', 'runtime.unknown'])('requires reconciliation for intervening %s', kind => {
+  const candidate = reclosedPreparation();
+  const events = [...candidate.stream.events.slice(0, 4), entry(5, kind),
+    { ...entry(6, 'mission.closed', { reason: 'controller-stop', episodeId: id(4) }),
+      source: 'void-harness:mission.dispatch' }];
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, closureEventId: id(6), expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+});
+
+it('retains the real review budget when recovering a premature evidence closure', () => {
+  const candidate = reclosedPreparation();
+  expect(planStoppedMissionRecovery({ ...candidate,
+    observation: { ...candidate.observation, maxRounds: 1 },
+  })).toMatchObject({ kind: 'refused', code: 'review-budget-exhausted' });
+});
+
+it('refuses manual controller-stop as proof of the legacy dispatch defect', () => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, source: 'void-harness:mission.close' } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
 });

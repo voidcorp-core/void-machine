@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/cli/src/lib/runs/mission-command-correction.test.ts
 import { canonicalJsonHash, sealEvidence, type EvidenceDraft,
   type MissionRecoveryObservation } from '@voidcorp/mission-engine';
 import { recordMissionClosure } from '../../../commands/mission.js';

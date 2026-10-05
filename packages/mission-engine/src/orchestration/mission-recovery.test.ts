@@ -504,3 +504,24 @@ it('refuses manual controller-stop as proof of the legacy dispatch defect', () =
     request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
   })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
 });
+
+
+it('refuses a third clarification recovery without progress after consuming the one-time exception', () => {
+  const secondInput = reclosedPreparation();
+  const second = planStoppedMissionRecovery(secondInput);
+  if (second.kind !== 'recover') throw new Error('Expected the first exceptional recovery');
+  const recovered = [...secondInput.stream.events,
+    recoveryEvent(secondInput.stream.events, second.receipt)];
+  const events = [...recovered, { ...entry(7, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(6),
+  }), source: 'void-harness:mission.dispatch' }];
+  const before = canonicalJsonHash(events);
+  const thirdInput = { ...secondInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...secondInput.request, closureEventId: id(7), expectedJournalHash: before },
+  };
+  expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+  expect(planStoppedMissionRecovery(thirdInput))
+    .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  expect(canonicalJsonHash(events)).toBe(before);
+});

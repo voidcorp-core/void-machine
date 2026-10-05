@@ -436,7 +436,7 @@ describe('mission team controller', () => {
     const events = [started(true), ...preparationReviews(1, 2, true), ...preparationReceipt()];
     const decision = decide(events);
 
-    expect(decision.action.kind).toBe('stop');
+    expect(decision.action.kind).toBe('await-evidence');
     expect(decision.reasons.join(' ')).toContain('Explain the preparation correction boundary.');
     expect(decision.reasons.join(' ')).toMatch(/classify|discharge/i);
   });
@@ -1160,4 +1160,21 @@ describe('mission team controller', () => {
     expect(decision.action.kind).toBe('stop');
     expect(decision.verdict.status).not.toBe('verified');
   });
+});
+
+
+it.each(['pass', 'changes-requested'] as const)(
+  'keeps missing preparation proof actionable after %s without closing or accepting the mission', verdict => {
+  const origin = completion('core:test-qa-engineer', 4, verdict, 'pre-implementation',
+    HASH, 1, 'pending-proof', [PROOF_REQUEST]);
+  const events = [started(), ...preReviews().slice(0, 2), origin];
+  const before = canonicalJsonHash(events);
+  const waiting = decide(events);
+  expect(waiting.action).toMatchObject({ kind: 'await-evidence' });
+  expect(waiting.verdict.status).toBe('blocked');
+  expect(waiting.reasons.join(' ')).toContain('mission evidence-request');
+  expect(decide(events)).toEqual(waiting);
+  expect(canonicalJsonHash(events)).toBe(before);
+  expect(decide([...events, ...classifyEvidence(origin, 5, 'post-implementation')]).action.kind)
+    .toBe(verdict === 'pass' ? 'run-lead-writer' : 'run-preparation-correction');
 });

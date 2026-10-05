@@ -1081,7 +1081,9 @@ native `spawn_agent`; Claude Code with native `Agent`.
 - `writer-event --id ...` consumes the controller's pending writer-action receipt, deriving the
   single lead writer and round rather than accepting either from the caller;
 - `close --id ... --reason interrupted|abandoned` records an explicit terminal boundary for
-  unfinished work; controller `complete` and `stop` actions close automatically;
+  unfinished work; controller `complete` and `stop` actions close automatically. A preparation
+  `await-evidence` action remains blocked and open for its authorized author response; see
+  [preparation recovery](BOUNDED-REVIEWS.md#preparation-waiting-for-evidence);
 - `resume --id ... [--json]` replays the durable journal, records one resume
   checkpoint, and returns the next safe action without dispatching a proven
   side effect again;

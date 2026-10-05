@@ -426,3 +426,102 @@ it.each(['completion', 'no-request', 'unauthorized', 'discharged'])('refuses an 
   const candidate = preparationObligationAtPost(cause === 'completion' ? 'completion' : 'post-implementation', cause);
   expect(planStoppedMissionRecovery(candidate).kind).toBe('refused');
 });
+
+
+function reclosedPreparation() {
+  const closed = blockerHistory();
+  const candidate = input(closed);
+  const originalInput = { ...candidate,
+    request: { ...candidate.request, closureEventId: id(3) },
+    observation: { ...candidate.observation, currentInputHashes: { [SPECIALIST]: HASH } },
+  };
+  const first = planStoppedMissionRecovery(originalInput);
+  if (first.kind !== 'recover') throw new Error('Expected initial recovery');
+  const reopened = [...closed, recoveryEvent(closed, first.receipt)];
+  const events = [...reopened, { ...entry(5, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(4),
+  }), source: 'void-harness:mission.dispatch' }];
+  return { ...originalInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...originalInput.request, closureEventId: id(5),
+      expectedJournalHash: canonicalJsonHash(events) },
+  };
+}
+
+it('recovers preparation reclosed on pending proof without demanding an impossible writer completion', () => {
+  const secondInput = reclosedPreparation();
+  const events = secondInput.stream.events;
+  const before = canonicalJsonHash(events);
+  const second = planStoppedMissionRecovery(secondInput);
+  expect(second).toMatchObject({ kind: 'recover', receipt: {
+    consumedRounds: 1, remainingRounds: 1, nextAction: 'clarification',
+    preservedCompletionEventIds: [id(2)], invalidatedCompletionEventIds: [],
+  } });
+  expect(canonicalJsonHash(events)).toBe(before);
+  if (second.kind !== 'recover') throw new Error('Expected pending-proof recovery');
+  const recovered = [...events, recoveryEvent(events, second.receipt)];
+  expect(validatedRecoveredReviewEvents(recovered).ok).toBe(true);
+  expect(planStoppedMissionRecovery({ ...secondInput,
+    stream: replayEventLog(recovered.map(serializeEvent).join('\n')),
+  })).toMatchObject({ kind: 'already-recovered' });
+});
+
+
+it.each(['abandoned', 'interrupted'])('preserves explicit human closure after clarification: %s', reason => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, payload: { reason, episodeId: id(4) } } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'unsupported-closure' });
+});
+
+it.each(['human.decision', 'runtime.unknown'])('requires reconciliation for intervening %s', kind => {
+  const candidate = reclosedPreparation();
+  const events = [...candidate.stream.events.slice(0, 4), entry(5, kind),
+    { ...entry(6, 'mission.closed', { reason: 'controller-stop', episodeId: id(4) }),
+      source: 'void-harness:mission.dispatch' }];
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, closureEventId: id(6), expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+});
+
+it('retains the real review budget when recovering a premature evidence closure', () => {
+  const candidate = reclosedPreparation();
+  expect(planStoppedMissionRecovery({ ...candidate,
+    observation: { ...candidate.observation, maxRounds: 1 },
+  })).toMatchObject({ kind: 'refused', code: 'review-budget-exhausted' });
+});
+
+it('refuses manual controller-stop as proof of the legacy dispatch defect', () => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, source: 'void-harness:mission.close' } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+});
+
+
+it('refuses a third clarification recovery without progress after consuming the one-time exception', () => {
+  const secondInput = reclosedPreparation();
+  const second = planStoppedMissionRecovery(secondInput);
+  if (second.kind !== 'recover') throw new Error('Expected the first exceptional recovery');
+  const recovered = [...secondInput.stream.events,
+    recoveryEvent(secondInput.stream.events, second.receipt)];
+  const events = [...recovered, { ...entry(7, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(6),
+  }), source: 'void-harness:mission.dispatch' }];
+  const before = canonicalJsonHash(events);
+  const thirdInput = { ...secondInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...secondInput.request, closureEventId: id(7), expectedJournalHash: before },
+  };
+  expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+  expect(planStoppedMissionRecovery(thirdInput))
+    .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  expect(canonicalJsonHash(events)).toBe(before);
+});

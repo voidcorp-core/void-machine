@@ -25,12 +25,12 @@ different purpose and must survive the change of execution transport.
 
 ## Decision
 
-Proposed: delegate short analysis and review to native subagents, long implementation
+Delegate short analysis and review to native subagents, long implementation
 to Herdr agents, and recover coordination from versioned-format mission files.
 
 Herdr owns live sessions and terminals. The harness owns briefs, bounded workflow,
 review evidence and acceptance. Pane identity is label plus canonical worktree within
-an explicitly verified server/workspace; a native session reference serves resume.
+the live pane listing; stored pane/workspace IDs are hints; a native session reference serves resume.
 Codex launch and resume under Herdr must retain --no-daemon and the required working
 directories. A file report is untrusted evidence, never a merge grant.
 
@@ -74,4 +74,5 @@ Negative:
 
 Medium. Restore the prior delegation adapters and caller routing while retaining
 mission files as historical evidence. Review and merge policy need not be redesigned.
-This decision remains proposed until the written design is accepted.
+The amended design was approved by Folpe on 8 October; this ADR remains proposed
+until normal merge review. No server restart, update or global configuration write is authorized.

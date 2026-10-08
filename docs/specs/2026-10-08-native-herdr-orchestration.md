@@ -1,7 +1,7 @@
 ---
 title: Orchestration native Herdr et continuité par fichiers
 date: 2026-10-08
-status: in-design
+status: approved
 author: Folpe + Codex
 ticket: DEV-1016
 related:
@@ -106,10 +106,14 @@ local ; un seul auteur par fichier. Ne pas réécrire les fichiers d'un autre r�
 
 `mission.md` contient `schema: 1`, `mission`, `project`, `status`, `updated_at`,
 `repository`, `coordinator` et `workers`. `status` vaut planned/running/blocked/done/
-failed. `coordinator` conserve le label, la worktree et le serveur/workspace
-vérifiés. Chaque worker conserve label, pane_id, agent, worktree, branch, ticket,
-status et attempt. `pane_id` peut être absent avant création et doit être revérifié
-après restauration. La référence native de session, optionnelle, sert uniquement
+failed. `coordinator` est exactement `{ label, worktree, workspace }` ; workspace
+est un indice optionnel, jamais une clé. Aucun champ server. Chaque worker conserve
+label, pane_id (indice optionnel), agent, worktree, branch, ticket, status et attempt.
+Son status vaut planned/running/blocked/done/failed, comme celui de la mission.
+L'identité est exclusivement label + worktree canonique. À chaque lecture, appeler
+`herdr pane list`, résoudre cette paire et revérifier les indices pane_id et workspace.
+Après restauration, ORCH met à jour ces indices depuis le résultat réel ; aucun hook
+ne choisit un pane par son ancien ID. Une paire absente ou ambiguë ne publie rien. La référence native de session, optionnelle, sert uniquement
 à reprendre une conversation, jamais à sélectionner le propriétaire d'un pane.
 
 `report.md` contient `schema: 1`, `mission`, `attempt`, `status`, `worker`, `branch`,
@@ -131,7 +135,7 @@ et resume dans Herdr comprend `--no-daemon`. Codex et Claude reçoivent `--add-d
 vers le dossier de mission autorisé. Les options n'élargissent pas les permissions
 au-delà du mandat. Un kind sans recette vérifiée est signalé comme non pris en charge.
 
-1. Lire mission, brief, rapports et état Git. Vérifier le serveur/workspace ; apparier
+1. Lire mission, brief, rapports et état Git et la liste Herdr courante ; apparier
    label et worktree canonique. Une correspondance multiple ou contradictoire refuse
    l'action ; une variable d'environnement seule ne décide pas.
 2. Enregistrer le worker prévu avant lancement. Créer sa surface, conserver l'ID
@@ -154,23 +158,53 @@ reste reconstructible depuis le dépôt canonique et les missions non terminales
 projet. Une seule mission compatible se reprend ; plusieurs sont exposées à ORCH
 sans sélection arbitraire. Aucun pointeur mutable dans le programme versionné.
 
-Un alias shell pour Codex n'est pas une preuve suffisante : le lancement explicite
-et le resume automatique de Herdr doivent être observés. Si Herdr perd une option
+Vérifier `pane.report_agent` et son champ `resume_argv` dans le schéma du serveur
+Herdr 0.9.0. Si supporté, publier la commande de reprise complète incluant
+`--no-daemon` et `--add-dir` pour Codex, et `--add-dir` pour Claude. Sinon documenter
+la limite et la version minimale attestée. Ne redémarrer et ne mettre à jour aucun
+serveur Herdr pour ce ticket dans cette session. Un alias shell n'est pas une preuve
+suffisante : le lancement explicite et les options du resume doivent être vérifiables. Si Herdr perd une option
 indispensable au redémarrage, le critère reste bloqué par la capacité amont ; ne pas
 le masquer avec un démon maison ou une reprise déclarée réussie sans observation.
 
 ## Hooks et affichage
 
-Les hooks existants publient, de façon bornée, des tokens vers `pane report-metadata`
-et `workspace report-metadata` : mission, ticket, rôle, statut et contexte lorsqu'une
-mesure réelle est disponible. Source distincte des tokens d'identité gérés par Herdr.
-Aucun remplacement de `report-agent-session`, aucun calcul inventé de pourcentage.
-Une cible non vérifiée n'est pas modifiée ; l'erreur de projection est visible et
-ne détruit ni rapport ni progression. Les tokens expirent ou sont retirés à clôture.
+Les hooks du harnais publient avec la source exacte `void-machine`, après résolution
+label + worktree depuis `herdr pane list`. Herdr conserve la propriété de l'état agent ;
+`wstatus` décrit exclusivement le statut des fichiers du harnais.
 
-Le garde personnel cockpit codex-session reste hors des assets du harnais jusqu'à
-la correction amont prévue au ticket. La migration n'écrase pas ce garde ni les
-intégrations Herdr. Les commandes projet vivent dans package.json/justfile/mise.
+| Niveau | Token | Valeur exemple | TTL |
+| --- | --- | --- | --- |
+| pane | mission | dev-1016-proof-01 | 24 h |
+| pane | worker | WORK-1 | 24 h |
+| pane | ticket | DEV-1016 | 24 h |
+| pane | wstatus | running | 24 h |
+| pane | ctx | 42% | 2 h, seulement si mesurable |
+| workspace | mission | dev-1016-proof-01 | 24 h |
+| workspace | wstatus | running | 24 h |
+| workspace | workers | 2 actifs, 1 bloqué | 24 h |
+
+Événements :
+
+- SessionStart startup/resume/clear/compact republie depuis les fichiers. Sur clear,
+  retirer ctx avant toute nouvelle mesure ; ne pas réutiliser le contexte précédent.
+- Stop actualise ctx lorsqu'il est mesurable et wstatus depuis le rapport courant.
+- Clôture de mission, ou SessionEnd sans mission active : retirer explicitement tous
+  les tokens possédés par cette publication, au niveau pane et workspace concerné.
+- Chaque événement rafraîchit les TTL. `seq` est un horodatage en nanosecondes, transmis
+  sans perte de précision ; sa représentation doit correspondre au schéma Herdr.
+
+Le comportement d'une même clé publiée par `void-machine` et `void-cockpit` doit être
+vérifié sur la version installée. ctx et ticket sont déjà publiés par void-cockpit.
+Si la collision est indéfinie, la signaler avant livraison ; ne pas inventer de priorité
+et ne pas désactiver soi-même ces publications. Le propriétaire cockpit les retire.
+Vérifier également la granularité du TTL pour ne pas faire expirer ctx au bout de 24 h.
+Une erreur de projection ne détruit ni rapport ni progression et reste diagnostiquée.
+
+Aucune modification de ~/.codex/hooks.json, ~/.claude/settings.json, ~/.codex/rules/
+ou ~/.zshrc sans validation explicite distincte. Le garde personnel
+`cockpit codex-session` reste actif jusqu'à DEV-1017. Ne pas écraser les intégrations
+Herdr. Les commandes projet vivent dans package.json/justfile/mise.
 
 ## Migration et conservation des preuves
 
@@ -190,8 +224,9 @@ Les cinq ADR nommées par l'ADR proposée sont remplacées seulement sur ce pér
 ## Vérification attendue et ordre de livraison
 
 1. **Capacités avant code** : preuve de lancement avec arguments, puis de restauration
-   avec no-daemon, accès central, bonnes identités et hooks actifs. Redémarrage testé
-   en environnement d'essai dédié ; ne pas arrêter le serveur de travail ni ses panes.
+   avec no-daemon, accès central, bonnes identités et hooks actifs. Dans cette session,
+   vérifier la capacité de restauration par schéma/source ; aucun serveur n'est arrêté,
+   redémarré ou mis à jour. La preuve de redémarrage réel reste explicitement non exécutée.
 2. **Contrats en TDD strict** : schémas, écritures concurrentes par propriétaires,
    reprise, rapport périmé/étranger, accusé perdu, identité ambiguë, option manquante,
    absence de session, transport indisponible et refus de permission.
@@ -208,7 +243,9 @@ Les cinq ADR nommées par l'ADR proposée sont remplacées seulement sur ce pér
 
 À cette préparation, seuls les contrôles documentaires et de lecture ci-dessus ont
 été réalisés. Aucun scénario réel de lancement, /clear, kill/resume ou redémarrage
-n'est encore prouvé. La spécification reste in-design ; aucune implémentation livrée.
+n'est encore prouvé. Florent a approuvé la conception et demandé planification puis implémentation,
+avec les amendements A à E intégrés ici. Aucune nouvelle approbation de plan n'est
+nécessaire pour exécuter ce mandat ; les limites opérationnelles ci-dessus subsistent.
 
 ## Sources et auto-relecture
 
@@ -224,5 +261,22 @@ n'est encore prouvé. La spécification reste in-design ; aucune implémentation
 Auto-relecture : les neuf points du périmètre et les sept critères Linear ont une
 responsabilité et une preuve nommées. Les faits observés sont séparés des capacités
 à éprouver ; aucune reprise, permission, identité, revue ni réussite n'est déduite
-d'un écran ou d'un simple statut. Le passage à un transport natif demande validation
-de cette proposition avant écriture du code.
+d'un écran ou d'un simple statut. La conception amendée est approuvée pour planification et implémentation.
+
+## Résultats des vérifications demandées A à E
+
+Le schéma API du binaire/serveur installé 0.9.0 ne contient pas resume_argv.
+Le champ apparaît en **0.9.2**, pas en 0.9.1 ; les anciennes versions l'ignorent.
+Aucune garantie de restauration des options n'est donc annoncée pour 0.9.0.
+Aucun serveur n'a été mis à jour ou redémarré. Sources :
+[schéma 0.9.0](https://github.com/herdrdev/herdr/blob/v0.9.0/src/api/schema/panes.rs),
+[ajout 0.9.2](https://github.com/herdrdev/herdr/blob/v0.9.2/CHANGELOG.md).
+
+Les tokens sont un patch par ressource, non un espace par source : dernière
+écriture acceptée gagnante, suppression globale de la clé. La collision cockpit
+est définie et signalée avant activation ; aucune publication cockpit n'est changée.
+Le TTL est bien **par clé touchée** : deux appels avec des séquences croissantes
+permettent 24 h pour l'état et 2 h pour ctx. Les clés omises restent intactes.
+Seq est un u64 : passage décimal exact via argv, jamais via un Number JavaScript.
+Sources : [contrat](https://github.com/herdrdev/herdr/blob/v0.9.0/docs/next/website/src/content/docs/socket-api.mdx#L776-L794),
+[implémentation](https://github.com/herdrdev/herdr/blob/v0.9.0/src/metadata_tokens.rs).

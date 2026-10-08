@@ -1,0 +1,122 @@
+---
+title: Livrer l'orchestration native Herdr sans cockpit
+date: 2026-10-08
+status: executing
+spec: docs/specs/2026-10-08-native-herdr-orchestration.md
+ticket: DEV-1016
+author: Folpe + Codex
+high_risk: true
+---
+
+# DEV-1016 : plan d'exécution
+
+## Goal
+
+Appliquer la conception approuvée avec les amendements A à E : identité label +
+worktree, documents de mission centraux, sous-agents courts natifs, workers Herdr,
+métadonnées projet et maintien des preuves de revue. Florent a explicitement demandé
+« intègre-les dans la spec, puis planifie et implémente » ; le présent plan exécute
+ce mandat sans nouvelle porte d'approbation documentaire. DEV-1017 suit dans Linear.
+
+## Préconditions observées
+
+Herdr 0.9.0 ne possède pas resume_argv : disponibilité à partir de 0.9.2 prouvée par
+le schéma/changelog officiel. Pas de mise à jour, de redémarrage ni de modification
+des quatre surfaces globales interdites. La preuve de restart réel reste non exécutée.
+Les tokens ont un TTL par clé et une priorité de dernière écriture, sans namespace
+par source. Collision ctx/ticket avec cockpit documentée dans la spec et signalée.
+
+## Steps
+
+### Step 1 — Reprendre une mission depuis ses fichiers et la liste Herdr
+
+- **Goal** : première tranche utilisable : lire/valider mission et rapport, retrouver
+  un worker par label + worktree, refuser les ambiguïtés et rendre les indices à ORCH.
+- **Depends on** : aucune.
+- **TDD mode** : strict.
+- **Fichiers** : petit contrat orchestra dans packages/hook-runner/src/lifecycle/
+  (codec strict, lecture bornée, résolution pure séparée de l'I/O), tests colocalisés,
+  recette du nouveau skill dans packages/core/skills/, source et note d'adaptation.
+- **Verification gate** : tests de YAML invalide/inconnu, alias, symlink, traversal,
+  taille, mission étrangère, homonymes, ID changé après restart, pair ambiguë,
+  rapport périmé/étranger ; typecheck hook-runner. Aucune écriture de mission par le hook.
+- **Expected commits** : test(orchestration) puis feat(orchestration).
+- **Notes** : réutiliser yaml via dépendance déclarée/version résolue si nécessaire,
+  jamais un parseur YAML maison. Pas de nouveau service résident. ORCH est seul
+  auteur de mission.md et brief.md, le worker de son report.md ; écritures atomiques.
+
+### Step 2 — Publier les tokens depuis les événements réels
+
+- **Goal** : publier source void-machine sur la cible revérifiée, sans inventer ctx.
+- **Depends on** : Step 1.
+- **TDD mode** : strict.
+- **Fichiers** : packages/hook-runner/src/lifecycle/herdr-metadata.ts et tests,
+  cli.ts/cli.test.ts ; manifests packages/core/codex/hooks.json et
+  packages/core/.claude-plugin/plugin.json ; tests lifecycle et parité correspondants.
+- **Verification gate** : source/events exacts, clear retire ctx avant nouvelle mesure,
+  Stop relit le rapport, clôture/SessionEnd retirent les clés ; TTL par clé 86400000
+  ou 7200000 ms ; seq BigInt exact et croissant ; absence de mission, transport
+  absent, timeout, cible étrangère/ambiguë et état terminal ; pas d'écriture globale.
+- **Expected commits** : test(hooks) puis feat(hooks).
+- **Notes** : réutiliser la continuité existante pour une mesure fraîche attestée,
+  sans élargir la lecture de transcriptions arbitraires. Diagnostic explicite pour
+  les données indisponibles. Commandes shell:false, sorties bornées, délai total borné.
+
+### Step 3 — Migrer les appelants et préserver l'admission des revues
+
+- **Goal** : aucun spécialiste court capturé ; un chemin documenté pour les workers
+  Herdr et leurs fichiers, sans rendre un rapport auto-déclaré suffisant au merge.
+- **Depends on** : Steps 1 et 2.
+- **TDD mode** : strict pour logique, souple pour wiring couvert par contrat.
+- **Fichiers** : skills implement/autopilot et nouveau skill d'orchestration ;
+  packages/cli/src/lib/claude-md.ts ; AGENTS.md et CLAUDE.md ;
+  docs/NATIVE-SUPERVISION.md, docs/ARCHITECTURE.md ; retirer le câblage et la capture
+  dans hook-runner/lifecycle/delegation-capture.ts et ses preuves devenues exclusives.
+  Adapter packages/cli/src/commands/autopilot-review.ts et ses tests si la collecte
+  indépendante native l'exige ; réutiliser review-receipt et specialist-lifecycle.
+- **Verification gate** : tests des skills, native short delegation sans interception,
+  provenance de revue native/artifact liée au commit/base/critères, rejet de résultat
+  auto-proclamé ou périmé ; autopilot-review/loop/judgments et bounded-review verts.
+- **Expected commits** : test(delegation) puis feat(delegation).
+- **Notes** : ne pas supprimer la collecte des runs legacy en cours ni leurs journaux.
+  Pas de réécriture du contrôleur de mission. Retirer seulement les composants sans
+  appelant réel. L'artefact de revue reste dans la frontière projet existante ; le
+  rapport central ne remplace pas cette preuve. Aucun changement de politique de merge.
+
+### Step 4 — Éprouver le livrable et préparer la PR
+
+- **Goal** : artefact construit, preuves locales et réelles traçables, limites honnêtes.
+- **Depends on** : Step 3.
+- **TDD mode** : souple pour les contrats de distribution, strict si correction.
+- **Fichiers** : tests de distribution/conformité existants, documentation des preuves
+  et limites ; assets régénérés via pnpm derive et builds propriétaires.
+- **Verification gate** : pnpm build, pnpm typecheck, pnpm lint, pnpm test et gates
+  générés applicables ; source/mirror, skill references, décisions, doctrine sœur ;
+  exécution réelle de lecture/projection sur mission contrôlée et revue indépendante
+  du commit final, avec maximum deux lots de correction ciblés.
+- **Expected commits** : test(conformance), build(assets), corrections ciblées si requises.
+- **Notes** : ne pas activer de nouveaux hooks dans les configurations personnelles.
+  Ne pas toucher d'autres workspaces ni arrêter de serveur. Les scénarios qui
+  demandent restart, /clear d'un ORCH actif ou manipulation de Cortex demeurent
+  explicitement non exécutés sous ces limites ; ne pas annoncer ces AC acquis.
+  Publication/release et fusion de cette PR restent humaines.
+
+## Review checkpoints
+
+Les spécialistes relisent le plan avant la première ligne de logique ; une revue
+indépendante juge le commit final avant PR prête. Seuls défauts bloquants concrets
+requièrent correction ; deux lots maximum, puis arbitrage humain si non résolu.
+Aucun checkpoint documentaire additionnel ne suspend le mandat d'implémentation.
+
+## Execution handoff
+
+Unité unique DEV-1016 : Step 1 → Step 2 → Step 3 → Step 4. Linear porte l'état.
+Un seul auteur pour code et corrections ; coordinateur pour intégration, preuves,
+revue et suivi. DEV-1017 conserve son blocage jusqu'au résultat de cette tranche.
+
+## Self-review
+
+Chaque tranche possède ses fichiers, modes, dépendances et échecs attendus. Les
+capacités Herdr absentes sont nommées ; les preuves non autorisées ne sont pas
+remplacées par des tests factices annoncés réels. Aucun nouveau parseur, démon ou
+registre d'identité concurrent n'est prévu. Les garanties de merge sont conservées.

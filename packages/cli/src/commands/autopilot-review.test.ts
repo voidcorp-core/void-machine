@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,12 +11,16 @@ import {
   type LaunchPlan,
 } from '@voidcorp/void-machine/agents';
 import { afterEach, describe, expect, it } from 'vitest';
+import { compileContextPack, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
+import { createMission, missionControllerRoutingHash, writeMissionControllerPlan } from '../lib/runs/store.js';
+import { parseSpecialistLifecycleInput, recordSpecialistLifecycle, recordSpecialistRequests } from '../lib/runs/specialist-lifecycle.js';
 import { admitLocalReview } from '../lib/autopilot/judgments.js';
 import { gitIn } from '../lib/autopilot/loop-observe.js';
 import {
   readLocalReviews,
   reviewBrief,
-  reviewCommand,
+  reviewLegacyCommand as reviewCommand,
+  reviewCommand as nativeReviewCommand,
   reviewMissionId,
   reviewPath,
   type ReviewRunners,
@@ -207,6 +212,72 @@ const recorded = (repo: Repository, ticket = 'DEV-1', head = repo.head) => {
   return admission.value;
 };
 
+describe('native review routing', () => {
+  it('collects canonical native evidence without a kernel and binds the ticket identity and bytes', async () => {
+    const repo = repository();
+    const { runners: built, launches } = runners(repo);
+    const { agents: _agents, ...nativeRunners } = built;
+    const mission = 'mis_native_autopilot_1234';
+    const ticketBody = '# DEV-1\nAcceptance: slots are five.\n';
+    const hash = `sha256:${createHash('sha256').update(ticketBody).digest('hex')}`;
+    const plan: MissionSpecialistPlan = { planHash: hash, context: { status: 'complete', issues: [] },
+      specialists: [{ specialistId: 'core:independent-code-reviewer', contractVersion: 1,
+        inputHash: hash, state: 'applicable', stages: ['post-implementation'] }] };
+    const ticket = { path: 'tickets/DEV-1.md', contentHash: hash };
+    mkdirSync(join(repo.root, 'tickets'));
+    writeFileSync(join(repo.root, ticket.path), ticketBody);
+    await createMission(repo.root, { missionId: mission, title: 'Review DEV-1', mode: 'team',
+      teamController: { planHash: hash, routingHash: missionControllerRoutingHash(plan, ticket, repo.base),
+        leadWriterId: 'writer:primary', runtime: 'codex' } });
+    await writeMissionControllerPlan(repo.root, mission, plan, ticket, repo.base);
+    const args = [...argv(repo.head), '--mission', mission];
+    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
+    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
+    expect(recorded(repo).attempts).toHaveLength(1);
+    const wrong = await nativeReviewCommand([...argv(repo.head, 'DEV-2'), '--mission', mission], nativeRunners);
+    expect(wrong.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('ticket binding') });
+    writeFileSync(join(repo.root, ticket.path), `${ticketBody}Changed criteria.\n`);
+    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({
+      outcome: 'failed', cause: expect.stringContaining('ticket binding'),
+    });
+    writeFileSync(join(repo.root, ticket.path), ticketBody);
+    const subject = { taskId: mission, reviewedCommit: repo.head, baseCommit: repo.base, acceptanceCriteriaHash: hash };
+    const envelope = { schemaVersion: 1, missionId: mission, runtime: 'codex',
+      specialistId: 'core:independent-code-reviewer', agentName: 'independent-code-reviewer', contractVersion: 1,
+      stage: 'post-implementation', reviewRound: 1, inputHash: hash, reviewSubject: subject,
+      reviewScope: { kind: 'general' }, contextPack: compileContextPack({ diff: '+slots=5', touchedPaths: ['loop.ts'],
+        artifacts: [], lens: 'full', budgetTokens: 12000, dispatch: { missionId: mission,
+          specialistId: 'core:independent-code-reviewer', stage: 'post-implementation', reviewRound: 1, inputHash: hash } }) } as const;
+    const contextId = '/root/review/actual';
+    await recordSpecialistRequests(repo.root, mission, [envelope], hash);
+    await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('started', { envelope, contextId }));
+    await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('completed', { envelope, contextId,
+      completion: { ...clean, review: { ...subject, writerId: 'writer:primary', reviewerId: 'reviewer:independent',
+        readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
+        provenance: { kind: 'native-context', contextId } } } }));
+    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ verdict: { receipt: subject } });
+    expect(launches).toEqual([]);
+  });
+  it('requires canonical native review evidence instead of launching another kernel run', async () => {
+    const repo = repository();
+    const { runners: built, launches } = runners(repo);
+    await expect(nativeReviewCommand(argv(repo.head), built))
+      .rejects.toThrow(/mission/);
+    expect(launches).toEqual([]);
+  });
+  it('refuses a native review checkout that drifted before any evidence is collected', async () => {
+    const repo = repository();
+    const path = worktreeOf(repo);
+    mkdirSync(join(path, '..'), { recursive: true });
+    git(repo.root, 'worktree', 'add', '-q', '--detach', path, repo.base);
+    const { runners: built, launches } = runners(repo);
+    const output = await nativeReviewCommand([...argv(repo.head), '--mission', 'mis_unknown_12345678'], built);
+    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining(`not ${repo.head}`) });
+    expect(recorded(repo).verdict).toBeUndefined();
+    expect(launches).toEqual([]);
+  });
+});
+
 describe('autopilot review', () => {
   it('records a clean verdict bound to the head and to the session the runtime listed', async () => {
     const repo = repository();
@@ -359,7 +430,7 @@ describe('autopilot review, around a crash and beside other reviews', () => {
     // The orphan is stopped before the new reviewer starts; the new one stops once accepted.
     expect(stops[0]).toBe(`vm-${orphan.runId}`);
     expect(launches).toHaveLength(2);
-    expect(recorded(repo).verdict?.runId).not.toBe(orphan.runId);
+    expect(recorded(repo).verdict).not.toMatchObject({ runId: orphan.runId });
     expect(recorded(repo).attempts[0]?.failure).toContain('interrupted');
     expect(recorded(repo).verdict).toBeDefined();
   });
@@ -430,7 +501,9 @@ describe('autopilot review, around a crash and beside other reviews', () => {
     const first = recorded(repo);
     const other = recorded(repo, 'DEV-2', second);
     expect([first.headSha, other.headSha]).toEqual([repo.head, second]);
-    expect(new Set([first.verdict?.sessionId, other.verdict?.sessionId]).size).toBe(2);
+    const session = (value: typeof first) => value.verdict !== undefined && 'sessionId' in value.verdict
+      ? value.verdict.sessionId : undefined;
+    expect(new Set([session(first), session(other)]).size).toBe(2);
     expect(git(join(repo.worktrees, 'checkout', 'review', 'DEV-2', second), 'rev-parse', 'HEAD').trim()).toBe(second);
     expect(readLocalReviews(repo.root, ['DEV-1', 'DEV-2']).get('DEV-2')?.has(second)).toBe(true);
   });

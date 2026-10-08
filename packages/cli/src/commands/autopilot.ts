@@ -156,13 +156,10 @@ async function autopilotReview(argv: readonly string[], root: string): Promise<v
   const agents = agentsContext({ cwd: root, env, home,
     updateCommand: `npx ${PRODUCT_IDENTITY.packageName} update` });
   try {
-    if (!('store' in agents)) {
-      throw autopilotFailure('AUTOPILOT_CONTRACT', 'the kernel delegation is unavailable here', agents.cause,
-        agents.action);
-    }
     const data = env['XDG_DATA_HOME'] ?? join(home, '.local', 'share');
     const worktrees = env['VOID_WORKTREES'] ?? join(data, 'git-worktrees');
-    const output = await reviewCommand(argv, { root, gh: execGh, git: gitIn, agents, now: Date.now, worktrees });
+    const output = await reviewCommand(argv, { root, gh: execGh, git: gitIn,
+      ...('store' in agents ? { agents } : {}), now: Date.now, worktrees });
     process.stdout.write(json ? `${JSON.stringify(output.value, null, 2)}\n` : output.human);
   } catch (error) {
     process.stderr.write(renderAutopilotFailure(toAutopilotFailure(error), json));

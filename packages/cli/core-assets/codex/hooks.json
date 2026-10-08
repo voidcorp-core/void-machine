@@ -120,6 +120,11 @@
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex" }
         ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle herdr-metadata codex" }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -139,6 +144,11 @@
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-audit codex" }
         ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle herdr-metadata codex" }
+        ]
       }
     ],
     "Stop": [
@@ -150,6 +160,11 @@
       {
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle typecheck codex" }
+        ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle herdr-metadata codex" }
         ]
       }
     ]

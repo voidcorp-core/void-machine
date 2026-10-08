@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 399,
+      "lines": 391,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 7050,
+      "staticTokens": 6886,
       "type": "skill"
     },
     {
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 6234,
+      "staticTokens": 5536,
       "type": "skill"
     },
     {
@@ -2395,6 +2395,36 @@
       ],
       "source": "packages/core/skills/void-observability/SKILL.md",
       "staticTokens": 2210,
+      "type": "skill"
+    },
+    {
+      "description": "Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.",
+      "enforcement": {
+        "floor": "ci",
+        "inline": {
+          "claude": "pretooluse",
+          "codex": "pretooluse",
+          "hermes": "ci-only"
+        }
+      },
+      "evalTargets": [
+        {
+          "provider": "anthropic",
+          "runtime": "claude",
+          "tier": "opus"
+        }
+      ],
+      "id": "skill:void-orchestrate",
+      "lines": 219,
+      "name": "void-orchestrate",
+      "owner": "folpe",
+      "pack": null,
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "source": "packages/core/skills/void-orchestrate/SKILL.md",
+      "staticTokens": 2845,
       "type": "skill"
     },
     {

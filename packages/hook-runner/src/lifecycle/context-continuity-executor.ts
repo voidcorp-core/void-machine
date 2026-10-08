@@ -1007,6 +1007,15 @@ function observePostToolUse(
   }
 }
 
+/** Fresh, read-only projection reuses the transcript containment and measurement boundary. */
+export function measureHerdrContext(
+  input: Record<string, unknown>, root: string,
+  runtime: 'claude' | 'codex' | 'unknown', now: number,
+): number | undefined {
+  if (runtime !== 'claude' || input['source'] === 'clear') return undefined;
+  return measureContext(initialState(''), input, root, 'UserPromptSubmit', runtime, now).usagePercent;
+}
+
 export function executeContextContinuity(
   rawInput: unknown,
   root: string,

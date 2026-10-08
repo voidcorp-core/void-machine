@@ -24,6 +24,7 @@ import { parseMechanicalContextBlock } from './checkpoint-codec.js';
 import {
   claimStaleLock,
   executeContextContinuity,
+  measureHerdrContext,
   isExternalTranscriptBound,
   readBoundedDescriptor,
 } from './context-continuity-executor.js';
@@ -53,6 +54,26 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 const roots: string[] = [];
+describe('fresh read-only context projection', () => {
+  it('measures Claude usage with a configured window without writing a checkpoint', () => {
+    const root = project({ context: { windowTokens: 1000 } });
+    writeFileSync(transcript(root), `${usageLine(420)}\n`);
+    expect(measureHerdrContext({ transcript_path: transcript(root) }, root, 'claude', 100))
+      .toBe(42);
+    expect(existsSync(checkpoint(root))).toBe(false);
+    expect(measureHerdrContext({ transcript_path: transcript(root) }, root, 'codex', 100))
+      .toBeUndefined();
+  });
+  it('does not reuse pre-clear usage or invent a window', () => {
+    const root = project();
+    writeFileSync(transcript(root), `${usageLine(420)}\n`);
+    expect(measureHerdrContext({ transcript_path: transcript(root) }, root, 'claude', 100))
+      .toBeUndefined();
+    writeFileSync(join(root, '.void', 'config.json'), JSON.stringify({ context: { windowTokens: 1000 } }));
+    expect(measureHerdrContext({ source: 'clear', transcript_path: transcript(root) }, root, 'claude', 100))
+      .toBeUndefined();
+  });
+});
 const originalHome = process.env['HOME'];
 
 afterEach(() => {

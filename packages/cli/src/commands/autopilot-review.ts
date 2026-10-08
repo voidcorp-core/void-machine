@@ -43,6 +43,7 @@ import { flagValue } from './autopilot-usage.js';
 import { collectNativeReview } from '../lib/autopilot/native-review.js';
 import { inspectMission, loadMissionControllerPlan } from '../lib/runs/store.js';
 import { readTicket } from '../lib/mission-inputs.js';
+import { computeProjectState } from '../lib/runs/project-state.js';
 
 /** Where each head's review is recorded, one directory per ticket. */
 export const REVIEW_DIRECTORY = join('.void', 'machine', 'autopilot', 'reviews');
@@ -698,7 +699,9 @@ async function reviewNativeHead(
     }
     record = { ...record, subject };
     writeRecord(path, record);
-    const inspection = await inspectMission(runners.root, mission, { dependencies: {} });
+    const project = await computeProjectState(worktree);
+    const evidenceContext = { dependencies: { 'git:working-tree': project.diffHash } };
+    const inspection = await inspectMission(runners.root, mission, evidenceContext);
     if (inspection.stream.issues.length > 0) throw Error('native mission journal is incomplete or invalid');
     const events = inspection.stream.events;
     const start = events.find(event => event.kind === 'mission.started');
@@ -717,7 +720,7 @@ async function reviewNativeHead(
           previous: target.round === 1 ? [] : previousBlocking(runners.root, target) }) },
         human: `Native independent review required for ${target.ticket} at ${target.head}; preserve this attempt and record the actual invocation in ${mission}\n` };
     }
-    const native = await collectNativeReview(runners.root, events, subject, writer, target.round);
+    const native = await collectNativeReview(runners.root, events, subject, writer, target.round, evidenceContext);
     const after = worktreeDrift(runners, worktree, target.head);
     if (after !== undefined) throw Error(after);
     const verdict = admitReviewCompletion(JSON.stringify(native.completion), target.head, target.round);

@@ -365,8 +365,28 @@ function latestBySpecialist(
   return latest;
 }
 
+/** Shared canonical reconciliation for controller and native local review admission. */
+export type ReviewFindingCompletion = Pick<CompletionEnvelope, 'event' | 'completion'>;
+export function reconcileReviewFindings(
+  completions: readonly ReviewFindingCompletion[], validProofIds: readonly string[],
+): readonly NormalizedReviewFinding[] {
+  const resolved = new Set<string>();
+  for (const item of [...completions].sort((left, right) => left.event.seq - right.event.seq)) {
+    for (const resolution of item.completion.review?.resolutions ?? []) {
+      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
+        && resolution.proofIds.every(id => validProofIds.includes(id))) {
+        resolved.add(resolution.findingId);
+      } else {
+        resolved.delete(resolution.findingId);
+      }
+    }
+  }
+  return mergeFindings([...completions])
+    .filter(finding => !resolved.has(finding.sourceId));
+}
+
 function mergeFindings(
-  completions: readonly CompletionEnvelope[],
+  completions: readonly ReviewFindingCompletion[],
 ): readonly NormalizedReviewFinding[] {
   const findings = new Map<string, NormalizedReviewFinding>();
   for (const envelope of completions) {
@@ -547,19 +567,7 @@ export function reduceReviewLoop(input: ReviewLoopInput): ReviewLoopState {
     ? Math.max(collected.nextRound, input.contractMigration?.reviewRound ?? 1) : collected.nextRound;
   const history = input.maxCorrectionBatches === undefined ? [] : collected.history.filter(item =>
     input.requiredSpecialists.includes(item.completion.specialistId));
-  const resolved = new Set<string>();
-  for (const item of [...history, ...current].sort((left, right) => left.event.seq - right.event.seq)) {
-    for (const resolution of item.completion.review?.resolutions ?? []) {
-      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
-        && resolution.proofIds.every(id => input.validProofIds?.includes(id))) {
-        resolved.add(resolution.findingId);
-      } else {
-        resolved.delete(resolution.findingId);
-      }
-    }
-  }
-  const findings = mergeFindings([...history, ...current])
-    .filter(finding => !resolved.has(finding.sourceId));
+  const findings = reconcileReviewFindings([...history, ...current], input.validProofIds ?? []);
   const status = decideStatus({
     issues,
     current,

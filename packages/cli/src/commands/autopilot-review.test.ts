@@ -11,11 +11,12 @@ import {
   type LaunchPlan,
 } from '@voidcorp/void-machine/agents';
 import { afterEach, describe, expect, it } from 'vitest';
-import { compileContextPack, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
-import { createMission, missionControllerRoutingHash, writeMissionControllerPlan } from '../lib/runs/store.js';
+import { compileContextPack, sealEvidence, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
+import { createMission, recordMissionEvidence, missionControllerRoutingHash, writeMissionControllerPlan } from '../lib/runs/store.js';
 import { parseSpecialistLifecycleInput, recordSpecialistLifecycle, recordSpecialistRequests } from '../lib/runs/specialist-lifecycle.js';
 import { admitLocalReview } from '../lib/autopilot/judgments.js';
 import { gitIn } from '../lib/autopilot/loop-observe.js';
+import { computeProjectState } from '../lib/runs/project-state.js';
 import {
   readLocalReviews,
   reviewBrief,
@@ -213,7 +214,8 @@ const recorded = (repo: Repository, ticket = 'DEV-1', head = repo.head) => {
 };
 
 describe('native review routing', () => {
-  it('collects canonical native evidence without a kernel and binds the ticket identity and bytes', async () => {
+  it.each(['clean', 'unresolved', 'stale', 'fresh'] as const)
+  ('collects %s canonical native history and binds ticket identity and bytes', async mode => {
     const repo = repository();
     const { runners: built, launches } = runners(repo);
     const { agents: _agents, ...nativeRunners } = built;
@@ -248,14 +250,51 @@ describe('native review routing', () => {
       reviewScope: { kind: 'general' }, contextPack: compileContextPack({ diff: '+slots=5', touchedPaths: ['loop.ts'],
         artifacts: [], lens: 'full', budgetTokens: 12000, dispatch: { missionId: mission,
           specialistId: 'core:independent-code-reviewer', stage: 'post-implementation', reviewRound: 1, inputHash: hash } }) } as const;
+    const proofId = 'evd_00000000-0000-4000-8000-000000000001';
+    const finding = { id: 'authorization', severity: 'high', classification: 'blocking',
+      summary: 'Authorization absent', evidence: [{ path: 'loop.ts', line: 1, detail: 'Role unchecked' }],
+      recommendation: 'Check role', criterion: 'Authorized access only', consequence: 'Unauthorized access',
+      resolutionCondition: 'Unauthorized request rejected', basis: 'initial-scope-defect' } as const;
+    if (mode !== 'clean') {
+      const contextId = '/root/review/prior';
+      const priorHash = `sha256:${'c'.repeat(64)}`;
+      const priorEnvelope = { ...envelope, inputHash: priorHash,
+        reviewSubject: { ...subject, reviewedCommit: repo.base },
+        contextPack: compileContextPack({ diff: '+slots=4', touchedPaths: ['loop.ts'], artifacts: [],
+          lens: 'full', budgetTokens: 12000, dispatch: { missionId: mission,
+            specialistId: envelope.specialistId, stage: envelope.stage, reviewRound: 1, inputHash: priorHash } }) };
+
+      await recordSpecialistRequests(repo.root, mission, [priorEnvelope], hash);
+      await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('started', { envelope: priorEnvelope, contextId }));
+      await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('completed', { envelope: priorEnvelope, contextId,
+        completion: { ...clean, completionId: 'cmp_prior_1234', verdict: 'changes-requested', findings: [finding],
+          review: { ...priorEnvelope.reviewSubject, writerId: 'writer:primary', reviewerId: 'reviewer:prior', readOnly: true,
+            scope: { kind: 'general' }, proofIds: [], resolutions: [], provenance: { kind: 'native-context', contextId } } } }));
+      const project = await computeProjectState(worktreeOf(repo));
+      const diffHash = mode === 'stale' ? `sha256:${'f'.repeat(64)}` : project.diffHash;
+      await recordMissionEvidence(repo.root, sealEvidence({ schemaVersion: 1, evidenceId: proofId, missionId: mission,
+        type: 'command', producer: 'void-harness:mission.verify', source: 'command:pnpm',
+        environment: { runtime: 'node:v24', platform: 'darwin', arch: 'arm64' }, confidence: 'high',
+        inputHash: hash, diffHash, startedAt: '2026-10-08T12:00:00Z', finishedAt: '2026-10-08T12:00:01Z',
+        durationMs: 1000, status: 'passed', exitCode: 0, command: ['pnpm', 'test'], affectedNodes: [],
+        output: { stdout: 'ok', stderr: '', truncated: false },
+        dependencies: [{ kind: 'diff', key: 'git:working-tree', hash: diffHash }],
+      }));
+    }
     const contextId = '/root/review/actual';
     await recordSpecialistRequests(repo.root, mission, [envelope], hash);
     await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('started', { envelope, contextId }));
     await recordSpecialistLifecycle(repo.root, mission, parseSpecialistLifecycleInput('completed', { envelope, contextId,
       completion: { ...clean, review: { ...subject, writerId: 'writer:primary', reviewerId: 'reviewer:independent',
-        readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
+        readOnly: true, scope: { kind: 'general' }, proofIds: mode === 'clean' ? [] : [proofId],
+        resolutions: mode === 'clean' ? [] : [{ findingId: finding.id,
+          status: mode === 'unresolved' ? 'unresolved' : 'resolved', proofIds: [proofId] }],
         provenance: { kind: 'native-context', contextId } } } }));
-    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ verdict: { receipt: subject } });
+    const result = await nativeReviewCommand(args, nativeRunners);
+    if (mode === 'unresolved' || mode === 'stale') {
+      expect(result.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('historical blockers') });
+      expect(recorded(repo).verdict).toBeUndefined();
+    } else expect(result.value).toMatchObject({ verdict: { receipt: subject, verdict: { blocking: [] } } });
     expect(launches).toEqual([]);
   });
   it('requires canonical native review evidence instead of launching another kernel run', async () => {

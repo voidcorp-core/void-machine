@@ -67,6 +67,12 @@ Autopilot additionally reuses the controller's bounded ticket reader: the ticket
 filename identity must equal the target ticket and its current bytes must hash to
 the frozen contentHash. The canonical mission.started routing hash must match the
 stored binding. Passing --mission alone does not select arbitrary acceptance criteria.
+Before a native local verdict is recorded, review history uses the same finding
+reconciliation as the mission controller. A completion omitting a historical
+blocker refuses collection unless its resolution names passed, intact canonical
+proof from this mission, recorded before the review, fresh for the reviewed
+checkout's project-state hash. The authentic completion and receipt remain intact;
+a later empty findings array alone never clears a blocker.
 YAML stays the official parser; Zod Mini provides strict schemas with reduced bundle
 weight. Native review does not require the legacy transport to be installed.
 

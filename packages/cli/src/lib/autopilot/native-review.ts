@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   type CanonicalEvent, canonicalJsonHash, type IndependentReviewReceipt,
   parseSpecialistCompletionValue, type ReviewSubject, sameReviewSubject,
-  type SpecialistCompletion,
+  type SpecialistCompletion, type EvidenceContext, parseEvidence, assessEvidence, reconcileReviewFindings,
 } from '@voidcorp/mission-engine';
 import { readBoundedProjectFile } from '../safe-read.js';
 
@@ -21,6 +21,7 @@ function refused(reason: string): never { throw Error(`NATIVE_REVIEW_REFUSED: ${
 /** Only canonical requested -> started -> completed evidence is a review transport. */
 export async function collectNativeReview(
   root: string, events: readonly CanonicalEvent[], subject: ReviewSubject, writerId: string, round: 1 | 2,
+  evidenceContext: EvidenceContext = { dependencies: {} },
 ): Promise<NativeReview> {
   const writerSeq = events.filter(event => event.kind === 'lead-writer.completed').at(-1)?.seq ?? 0;
   const terminals = events.filter(event => event.kind === 'specialist.completed'
@@ -69,6 +70,30 @@ export async function collectNativeReview(
     if (field(body, 'requestEventId') !== request.eventId || field(body, 'invocationEventId') !== invocation.eventId
       || canonicalJsonHash(field(body, 'result')) !== canonicalJsonHash(result)
       || canonicalJsonHash(field(body, 'review')) !== canonicalJsonHash(review)) refused('artifact binding changed');
+  }
+  const history = events.filter(event => event.missionId === subject.taskId
+    && event.kind === 'specialist.completed' && event.subject === terminal.subject
+    && event.seq <= terminal.seq && field(event.payload, 'stage') === 'post-implementation')
+    .map(event => {
+      const parsed = parseSpecialistCompletionValue(field(event.payload, 'completion'));
+      if (parsed === undefined) refused('invalid canonical review history');
+      return { event, completion: parsed };
+    });
+  const validProofIds = events.flatMap(event => {
+    if (event.missionId !== subject.taskId || event.kind !== 'evidence.recorded'
+      || event.seq >= terminal.seq) return [];
+    const parsed = parseEvidence(field(event.payload, 'evidence'));
+    return parsed.ok && parsed.value.evidenceId === event.subject
+      && parsed.value.missionId === subject.taskId && parsed.value.status === 'passed'
+      && parsed.value.diffHash === evidenceContext.dependencies['git:working-tree']
+      && assessEvidence(parsed.value, evidenceContext).status === 'fresh'
+      ? [parsed.value.evidenceId] : [];
+  });
+  const outstanding = reconcileReviewFindings(history, validProofIds);
+  if (outstanding.some(finding => finding.classification === 'blocking'
+    && !completion.findings.some(current => current.id === finding.sourceId
+      && current.classification === 'blocking'))) {
+    refused('historical blockers remain unresolved by fresh canonical proof');
   }
   return { completion, receipt, invocationEventId: invocation.eventId, completionEventId: terminal.eventId };
 }

@@ -120,3 +120,15 @@ Chaque tranche possède ses fichiers, modes, dépendances et échecs attendus. L
 capacités Herdr absentes sont nommées ; les preuves non autorisées ne sont pas
 remplacées par des tests factices annoncés réels. Aucun nouveau parseur, démon ou
 registre d'identité concurrent n'est prévu. Les garanties de merge sont conservées.
+
+## Préparation observée
+
+Huit spécialistes natifs ont rendu un avis le 8 octobre : sécurité, API, QA,
+architecture, exploitation, données, expérience, produit. Aucun bloqueur concret
+avant code ; exploitation demande les bornes désormais précisées dans la spec.
+Architecture déclare une limite sur les preuves de code absentes avant implémentation.
+Les résultats réels sont conservés localement dans /private/tmp/dev1016-panel/ et
+leur synthèse dans /private/tmp/dev1016-panel-report.md. L'ancien parseur de reçus
+refuse les noms de contexte natifs et son alternative artifact exige déjà un sujet
+commité pour la préparation : aucun identifiant ou événement n'a été inventé.
+Cette limite n'annule pas les avis ; la revue finale portera un commit exact.

@@ -201,6 +201,17 @@ et ne pas désactiver soi-même ces publications. Le propriétaire cockpit les r
 Vérifier également la granularité du TTL pour ne pas faire expirer ctx au bout de 24 h.
 Une erreur de projection ne détruit ni rapport ni progression et reste diagnostiquée.
 
+La préparation précise ces invariants : le rapport validé de la mission et de
+l'attempt courants donne le statut effectif à tous les événements. Un rapport
+absent permet le statut déclaré dans mission.md ; un rapport malformé ou inconnu
+refuse la projection, avec diagnostic. Le coordinateur résolu possède seul les
+publications workspace. Une clôture doit rester découvrable et vérifier la mission
+actuellement projetée avant retrait ; une clôture retardée ne retire pas les tokens
+d'une autre mission. Les lectures et sorties subprocess ont des plafonds, et la
+projection un budget total court. Une découverte incomplète ne peut jamais prouver
+qu'une mission est unique. Les tests couvrent l'ordre des séquences et l'état final
+des tokens selon les règles réelles de Herdr.
+
 Aucune modification de ~/.codex/hooks.json, ~/.claude/settings.json, ~/.codex/rules/
 ou ~/.zshrc sans validation explicite distincte. Le garde personnel
 `cockpit codex-session` reste actif jusqu'à DEV-1017. Ne pas écraser les intégrations

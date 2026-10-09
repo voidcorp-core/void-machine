@@ -230,6 +230,39 @@ What is still open is BEHAVIOURAL parity of a real Codex run, which needs an
 execution conformance gate and belongs to the certification range. The loop was
 proved on Claude; runtime equivalence on Codex is asserted, not measured.
 
+## Global Herdr session ownership guard
+
+The distributed hook bundle exposes `lifecycle herdr-session codex` for an explicitly
+configured global SessionStart route. It validates the event and Herdr context,
+then proves that the hook process descends from a foreground PID of the claimed
+pane before invoking the unchanged `herdr-agent-state.sh session`. The native
+script resolves under `CODEX_HOME`, otherwise `HOME/.codex`, and retains its own
+thread/transcript checks and ownership of session publication.
+
+The relay preserves the original stdin bytes (up to 1 MiB). Discovery accepts at
+most 256 numeric safe-integer PIDs and verifies the returned pane identity. A
+64-hop parent walk shares a two-second deadline with discovery; native execution
+has a separate one-second limit. Subprocess output is bounded to 256 KiB, argv is
+literal, and no retries run. Missing or invalid evidence prevents relay. Fixed
+`herdr-session:` stderr codes distinguish invalid discovery, unproven ownership,
+parent lookup failure and native relay failure without exposing payloads or raw
+child diagnostics. Successful native stdout passes through unchanged. A failed
+native invocation may already have published; no rollback is claimed.
+
+This global route does not discover a project or record project telemetry. Other
+lifecycle handlers keep their existing journals. No project manifest adds the
+route by default: a project hook cannot suppress an unguarded personal hook.
+Personal migration must replace the existing guard with one absolute accepted
+bundle command, remove any parallel direct native SessionStart route, and verify
+all effective global/project entries. An integration reinstall can reintroduce
+an unguarded entry, so recheck drift before activation.
+
+The temporary guard addresses stale inherited pane context, not malicious control
+of same-user executables or atomic process identity. Tests use controlled processes
+and fixture scripts; they do not prove live personal activation or server restart.
+See the [cutover specification](specs/2026-10-09-native-herdr-cutover.md) and
+[entrypoint decision](decisions-log/2026-10-09-global-herdr-session-guard-without-project-telemetry--914e4727-b71c-41c2-9272-d038b0a73bd8.md).
+
 ## The irreducible residual
 
 Everything above was closed by filling the gap. These cannot be, and saying so

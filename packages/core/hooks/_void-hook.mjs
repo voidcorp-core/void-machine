@@ -2487,7 +2487,7 @@ var require_int = __commonJS({
       resolve: (str, _onError, opt) => intResolve(str, 2, 8, opt),
       stringify: (node) => intStringify(node, 8, "0o")
     };
-    var int = {
+    var int2 = {
       identify: intIdentify,
       default: true,
       tag: "tag:yaml.org,2002:int",
@@ -2504,7 +2504,7 @@ var require_int = __commonJS({
       resolve: (str, _onError, opt) => intResolve(str, 2, 16, opt),
       stringify: (node) => intStringify(node, 16, "0x")
     };
-    exports.int = int;
+    exports.int = int2;
     exports.intHex = intHex;
     exports.intOct = intOct;
   }
@@ -2520,16 +2520,16 @@ var require_schema = __commonJS({
     var string3 = require_string();
     var bool = require_bool();
     var float = require_float();
-    var int = require_int();
+    var int2 = require_int();
     var schema = [
       map.map,
       seq.seq,
       string3.string,
       _null3.nullTag,
       bool.boolTag,
-      int.intOct,
-      int.int,
-      int.intHex,
+      int2.intOct,
+      int2.int,
+      int2.intHex,
       float.floatNaN,
       float.floatExp,
       float.float
@@ -2963,7 +2963,7 @@ var require_int2 = __commonJS({
       resolve: (str, _onError, opt) => intResolve(str, 1, 8, opt),
       stringify: (node) => intStringify(node, 8, "0")
     };
-    var int = {
+    var int2 = {
       identify: intIdentify,
       default: true,
       tag: "tag:yaml.org,2002:int",
@@ -2980,7 +2980,7 @@ var require_int2 = __commonJS({
       resolve: (str, _onError, opt) => intResolve(str, 2, 16, opt),
       stringify: (node) => intStringify(node, 16, "0x")
     };
-    exports.int = int;
+    exports.int = int2;
     exports.intBin = intBin;
     exports.intHex = intHex;
     exports.intOct = intOct;
@@ -3175,7 +3175,7 @@ var require_schema3 = __commonJS({
     var binary = require_binary();
     var bool = require_bool2();
     var float = require_float2();
-    var int = require_int2();
+    var int2 = require_int2();
     var merge2 = require_merge();
     var omap = require_omap();
     var pairs = require_pairs();
@@ -3188,10 +3188,10 @@ var require_schema3 = __commonJS({
       _null3.nullTag,
       bool.trueTag,
       bool.falseTag,
-      int.intBin,
-      int.intOct,
-      int.int,
-      int.intHex,
+      int2.intBin,
+      int2.intOct,
+      int2.int,
+      int2.intHex,
       float.floatNaN,
       float.floatExp,
       float.float,
@@ -3218,7 +3218,7 @@ var require_tags = __commonJS({
     var string3 = require_string();
     var bool = require_bool();
     var float = require_float();
-    var int = require_int();
+    var int2 = require_int();
     var schema = require_schema();
     var schema$1 = require_schema2();
     var binary = require_binary();
@@ -3242,9 +3242,9 @@ var require_tags = __commonJS({
       floatExp: float.floatExp,
       floatNaN: float.floatNaN,
       floatTime: timestamp.floatTime,
-      int: int.int,
-      intHex: int.intHex,
-      intOct: int.intOct,
+      int: int2.int,
+      intHex: int2.intHex,
+      intOct: int2.intOct,
       intTime: timestamp.intTime,
       map: map.map,
       merge: merge2.merge,
@@ -11169,6 +11169,13 @@ function optionalKeys(shape) {
     return shape[k]._zod.optin !== void 0 && shape[k]._zod.optout === "optional";
   });
 }
+var NUMBER_FORMAT_RANGES = /* @__PURE__ */ (() => ({
+  safeint: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+  int32: [-2147483648, 2147483647],
+  uint32: [0, 4294967295],
+  float32: [-34028234663852886e22, 34028234663852886e22],
+  float64: [-Number.MAX_VALUE, Number.MAX_VALUE]
+}))();
 function aborted(x, startIndex = 0) {
   if (x.aborted === true)
     return true;
@@ -11622,6 +11629,100 @@ var _whenHasLength = (payload) => {
   const val = payload.value;
   return !nullish(val) && val.length !== void 0;
 };
+var numericOriginMap = {
+  number: "number",
+  bigint: "bigint",
+  object: "date"
+};
+var $ZodCheckGreaterThan = /* @__PURE__ */ $constructor("$ZodCheckGreaterThan", (inst, def) => {
+  $ZodCheck.init(inst, def);
+  const origin = numericOriginMap[typeof def.value];
+  inst._zod.check = (payload) => {
+    if (def.inclusive ? payload.value >= def.value : payload.value > def.value) {
+      return;
+    }
+    payload.issues.push({
+      origin: numericOriginMap[typeof payload.value] ?? origin,
+      code: "too_small",
+      minimum: typeof def.value === "object" ? def.value.getTime() : def.value,
+      input: payload.value,
+      inclusive: def.inclusive,
+      inst,
+      continue: !def.abort
+    });
+  };
+});
+var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat", (inst, def) => {
+  $ZodCheck.init(inst, def);
+  def.format = def.format || "float64";
+  const isInt = def.format?.includes("int");
+  const origin = isInt ? "int" : "number";
+  const [minimum, maximum] = NUMBER_FORMAT_RANGES[def.format];
+  inst._zod.check = (payload) => {
+    const input = payload.value;
+    if (isInt) {
+      if (!Number.isInteger(input)) {
+        payload.issues.push({
+          expected: origin,
+          format: def.format,
+          code: "invalid_type",
+          continue: false,
+          input,
+          inst
+        });
+        return;
+      }
+      if (!Number.isSafeInteger(input)) {
+        if (input > 0) {
+          payload.issues.push({
+            input,
+            code: "too_big",
+            maximum: Number.MAX_SAFE_INTEGER,
+            note: "Integers must be within the safe integer range.",
+            inst,
+            origin,
+            inclusive: true,
+            continue: !def.abort
+          });
+        } else {
+          payload.issues.push({
+            input,
+            code: "too_small",
+            minimum: Number.MIN_SAFE_INTEGER,
+            note: "Integers must be within the safe integer range.",
+            inst,
+            origin,
+            inclusive: true,
+            continue: !def.abort
+          });
+        }
+        return;
+      }
+    }
+    if (input < minimum) {
+      payload.issues.push({
+        origin: "number",
+        input,
+        code: "too_small",
+        minimum,
+        inclusive: true,
+        inst,
+        continue: !def.abort
+      });
+    }
+    if (input > maximum) {
+      payload.issues.push({
+        origin: "number",
+        input,
+        code: "too_big",
+        maximum,
+        inclusive: true,
+        inst,
+        continue: !def.abort
+      });
+    }
+  };
+});
 var $ZodCheckMaxLength = /* @__PURE__ */ $constructor("$ZodCheckMaxLength", (inst, def) => {
   var _a2;
   $ZodCheck.init(inst, def);
@@ -11882,6 +11983,34 @@ var $ZodISOTime = /* @__PURE__ */ $constructor("$ZodISOTime", (inst, def) => {
 var $ZodISODuration = /* @__PURE__ */ $constructor("$ZodISODuration", (inst, def) => {
   def.pattern ?? (def.pattern = duration);
   $ZodStringFormat.init(inst, def);
+});
+var $ZodNumber = /* @__PURE__ */ $constructor("$ZodNumber", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = number;
+  inst._zod.parse = (payload, _ctx) => {
+    if (def.coerce)
+      try {
+        payload.value = Number(payload.value);
+      } catch (_) {
+      }
+    const input = payload.value;
+    if (typeof input === "number" && !Number.isNaN(input) && Number.isFinite(input)) {
+      return payload;
+    }
+    const received = typeof input === "number" ? Number.isNaN(input) ? "NaN" : !Number.isFinite(input) ? String(input) : void 0 : void 0;
+    payload.issues.push({
+      expected: "number",
+      code: "invalid_type",
+      input,
+      inst,
+      ...received ? { received } : {}
+    });
+    return payload;
+  };
+});
+var $ZodNumberFormat = /* @__PURE__ */ $constructor("$ZodNumberFormat", (inst, def) => {
+  $ZodCheckNumberFormat.init(inst, def);
+  $ZodNumber.init(inst, def);
 });
 var $ZodNever = /* @__PURE__ */ $constructor("$ZodNever", (inst, def) => {
   $ZodType.init(inst, def);
@@ -12448,10 +12577,33 @@ function _isoDuration(Class, params) {
   });
 }
 // @__NO_SIDE_EFFECTS__
+function _number(Class, params) {
+  return new Class(snapshotChecks({ type: "number", checks: [], ...normalizeParams(params) }));
+}
+// @__NO_SIDE_EFFECTS__
+function _int(Class, params) {
+  return new Class({
+    type: "number",
+    check: "number_format",
+    abort: false,
+    format: "safeint",
+    ...normalizeParams(params)
+  });
+}
+// @__NO_SIDE_EFFECTS__
 function _never(Class, params) {
   return new Class({
     type: "never",
     ...normalizeParams(params)
+  });
+}
+// @__NO_SIDE_EFFECTS__
+function _gte(value, params) {
+  return new $ZodCheckGreaterThan({
+    check: "greater_than",
+    ...normalizeParams(params),
+    value,
+    inclusive: true
   });
 }
 // @__NO_SIDE_EFFECTS__
@@ -12556,6 +12708,21 @@ var ZodMiniStringFormat = /* @__PURE__ */ $constructor("ZodMiniStringFormat", (i
   $ZodStringFormat.init(inst, def);
   ZodMiniString.init(inst, def);
 });
+var ZodMiniNumber = /* @__PURE__ */ $constructor("ZodMiniNumber", (inst, def) => {
+  $ZodNumber.init(inst, def);
+  ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function number2(params) {
+  return _number(ZodMiniNumber, params);
+}
+var ZodMiniNumberFormat = /* @__PURE__ */ $constructor("ZodMiniNumberFormat", (inst, def) => {
+  $ZodNumberFormat.init(inst, def);
+  ZodMiniNumber.init(inst, def);
+});
+function int(params) {
+  return _int(ZodMiniNumberFormat, params);
+}
 var ZodMiniNever = /* @__PURE__ */ $constructor("ZodMiniNever", (inst, def) => {
   $ZodNever.init(inst, def);
   ZodMiniType.init(inst, def);
@@ -13109,16 +13276,121 @@ Read mission.md and the current brief/report before resuming; Herdr IDs are hint
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
+import { spawnSync as spawnSync3 } from "node:child_process";
+import { statSync as statSync6 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join13 } from "node:path";
+var runCommand2 = (command, args, options) => {
+  const result = spawnSync3(command, args, options);
+  if (result.error !== void 0 || result.status !== 0) throw Error("process-failed");
+  return result.stdout;
+};
+var discoverySchema = object2({ result: object2({ process_info: object2({
+  pane_id: string2(),
+  foreground_processes: array(object2({
+    pid: number2().check(int(), _gte(2))
+  })).check(_minLength(1), _maxLength(256))
+}) }) });
+function refused(reason) {
+  return { status: "degraded", details: { reason }, diagnostic: `herdr-session: ${reason}
+` };
+}
+function foreground(output, pane) {
+  try {
+    const value = JSON.parse(output.toString("utf8"));
+    if (record3(value)?.["error"] !== void 0) return void 0;
+    const result = discoverySchema.safeParse(value);
+    if (!result.success || result.data.result.process_info.pane_id !== pane) return void 0;
+    return result.data.result.process_info.foreground_processes.map((item) => item.pid);
+  } catch {
+    return void 0;
+  }
+}
+function proveOwnership(pids, call) {
+  let pid = process.pid;
+  const visited = /* @__PURE__ */ new Set();
+  for (let depth = 0; depth < 64; depth++) {
+    if (visited.has(pid)) return "parent-cycle";
+    visited.add(pid);
+    if (pids.includes(pid)) return void 0;
+    const parent = call("ps", ["-o", "ppid=", "-p", String(pid)]).toString("utf8").trim();
+    if (!/^[0-9]+$/.test(parent) || !Number.isSafeInteger(Number(parent))) return "invalid-parent";
+    pid = Number(parent);
+    if (pid <= 1) return "ownership-unproven";
+  }
+  return "parent-depth-exceeded";
+}
+function nativeHook(env) {
+  const path2 = join13(
+    env["CODEX_HOME"] || join13(env["HOME"] || homedir3(), ".codex"),
+    "herdr-agent-state.sh"
+  );
+  try {
+    return statSync6(path2).isFile() ? path2 : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function executeHerdrSession(input, env, runtime3, run = runCommand2, clock = () => performance.now()) {
+  if (runtime3 !== "codex" || env["HERDR_ENV"] !== "1") {
+    return { status: "skipped", details: { reason: "outside-codex-herdr" } };
+  }
+  try {
+    if (record3(parseHookPayload(input))?.["hook_event_name"] !== "SessionStart") {
+      return { status: "skipped", details: { reason: "event-not-actionable" } };
+    }
+  } catch {
+    return refused("invalid-input");
+  }
+  const pane = env["HERDR_PANE_ID"];
+  if (pane === void 0 || pane.length === 0 || pane.length > 160 || [...pane].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || !env["HERDR_SOCKET_PATH"]) return refused("missing-herdr-context");
+  const hook = nativeHook(env);
+  if (hook === void 0) return refused("native-hook-unavailable");
+  const deadline = clock() + 2e3;
+  let reason = "discovery-failed";
+  const call = (command, args) => {
+    const timeout = Math.floor(deadline - clock());
+    if (timeout <= 0) {
+      reason = "discovery-deadline";
+      throw Error(reason);
+    }
+    return run(command, args, { env, shell: false, timeout, maxBuffer: 262144, killSignal: "SIGKILL" });
+  };
+  try {
+    const pids = foreground(call("herdr", ["pane", "process-info", "--pane", pane]), pane);
+    if (pids === void 0) return refused("invalid-discovery");
+    reason = "parent-lookup-failed";
+    const denied = proveOwnership(pids, call);
+    if (denied !== void 0) return refused(denied);
+  } catch {
+    return refused(reason);
+  }
+  try {
+    const output = run("sh", [hook, "session"], {
+      env,
+      shell: false,
+      timeout: 1e3,
+      maxBuffer: 262144,
+      killSignal: "SIGKILL",
+      input
+    });
+    return { status: "ok", details: { relayed: true }, output };
+  } catch {
+    return refused("native-relay-failed");
+  }
+}
+
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { randomUUID } from "node:crypto";
 import { lstatSync as lstatSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync5, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { basename as basename5, dirname as dirname6, isAbsolute as isAbsolute7, join as join15 } from "node:path";
+import { basename as basename5, dirname as dirname6, isAbsolute as isAbsolute7, join as join16 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { spawnSync as spawnSync3 } from "node:child_process";
-import { basename as basename4, dirname as dirname5, join as join14 } from "node:path";
+import { spawnSync as spawnSync4 } from "node:child_process";
+import { basename as basename4, dirname as dirname5, join as join15 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { join as join13 } from "node:path";
+import { join as join14 } from "node:path";
 var VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
 function readVersion(path2) {
   const version2 = record3(readJson(path2))?.["version"];
@@ -13131,7 +13403,7 @@ function resolveInstall(root, env) {
   }
   const pluginRoot = env["CLAUDE_PLUGIN_ROOT"];
   if (pluginRoot !== void 0) {
-    const version3 = readVersion(join13(pluginRoot, ".claude-plugin", "plugin.json"));
+    const version3 = readVersion(join14(pluginRoot, ".claude-plugin", "plugin.json"));
     if (version3 !== void 0) return { version: version3, source: "marketplace" };
   }
   const receipt = record3(readJson(voidReadPath(root, "receipts", "install-v1.json")));
@@ -13145,13 +13417,13 @@ function resolveInstall(root, env) {
 }
 
 function machineRootOf(cwd) {
-  const result = spawnSync3(
+  const result = spawnSync4(
     "git",
     ["rev-parse", "--path-format=absolute", "--git-common-dir"],
     { cwd, shell: false, encoding: "utf8", timeout: 5e3 }
   );
   const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, "") : "";
-  return common !== "" && basename4(common) === ".git" ? join14(dirname5(common), ".void", "machine") : void 0;
+  return common !== "" && basename4(common) === ".git" ? join15(dirname5(common), ".void", "machine") : void 0;
 }
 
 var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -13161,11 +13433,11 @@ var PARKING_WINDOW_MS = 6e5;
 var skipped = (reason) => ({ status: "skipped", details: { reason } });
 function claimedPath(root, sessionId) {
   try {
-    const claim2 = record3(JSON.parse(readFileSync11(join15(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
+    const claim2 = record3(JSON.parse(readFileSync11(join16(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
     const path2 = claim2?.["resultPath"];
     if (claim2?.["schemaVersion"] !== 1 || typeof path2 !== "string" || !isAbsolute7(path2)) return void 0;
     if (path2.length > MAX_CLAIM_BYTES || basename5(path2) !== "result.json") return void 0;
-    const runs = join15(root, "runs");
+    const runs = join16(root, "runs");
     if (!within(runs, path2) || lstatSync5(dirname6(path2), { throwIfNoEntry: false })?.isDirectory() !== true) {
       return void 0;
     }
@@ -13177,9 +13449,9 @@ function claimedPath(root, sessionId) {
 function waitingRun(root, cwd, now) {
   try {
     const here = realpathSync5(cwd);
-    const directory = join15(root, "agents", "pending");
+    const directory = join16(root, "agents", "pending");
     return readdirSync3(directory).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
-      const marker = record3(JSON.parse(readFileSync11(join15(directory, name), "utf8")));
+      const marker = record3(JSON.parse(readFileSync11(join16(directory, name), "utf8")));
       const createdAt = marker?.["createdAt"];
       const runCwd = marker?.["cwd"];
       return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync5(runCwd) === here;
@@ -13205,13 +13477,13 @@ function executeDelegationResult(input, now) {
   const parked = target === void 0;
   if (target === void 0) {
     if (!waitingRun(root, cwd, now)) return skipped("not-delegated");
-    target = join15(root, "agents", "parked", `${sessionId}.json`);
+    target = join16(root, "agents", "parked", `${sessionId}.json`);
   }
   const message = fields?.["last_assistant_message"];
   const { text: text3, truncated } = boundedMessage(typeof message === "string" ? message : "");
   try {
     mkdirSync4(dirname6(target), { recursive: true, mode: 448 });
-    const temporary = join15(dirname6(target), `.tmp-${randomUUID()}`);
+    const temporary = join16(dirname6(target), `.tmp-${randomUUID()}`);
     const pendingWork = [fields?.["background_tasks"], fields?.["session_crons"]].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
     writeFileSync3(temporary, JSON.stringify({
       schemaVersion: 1,
@@ -13229,7 +13501,7 @@ function executeDelegationResult(input, now) {
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { spawnSync as spawnSync4 } from "node:child_process";
+import { spawnSync as spawnSync5 } from "node:child_process";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import {
@@ -13278,7 +13550,7 @@ function executeFormat(rawInput, root, env) {
   );
   let formatted = 0;
   for (const file of files) {
-    const result = spawnSync4(biome, ["format", "--write", file], {
+    const result = spawnSync5(biome, ["format", "--write", file], {
       cwd: root,
       env: { ...process.env, ...env },
       shell: false,
@@ -13302,7 +13574,7 @@ function executeFormat(rawInput, root, env) {
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { spawnSync as spawnSync5 } from "node:child_process";
+import { spawnSync as spawnSync6 } from "node:child_process";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 function parseAddedLines(numstat) {
@@ -13329,7 +13601,7 @@ function assessLargeChange(assessment) {
 }
 
 function runGit(git3, root, args, env) {
-  const result = spawnSync5(git3, args, {
+  const result = spawnSync6(git3, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -13433,18 +13705,18 @@ import {
   existsSync as existsSync6,
   lstatSync as lstatSync6,
   readFileSync as readFileSync12,
-  statSync as statSync6
+  statSync as statSync7
 } from "node:fs";
-import { basename as basename6, join as join16 } from "node:path";
+import { basename as basename6, join as join17 } from "node:path";
 var PROGRAM_PATHS = [
-  join16(".void", "program.md"),
-  join16(".void", "active.md"),
-  join16("plans", "ACTIVE.md")
+  join17(".void", "program.md"),
+  join17(".void", "active.md"),
+  join17("plans", "ACTIVE.md")
 ];
 var CHECKPOINT_PATHS = [
-  join16(".void", "machine", "checkpoint.md"),
-  join16(".void", "local", "checkpoint.md"),
-  join16(".void", "session", "current.md")
+  join17(".void", "machine", "checkpoint.md"),
+  join17(".void", "local", "checkpoint.md"),
+  join17(".void", "session", "current.md")
 ];
 var MAX_READ_BYTES = 5e5;
 var GIT_TIMEOUT_MS = 200;
@@ -13503,7 +13775,7 @@ function programFrom(raw, legacy) {
   };
 }
 function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative12) => existsSync6(join16(root, relative12)));
+  const present = PROGRAM_PATHS.filter((relative12) => existsSync6(join17(root, relative12)));
   if (present.length === 0) return { program: void 0 };
   if (present.length > 1) {
     return {
@@ -13513,7 +13785,7 @@ function observeProgram(root) {
   }
   const relative11 = present[0];
   if (relative11 === void 0) return { program: void 0 };
-  const raw = readBounded(join16(root, relative11));
+  const raw = readBounded(join17(root, relative11));
   const program = raw === void 0 ? void 0 : programFrom(raw, relative11 !== PROGRAM_PATHS[0]);
   return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative11}` } : { program };
 }
@@ -13541,11 +13813,11 @@ function gitObservation(root) {
 }
 function checkpointObservation(root) {
   for (const relative11 of CHECKPOINT_PATHS) {
-    const path2 = join16(root, relative11);
+    const path2 = join17(root, relative11);
     const raw = readBounded(path2);
     if (raw === void 0) continue;
     try {
-      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync6(path2).mtimeMs };
+      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync7(path2).mtimeMs };
     } catch {
       return { checkpoint: parseCheckpoint2(raw) };
     }
@@ -13613,7 +13885,7 @@ import {
   realpathSync as realpathSync6,
   writeFileSync as writeFileSync4
 } from "node:fs";
-import { join as join17, relative as relative7 } from "node:path";
+import { join as join18, relative as relative7 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 function record5(value) {
@@ -13720,7 +13992,7 @@ function executeTrim(rawInput, root, env) {
   }
   const hash = createHash5("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
-  const file = join17(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
+  const file = join18(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
   const spillPath = relative7(realpathSync6(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
@@ -13757,14 +14029,14 @@ function executeTrim(rawInput, root, env) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { existsSync as existsSync7 } from "node:fs";
-import { join as join19 } from "node:path";
-import { spawnSync as spawnSync6 } from "node:child_process";
+import { join as join20 } from "node:path";
+import { spawnSync as spawnSync7 } from "node:child_process";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import {
   dirname as dirname7,
   isAbsolute as isAbsolute9,
-  join as join18,
+  join as join19,
   relative as relative8,
   resolve as resolve8
 } from "node:path";
@@ -13866,7 +14138,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
     if (!within3(root, target)) continue;
     let current = dirname7(target);
     while (within3(root, current)) {
-      const config2 = join18(current, "tsconfig.json");
+      const config2 = join19(current, "tsconfig.json");
       if (hasFile(config2)) {
         found.add(config2);
         break;
@@ -13881,7 +14153,7 @@ function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
 function runGit2(root, args, env) {
   const git3 = findExecutable("git", root, env);
   if (git3 === void 0) return { ok: false, output: "" };
-  const result = spawnSync6(git3, args, {
+  const result = spawnSync7(git3, args, {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -13922,7 +14194,7 @@ function executeTypecheck(root, env) {
     return { status: "skipped", details: { reason: "no-touched-typescript" } };
   }
   const configs = nearestTsconfigs(changed, root, existsSync7);
-  const configured = configuredTypecheck(readJson(join19(root, ".void", "config.json")));
+  const configured = configuredTypecheck(readJson(join20(root, ".void", "config.json")));
   const configuredArgv = "argv" in configured ? configured.argv : void 0;
   const warning = "warning" in configured ? configured.warning : void 0;
   const fallback = findExecutable("tsc", root, env);
@@ -13958,7 +14230,7 @@ function executeTypecheck(root, env) {
   const invocations = isTsc && configs.length > 0 ? configs.map((config2) => [...args, "-p", config2]) : [args];
   let errors = "";
   for (const invocation of invocations) {
-    const result = spawnSync6(executablePath, invocation, {
+    const result = spawnSync7(executablePath, invocation, {
       cwd: root,
       env: minimalEnvironment(process.env, env),
       encoding: "utf8",
@@ -14007,9 +14279,9 @@ Resolve before claiming done. This never blocks.
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { spawnSync as spawnSync7 } from "node:child_process";
+import { spawnSync as spawnSync8 } from "node:child_process";
 import { closeSync as closeSync4, existsSync as existsSync8, lstatSync as lstatSync8, openSync as openSync4, readSync as readSync4, realpathSync as realpathSync7 } from "node:fs";
-import { dirname as dirname8, isAbsolute as isAbsolute10, join as join20, resolve as resolve9 } from "node:path";
+import { dirname as dirname8, isAbsolute as isAbsolute10, join as join21, resolve as resolve9 } from "node:path";
 var GIT_TIMEOUT_MS2 = 5e3;
 var GIT_MAX_OUTPUT_BYTES = 1e6;
 function canonical2(path2) {
@@ -14022,7 +14294,7 @@ function canonical2(path2) {
 function git2(cwd, args, deadline) {
   const remaining = deadline === void 0 ? GIT_TIMEOUT_MS2 : Math.ceil(deadline - performance.now());
   if (remaining <= 0) return void 0;
-  const result = spawnSync7("git", args, {
+  const result = spawnSync8("git", args, {
     cwd,
     ...deadline === void 0 ? {} : {
       env: Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_(DIR|WORK_TREE|COMMON_DIR|CONFIG|INDEX_FILE)/.test(name)))
@@ -14071,35 +14343,35 @@ function gitPointer(path2) {
   }
 }
 function ordinaryLinkedMain(tree) {
-  const marker = join20(tree, ".git");
+  const marker = join21(tree, ".git");
   const pointer = gitPointer(marker);
   if (!pointer.startsWith("gitdir: ")) throw new Error("INVALID_GIT_POINTER");
   const directory = canonical2(resolve9(tree, pointer.slice(8)));
-  if (!existsSync8(join20(directory, "commondir"))) return void 0;
-  const common = canonical2(resolve9(directory, gitPointer(join20(directory, "commondir"))));
-  const backlink = gitPointer(join20(directory, "gitdir"));
-  if (!isAbsolute10(backlink) || canonical2(backlink) !== canonical2(marker) || canonical2(dirname8(directory)) !== canonical2(join20(common, "worktrees"))) {
+  if (!existsSync8(join21(directory, "commondir"))) return void 0;
+  const common = canonical2(resolve9(directory, gitPointer(join21(directory, "commondir"))));
+  const backlink = gitPointer(join21(directory, "gitdir"));
+  if (!isAbsolute10(backlink) || canonical2(backlink) !== canonical2(marker) || canonical2(dirname8(directory)) !== canonical2(join21(common, "worktrees"))) {
     throw new Error("INVALID_GIT_POINTER");
   }
   const candidate = dirname8(common);
-  const candidateMarker = join20(candidate, ".git");
+  const candidateMarker = join21(candidate, ".git");
   if (!lstatSync8(candidateMarker, { throwIfNoEntry: false })?.isDirectory() || canonical2(candidateMarker) !== common) return void 0;
   return candidate;
 }
 function resolveTelemetryRoot(cwd, query = git2) {
-  const refused = { kind: "unavailable", code: "TELEMETRY_ROOT_UNRESOLVED" };
+  const refused2 = { kind: "unavailable", code: "TELEMETRY_ROOT_UNRESOLVED" };
   try {
     let tree = canonical2(cwd);
-    while (lstatSync8(join20(tree, ".git"), { throwIfNoEntry: false }) === void 0 && !holdsInstallReceipt(tree)) {
+    while (lstatSync8(join21(tree, ".git"), { throwIfNoEntry: false }) === void 0 && !holdsInstallReceipt(tree)) {
       const parent = dirname8(tree);
       if (parent === tree) {
         return { kind: "resolved", root: canonical2(discoverProjectRoot(cwd)) };
       }
       tree = parent;
     }
-    const marker = join20(tree, ".git");
+    const marker = join21(tree, ".git");
     const markerStat = lstatSync8(marker, { throwIfNoEntry: false });
-    if (markerStat?.isSymbolicLink()) return refused;
+    if (markerStat?.isSymbolicLink()) return refused2;
     if (markerStat === void 0 || markerStat.isDirectory() || holdsInstallReceipt(tree)) {
       return { kind: "resolved", root: tree };
     }
@@ -14112,15 +14384,15 @@ function resolveTelemetryRoot(cwd, query = git2) {
       "--absolute-git-dir",
       "--git-common-dir"
     ], deadline)?.trim().split(/\r?\n/) ?? [];
-    if (toplevel === void 0 || canonical2(toplevel) !== tree) return refused;
-    if (directory === void 0 || common === void 0) return refused;
+    if (toplevel === void 0 || canonical2(toplevel) !== tree) return refused2;
+    if (directory === void 0 || common === void 0) return refused2;
     const commonDirectory = canonical2(resolve9(tree, common));
     if (canonical2(directory) === commonDirectory) return { kind: "resolved", root: tree };
     const main2 = mainWorkingTree(tree, deadline, commonDirectory, query);
-    if (main2 === void 0) return refused;
+    if (main2 === void 0) return refused2;
     return { kind: "resolved", root: main2 };
   } catch {
-    return refused;
+    return refused2;
   }
 }
 
@@ -14269,7 +14541,7 @@ import {
 import {
   dirname as dirname9,
   isAbsolute as isAbsolute12,
-  join as join21,
+  join as join22,
   relative as relative10,
   resolve as resolve11
 } from "node:path";
@@ -14703,9 +14975,9 @@ async function writeSequencedEventInternal(options) {
     throw new Error("HOOK_INVALID_EVENT_ID: expected evt_<opaque-id>");
   }
   const run = await safeRunDirectory(options.root, options.missionId);
-  const logPath = join21(run, "events.jsonl");
-  const statePath = join21(run, ".seq.state");
-  const lockPath = join21(run, ".seq.lock");
+  const logPath = join22(run, "events.jsonl");
+  const statePath = join22(run, ".seq.state");
+  const lockPath = join22(run, ".seq.lock");
   await Promise.all([
     rejectSymlink(logPath),
     rejectSymlink(statePath),
@@ -14945,6 +15217,12 @@ async function observeHook(hook, execution, rawInput, agentRuntime, root) {
 async function runLifecycle(input) {
   const hook = process.argv[3] ?? "";
   const agentRuntime = runtime2(process.argv[4] ?? process.env["VOID_AGENT_RUNTIME"]);
+  if (hook === "herdr-session") {
+    const execution2 = executeHerdrSession(input, process.env, agentRuntime);
+    if (execution2.diagnostic !== void 0) process.stderr.write(execution2.diagnostic);
+    if (execution2.output !== void 0) process.stdout.write(execution2.output);
+    return;
+  }
   const root = projectRoot();
   const rawInput = optionalPayload(input);
   if (hook === "context" || hook === "context-continuity") {

@@ -16,6 +16,7 @@ import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
 import { sessionStartOutput } from './lifecycle/context.js';
 import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
 import { executeHerdrMetadata } from './lifecycle/herdr-metadata-executor.js';
+import { executeHerdrSession } from './lifecycle/herdr-session-executor.js';
 import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
@@ -186,6 +187,13 @@ async function observeHook(
 async function runLifecycle(input: Uint8Array): Promise<void> {
   const hook = process.argv[3] ?? '';
   const agentRuntime = runtime(process.argv[4] ?? process.env['VOID_AGENT_RUNTIME']);
+  // This global route must not create project state outside a harness installation.
+  if (hook === 'herdr-session') {
+    const execution = executeHerdrSession(input, process.env, agentRuntime);
+    if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);
+    if (execution.output !== undefined) process.stdout.write(execution.output);
+    return;
+  }
   const root = projectRoot();
   const rawInput = optionalPayload(input);
   if (hook === 'context' || hook === 'context-continuity') {

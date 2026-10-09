@@ -1,9 +1,10 @@
-// @test-resource filesystem
+// @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('one package installation proof across runtime consumers', () => {
   it('installs the immutable package once and exercises all three isolated runtime roots', async () => {
@@ -98,13 +99,13 @@ describe('the installed syntax worker: a blocking proof, and a latency observati
   ].join('\n') + '\n';
 
   it('reports a complete campaign without a failed sample as complete', async () => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     expect(classifyLatencyObservation({ code: 0, stdout: campaign('a'.repeat(64)), workerSha256: 'a'.repeat(64) }))
       .toMatchObject({ status: 'complete', failures: 0 });
   });
 
   it('keeps a measured timeout as a visible latency anomaly, never as a success, and never fails the install for it', async () => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     const observation = classifyLatencyObservation({ code: 1,
       stdout: campaign('a'.repeat(64), { 'invalid-request': 1 }), workerSha256: 'a'.repeat(64) });
     expect(observation).toMatchObject({ status: 'latency-anomaly', failures: 1 });
@@ -127,7 +128,68 @@ describe('the installed syntax worker: a blocking proof, and a latency observati
     ['a valid sample without metrics', /LATENCY_OBSERVATION_INCOHERENT/, 0, campaign('a'.repeat(64)).replace('{"wallMs":120,"cpuMs":110,"rssKiB":74000,"valid":true}',
       '{"wallMs":120,"valid":true}')],
   ])('refuses to read %s as an observation', async (_case, refusal, code, stdout) => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     expect(() => classifyLatencyObservation({ code, stdout, workerSha256: 'a'.repeat(64) })).toThrow(refusal);
   });
+});
+
+// Reproduce the shared deadline without a wall-clock race: the external CLI writes a
+// conformant fixture, while the separate measurement process exhausts its budget.
+// The real installer still checks doctrine, receipts, preservation and worker answers.
+vi.mock('./conformance-process.mjs', async (original) => {
+  const actual = await original<typeof import('./conformance-process.mjs')>();
+  return { ...actual, runConformanceStep: async (_label: string, options: { cwd: string; args: string[] }) => {
+    const fixture = options.cwd;
+    const bin = options.args[0];
+    const write = (path: string, contents: string) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, contents);
+    };
+    const receipt = join(fixture, '.void/machine/receipts/install-v1.json');
+    if (!existsSync(receipt)) write(receipt, JSON.stringify({ source: 'fixture', runtimes: ['codex'], files: [] }));
+    if (options.args[1] === 'init') {
+      const assets = join(dirname(bin), '../core-assets');
+      for (const [source, target] of [
+        ['PHILOSOPHY.md', '.void/installed/PHILOSOPHY.md'],
+        ['hooks/_syntax-worker.cjs', '.void/hooks/_syntax-worker.cjs'],
+      ]) {
+        mkdirSync(dirname(join(fixture, target)), { recursive: true });
+        copyFileSync(join(assets, source), join(fixture, target));
+      }
+      write(join(fixture, '.void/hooks/_void-hook.mjs'), 'fixture');
+      write(join(fixture, '.agents/skills/void-tdd/SKILL.md'), 'fixture');
+      write(join(fixture, '.codex/hooks.json'), '{}');
+    }
+    return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '', durationMs: 1 };
+  }, runConformanceProcess: async (options: Parameters<typeof actual.runConformanceProcess>[0]) => {
+    if (options.args?.some((arg: string) => arg.endsWith('benchmarks/syntax-worker.mjs'))) {
+      return { outcome: { kind: 'timed-out' }, stdout: '', stderr: '', durationMs: 120_000 };
+    }
+    return actual.runConformanceProcess(options);
+  } };
+});
+
+it('completes Codex installation proofs independently of the latency campaign', async () => {
+  const { exerciseRuntime } = await import('./conformance-install.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'install-without-latency-'));
+  const bin = fileURLToPath(new URL('../bin/void-machine.mjs', import.meta.url));
+  await expect(exerciseRuntime(root, bin, 'codex')).resolves.toBeGreaterThan(0);
+});
+
+it('runs latency in its own bounded process on the same artifact by default', async () => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-boundaries-'));
+  const calls: Array<{ args: string[]; env: Record<string, string>; timeoutMs?: number }> = [];
+  const names = await exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async (options) => {
+    calls.push(options);
+    return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
+  });
+  expect(names).toEqual(['install', 'hooks', 'autopilot', 'latency']);
+  expect(calls).toHaveLength(4);
+  expect(new Set(calls.map((call) => call.args[0])).size).toBe(4);
+  expect(calls.every((call) => call.env.VOID_CONFORMANCE_TARBALL === '/artifact/consumer.tgz')).toBe(true);
+  expect(calls.every((call) => call.timeoutMs === undefined)).toBe(true);
+  await expect(exerciseConsumerSuites('latency', '/artifact/consumer.tgz', root, async () => ({
+    outcome: { kind: 'timed-out' }, stdout: '', stderr: '',
+  }))).rejects.toThrow('latency: timed-out');
 });

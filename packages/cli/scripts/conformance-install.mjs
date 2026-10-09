@@ -11,7 +11,6 @@ import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import {
   conformanceFixtureEnvironment,
   packageManagerCommand,
-  requireConformanceExit,
   runConformanceProcess,
   runConformanceStep,
 } from './conformance-process.mjs';
@@ -32,7 +31,6 @@ const SYNTAX_WORKER_REQUESTS = [
   { input: { version: 1, path: 'view.test.ts', source: 'const = ;', purpose: 'focused-tests' },
     answer: { version: 1, kind: 'invalid-source' } },
 ];
-const LATENCY_CASES = ['node-baseline', 'typescript', 'tsx', 'large', 'invalid-source', 'invalid-request'];
 
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -71,69 +69,12 @@ export async function proveInstalledSyntaxWorker({ worker, identity, execute }) 
   return { worker, sha256, answers: SYNTAX_WORKER_REQUESTS.length };
 }
 
-export function classifyLatencyObservation({ code, stdout, workerSha256 }) {
-  if (code !== 0 && code !== 1) throw new Error(`LATENCY_OBSERVATION_EXIT: the campaign exited ${code}`);
-  let lines;
-  try { lines = stdout.trim().split('\n').map((line) => JSON.parse(line)); } catch { lines = undefined; }
-  const header = lines?.[0];
-  if (header === undefined || typeof header.workerSha256 !== 'string' || !Number.isSafeInteger(header.samplesPerCase)) {
-    throw new Error('LATENCY_OBSERVATION_UNREADABLE: no campaign header');
-  }
-  if (header.workerSha256 !== workerSha256) {
-    throw new Error(`LATENCY_OBSERVATION_WORKER: measured ${header.workerSha256}, installed ${workerSha256}`);
-  }
-  const cases = lines.slice(1);
-  if (canonical(cases.map((item) => item.case)) !== canonical(LATENCY_CASES)
-    || cases.some((item) => !Array.isArray(item.samples) || item.samples.length !== header.samplesPerCase)) {
-    throw new Error('LATENCY_OBSERVATION_INCOMPLETE: every case needs every sample');
-  }
-  const anomalies = [];
-  for (const item of cases) {
-    for (const sample of item.samples) {
-      if (sample.valid === true) {
-        if (typeof sample.cpuMs !== 'number' || typeof sample.rssKiB !== 'number') {
-          throw new Error(`LATENCY_OBSERVATION_INCOHERENT: ${item.case} counts a sample valid without its metrics`);
-        }
-      } else if (sample.error === 'ETIMEDOUT') {
-        anomalies.push({ case: item.case, ...sample });
-      } else {
-        throw new Error(`LATENCY_OBSERVATION_PROTOCOL: ${item.case} sample failed with ${sample.error ?? 'a wrong answer'}`);
-      }
-    }
-    if (item.failures !== item.samples.filter((sample) => sample.valid !== true).length) {
-      throw new Error(`LATENCY_OBSERVATION_INCOHERENT: ${item.case} reports ${item.failures} failures`);
-    }
-  }
-  if (code !== (anomalies.length > 0 ? 1 : 0)) {
-    throw new Error(`LATENCY_OBSERVATION_EXIT: exit ${code} with ${anomalies.length} failed samples`);
-  }
-  return { status: anomalies.length > 0 ? 'latency-anomaly' : 'complete', failures: anomalies.length, workerSha256,
-    environment: { node: header.node, platform: header.platform, arch: header.arch }, cases, anomalies };
-}
-
-async function observeSyntaxWorkerLatency(fixture, environment, worker, workerSha256) {
-  const label = 'install conformance packed TypeScript worker latency observation';
-  process.stdout.write(`${JSON.stringify({ phase: 'started', label })}\n`);
-  const result = await runConformanceProcess({ command: process.execPath,
-    args: [fileURLToPath(new URL('../../hook-runner/benchmarks/syntax-worker.mjs', import.meta.url))],
-    cwd: fixture, env: { ...environment, VOID_BENCHMARK_WORKER: worker } });
-  // Exit 1 is only admitted when the classification below proves a measured timeout.
-  requireConformanceExit(result, label, [0, 1]);
-  process.stdout.write(result.stdout);
-  const observation = classifyLatencyObservation({ code: result.outcome.code, stdout: result.stdout, workerSha256 });
-  process.stdout.write(`${JSON.stringify({ observation: 'syntax-worker-latency', status: observation.status,
-    failures: observation.failures, workerSha256, environment: observation.environment,
-    anomalies: observation.anomalies })}\n`);
-  if (observation.status === 'latency-anomaly') {
-    process.stderr.write(`latency anomaly (not an install verdict): ${observation.failures} measured timeout(s) in ${label}\n`);
-  }
-}
 
 function requirePath(path, label) {
   if (!existsSync(path)) throw new Error(`conformance missing ${label}: ${path}`);
 }
 
-async function installPackage(temporary, tarball) {
+export async function installPackage(temporary, tarball) {
   const fixture = join(temporary, 'package');
   await mkdir(join(fixture, 'tmp'), { recursive: true });
   const environment = conformanceFixtureEnvironment(fixture);
@@ -188,7 +129,7 @@ async function assertDoctrine(fixture, bin, stage) {
   }
 }
 
-async function exerciseRuntime(temporary, bin, runtime) {
+export async function exerciseRuntime(temporary, bin, runtime) {
   const fixture = join(temporary, `fixture-${runtime}`);
   await mkdir(join(fixture, 'tmp'), { recursive: true });
   await writeFile(join(fixture, 'package.json'), JSON.stringify({
@@ -214,12 +155,11 @@ async function exerciseRuntime(temporary, bin, runtime) {
   requirePath(join(fixture, '.void', 'hooks', '_void-hook.mjs'), `${runtime} hook runner`);
   const syntaxWorker = join(fixture, '.void', 'hooks', '_syntax-worker.cjs');
   requirePath(syntaxWorker, `${runtime} syntax worker`);
-  const workerProof = await proveInstalledSyntaxWorker({ worker: syntaxWorker,
+  await proveInstalledSyntaxWorker({ worker: syntaxWorker,
     identity: expectedSyntaxWorkerIdentity(await readFile(SYNTAX_WORKER_IDENTITY_SOURCE, 'utf8')),
     execute: (input) => runConformanceProcess({ command: process.execPath,
       args: ['--max-old-space-size=128', syntaxWorker], cwd: fixture, env: {}, input,
       timeoutMs: SYNTAX_WORKER_BUDGET_MS }) });
-  if (runtime === 'codex') await observeSyntaxWorkerLatency(fixture, environment, syntaxWorker, workerProof.sha256);
   if (runtime !== 'codex') {
     requirePath(join(fixture, '.claude', 'skills', 'void-tdd', 'SKILL.md'), `${runtime} Claude skill`);
     requirePath(join(fixture, '.claude', 'agents', 'doctrine-critic.md'), `${runtime} Claude agent`);

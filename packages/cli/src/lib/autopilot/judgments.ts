@@ -9,7 +9,10 @@
 //
 // Zod 4 strict objects refuse unknown keys: https://zod.dev/api#zstrictobject.
 
-import { parseSpecialistCompletionValue, type SpecialistFinding } from '@voidcorp/mission-engine';
+import {
+  type IndependentReviewReceipt, isReviewSubject, parseReviewReceipt,
+  parseSpecialistCompletionValue, type ReviewSubject, sameReviewSubject, type SpecialistFinding,
+} from '@voidcorp/mission-engine';
 import { z } from 'zod';
 import { normaliseArea } from './footprint-area.js';
 
@@ -153,6 +156,7 @@ const instant = z.int().nonnegative();
 // verdict. An attempt with no end is running, or was interrupted.
 const reviewAttemptSchema = z.strictObject({
   runId: runId.optional(),
+  invocationEventId: boundedText(160).optional(),
   startedAt: instant,
   endedAt: instant.optional(),
   failure: reason.optional(),
@@ -160,12 +164,18 @@ const reviewAttemptSchema = z.strictObject({
 
 // The verdict and what binds it: the run the kernel dispatched and the native
 // session the runtime listed under it when the kernel accepted the result.
-const recordedVerdictSchema = z.strictObject({
+const legacyVerdictSchema = z.strictObject({
   runId,
   sessionId,
   recordedAt: instant,
   verdict: reviewVerdictSchema,
 });
+const nativeVerdictSchema = z.strictObject({
+  receipt: z.custom<IndependentReviewReceipt>(value => parseReviewReceipt(value) !== undefined),
+  invocationEventId: boundedText(160), completionEventId: boundedText(160),
+  recordedAt: instant, verdict: reviewVerdictSchema,
+});
+const recordedVerdictSchema = z.union([legacyVerdictSchema, nativeVerdictSchema]);
 
 /**
  * What `autopilot review` records for one head of one pull request. It lives
@@ -179,6 +189,7 @@ const localReviewSchema = z
     ticketId,
     pullRequest: z.int().positive().max(2_147_483_647),
     headSha: commitSha,
+    subject: z.custom<ReviewSubject>(isReviewSubject).optional(),
     attempts: z.array(reviewAttemptSchema).max(REVIEW_ATTEMPTS_RECORDED_MAX),
     verdict: recordedVerdictSchema.optional(),
   })
@@ -187,6 +198,15 @@ const localReviewSchema = z
     if (review.verdict.verdict.headSha !== review.headSha) {
       context.addIssue({ code: 'custom', path: ['verdict', 'verdict', 'headSha'],
         message: `judges another head than ${review.headSha}` });
+    }
+    if ('receipt' in review.verdict) {
+      const invocation = review.verdict.invocationEventId;
+      if (review.subject === undefined || !sameReviewSubject(review.subject, review.verdict.receipt)
+        || review.subject.reviewedCommit !== review.headSha
+        || !review.attempts.some(attempt => attempt.invocationEventId === invocation)) {
+        context.addIssue({ code: 'custom', path: ['verdict'], message: 'native receipt lacks exact subject or invocation' });
+      }
+      return;
     }
     const run = review.verdict.runId;
     if (!review.attempts.some((attempt) => attempt.runId === run)) {

@@ -16,7 +16,7 @@
  * renaming it.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
@@ -75,79 +75,14 @@ describe('the implement cycle briefs before it writes', () => {
     expect(SKILL).toContain('contextPack');
   });
 
-  it('launches each envelope through the delegation kernel, from the envelope alone', () => {
+  it('uses native orchestration with the unchanged envelope and real provenance', () => {
     const convene = passMatching(/invoke-specialists|convene/i)?.body ?? '';
-    expect(convene).toMatch(/agents dispatch --role review/);
-    // Runtime, type and mission are copied, never chosen: the skill keeps no agent list.
-    for (const field of ['agentName', 'runtime', 'missionId']) expect(convene).toContain(field);
-  });
-
-  it('never replaces a refused dispatch with a native subagent, nor a full mission with a subset', () => {
-    const convene = passMatching(/invoke-specialists|convene/i)?.body ?? '';
-    expect(convene).toMatch(/refus[^.]*never[^.]*native subagent/i);
-    expect(convene).toMatch(/at most four/i);
-  });
-});
-
-// The three rules below follow the kernel and the controller as they are, so
-// each reads the fact it depends on from the module that owns it.
-const DISPATCH = readFileSync(
-  new URL('../../packages/mission-engine/src/orchestration/dispatch.ts', import.meta.url), 'utf8');
-const DELEGATION = readFileSync(
-  new URL('../../packages/void-machine/src/core/delegation.ts', import.meta.url), 'utf8');
-const KERNEL = readFileSync(
-  new URL('../../packages/void-machine/src/application/agents.ts', import.meta.url), 'utf8');
-
-describe('a kernel run carries the whole envelope contract and follows the run, not the wait', () => {
-  const convene = () => (passMatching(/invoke-specialists|convene/i)?.body ?? '').replace(/\s+/g, ' ');
-
-  it('hands a reviewer its subject and scope, which travel beside the pack', () => {
-    // Envelope fields outside `contextPack`: a reviewer that never sees them
-    // cannot echo the receipt `specialist-event` requires.
-    expect(DISPATCH).toMatch(/reviewSubject: input\.reviewSubject[\s\S]*contextPack: compileContextPack/);
-    expect(convene()).toMatch(/reviewSubject/);
-    expect(convene()).toMatch(/reviewScope/);
-    expect(convene()).not.toMatch(/pack is the whole brief/i);
-  });
-
-  it('accepts only a run whose turn ended, and never fails a specialist on a wait that timed out', () => {
-    // `accept` refuses every state but `turn-ended`; `timed-out` ends an observation, not a run.
-    expect(DELEGATION).toMatch(/export function acceptRun\([^{]*\{\s*if \(view\.state !== 'turn-ended'\)/);
-    expect(convene()).toMatch(/agents status/);
-    expect(convene()).toMatch(/accept[^.]*only[^.]*turn-ended|only[^.]*turn-ended[^.]*accept/i);
-    expect(convene()).toMatch(/tim(e|ed)[ -]?out[^.]*never[^.]*failed|never[^.]*failed[^.]*tim(e|ed)[ -]?out/i);
-  });
-
-  it('resumes the run an envelope already has before it ever dispatches another', () => {
-    // The kernel stores the run and its brief before the runtime launches, so a
-    // crash after the acknowledgement still leaves the run to find.
-    expect(KERNEL).toMatch(/store\.create\(run[\s\S]*port\.dispatch\(/);
-    expect(convene()).toMatch(/before[^.]*dispatch[^.]*(started|existing run|its run)/i);
-    expect(convene()).toMatch(/brief/);
-    expect(convene()).toMatch(/(uncertain|cannot be matched|unmatched)[^.]*(no|never)[^.]*(launch|dispatch)/i);
-  });
-
-  it('records a result already accepted from the run that holds it, without accepting it again', () => {
-    // An interruption between `accept` and `completed` leaves a closed run: a
-    // second accept is refused, yet its status still returns the collected result.
-    expect(DELEGATION).toMatch(/CLOSED[^\n]*'accepted', 'retired'/);
-    expect(KERNEL).toMatch(/async function summary[\s\S]*?currentResult\(run, await context\.store\.result\(run\.runId\)\)/);
-    expect(convene()).toMatch(/(accepted|retired)[^.]*agents status[^.]*result/i);
-    expect(convene()).toMatch(/never[^.]*accept[^.]*again|accept[^.]*never[^.]*twice/i);
-    expect(convene()).toMatch(/\b(no|without)\b[^.]*(collected|whole)[^.]*result[^.]*(stop|report)/i);
-  });
-});
-
-describe('no shipped skill decides how an agent is launched from what displays it', () => {
-  const root = new URL('../../packages/core/skills/', import.meta.url);
-  const skills = readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => [entry.name, readFileSync(new URL(`${entry.name}/SKILL.md`, root), 'utf8')] as const);
-
-  it.each(skills)('%s', (_name, text) => {
-    const flat = text.replace(/\s+/g, ' ');
-    expect(flat).not.toMatch(/mission-presentation|cockpit presentation|workers are native subagents/i);
-    // A multiplexer may be named as a view; it is never the condition of a launch path.
-    expect(flat).not.toMatch(/\b(if|when|without|unless)\b[^.]{0,80}\b(multiplexer|herdr|tmux|cmux)\b/i);
+    expect(convene).toContain('void-orchestrate');
+    for (const field of ['contextPack', 'reviewSubject', 'reviewScope', 'agentName', 'runtime', 'missionId']) {
+      expect(convene).toContain(field);
+    }
+    expect(convene).toContain('actual');
+    expect(convene).toContain('at most four');
+    expect(convene).not.toContain('agents dispatch');
   });
 });

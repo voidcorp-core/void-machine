@@ -70,7 +70,12 @@ export const PACKAGE_LIMITS = Object.freeze({
   // client the adapter needs to reach the Codex daemon on its Unix socket:
   // 2050.5 kB on 2026-09-29, no fixture or test code packed. The same 45 kB of
   // headroom.
-  [PRODUCT_IDENTITY.packageName]: 2_095_000,
+  // DEV-1016 native Herdr orchestration: final pnpm pack 2128.0 kB (previous
+  // ceiling 2095 kB). Official YAML plus strict Zod Mini schemas, bounded reader
+  // and independent native receipt collection add 33 kB beyond that ceiling.
+  // Mini removed 104.4 kB from the initial 2232.4 kB implementation; retain all
+  // payloads/licenses and the existing approximately 45 kB bounded headroom.
+  [PRODUCT_IDENTITY.packageName]: 2_173_000,
   '@voidcorp/harness-graph': 120_000,
   '@voidcorp/pack-monorepo': 20_000,
   '@voidcorp/pack-nextjs': 20_000,

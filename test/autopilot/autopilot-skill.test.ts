@@ -131,17 +131,17 @@ describe('remote effects stay with the roles that own them', () => {
     expect(flat(body(SKILL))).toMatch(/never chooses its own checkout and never works in the main one/i);
   });
 
-  it('launches every worker through the delegation kernel, whatever displays it', () => {
+  it('launches durable workers through the shared native orchestration contract', () => {
     const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
-    expect(spawning).toMatch(/agents dispatch --role work/);
-    expect(spawning).toMatch(/--cwd/);
+    expect(spawning).toMatch(/void-orchestrate/);
+    expect(spawning).toMatch(/label \+ worktree/);
     // The sentence this replaced let the agent choose between two launch paths.
     expect(spawning).not.toMatch(/native subagents|cockpit presentation|\bwhen the project uses\b/i);
   });
 
   it('hands a ticket back to the run that holds it, and never seats a second one', () => {
     const respawning = flat(body(SKILL)).match(/\*\*Respawning\.\*\*.*?(?=\*\*The fingerprint\.\*\*)/)?.[0] ?? '';
-    expect(respawning).toMatch(/agents send/);
+    expect(respawning).toMatch(/same native session/);
     expect(respawning).toMatch(/never a second run/i);
   });
 
@@ -168,8 +168,10 @@ describe('the review is local, bound to the head and to the session it delegated
   // A verdict read on GitHub can be written by anyone who comments; the loop
   // merges on the record the kernel wrote after delegating the reviewer itself.
   it('delegates the reviewer on the exact head and records its verdict locally', () => {
-    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after the run, refuses a change that touches a protected path, whose configuration the reviewer would load, and delegates the reviewer there/);
-    expect(flat(body(SKILL))).toMatch(/only from the native session the runtime lists under that run/);
+    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after/);
+    expect(flat(body(SKILL))).toMatch(/protected path/);
+    expect(flat(body(SKILL))).toMatch(/canonical.*receipt/);
+    expect(flat(body(SKILL))).toMatch(/acceptanceCriteriaHash/);
     expect(flat(body(SKILL))).toMatch(/`\.void\/machine\/autopilot\/reviews\/<ticket>\/<head>\.json`; `next` decides on that record alone/);
     expect(flat(body(SKILL))).toMatch(/A verdict posted on the pull request is a copy for people/);
   });

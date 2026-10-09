@@ -16,18 +16,21 @@ const MATCHING = JSON.stringify({
 
 function runRegistry(scenario: string, visibleAfter = 360) {
   const root = mkdtempSync(join(tmpdir(), 'void-registry-convergence-'));
-  for (const name of ['elapsed', 'published', 'output']) writeFileSync(join(root, name), '');
+  for (const name of ['elapsed', 'published', 'output', 'queries']) {
+    writeFileSync(join(root, name), '');
+  }
   const step = RELEASE.split('        id: registry\n')[1]?.split('\n  # This job')[0];
   const source = step?.split('        run: |\n')[1];
   if (!source) throw new Error('Registry step is missing');
   const limits = Object.fromEntries(
-    [...RELEASE.matchAll(/^      (MAX_\w+): (\d+)$/gm)].map((match) => [match[1], match[2]]),
+    [...RELEASE.matchAll(/^ {6}(MAX_\w+): (\d+)$/gm)].map((match) => [match[1], match[2]]),
   );
   const result = spawnSync('bash', ['-c', `
     sleep() { echo "$(( $(cat "$CASE_ROOT/elapsed") + $1 ))" > "$CASE_ROOT/elapsed"; }
     npm() {
       if [[ "$1" == publish ]]; then echo publish >> "$CASE_ROOT/published"; return; fi
       if [[ "$1" != view ]]; then return 90; fi
+      echo "$*" >> "$CASE_ROOT/queries"
       elapsed=$(cat "$CASE_ROOT/elapsed")
       if [[ "$SCENARIO" == existing ]]; then echo "$MATCHING"; return; fi
       if [[ ! -s "$CASE_ROOT/published" ]]; then
@@ -35,7 +38,8 @@ function runRegistry(scenario: string, visibleAfter = 360) {
       fi
       case "$SCENARIO" in
         conflict) echo '{"integrity":"sha512-other-bytes"}'; return ;;
-        auth) echo '{"error":{"code":"E403"}}'; return 1 ;;
+        auth401) echo '{"error":{"code":"E401"}}'; return 1 ;;
+        auth403) echo '{"error":{"code":"E403"}}'; return 1 ;;
         malformed) echo 'not json'; return ;;
       esac
       if (( elapsed >= VISIBLE_AFTER )); then echo "$MATCHING"; return; fi
@@ -63,6 +67,7 @@ function runRegistry(scenario: string, visibleAfter = 360) {
     elapsed: Number(readFileSync(join(root, 'elapsed'), 'utf8')),
     published: readFileSync(join(root, 'published'), 'utf8'),
     output: readFileSync(join(root, 'output'), 'utf8'),
+    queries: readFileSync(join(root, 'queries'), 'utf8'),
   };
 }
 
@@ -101,12 +106,25 @@ describe('registry convergence in the publishing workflow', () => {
     expect(result.output).toBe('state=existing\n');
   });
 
-  it.each(['conflict', 'auth', 'malformed'])('rejects %s immediately after publishing', (state) => {
+  it('bounds npm reads and the whole OIDC job instead of multiplying default HTTP retries', () => {
+    const result = runRegistry('existing');
+    expect(result.status, result.stderr).toBe(0);
+    for (const query of result.queries.trim().split('\n')) {
+      expect(query).toContain('--fetch-retries=0');
+      expect(query).toContain('--fetch-timeout=10000');
+    }
+    const publish = RELEASE.split('\n  publish:\n')[1]?.split('\n  verify-publication:')[0];
+    expect(publish).toMatch(/^ {4}timeout-minutes: 30$/m);
+  });
+
+  it.each(['conflict', 'auth401', 'auth403', 'malformed'])(
+    'rejects %s immediately after publishing', (state) => {
     const result = runRegistry(state);
     expect(result.status).not.toBe(0);
     expect(result.elapsed).toBe(0);
     expect(result.output).toBe('');
     expect(result.published).toBe('publish\n');
     expect(result.stderr).toMatch(/registry classification:/);
-  });
+    },
+  );
 });

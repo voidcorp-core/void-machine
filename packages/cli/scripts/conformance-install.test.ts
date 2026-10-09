@@ -99,13 +99,13 @@ describe('the installed syntax worker: a blocking proof, and a latency observati
   ].join('\n') + '\n';
 
   it('reports a complete campaign without a failed sample as complete', async () => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     expect(classifyLatencyObservation({ code: 0, stdout: campaign('a'.repeat(64)), workerSha256: 'a'.repeat(64) }))
       .toMatchObject({ status: 'complete', failures: 0 });
   });
 
   it('keeps a measured timeout as a visible latency anomaly, never as a success, and never fails the install for it', async () => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     const observation = classifyLatencyObservation({ code: 1,
       stdout: campaign('a'.repeat(64), { 'invalid-request': 1 }), workerSha256: 'a'.repeat(64) });
     expect(observation).toMatchObject({ status: 'latency-anomaly', failures: 1 });
@@ -128,7 +128,7 @@ describe('the installed syntax worker: a blocking proof, and a latency observati
     ['a valid sample without metrics', /LATENCY_OBSERVATION_INCOHERENT/, 0, campaign('a'.repeat(64)).replace('{"wallMs":120,"cpuMs":110,"rssKiB":74000,"valid":true}',
       '{"wallMs":120,"valid":true}')],
   ])('refuses to read %s as an observation', async (_case, refusal, code, stdout) => {
-    const { classifyLatencyObservation } = await import('./conformance-install.mjs');
+    const { classifyLatencyObservation } = await import('./conformance-latency.mjs');
     expect(() => classifyLatencyObservation({ code, stdout, workerSha256: 'a'.repeat(64) })).toThrow(refusal);
   });
 });
@@ -174,4 +174,22 @@ it('completes Codex installation proofs independently of the latency campaign', 
   const root = mkdtempSync(join(tmpdir(), 'install-without-latency-'));
   const bin = fileURLToPath(new URL('../bin/void-machine.mjs', import.meta.url));
   await expect(exerciseRuntime(root, bin, 'codex')).resolves.toBeGreaterThan(0);
+});
+
+it('runs latency in its own bounded process on the same artifact by default', async () => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-boundaries-'));
+  const calls: Array<{ args: string[]; env: Record<string, string>; timeoutMs?: number }> = [];
+  const names = await exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async (options) => {
+    calls.push(options);
+    return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
+  });
+  expect(names).toEqual(['install', 'hooks', 'autopilot', 'latency']);
+  expect(calls).toHaveLength(4);
+  expect(new Set(calls.map((call) => call.args[0])).size).toBe(4);
+  expect(calls.every((call) => call.env.VOID_CONFORMANCE_TARBALL === '/artifact/consumer.tgz')).toBe(true);
+  expect(calls.every((call) => call.timeoutMs === undefined)).toBe(true);
+  await expect(exerciseConsumerSuites('latency', '/artifact/consumer.tgz', root, async () => ({
+    outcome: { kind: 'timed-out' }, stdout: '', stderr: '',
+  }))).rejects.toThrow('latency: timed-out');
 });

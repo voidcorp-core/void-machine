@@ -423,6 +423,11 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   if (review.issues.length > 0) {
     return refuse('inconsistent-review', 'Resolve inconsistent source, contract, context or round evidence before recovery');
   }
+  if (disposition.kind === 'controller-defect' && disposition.defect === 'opaque-native-context'
+    && (!review.readyForVerdict || existing.length !== required.length
+      || required.some(id => !existing.some(item => item.event.subject === id)))) {
+    return refuse('incomplete-required-panel', 'Every required preparation specialist must have its original matching PASS triplet before recovery');
+  }
   const consumedRounds = Math.max(0, ...projected.filter((event) =>
     ['specialist.completed', 'specialist.failed'].includes(event.kind)
       && field(event, 'stage') === observation.stage).map((event) => Number(field(event, 'reviewRound'))));

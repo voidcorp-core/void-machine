@@ -662,6 +662,12 @@ export async function recoverStoppedMission(
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
   const committedSubject = provenance === undefined ? undefined
     : await captureMissionReviewSubject(workRoot, stored.baseCommit, true);
+  const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
+    && request.disposition.defect === 'opaque-native-context';
+  const recoverySpecialists = opaqueContextRecovery
+    ? migration.plan.specialists.filter(value => value.state === 'applicable'
+      && value.stages?.includes('pre-implementation'))
+    : migration.plan.specialists;
   const observation: MissionRecoveryObservation = {
     ...(provenance === undefined || committedSubject?.baseCommit === undefined
       || committedSubject.reviewedCommit === undefined ? {} : {
@@ -673,7 +679,7 @@ export async function recoverStoppedMission(
     evidenceDependencies: { 'git:working-tree': current.project.diffHash },
     expectedSource: identity.runtime === 'codex' ? 'runtime:codex' : 'runtime:claude',
     currentInputHashes,
-    contractVersions: Object.fromEntries(migration.plan.specialists.map(value => [value.specialistId, value.contractVersion])),
+    contractVersions: Object.fromEntries(recoverySpecialists.map(value => [value.specialistId, value.contractVersion])),
     ...(resolutionArtifact === undefined ? {} : { resolutionArtifact }),
   };
   const result = await recordStoppedMissionRecovery(installRoot, missionId, request, observation);

@@ -92,7 +92,12 @@ interface CompletionEnvelope {
 }
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
-const CONTEXT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/;
+/** Native context identity is opaque data, matching lifecycle ingestion. */
+export function validNativeContextId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 160
+    && [...value].every(char => char.charCodeAt(0) >= 32
+      && (char.charCodeAt(0) < 127 || char.charCodeAt(0) > 159));
+}
 const SEVERITY_RANK: Readonly<Record<ReviewFindingSeverity, number>> = {
   low: 0,
   medium: 1,
@@ -131,7 +136,7 @@ function parseEnvelope(event: CanonicalEvent): CompletionEnvelope | undefined {
     || Number(reviewRound) > 8
     || typeof payload.inputHash !== 'string'
     || !SHA256.test(payload.inputHash)
-    || (!(typeof payload.contextId === 'string' && CONTEXT_ID.test(payload.contextId))
+    || (!validNativeContextId(payload.contextId)
       && completion?.review?.provenance.kind !== 'review-artifact')
     || (payload.stage !== 'pre-implementation' && payload.stage !== 'post-implementation')
     || completion === undefined

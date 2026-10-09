@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "938a5fa5da607b617140dc3b8f274bfe12db60d7",
+  "meaning": "Byte-identical archives of previously versioned evidence, not rewritten logs. New verification evidence is indexed separately.",
+  "archivedVersionedEvidence": [
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/build.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/build.log",
+      "bytes": 23214,
+      "sha256": "5d6742b97e267330e0c6c8eab3492ec80f472ede68d24d516c61a0b5b04a0591"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/conformance.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/conformance.log",
+      "bytes": 6625,
+      "sha256": "3f226f19a2af440d666e07b4b78e27981495fedb06c671e2de40cfe77ecd732d"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/consumer.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/consumer.log",
+      "bytes": 27298,
+      "sha256": "47b4a5ec1e0e5cdffba4d5fac3944ebe86f68091e94c379cf0184e9afb270531"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/native-context-fix.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/native-context-fix.log",
+      "bytes": 36499,
+      "sha256": "411bfc35475b0e504bca3ad0a925c7b6dd26a5862d2fa7f06892be8790dd99d0"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/native-context.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/native-context.log",
+      "bytes": 8070,
+      "sha256": "604414031436106a8d6fd4ad245e66cdb488e22fe40cd6aca67bdac18c40208b"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/native-receipts.json",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/native-receipts.json",
+      "bytes": 8030,
+      "sha256": "91731f2699cef90c071453e34d38449baebe5966cb4fecccd963fc078da28328"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/remote.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/remote.log",
+      "bytes": 9137,
+      "sha256": "eefa61b37f0de226ba472f9c7ec6f4e82fa78dec6df41297218e65d087c802e4"
+    },
+    {
+      "formerVersionedPath": "docs/evidence/dev-930/runtime.log",
+      "rawPath": ".void/machine/dev930/raw-versioned-evidence-938a5fa5/runtime.log",
+      "bytes": 3763,
+      "sha256": "85f985faad737feb64264bbb5b007de48626e7aee1050737accc95387cfebf21"
+    }
+  ],
+  "additionalLocalEvidence": [
+    {
+      "rawPath": ".void/machine/dev930/fix-batch1-red.log",
+      "bytes": 3770,
+      "sha256": "02b845efa76d88752acb231d2fba4938a430eecd76d1dd7c09c7a66fd84b6dc8"
+    },
+    {
+      "rawPath": ".void/machine/dev930/fix-batch1-green-final.log",
+      "bytes": 971,
+      "sha256": "e32beb312720d515062fd1f6a3c733d2845ea6fe4bfd68d6012cc023b16f806e"
+    },
+    {
+      "rawPath": ".void/machine/dev930/fix-batch1-typecheck-final.log",
+      "bytes": 1153,
+      "sha256": "a127323eaf9db4ebb91920ece07b89620c2477b3dcf08191cc1816068a44c9ad"
+    },
+    {
+      "rawPath": ".void/machine/dev930/fix-tests-all.log",
+      "bytes": 41816,
+      "sha256": "49185123c11a002d544132d98905b0fa4bf55c39126c8e68ac7b76de0b75747d"
+    },
+    {
+      "rawPath": ".void/machine/dev930/fix-original-events.jsonl",
+      "bytes": 9005,
+      "sha256": "1b842a7d7798f127e06db21dfbffdc1f6a90f067ed95eef9e7954173d224e841"
+    },
+    {
+      "rawPath": ".void/machine/dev930/fix-batch1-original-audit.log",
+      "bytes": 628,
+      "sha256": "f29f9d571fd712529c3f8f94d2c39a969e8fa0ab961773c1c81cc49dc2c46104"
+    },
+    {
+      "rawPath": ".void/machine/dev930/proof1-recovery-contained.log",
+      "bytes": 1147,
+      "sha256": "808859a893dae34cee100052cf2c5d7ca7b986881c75691937db0c3a2c9af3a3"
+    },
+    {
+      "rawPath": ".void/machine/dev930/proof1-recovery-idempotent.log",
+      "bytes": 1148,
+      "sha256": "cbee1a30b4731c4c9603c492d7e3c541add94ade32a19fc675d8801eb8cb3ee6"
+    },
+    {
+      "rawPath": ".void/machine/dev930/proof1-dispatch-recovered.log",
+      "bytes": 630,
+      "sha256": "9d804d25cdf2b926fed472d23180c2203f6af7fddb5dcfbadb9bfd97cacf6e29"
+    }
+  ]
+}

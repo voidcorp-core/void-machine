@@ -13,6 +13,11 @@ Ne rien supprimer avant conservation et acceptation des preuves utiles.
 - Captures des états PR avant/après, du merge exact-head et de la retenue, puis
   confirmation de suppression GitHub par ORCH. À compléter après les essais.
 
+Les transcripts bruts ont été retirés du suivi après archivage byte-identique
+dans `raw-versioned-evidence-938a5fa5/` sous les preuves locales. Conserver cet
+archive et les preuves négatives originales avec leurs hashes avant nettoyage;
+le Git versionné ne contient plus ces octets sur le dernier commit.
+
 ## Traces créées, à nettoyer après acceptation
 
 Toutes les traces locales WORK-3 sont sous `.void/machine/dev930/` de sa worktree,
@@ -23,6 +28,9 @@ nommés ci-dessous :
 |---|---|
 | `source/` | clone source isolé, dépendances/builds; supprimer copie complète |
 | `artifact/` | tarball et manifeste; conserver digest/log, puis supprimer binaire |
+| `artifact-fixed/`, `installed-package-fixed/` | pack préliminaire6e21 devenu inadmissible après revue, répertoire d’installation vide; garder l’échec puis nettoyer |
+| `raw-versioned-evidence-938a5fa5/` | huit fichiers archivés à l’identique, index/hashes versionnés; conserver avant nettoyage |
+| `attempt-2-preparation/` | fichiers/tickets/plan seulement, aucun essai lancé; conserver le manifeste puis nettoyer |
 | `installed-package/` | installation npm offline du pack; supprimer copie |
 | `consumer/` | clone synthétique dev929 modifié, commit local; supprimer copie |
 | `consumer-clone/` | clone réhydraté, retenue humaine active locale; supprimer copie |
@@ -33,6 +41,11 @@ nommés ci-dessous :
 | `github-consumer/` | clone privé synthétique, branches, empreintes PROOF, missions et reçus; collecter puis supprimer |
 | `review-worktrees/` si créé | worktrees détachées des revues du repo synthétique; collecter, retirer via Git depuis leur propre dépôt puis supprimer le clone |
 | `*.log`, scripts `.py`/`.mjs`, fichiers `.json`, `report.md` | conserver copies expurgées utiles, supprimer les résidus locaux après acceptation |
+
+PROOF-1 est un échec conservé: journal14 original et journal16 final,
+récupération seq15, branch locale `proof/PROOF-1` et commit `7ccf658` sans push.
+Aucune réparation additionnelle de ce journal. La prochaine fixture sera distincte
+et devra être ajoutée à cet inventaire seulement après création effectivement observée.
 
 Les inventaires temporaires Herdr `/tmp/dev930-panes.json` et
 `/tmp/dev930-panes-current.json` sont à nettoyer après conservation de la vue WORK-3.

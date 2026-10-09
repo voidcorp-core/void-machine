@@ -5,8 +5,11 @@ locales sur `8fee97c9ba8ab7ad17c24a45204dd849f54acf24`, avant les merges DEV-916
 Le pack porte encore **4.0.0**. Ce n'est ni le candidat final ni une certification
 `voidmachine@4.1.0` publiée. Aucune version n'a été modifiée.
 La première phase locale est terminée; les deux essais privés ont ensuite été
-autorisés explicitement. Le premier est bloqué avant PR par un défaut reproduit
-d'admission des identifiants natifs; voir le rapport dédié et `remote.log`.
+autorisés explicitement. Le premier essai est conservé comme ÉCHEC, sans PR ni merge,
+après deux défauts corrigés en TDD. La revue native ciblée est résolue sur
+`938a5fa5`; la validation globale reste requise. Un nouvel essai indépendant est
+autorisé après cette validation, avec fixture/ticket distincts et nouveaux receipts.
+Les observations positives sur `8fee97c9` ne valident pas le nouvel artefact.
 
 Ticket complet et relations relus par MCP Linear le 9 octobre, statut In Progress.
 Références : [Step 10 du plan](../../plans/2026-09-28-release-4-1-delegation-and-autonomous-merge-plan.md),
@@ -23,9 +26,11 @@ une expérience non exécutée. Les simulations sont nommées comme telles.
 
 | Observation | Statut | Preuve et limite |
 |---|---|---|
-| Pack issu du SHA annoncé | PASS préliminaire | [build.log](build.log), [artifact.json](artifact.json); checkout isolé propre après pack |
+| Pack issu du SHA annoncé | PASS préliminaire | [build.log](RAW-EVIDENCE.md), [artifact.json](artifact.json); checkout isolé propre après pack |
 | Versions alignées | PASS préliminaire | `pnpm version:check`: 12 fichiers à 4.0.0 |
-| Installation du tarball, init both | PASS local | Installation npm offline, scripts désactivés, puis CLI du pack; [consumer.log](consumer.log) |
+| Contrat natif opaque et panel complet | PASS tests ciblés / revue | Correction `938a5fa5`,183 tests, typecheck, revue native ciblée résolue; CI globale encore requise |
+| Première mission privée PROOF-1 | ÉCHEC conservé | Journal16 intact; récupération seq15 refusée par le validateur durci; aucune reprise supplémentaire |
+| Installation du tarball, init both | PASS local | Installation npm offline, scripts désactivés, puis CLI du pack; [consumer.log](RAW-EVIDENCE.md) |
 | Commit, clone et réhydratation | PASS local | Commit consommateur `dac473b86e2b6907318e7392c314cd4a22a2435b`; 136 fichiers restaurés et vérifiés par hash; clone propre |
 | Doctor après init et après hydrate | PASS avec réserve explicite | `no blocker; 1 advisory`; spécialistes Codex: le sandbox parent peut affaiblir read-only |
 | Doctor avant hydrate | PASS du contrôle négatif | **Exit 1, 11 checks failed, 1 advisory**; fichiers dérivés absents, dont compétences et manifeste divergent. Pas un état consommateur sain |
@@ -33,18 +38,19 @@ une expérience non exécutée. Les simulations sont nommées comme telles.
 | Conformité hooks | PASS local macOS | Claude, Codex, both; manifeste Codex depuis racine et sous-dossier via sh, sh login, bash, zsh |
 | Conformité autopilot | PASS surface hors réseau | CLI/skills installés et calcul sur entrées synthétiques; **aucun merge GitHub prouvé** |
 | Retenue humaine persistée | PASS local | Commande du pack `autopilot merges --by-human`; JSON `schemaVersion:1`, `mergedBy:human` conservé |
-| Retenue arrêtant une PR prête | BLOCKED | Même défaut de revue; aucune PR encore créée, état local de retenue et tests déjà prouvés |
-| Ticket mergé en intégration sans App/protection | BLOCKED | Dépôt privé autorisé, main/develop poussées; mission bloquée par le refus des vrais contextId natifs; aucun merge |
-| Worker terminal visible Herdr | PASS observation partielle | WORK-3 identifié par label + worktree, session `01a1202c-90e6-7b11-98b7-813fc5882069`, processus `codex --no-daemon`; [runtime.log](runtime.log) |
+| Retenue arrêtant une PR prête | BLOCKED | Nouvelle tentative préparée seulement; attendre validation globale. Aucune PR créée |
+| Ticket mergé en intégration sans App/protection | BLOCKED | Première mission échouée; nouvelle tentative indépendante autorisée après validation globale. Aucun merge |
+| Worker terminal visible Herdr | PASS observation partielle | WORK-3 identifié par label + worktree, session `01a1202c-90e6-7b11-98b7-813fc5882069`, processus `codex --no-daemon`; [runtime.log](RAW-EVIDENCE.md) |
 | Délégation consommateur via artefact final sous Herdr | NON MESURÉ | Le worker observé est cette collecte, pas une délégation lancée depuis le tarball consommateur |
 | Sous-agent natif sans multiplexeur | NON MESURÉ | Ni un test de CLI hors réseau, ni une observation Herdr ne prouvent cette cellule |
 | Daemon Codex: versions | PASS lecture seule | CLI et app-server 0.162.0 alignés, daemon déjà running; aucun start/stop/restart/update |
 | Daemon Codex: résultat structuré corrélé | NON MESURÉ | Aucun nouveau run; ne pas imposer ce transport au worker terminal |
 | Windows/PowerShell | NON MESURÉ ici | Les preuves de ce dossier sont macOS uniquement |
-| Pack final après DEV-916/917 | BLOCKED | Attendre leurs merges, enregistrer le SHA final puis reconstruire et réexécuter les preuves affectées |
+| Pack final après DEV-916/917 | BLOCKED | Merges447/448 observés sur origin/develop `cd4bd44e`; intégrer cette base, valider globalement puis produire un nouvel artefact |
 | Promotion, release, provenance npm | BLOCKED, humain | Aucune promotion/publication; aucun update du dépôt principal avant publication |
 
-Les sorties détaillées des trois conformités sont dans [conformance.log](conformance.log).
+Les sorties détaillées des trois conformités sont conservées localement et
+indexées dans [RAW-EVIDENCE.md](RAW-EVIDENCE.md), avec les autres transcripts bruts.
 Les tests de retenue passent (6 tests), puis la table de décision complète passe
 (141 tests). Le premier appel `test:fast` sélectionne seulement le fichier de
 retenue; un second appel explicite sans filtre de projet couvre `loop.test.ts`.
@@ -52,8 +58,9 @@ Ces 147 tests utilisent des observations locales/synthétiques, pas une PR réel
 
 Le contrôle négatif doctor a également été reproduit par un subprocess direct sur
 un second clone frais : exit 1. Une première lecture orale attribuant exit 0 à
-ce contrôle était erronée; les journaux conservés font foi. Aucun défaut doctor reproduit. **Un défaut produit de revue native a ensuite été
-reproduit et bloque les deux essais privés**, décrit dans [NATIVE-CONTEXT-BLOCKER.md](NATIVE-CONTEXT-BLOCKER.md).
+ce contrôle était erronée; les journaux conservés font foi. Aucun défaut doctor reproduit.
+Les défauts natifs observés ensuite et le statut de l’essai original figurent dans
+[NATIVE-CONTEXT-FIX.md](NATIVE-CONTEXT-FIX.md).
 
 `doctor` sur la worktree du harnais via le wrapper local `void-machine` a répondu
 `self-host not-installed` (reçu manquant). Cette observation n'est pas un doctor
@@ -61,7 +68,9 @@ consommateur PASS. Aucun init ni réparation n'a été exécuté dans le harnais
 
 ## Provenance et reproduction
 
-Les logs conservent date UTC, cwd, commande, sortie et résultat. `<USER_HOME>`
+Les logs locaux conservent date UTC, cwd, commande, sortie et résultat. Leur
+index versionné contient chemins, tailles et hashes; ce n’est pas un log réécrit.
+`<USER_HOME>`
 remplace le chemin personnel; aucun secret, configuration personnelle ou code
 consommateur privé n'est joint. Le pack SHA-256 vaut
 `e63f7aed59fed4e0fc9de369c4a431fff2bfd7c3f4137fba509ea1322dbe7320`.
@@ -117,7 +126,7 @@ privés avec nettoyage complet, puis créé
 `voidcorp-core/void-machine-proof-dev930-20261009`. GitHub a confirmé `isPrivate:true`,
 `isEmpty:true`, permission ADMIN avant initialisation. WORK-3 a poussé uniquement
 un seed synthétique sur `main` et `develop` dans ce dépôt autorisé.
-[remote.log](remote.log) conserve ces faits et la nouvelle empreinte PROOF-1,
+[remote.log](RAW-EVIDENCE.md) conserve ces faits et la nouvelle empreinte PROOF-1,
 sans remplacer l'empreinte DEV-930 de la mission principale.
 
 Observé : `main` par défaut, `develop` non protégée, zéro ruleset (parents inclus),
@@ -139,12 +148,14 @@ Après correction du défaut natif, réception des merges DEV-916/917 et nouvell
 preuve du pack final, ORCH pourra :
 
 1. Figer le SHA final et reconstruire le pack sans changer manuellement la version.
-2. Initialiser une copie locale synthétique; garder le programme/ticket prêts et
-   les critères vérifiables. Installer le pack et refaire le cycle ci-dessus.
+2. Après validation globale, créer une fixture synthétique indépendante et le
+   ticket `TRIAL-A2-MERGE`; aucun clone ou recyclage du journal original. Le fichier
+   attendu est `proof-a2-merge.txt`. Installer le nouveau pack et lancer une mission
+   normale depuis zéro, avec nouvelles invocations et nouveaux receipts réels.
 3. Pour une première unité, conserver invocation/reçu réels de revue native en
    contexte frais read-only, liés au head/base/critères; observer checks et base,
    puis utiliser la commande produit de merge exact-head vers `develop`.
-4. Pour une seconde PR prête et revue, poser la retenue humaine avant le tick;
+4. Pour la seconde PR `TRIAL-A2-HOLD` prête et revue, poser la retenue humaine avant le tick;
    observer `human-merge-gate`, PR toujours ouverte et aucun effet de merge.
 5. Exécuter séparément délégation native sans multiplexeur, preuve Herdr depuis
    le consommateur, et éventuellement daemon legacy sans toucher aux sessions
@@ -159,17 +170,17 @@ ne donne aucune autorisation de promotion ou de publication du harnais.
 
 | Item | Résultat de cette collecte documentaire |
 |---|---|
-| 1 Typecheck | SKIP: aucun code modifié; build réel du pack passé |
-| 2 Tests | Conformités install/hooks/autopilot PASS; tests locaux de retenue joints, distincts du réel distant |
+| 1 Typecheck | PASS sur correction938a5fa5; validation du SHA après intégration de base à obtenir |
+| 2 Tests | Correction ciblée183 PASS; contrôle identité documentaire16 PASS; globale du SHA intégré à obtenir. Conformités initiales datées, distinctes du réel distant |
 | 3 Lint | SKIP: uniquement preuves textuelles/JSON; contrôle whitespace et JSON avant remise |
-| 4 Couverture | Exploratory; cellules manquantes explicites dans la matrice |
+| 4 Couverture | Collecte exploratory; code en TDD strict, couverture instrumentée NON MESURÉE. Cellules manquantes explicites |
 | 5 Hooks | Conformité des hooks installés PASS; pré-commit documentaire exécuté: PASS (après installation ignore-scripts de yaml manquant) |
 | 6 UI | SKIP: aucune UI modifiée; observation terminal bornée à MACHINE |
-| 7 Observabilité | SKIP: aucune logique ajoutée; ne pas confondre wired/fired avec observed |
+| 7 Observabilité | Refus et receipts canoniques conservés; ne pas confondre wired/fired avec observed |
 | 8 Sécurité | Logs expurgés, aucune donnée privée consommateur ou permission élargie |
 | 9 Documentation | Ce dossier seulement; aucune convention changée |
 | 10 Commit | Commit documentaire avec raison; reçu final dans le rapport worker |
-| 11 Revue indépendante | ORCH propriétaire; revue documentaire finale en attente, aucune review inventée |
+| 11 Revue indépendante | Revue ciblée938a5fa5 résolue, relayée par ORCH; vérification base et docs à venir |
 | 12 Plan/spec | Liens ci-dessus; Step 10 PARTIAL, progression et checkpoint restent à ORCH |
 
 Inventaire : [CLEANUP.md](CLEANUP.md). Les suppressions ne sont pas encore exécutées.

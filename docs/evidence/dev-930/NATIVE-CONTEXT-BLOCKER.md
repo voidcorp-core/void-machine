@@ -2,7 +2,9 @@
 
 Le 9 octobre 2026, le pack lié à `8fee97c9` et au digest de `artifact.json`
 a bloqué PROOF-1 **avant écriture, PR ou merge**. Aucun correctif n'a été ajouté
-par WORK-3, dont le périmètre est la collecte de preuves.
+par WORK-3 à cet instant, alors limité à la collecte de preuves.
+Ce document conserve le constat initial. La correction autorisée ensuite et
+l’échec définitif de cet essai sont décrits dans [NATIVE-CONTEXT-FIX.md](NATIVE-CONTEXT-FIX.md).
 
 ## Déclencheur et observation
 
@@ -21,8 +23,8 @@ par WORK-3, dont le périmètre est la collecte de preuves.
    `invalid-completion: completion envelope is invalid`.
 
 La sortie exacte, les enveloppes et le diagnostic figurent dans
-[native-context.log](native-context.log). Les événements canoniques pertinents et
-le digest du journal observé figurent dans [native-receipts.json](native-receipts.json).
+[native-context.log](RAW-EVIDENCE.md). Les événements canoniques pertinents et
+le digest du journal observé figurent dans [native-receipts.json](RAW-EVIDENCE.md).
 Les sources des retours natifs restent chez ORCH à
 `<USER_HOME>/Developer/void-machine/.void/machine/milestone-01/proof1-native-completions.json`.
 Cette référence est une provenance de l'invocation réelle, pas une revue indépendante
@@ -47,17 +49,17 @@ opaques réellement retournés, y compris ceux commençant par `/`. Une commande
 qui accepte le reçu puis une autre qui refuse le même identifiant empêche ici
 la transition de préparation vers implémentation.
 
-## Effet et résolution attendue
+## Effet au premier arrêt, puis décision de conservation
 
-- Aucun fichier `proof-1.txt`, aucune PR, aucun merge : les deux essais autorisés
-  restent non prouvés, et le dépôt privé ne contient que le seed synthétique.
+- À seq14: aucun fichier `proof-1.txt`, aucune PR, aucun merge. Les deux essais
+  autorisés restent non prouvés; le dépôt distant ne contient que le seed synthétique.
 - Les quatre vrais contextes/résultats sont conservés. Ne pas les renommer,
   relancer un panel à l'aveugle, inventer un reçu ni éditer le journal.
-- ORCH porte le défaut hors DEV-930 et sa vérification ciblée; corriger de façon
-  cohérente les admissions des identifiants opaques, avec un test échouant sur
-  ces valeurs réelles. Ne pas restreindre le correctif au seul texte d'erreur.
-- Après livraison du correctif, construire un nouveau pack lié à son SHA,
-  vérifier la reprise supportée de la mission existante et reprendre les essais.
-  L'ancien pack et son échec restent une preuve rouge historique.
+- Le défaut a ensuite été admis explicitement dans DEV-930, corrigé en TDD et
+  soumis à la revue native puis à une correction ciblée. L’essai original a
+  atteint seq16 avant ce second constat et reste désormais un échec conservé.
+- Aucune reprise supplémentaire de ce journal n’est autorisée. Un nouvel essai
+  indépendant est autorisé après validation globale du nouveau code et des docs;
+  il ne recycle aucun receipt de cette mission. L’ancien pack et son échec restent conservés.
 - Le dépôt privé et les traces restent à nettoyer par ORCH après collecte ou
   abandon explicite; [CLEANUP.md](CLEANUP.md) inventorie leur périmètre.

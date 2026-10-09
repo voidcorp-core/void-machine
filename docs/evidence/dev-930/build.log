@@ -1,0 +1,476 @@
+=== source-copy ===
+UTC: 2026-10-09T10:20:37.908221+00:00
+CWD: .
+COMMAND: git clone --no-hardlinks --no-checkout . .void/machine/dev930/source
+EXIT: 0
+Cloning into '.void/machine/dev930/source'...
+done.
+
+=== source-checkout ===
+UTC: 2026-10-09T10:20:38.282612+00:00
+CWD: .void/machine/dev930/source
+COMMAND: git checkout --detach 8fee97c9ba8ab7ad17c24a45204dd849f54acf24
+EXIT: 0
+HEAD is now at 8fee97c9 Merge pull request #446 from voidcorp-core/fix/codex-skill-observability
+
+=== dependencies ===
+UTC: 2026-10-09T10:20:38.849477+00:00
+CWD: .void/machine/dev930/source
+COMMAND: pnpm install --frozen-lockfile --ignore-scripts --offline
+EXIT: 1
+Scope: all 11 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +240
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ ERR_PNPM_NO_OFFLINE_TARBALL  A package is missing from the store but cannot download it in offline mode. The missing package may be downloaded from https://registry.npmjs.org/@types/node/-/node-24.13.6.tgz.
+
+=== dependencies-online ===
+UTC: 2026-10-09T10:20:54.848824+00:00
+CWD: .void/machine/dev930/source
+COMMAND: pnpm install --frozen-lockfile --ignore-scripts
+EXIT: 0
+Scope: all 11 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +240
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 240, reused 239, downloaded 0, added 240, done
+
+devDependencies:
++ @biomejs/biome 2.4.16
++ @types/node 24.13.6
++ @typescript/native <- typescript 7.0.2
++ typescript <- @typescript/typescript6 6.0.2
++ vitest 5.0.1
+
+Done in 1s using pnpm v10.34.5
+
+=== version-check ===
+UTC: 2026-10-09T10:21:00.011171+00:00
+CWD: .
+COMMAND: pnpm version:check
+EXIT: 0
+
+> void-harness@0.0.0 version:check <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01
+> node scripts/check-version-lockstep.mjs
+
+check-version-lockstep: 12 files all at 4.0.0.
+
+=== pack ===
+UTC: 2026-10-09T10:21:16.336223+00:00
+CWD: .void/machine/dev930/source
+COMMAND: pnpm --filter ./packages/cli pack --pack-destination ../artifact
+EXIT: 0
+
+> voidmachine@4.0.0 prepack <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli
+> pnpm -w build:cli && pnpm run build:assets
+
+
+> void-harness@0.0.0 build:cli <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source
+> pnpm --filter @voidcorp/mission-engine build && pnpm --filter @voidcorp/harness-graph build && pnpm --filter @voidcorp/hook-runner build && pnpm --filter @voidcorp/void-machine build && pnpm --filter ./packages/cli build
+
+
+> @voidcorp/mission-engine@0.0.0 build <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/mission-engine
+> tsc --project tsconfig.json
+
+
+> @voidcorp/harness-graph@4.0.0 build <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/harness-graph
+> tsup && tsc --emitDeclarationOnly --declarationMap false
+
+CLI Building entry: src/index.ts, src/project/index.ts
+CLI Using tsconfig: tsconfig.json
+CLI tsup v8.5.1
+CLI Using tsup config: <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/harness-graph/tsup.config.ts
+CLI Target: es2022
+CLI Cleaning output folder
+ESM Build start
+ESM dist/chunk-LMWOGQMY.js 20.66 KB
+ESM dist/index.js          88.62 KB
+ESM dist/project/index.js  197.61 KB
+ESM ⚡️ Build success in 31ms
+
+> @voidcorp/hook-runner@0.0.0 build <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/hook-runner
+> node scripts/build.mjs
+
+
+> @voidcorp/void-machine@0.0.0 build <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/void-machine
+> tsc --project tsconfig.json
+
+
+> voidmachine@4.0.0 build <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli
+> tsup
+
+CLI Building entry: src/main.ts
+CLI Using tsconfig: tsconfig.json
+CLI tsup v8.5.1
+CLI Using tsup config: <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli/tsup.config.ts
+CLI Target: node24
+CLI Cleaning output folder
+ESM Build start
+"default" is imported from external module "path" but never used in "dist/main.js".
+"closeSync", "openSync", "readSync" and "fstatSync" are imported from external module "fs" but never used in "dist/main.js".
+"stripVTControlCharacters" is imported from external module "util" but never used in "dist/main.js".
+"ReadStream" is imported from external module "tty" but never used in "dist/main.js".
+ESM dist/main.js 2.64 MB
+ESM ⚡️ Build success in 1648ms
+
+> voidmachine@4.0.0 build:assets <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli
+> node scripts/copy-core-assets.mjs
+
+copy-core-assets: copied <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/core -> <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli/core-assets
+copy-core-assets: bundled 6 pack(s) skills -> <USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/source/packages/cli/core-assets/packs
+📦  voidmachine@4.0.0
+Tarball Contents
+bin/void-harness.mjs
+bin/void-machine.mjs
+core-assets/.claude-plugin/plugin.json
+core-assets/.gitkeep
+core-assets/adapters/security/manifest.yaml
+core-assets/agents/.gitkeep
+core-assets/agents/accessibility-specialist.md
+core-assets/agents/api-integration-engineer.md
+core-assets/agents/code-explorer.md
+core-assets/agents/code-explorer.source
+core-assets/agents/data-migration-engineer.md
+core-assets/agents/devex-docs-engineer.md
+core-assets/agents/doctrine-critic.md
+core-assets/agents/doctrine-critic.source
+core-assets/agents/domain-architect.md
+core-assets/agents/experience-designer.md
+core-assets/agents/frontend-engineer.md
+core-assets/agents/independent-code-reviewer.md
+core-assets/agents/migration-planner.md
+core-assets/agents/migration-planner.source
+core-assets/agents/observability-sre-engineer.md
+core-assets/agents/pdf-specialist.md
+core-assets/agents/performance-engineer.md
+core-assets/agents/product-challenger.md
+core-assets/agents/security-engineer.md
+core-assets/agents/silent-failure-hunter.md
+core-assets/agents/silent-failure-hunter.source
+core-assets/agents/solution-architect.md
+core-assets/agents/test-qa-engineer.md
+core-assets/agents/type-design-analyzer.md
+core-assets/agents/type-design-analyzer.source
+core-assets/agents/visual-craft-director.md
+core-assets/codex/hooks.json
+core-assets/contract-history/visual-craft-director/v2.yaml
+core-assets/data/catalog.v3.json
+core-assets/data/certification.json
+core-assets/data/identity.json
+core-assets/data/model.json
+core-assets/enforce/ci-enforce.sh
+core-assets/hooks/_checks.sh
+core-assets/hooks/_hooklib.sh
+core-assets/hooks/_syntax-worker.cjs
+core-assets/hooks/_void-hook.mjs
+core-assets/hooks/activation-meter.sh
+core-assets/hooks/anti-ai-slop-grep.sh
+core-assets/hooks/auto-format.sh
+core-assets/hooks/axe-precommit.sh
+core-assets/hooks/block-dangerous-bash.sh
+core-assets/hooks/block-protected-push.sh
+core-assets/hooks/boundary-direction-check.sh
+core-assets/hooks/control-character-grep.sh
+core-assets/hooks/fowler-refactors.txt
+core-assets/hooks/large-cl-grep.sh
+core-assets/hooks/llm-cost-precommit.sh
+core-assets/hooks/migration-lint.sh
+core-assets/hooks/migration-pr-template.sh
+core-assets/hooks/no-ai-design-slop.sh
+core-assets/hooks/no-any-grep.sh
+core-assets/hooks/no-as-cast-grep.sh
+core-assets/hooks/no-console-log-grep.sh
+core-assets/hooks/no-null-grep.sh
+core-assets/hooks/no-only-no-skip.sh
+core-assets/hooks/outcome-meter.sh
+core-assets/hooks/pre-PR-review-evidence.sh
+core-assets/hooks/protect-sensitive-files.sh
+core-assets/hooks/refactor-named-grep.sh
+core-assets/hooks/secret-in-content.sh
+core-assets/hooks/sessionstart-context.sh
+core-assets/hooks/stop-typecheck.sh
+core-assets/hooks/tdd-guard.md
+core-assets/hooks/tdd-guard.sh
+core-assets/hooks/test-name-lint.sh
+core-assets/hooks/tidying-commit-prefix.sh
+core-assets/hooks/trim-large-output.sh
+core-assets/hooks/tsc-noemit-precommit.sh
+core-assets/hooks/ubiquitous-language-lint.sh
+core-assets/hooks/viewport-screenshot-gate.sh
+core-assets/modules/.gitkeep
+core-assets/packs/pack-mobile/skills/void-eas-build-profile/.source
+core-assets/packs/pack-mobile/skills/void-eas-build-profile/harness.yaml
+core-assets/packs/pack-mobile/skills/void-eas-build-profile/SKILL.md
+core-assets/packs/pack-mobile/skills/void-expo-config-plugins/.source
+core-assets/packs/pack-mobile/skills/void-expo-config-plugins/harness.yaml
+core-assets/packs/pack-mobile/skills/void-expo-config-plugins/SKILL.md
+core-assets/packs/pack-mobile/skills/void-expo-router-pattern/.source
+core-assets/packs/pack-mobile/skills/void-expo-router-pattern/harness.yaml
+core-assets/packs/pack-mobile/skills/void-expo-router-pattern/SKILL.md
+core-assets/packs/pack-mobile/skills/void-ota-update-strategy/.source
+core-assets/packs/pack-mobile/skills/void-ota-update-strategy/harness.yaml
+core-assets/packs/pack-mobile/skills/void-ota-update-strategy/SKILL.md
+core-assets/packs/pack-monorepo/skills/void-dependency-direction/.source
+core-assets/packs/pack-monorepo/skills/void-dependency-direction/harness.yaml
+core-assets/packs/pack-monorepo/skills/void-dependency-direction/SKILL.md
+core-assets/packs/pack-monorepo/skills/void-package-extraction/.source
+core-assets/packs/pack-monorepo/skills/void-package-extraction/harness.yaml
+core-assets/packs/pack-monorepo/skills/void-package-extraction/SKILL.md
+core-assets/packs/pack-monorepo/skills/void-service-package/.source
+core-assets/packs/pack-monorepo/skills/void-service-package/harness.yaml
+core-assets/packs/pack-monorepo/skills/void-service-package/SKILL.md
+core-assets/packs/pack-monorepo/skills/void-turbo-pipeline-tuning/.source
+core-assets/packs/pack-monorepo/skills/void-turbo-pipeline-tuning/harness.yaml
+core-assets/packs/pack-monorepo/skills/void-turbo-pipeline-tuning/SKILL.md
+core-assets/packs/pack-nextjs/skills/void-cache-component-pattern/.source
+core-assets/packs/pack-nextjs/skills/void-cache-component-pattern/harness.yaml
+core-assets/packs/pack-nextjs/skills/void-cache-component-pattern/SKILL.md
+core-assets/packs/pack-nextjs/skills/void-instrumentation-setup/.source
+core-assets/packs/pack-nextjs/skills/void-instrumentation-setup/harness.yaml
+core-assets/packs/pack-nextjs/skills/void-instrumentation-setup/SKILL.md
+core-assets/packs/pack-nextjs/skills/void-loading-error-boundaries/.source
+core-assets/packs/pack-nextjs/skills/void-loading-error-boundaries/harness.yaml
+core-assets/packs/pack-nextjs/skills/void-loading-error-boundaries/SKILL.md
+core-assets/packs/pack-nextjs/skills/void-parallel-routes-slots/.source
+core-assets/packs/pack-nextjs/skills/void-parallel-routes-slots/harness.yaml
+core-assets/packs/pack-nextjs/skills/void-parallel-routes-slots/SKILL.md
+core-assets/packs/pack-nextjs/skills/void-route-group-decision/.source
+core-assets/packs/pack-nextjs/skills/void-route-group-decision/harness.yaml
+core-assets/packs/pack-nextjs/skills/void-route-group-decision/SKILL.md
+core-assets/packs/pack-pwa/skills/void-install-prompt-ux/.source
+core-assets/packs/pack-pwa/skills/void-install-prompt-ux/harness.yaml
+core-assets/packs/pack-pwa/skills/void-install-prompt-ux/SKILL.md
+core-assets/packs/pack-pwa/skills/void-manifest-checklist/.source
+core-assets/packs/pack-pwa/skills/void-manifest-checklist/harness.yaml
+core-assets/packs/pack-pwa/skills/void-manifest-checklist/SKILL.md
+core-assets/packs/pack-pwa/skills/void-offline-first-mutation/.source
+core-assets/packs/pack-pwa/skills/void-offline-first-mutation/harness.yaml
+core-assets/packs/pack-pwa/skills/void-offline-first-mutation/SKILL.md
+core-assets/packs/pack-pwa/skills/void-service-worker-strategy/.source
+core-assets/packs/pack-pwa/skills/void-service-worker-strategy/harness.yaml
+core-assets/packs/pack-pwa/skills/void-service-worker-strategy/SKILL.md
+core-assets/packs/pack-react/skills/void-accessibility-check/.source
+core-assets/packs/pack-react/skills/void-accessibility-check/harness.yaml
+core-assets/packs/pack-react/skills/void-accessibility-check/SKILL.md
+core-assets/packs/pack-react/skills/void-client-vs-server-component/.source
+core-assets/packs/pack-react/skills/void-client-vs-server-component/harness.yaml
+core-assets/packs/pack-react/skills/void-client-vs-server-component/SKILL.md
+core-assets/packs/pack-react/skills/void-form-pattern/.source
+core-assets/packs/pack-react/skills/void-form-pattern/harness.yaml
+core-assets/packs/pack-react/skills/void-form-pattern/SKILL.md
+core-assets/packs/pack-react/skills/void-state-architecture/.source
+core-assets/packs/pack-react/skills/void-state-architecture/harness.yaml
+core-assets/packs/pack-react/skills/void-state-architecture/SKILL.md
+core-assets/packs/pack-server/skills/void-background-job-pattern/.source
+core-assets/packs/pack-server/skills/void-background-job-pattern/harness.yaml
+core-assets/packs/pack-server/skills/void-background-job-pattern/SKILL.md
+core-assets/packs/pack-server/skills/void-drizzle-migration-safe/.source
+core-assets/packs/pack-server/skills/void-drizzle-migration-safe/harness.yaml
+core-assets/packs/pack-server/skills/void-drizzle-migration-safe/SKILL.md
+core-assets/packs/pack-server/skills/void-env-validation/.source
+core-assets/packs/pack-server/skills/void-env-validation/harness.yaml
+core-assets/packs/pack-server/skills/void-env-validation/SKILL.md
+core-assets/packs/pack-server/skills/void-rate-limit-strategy/.source
+core-assets/packs/pack-server/skills/void-rate-limit-strategy/harness.yaml
+core-assets/packs/pack-server/skills/void-rate-limit-strategy/SKILL.md
+core-assets/packs/pack-server/skills/void-server-action/.source
+core-assets/packs/pack-server/skills/void-server-action/harness.yaml
+core-assets/packs/pack-server/skills/void-server-action/SKILL.md
+core-assets/packs/pack-server/skills/void-testing-server-modules/.source
+core-assets/packs/pack-server/skills/void-testing-server-modules/harness.yaml
+core-assets/packs/pack-server/skills/void-testing-server-modules/SKILL.md
+core-assets/packs/pack-server/skills/void-webhook-handler-pattern/.source
+core-assets/packs/pack-server/skills/void-webhook-handler-pattern/harness.yaml
+core-assets/packs/pack-server/skills/void-webhook-handler-pattern/SKILL.md
+core-assets/PHILOSOPHY.md
+core-assets/policies/core.yaml
+core-assets/policies/ui.yaml
+core-assets/profiles/base.yaml
+core-assets/profiles/expo-config.yaml
+core-assets/profiles/expo.yaml
+core-assets/profiles/monorepo.yaml
+core-assets/profiles/nextjs-config.yaml
+core-assets/profiles/nextjs.yaml
+core-assets/profiles/node-server.yaml
+core-assets/profiles/pwa.yaml
+core-assets/profiles/react.yaml
+core-assets/profiles/sql.yaml
+core-assets/profiles/typescript.yaml
+core-assets/PROJECT-DOCTRINE.template.md
+core-assets/skills/.gitkeep
+core-assets/skills/void-accessibility/.source
+core-assets/skills/void-accessibility/harness.yaml
+core-assets/skills/void-accessibility/SKILL.md
+core-assets/skills/void-api-and-interface-design/.source
+core-assets/skills/void-api-and-interface-design/harness.yaml
+core-assets/skills/void-api-and-interface-design/SKILL.md
+core-assets/skills/void-async-safety/.source
+core-assets/skills/void-async-safety/harness.yaml
+core-assets/skills/void-async-safety/SKILL.md
+core-assets/skills/void-audit/.source
+core-assets/skills/void-audit/harness.yaml
+core-assets/skills/void-audit/SKILL.md
+core-assets/skills/void-autopilot/.source
+core-assets/skills/void-autopilot/harness.yaml
+core-assets/skills/void-autopilot/SKILL.md
+core-assets/skills/void-brainstorm/.source
+core-assets/skills/void-brainstorm/harness.yaml
+core-assets/skills/void-brainstorm/SKILL.md
+core-assets/skills/void-checkpoint/.source
+core-assets/skills/void-checkpoint/harness.yaml
+core-assets/skills/void-checkpoint/SKILL.md
+core-assets/skills/void-claude-md/.source
+core-assets/skills/void-claude-md/harness.yaml
+core-assets/skills/void-claude-md/SKILL.md
+core-assets/skills/void-code-review/.source
+core-assets/skills/void-code-review/harness.yaml
+core-assets/skills/void-code-review/SKILL.md
+core-assets/skills/void-commit-discipline/.source
+core-assets/skills/void-commit-discipline/harness.yaml
+core-assets/skills/void-commit-discipline/SKILL.md
+core-assets/skills/void-context/.source
+core-assets/skills/void-context/harness.yaml
+core-assets/skills/void-context/SKILL.md
+core-assets/skills/void-debug/.source
+core-assets/skills/void-debug/harness.yaml
+core-assets/skills/void-debug/SKILL.md
+core-assets/skills/void-decide/.source
+core-assets/skills/void-decide/harness.yaml
+core-assets/skills/void-decide/SKILL.md
+core-assets/skills/void-devex-audit/.source
+core-assets/skills/void-devex-audit/harness.yaml
+core-assets/skills/void-devex-audit/SKILL.md
+core-assets/skills/void-doctor/.source
+core-assets/skills/void-doctor/harness.yaml
+core-assets/skills/void-doctor/SKILL.md
+core-assets/skills/void-domain-driven-design/.source
+core-assets/skills/void-domain-driven-design/harness.yaml
+core-assets/skills/void-domain-driven-design/SKILL.md
+core-assets/skills/void-frontend-design/.source
+core-assets/skills/void-frontend-design/harness.yaml
+core-assets/skills/void-frontend-design/SKILL.md
+core-assets/skills/void-functional/.source
+core-assets/skills/void-functional/harness.yaml
+core-assets/skills/void-functional/SKILL.md
+core-assets/skills/void-graph/.source
+core-assets/skills/void-graph/harness.yaml
+core-assets/skills/void-graph/SKILL.md
+core-assets/skills/void-hexagonal-architecture/.source
+core-assets/skills/void-hexagonal-architecture/harness.yaml
+core-assets/skills/void-hexagonal-architecture/SKILL.md
+core-assets/skills/void-implement/.source
+core-assets/skills/void-implement/harness.yaml
+core-assets/skills/void-implement/SKILL.md
+core-assets/skills/void-learn/.source
+core-assets/skills/void-learn/harness.yaml
+core-assets/skills/void-learn/SKILL.md
+core-assets/skills/void-llm-cost-discipline/.source
+core-assets/skills/void-llm-cost-discipline/harness.yaml
+core-assets/skills/void-llm-cost-discipline/SKILL.md
+core-assets/skills/void-make-pdf/.source
+core-assets/skills/void-make-pdf/harness.yaml
+core-assets/skills/void-make-pdf/SKILL.md
+core-assets/skills/void-merge/.source
+core-assets/skills/void-merge/harness.yaml
+core-assets/skills/void-merge/SKILL.md
+core-assets/skills/void-migrations/.source
+core-assets/skills/void-migrations/harness.yaml
+core-assets/skills/void-migrations/SKILL.md
+core-assets/skills/void-observability/.source
+core-assets/skills/void-observability/harness.yaml
+core-assets/skills/void-observability/SKILL.md
+core-assets/skills/void-orchestrate/.source
+core-assets/skills/void-orchestrate/harness.yaml
+core-assets/skills/void-orchestrate/SKILL.md
+core-assets/skills/void-plan-review/.source
+core-assets/skills/void-plan-review/harness.yaml
+core-assets/skills/void-plan-review/SKILL.md
+core-assets/skills/void-plan/.source
+core-assets/skills/void-plan/harness.yaml
+core-assets/skills/void-plan/SKILL.md
+core-assets/skills/void-qa/.source
+core-assets/skills/void-qa/harness.yaml
+core-assets/skills/void-qa/SKILL.md
+core-assets/skills/void-refactor/.source
+core-assets/skills/void-refactor/harness.yaml
+core-assets/skills/void-refactor/SKILL.md
+core-assets/skills/void-retrospective/.source
+core-assets/skills/void-retrospective/harness.yaml
+core-assets/skills/void-retrospective/SKILL.md
+core-assets/skills/void-security-audit/.source
+core-assets/skills/void-security-audit/harness.yaml
+core-assets/skills/void-security-audit/SKILL.md
+core-assets/skills/void-security-guidance/.source
+core-assets/skills/void-security-guidance/harness.yaml
+core-assets/skills/void-security-guidance/SKILL.md
+core-assets/skills/void-source-driven-development/.source
+core-assets/skills/void-source-driven-development/harness.yaml
+core-assets/skills/void-source-driven-development/SKILL.md
+core-assets/skills/void-tdd/.source
+core-assets/skills/void-tdd/harness.yaml
+core-assets/skills/void-tdd/SKILL.md
+core-assets/skills/void-testing/.source
+core-assets/skills/void-testing/harness.yaml
+core-assets/skills/void-testing/SKILL.md
+core-assets/skills/void-ticket/.source
+core-assets/skills/void-ticket/harness.yaml
+core-assets/skills/void-ticket/SKILL.md
+core-assets/skills/void-typescript-strict/.source
+core-assets/skills/void-typescript-strict/harness.yaml
+core-assets/skills/void-typescript-strict/SKILL.md
+core-assets/skills/void-ui-review/.source
+core-assets/skills/void-ui-review/harness.yaml
+core-assets/skills/void-ui-review/SKILL.md
+core-assets/skills/void-verify/.source
+core-assets/skills/void-verify/harness.yaml
+core-assets/skills/void-verify/SKILL.md
+core-assets/specialists/accessibility-specialist.source
+core-assets/specialists/accessibility-specialist.yaml
+core-assets/specialists/api-integration-engineer.source
+core-assets/specialists/api-integration-engineer.yaml
+core-assets/specialists/data-migration-engineer.source
+core-assets/specialists/data-migration-engineer.yaml
+core-assets/specialists/devex-docs-engineer.source
+core-assets/specialists/devex-docs-engineer.yaml
+core-assets/specialists/domain-architect.source
+core-assets/specialists/domain-architect.yaml
+core-assets/specialists/experience-designer.source
+core-assets/specialists/experience-designer.yaml
+core-assets/specialists/frontend-engineer.source
+core-assets/specialists/frontend-engineer.yaml
+core-assets/specialists/independent-code-reviewer.source
+core-assets/specialists/independent-code-reviewer.yaml
+core-assets/specialists/migrations.json
+core-assets/specialists/observability-sre-engineer.source
+core-assets/specialists/observability-sre-engineer.yaml
+core-assets/specialists/pdf-specialist.source
+core-assets/specialists/pdf-specialist.yaml
+core-assets/specialists/performance-engineer.source
+core-assets/specialists/performance-engineer.yaml
+core-assets/specialists/product-challenger.source
+core-assets/specialists/product-challenger.yaml
+core-assets/specialists/security-engineer.source
+core-assets/specialists/security-engineer.yaml
+core-assets/specialists/solution-architect.source
+core-assets/specialists/solution-architect.yaml
+core-assets/specialists/test-qa-engineer.source
+core-assets/specialists/test-qa-engineer.yaml
+core-assets/specialists/visual-craft-director.source
+core-assets/specialists/visual-craft-director.yaml
+core-assets/templates/github/dependency-audit.mjs
+core-assets/templates/github/void-dependency-audit.yml
+core-assets/templates/github/void-security.yml
+dist/main.js
+LICENSE
+package.json
+README.md
+Tarball Details
+<USER_HOME>/.local/share/git-worktrees/void-machine/folpe/dev-930-milestone-01/.void/machine/dev930/artifact/voidmachine-4.0.0.tgz
+
+=== packed-source-status ===
+UTC: 2026-10-09T10:21:41.494215+00:00
+CWD: .void/machine/dev930/source
+COMMAND: git status --short
+EXIT: 0

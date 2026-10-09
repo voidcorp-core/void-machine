@@ -2,6 +2,7 @@ import type { CanonicalEvent } from '../events/types.js';
 import type { Evidence, EvidenceContext } from '../evidence/types.js';
 import { canonicalJsonHash } from '../evidence/canonical-json.js';
 import { assessEvidence } from '../evidence/invalidation.js';
+import { validNativeContextId } from '../orchestration/review-loop.js';
 import { parseSpecialistCompletionValue, type SpecialistCompletion } from './completion.js';
 
 export type EvidenceDue = 'current-review' | 'post-implementation' | 'completion';
@@ -54,7 +55,7 @@ function binding(value: unknown): Binding | undefined {
   if (!record(value)) return undefined;
   const { completionEventId, completionHash, specialistId, nativeContextId, requestId } = value;
   if (!text(completionEventId) || !text(completionHash) || !text(specialistId)
-    || !text(nativeContextId) || !text(requestId)) return undefined;
+    || !validNativeContextId(nativeContextId) || !text(requestId)) return undefined;
   return { completionEventId, completionHash, specialistId, nativeContextId, requestId };
 }
 function due(value: unknown): value is EvidenceDue {

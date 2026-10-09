@@ -205,3 +205,43 @@ describe('future discharge freshness on resume', () => {
     expect(after.blockingObligationIds).toEqual([fixture.obligation.obligationId]);
   });
 });
+
+function withContext(events: readonly CanonicalEvent[], nativeContextId: string): CanonicalEvent[] {
+  return events.map(value => value.kind.startsWith('specialist.evidence-')
+    && typeof value.payload === 'object' && value.payload !== null && !Array.isArray(value.payload)
+    ? { ...value, payload: { ...value.payload, nativeContextId } } : value);
+}
+
+describe.each(['classification', 'discharge'] as const)('opaque context %s replay', operation => {
+  function scenario() {
+    const fixture = dischargeScenario();
+    return { events: operation === 'classification' ? [original, ...clarification()] : fixture.events,
+      proofs: [{ eventId: fixture.proofEvent.eventId, evidence: fixture.proof }] };
+  }
+  it.each(['/root/proof_author', 'x', '/'.repeat(160)])('accepts exact fresh opaque context %j', contextId => {
+    const fixture = scenario();
+    const state = reduce(withContext(fixture.events, contextId), { proofs: fixture.proofs });
+    expect(state.issues).toEqual([]);
+    expect(state.blockingObligationIds).toEqual([]);
+    if (operation === 'classification') expect(state.obligations[0]?.due).toBe('post-implementation');
+    else expect(state.obligations[0]?.discharged).toBe(true);
+  });
+  it.each(['', '   ', 'ctx\0', 'ctx\n', 'ctx\u001f', 'ctx\u007f', 'ctx\u0080',
+    'ctx\u009f', 'x'.repeat(161)])('rejects matching invalid request and response %j', contextId => {
+    const fixture = scenario();
+    const state = reduce(withContext(fixture.events, contextId), { proofs: fixture.proofs });
+    expect(state.issues).not.toHaveLength(0);
+    expect(state.blockingObligationIds).toHaveLength(1);
+    expect(state.obligations[0]?.discharged).toBe(false);
+    expect(state.obligations[0]?.due).toBe('current-review');
+  });
+  it('rejects an opaque context already used by the original specialist', () => {
+    const fixture = scenario();
+    const events = withContext(fixture.events, '/root/original').map(value => value === original
+      ? { ...original, payload: { contextId: '/root/original', inputHash: INPUT_A,
+        stage: 'pre-implementation', reviewRound: 1, completion } } : value);
+    const state = reduce(events, { proofs: fixture.proofs });
+    expect(state.issues).not.toHaveLength(0);
+    expect(state.blockingObligationIds).toHaveLength(1);
+  });
+});

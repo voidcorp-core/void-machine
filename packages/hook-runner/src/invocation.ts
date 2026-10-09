@@ -57,6 +57,7 @@ export function installedSkillNames(root: string): ReadonlySet<string> {
 }
 
 interface JournalEvent {
+  readonly source: string;
   readonly kind: string;
   readonly missionId: string;
   readonly category: string;
@@ -87,6 +88,7 @@ function eachEvent(body: string, visit: (event: JournalEvent) => void): void {
         ? (payload as Record<string, unknown>)['category']
         : undefined;
     visit({
+      source: typeof record['source'] === 'string' ? record['source'] : '',
       kind: typeof record['kind'] === 'string' ? record['kind'] : '',
       missionId: typeof record['missionId'] === 'string' ? record['missionId'] : '',
       category: typeof category === 'string' ? category : '',
@@ -217,7 +219,7 @@ export function invocationAlert(
   resolution: ResolutionVerdict,
   liveness: LivenessVerdict,
 ): string | undefined {
-  if (resolution.ok && liveness.ok) return undefined;
+  if (resolution.ok && liveness.ok && liveness.unobservable.length === 0) return undefined;
   const lines = [`${PRODUCT_COMMAND}, invocation surface:`];
   if (!resolution.ok) {
     const named = resolution.unresolved.slice(0, MAX_NAMED).map(withSuccessor).join(', ');
@@ -231,6 +233,9 @@ export function invocationAlert(
     lines.push(
       `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`,
     );
+  }
+  for (const { source, toolCalls } of liveness.unobservable) {
+    lines.push(`  skill usage not observable for ${source} (${toolCalls} tool calls); activation count unknown`);
   }
   lines.push(`  run \`${PRODUCT_COMMAND} doctor\` for the detail`);
   return lines.join('\n');
@@ -246,6 +251,7 @@ export function invocationAlert(
  * floor gains or loses a rule.
  */
 export interface LivenessVerdict {
+  /** No proven silence on the observable surface; not proof of Codex usage. */
   readonly ok: boolean;
   /** Working missions actually judged, capped at the window. */
   readonly missions: number;
@@ -253,6 +259,8 @@ export interface LivenessVerdict {
   readonly toolCalls: number;
   /** Skill activations across those missions. Context for `doctor`, never a threshold. */
   readonly skillCalls: number;
+  /** Collected calls whose runtime exposes no supported skill-activation signal. */
+  readonly unobservable: readonly { readonly source: string; readonly toolCalls: number }[];
 }
 
 /** Tool calls below which a mission proves nothing and is not judged. */
@@ -268,8 +276,17 @@ interface MissionTally {
 
 export function livenessVerdict(body: string): LivenessVerdict {
   const tallies = new Map<string, MissionTally>();
+  const unobservable = new Map<string, number>();
   eachEvent(body, (event) => {
     if (event.kind !== 'runtime.tool.started' || event.missionId === '') return;
+    // Only Claude's Skill tool makes silence measurable. A SKILL.md shell read
+    // is context loading, not an invocation event. Missing/unknown provenance
+    // must not be promoted to an observable runtime either.
+    if (event.source !== 'runtime:claude') {
+      const source = event.source || 'runtime:unknown';
+      unobservable.set(source, (unobservable.get(source) ?? 0) + 1);
+      return;
+    }
     const tally = tallies.get(event.missionId) ?? { toolCalls: 0, skillCalls: 0, lastTs: '' };
     tally.toolCalls += 1;
     if (event.category === 'skill') tally.skillCalls += 1;
@@ -287,7 +304,11 @@ export function livenessVerdict(body: string): LivenessVerdict {
   // Under a full window there is no verdict to give: two silent missions are a
   // quiet week, and crying on them is how a guardrail gets turned off.
   const ok = judged.length < LIVENESS_WINDOW || judged.some((tally) => tally.skillCalls > 0);
-  return { ok, missions: judged.length, toolCalls, skillCalls };
+  return {
+    ok, missions: judged.length, toolCalls, skillCalls,
+    unobservable: [...unobservable].sort(([a], [b]) => a.localeCompare(b))
+      .map(([source, calls]) => ({ source, toolCalls: calls })),
+  };
 }
 
 /**
@@ -302,7 +323,10 @@ export function livenessVerdict(body: string): LivenessVerdict {
  * It is a cache, not a second source of truth: it holds nothing the journals do
  * not, and deleting it costs one stale session.
  */
+const VERDICT_VERSION = 2;
+
 interface CachedVerdict {
+  readonly version: typeof VERDICT_VERSION;
   readonly fingerprint: string;
   readonly alert?: string;
 }
@@ -319,6 +343,7 @@ export function cachedInvocationAlert(root: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(readFileSync(cachePath(root), 'utf8'));
     if (typeof parsed !== 'object' || parsed === null) return undefined;
+    if ((parsed as Record<string, unknown>)['version'] !== VERDICT_VERSION) return undefined;
     const alert = (parsed as Record<string, unknown>)['alert'];
     return typeof alert === 'string' && alert !== '' ? alert : undefined;
   } catch {
@@ -342,6 +367,7 @@ export function refreshInvocationVerdict(root: string): void {
       if (
         typeof previous === 'object'
         && previous !== null
+        && (previous as Record<string, unknown>)['version'] === VERDICT_VERSION
         && (previous as Record<string, unknown>)['fingerprint'] === fingerprint
       ) return;
     } catch {
@@ -352,7 +378,7 @@ export function refreshInvocationVerdict(root: string): void {
       resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
       livenessVerdict(journals),
     );
-    const entry: CachedVerdict = alert === undefined ? { fingerprint } : { fingerprint, alert };
+    const entry: CachedVerdict = { version: VERDICT_VERSION, fingerprint, ...(alert === undefined ? {} : { alert }) };
     mkdirSync(dirname(path), { recursive: true });
     // Temporary sibling then rename, so a session never reads half a verdict.
     const temporary = `${path}.${process.pid}.tmp`;

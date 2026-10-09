@@ -1,7 +1,8 @@
 import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { journalFingerprint } from './journal.js';
+import { journalFingerprint, readMissionJournals } from './journal.js';
+import { recordRuntimeEvent } from './record.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   cachedInvocationAlert,
@@ -38,6 +39,7 @@ function project(skills: readonly string[] = [], agentSkills: readonly string[] 
 function activation(name: string, ts = '2026-08-19T10:00:00.000Z', missionId = 'mis_now'): string {
   return JSON.stringify({
     kind: 'runtime.tool.started',
+    source: 'runtime:claude',
     subject: `skill:${name}`,
     ts,
     missionId,
@@ -184,6 +186,7 @@ describe('resolutionVerdict', () => {
   it('keeps an activation whose timestamp is unreadable rather than silently dropping it', () => {
     const broken = JSON.stringify({
       kind: 'runtime.tool.started',
+    source: 'runtime:claude',
       subject: 'skill:ticket-writer',
       ts: 'pas une date',
       payload: { category: 'skill', tool: 'Skill' },
@@ -197,7 +200,7 @@ describe('resolutionVerdict', () => {
   });
 });
 
-const ALIVE = { ok: true, missions: 3, toolCalls: 300, skillCalls: 6 } as const;
+const ALIVE = { ok: true, missions: 3, toolCalls: 300, skillCalls: 6, unobservable: [] } as const;
 const RESOLVES = { ok: true, unresolved: [], retired: [] } as const;
 
 describe('invocationAlert', () => {
@@ -212,13 +215,13 @@ describe('invocationAlert', () => {
   });
 
   it('reports the silence with the evidence that the missions actually worked', () => {
-    const alert = invocationAlert(RESOLVES, { ok: false, missions: 3, toolCalls: 1464, skillCalls: 0 }) ?? '';
+    const alert = invocationAlert(RESOLVES, { ok: false, missions: 3, toolCalls: 1464, skillCalls: 0, unobservable: [] }) ?? '';
     expect(alert).toContain('3');
     expect(alert).toContain('1464');
   });
 
   it('carries both findings in one block rather than two banners', () => {
-    const alert = invocationAlert({ ok: false, unresolved: ['ticket-writer'], retired: ['ticket-writer'] }, { ok: false, missions: 3, toolCalls: 900, skillCalls: 0 }) ?? '';
+    const alert = invocationAlert({ ok: false, unresolved: ['ticket-writer'], retired: ['ticket-writer'] }, { ok: false, missions: 3, toolCalls: 900, skillCalls: 0, unobservable: [] }) ?? '';
     expect(alert.split('\n')).toHaveLength(4);
     expect(alert).toContain('ticket-writer');
     expect(alert).toContain('900');
@@ -286,6 +289,30 @@ describe('livenessVerdict', () => {
     expect(verdict.ok).toBe(false);
     expect(verdict.missions).toBe(3);
     expect(verdict.toolCalls).toBe(90);
+  });
+
+  it('collects Codex SKILL.md reads without inventing native skill activations', async () => {
+    const root = project();
+    for (let session = 0; session < 3; session += 1) {
+      for (let call = 0; call < 20; call += 1) {
+        await recordRuntimeEvent({
+          root, runtime: 'codex', phase: 'activation',
+          rawInput: {
+            session_id: `codex-${session}`, hook_event_name: 'PreToolUse', tool_name: 'Bash',
+            tool_input: { command: 'cat .agents/skills/void-tdd/SKILL.md' },
+          },
+        });
+      }
+    }
+    const journal = readMissionJournals(root);
+    expect(journal.match(/runtime.tool.started/g)).toHaveLength(60);
+    expect(journal).not.toContain('skill:void-tdd');
+    const verdict = livenessVerdict(journal);
+    expect(verdict.unobservable).toEqual([{ source: 'runtime:codex', toolCalls: 60 }]);
+    expect(verdict.missions).toBe(0);
+    refreshInvocationVerdict(root);
+    expect(cachedInvocationAlert(root)).toContain('not observable for runtime:codex');
+    expect(cachedInvocationAlert(root)).not.toContain('no skill fired');
   });
 
   it('does not diagnose unobservable Codex or unknown sources as silent skills', () => {

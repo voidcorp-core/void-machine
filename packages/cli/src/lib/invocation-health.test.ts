@@ -1,5 +1,4 @@
-import { readMissionJournals } from '@voidcorp/hook-runner';
-import { recordRuntimeEvent } from '../../../hook-runner/src/record.js';
+import { livenessVerdict } from '@voidcorp/hook-runner';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +9,7 @@ import { judgeInvocation, observeInvocation } from './invocation-health.js';
 // name list, this has room for the evidence behind it. The ratio of activations
 // to tool calls is shown here and judged nowhere -- four observed values across
 // the whole corpus define no normal.
-const ALIVE = { ok: true, missions: 3, toolCalls: 1312, skillCalls: 8 } as const;
+const ALIVE = { ok: true, missions: 3, toolCalls: 1312, skillCalls: 8, unobservable: [] } as const;
 const RESOLVES = { ok: true, unresolved: [], retired: [] } as const;
 const roots: string[] = [];
 
@@ -41,7 +40,7 @@ describe('judgeInvocation', () => {
   });
 
   it('shows the activation ratio as context, and never fails on it', () => {
-    const thin = { ok: true, missions: 3, toolCalls: 1000, skillCalls: 1 } as const;
+    const thin = { ok: true, missions: 3, toolCalls: 1000, skillCalls: 1, unobservable: [] } as const;
     const check = judgeInvocation({ resolution: RESOLVES, liveness: thin, installedSkills: 37 });
     expect(check.ok).toBe(true);
     expect(check.message).toMatch(/0\.1\s?%/);
@@ -62,7 +61,7 @@ describe('judgeInvocation', () => {
   it('fails on a silence, with the work that proves the missions were not idle', () => {
     const check = judgeInvocation({
       resolution: RESOLVES,
-      liveness: { ok: false, missions: 3, toolCalls: 1464, skillCalls: 0 },
+      liveness: { ok: false, missions: 3, toolCalls: 1464, skillCalls: 0, unobservable: [] },
       installedSkills: 37,
     });
     expect(check.ok).toBe(false);
@@ -72,7 +71,7 @@ describe('judgeInvocation', () => {
   it('reports both failures at once rather than hiding the second behind the first', () => {
     const check = judgeInvocation({
       resolution: { ok: false, unresolved: ['ticket-writer'], retired: ['ticket-writer'] },
-      liveness: { ok: false, missions: 3, toolCalls: 900, skillCalls: 0 },
+      liveness: { ok: false, missions: 3, toolCalls: 900, skillCalls: 0, unobservable: [] },
       installedSkills: 37,
     });
     expect(check.message).toContain('ticket-writer');
@@ -82,7 +81,7 @@ describe('judgeInvocation', () => {
   it('stays honest about a project that has recorded nothing yet', () => {
     const check = judgeInvocation({
       resolution: RESOLVES,
-      liveness: { ok: true, missions: 0, toolCalls: 0, skillCalls: 0 },
+      liveness: { ok: true, missions: 0, toolCalls: 0, skillCalls: 0, unobservable: [] },
       installedSkills: 37,
     });
     expect(check.ok).toBe(true);
@@ -91,24 +90,14 @@ describe('judgeInvocation', () => {
 });
 
 describe('observeInvocation', () => {
-  it('reports Codex skill reads as unobservable through the real collection path', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'void-codex-observability-'));
-    roots.push(root);
-    for (let session = 0; session < 3; session += 1) {
-      for (let call = 0; call < 20; call += 1) {
-        await recordRuntimeEvent({
-          root, runtime: 'codex', phase: 'activation',
-          rawInput: {
-            session_id: `codex-${session}`, hook_event_name: 'PreToolUse', tool_name: 'Bash',
-            tool_input: { command: 'cat .agents/skills/void-tdd/SKILL.md' },
-          },
-        });
-      }
-    }
-    const journal = readMissionJournals(root);
-    expect(journal.match(/runtime.tool.started/g)).toHaveLength(60);
-    expect(journal).not.toContain('skill:void-tdd');
-    const check = judgeInvocation(observeInvocation(root));
+  it('reports collected Codex activity as unknown, never a passing zero', () => {
+    const journal = Array.from({ length: 60 }, (_, call) => JSON.stringify({
+      kind: 'runtime.tool.started', source: 'runtime:codex',
+      missionId: `mis_${Math.floor(call / 20)}`, subject: 'tool:Bash',
+      ts: '2026-10-09T08:00:00.000Z', payload: { category: 'tool', tool: 'Bash' },
+    })).join('\n');
+    const liveness = livenessVerdict(journal);
+    const check = judgeInvocation({ resolution: RESOLVES, liveness, installedSkills: 37 });
     expect(check.status).toBe('unknown');
     expect(check.ok).toBe(false);
     expect(check.message).toContain('not observable');
@@ -117,6 +106,13 @@ describe('observeInvocation', () => {
     expect(check.message).not.toContain('0 activation');
     expect(check.message).not.toContain('no skill fired');
     expect(check.fix).toBeUndefined();
+    // An unknown measurement must never hide a separate, observed fault.
+    const retired = judgeInvocation({
+      resolution: { ok: false, unresolved: ['ticket-writer'], retired: ['ticket-writer'] },
+      liveness, installedSkills: 37,
+    });
+    expect(retired.status).toBe('fail');
+    expect(retired.message).toContain('ticket-writer');
   });
 
   it('reads the project on disk, both journal locations and both runtimes', () => {

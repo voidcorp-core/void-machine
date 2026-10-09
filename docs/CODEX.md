@@ -71,6 +71,21 @@ So on a Codex-only project the usage counts reflect Claude usage only — a low
 count means "not observed", not "not useful". This is a Codex limitation, not a
 gap in the harness; nothing to instrument until Codex surfaces skill use.
 
+The invocation-health check preserves the event's runtime source. Only
+`runtime:claude` tool calls enter its three-working-mission silence window.
+Codex and missing/unknown sources remain explicitly **not observable**, with
+collected tool-call counts and an unknown activation count. `doctor` reports
+`unknown`, never a passing zero; the session banner states the same limitation.
+Mixed journals cannot use Codex activity to mask Claude silence. Recorded retired
+skill names still fail independently of runtime. Reading `SKILL.md` or declaring
+that a skill was applied never synthesizes a skill activation.
+
+The verdict cache is versioned so an unchanged journal cannot preserve a verdict
+computed under the old, runtime-blind rule. Collection and enforcement hooks are
+unchanged. This follows the [Codex skill-loading contract][build-skills] and
+[documented hook coverage](https://learn.chatgpt.com/docs/hooks#tool-coverage).
+
+
 ## The hooks (a full mirror, not a floor)
 
 The safety *floor* for an unattended run is the deny-by-default permission scope

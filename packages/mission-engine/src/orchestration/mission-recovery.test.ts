@@ -14,7 +14,7 @@ const SPECIALIST = 'core:test-qa-engineer';
 function opaqueContextHistory(contextId = '/root/proof1_qa'): readonly CanonicalEvent[] {
   const binding = { stage: 'pre-implementation', reviewRound: 1, inputHash: HASH, contractVersion: 1 };
   return [
-    { ...entry(1, 'mission.started', { planHash: HASH, runtime: 'codex' }), source: 'void-harness:mission' },
+    { ...entry(1, 'mission.started', { planHash: HASH, runtime: 'codex', runtimeAttested: true, mode: 'team' }), source: 'void-harness:mission' },
     { ...entry(2, 'specialist.requested', { ...binding, runtime: 'codex', planHash: HASH }),
       subject: SPECIALIST, source: 'void-harness:mission.dispatch' },
     { ...entry(3, 'specialist.started', { ...binding, contextId }), subject: SPECIALIST },
@@ -87,9 +87,10 @@ describe('recovery of the proven opaque context validator defect', () => {
     ['unmatched request plan', 2, { planHash: `sha256:${'b'.repeat(64)}` }],
     ['unmatched request contract', 2, { contractVersion: 2 }],
     ['later review round', 4, { reviewRound: 2 }],
+    ['unattested runtime', 1, { runtimeAttested: false }],
   ] as const)('refuses %s', (_label, seq, patch) => {
     const events = opaqueContextHistory().map(item => item.seq !== seq ? item : {
-      ...item, payload: { ...Object(item.payload), ...patch },
+      ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), ...patch },
     });
     expect(planStoppedMissionRecovery(opaqueContextInput(events))).toMatchObject({ kind: 'refused' });
   });
@@ -100,8 +101,8 @@ describe('recovery of the proven opaque context validator defect', () => {
     { limitations: ['No real observation'] },
   ])('never upgrades unresolved evidence %j', patch => {
     const events = opaqueContextHistory().map(item => item.kind !== 'specialist.completed' ? item : {
-      ...item, payload: { ...Object(item.payload), completion: {
-        ...Object(Object(item.payload).completion), ...patch,
+      ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), completion: {
+        ...((item.payload as Readonly<Record<string, JsonValue>>)['completion'] as Readonly<Record<string, JsonValue>>), ...patch,
       } },
     });
     expect(planStoppedMissionRecovery(opaqueContextInput(events)))
@@ -110,13 +111,15 @@ describe('recovery of the proven opaque context validator defect', () => {
 
   it('refuses an incomplete or repeated preparation panel', () => {
     const history = opaqueContextHistory();
+    const [, requested, started, completed, closure] = history;
+    if (!requested || !started || !completed || !closure) throw new Error('Complete fixture required');
     for (const extra of [
-      { ...history[1]!, subject: 'core:security-engineer' },
-      history[2]!,
-      history[3]!,
-      { ...history[1]!, kind: 'lead-writer.completed' },
+      { ...requested, subject: 'core:security-engineer' },
+      started,
+      completed,
+      { ...requested, kind: 'lead-writer.completed' },
     ]) {
-      const events = [...history.slice(0, -1), extra, history.at(-1)!]
+      const events = [...history.slice(0, -1), extra, closure]
         .map((item, index) => ({ ...item, seq: index + 1, eventId: id(index + 1) }));
       const candidate = opaqueContextInput(events);
       expect(planStoppedMissionRecovery({ ...candidate,

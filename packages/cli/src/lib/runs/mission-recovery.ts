@@ -69,7 +69,8 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
   if (disposition['kind'] === 'controller-defect') {
     const defect = disposition['defect'];
     if (!exact(disposition, ['kind', 'defect'])
-      || (defect !== 'partial-fanout-round' && defect !== 'stale-input-dispatch')) invalid();
+      || (defect !== 'partial-fanout-round' && defect !== 'stale-input-dispatch'
+        && defect !== 'opaque-native-context')) invalid();
     return { ...base, disposition: { kind: 'controller-defect', defect } };
   }
   const commandCorrection = disposition['kind'] === 'command-correction';

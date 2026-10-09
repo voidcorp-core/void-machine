@@ -25,13 +25,28 @@ function runRegistry(scenario: string, visibleAfter = 360) {
   const limits = Object.fromEntries(
     [...RELEASE.matchAll(/^ {6}(MAX_\w+): (\d+)$/gm)].map((match) => [match[1], match[2]]),
   );
+  // Classifier behavior has its own executable contract. Long propagation cases
+  // double only that registry I/O boundary, so polling does not launch 73 Nodes.
+  // Existing-version and fatal cases below still execute the full classifier.
+  const pollingBoundary = ['absent', 'provenance'].includes(scenario) ? `
+    query_registry() {
+      if [[ ! -s "$CASE_ROOT/published" ]]; then echo absent; return; fi
+      elapsed=$(< "$CASE_ROOT/elapsed")
+      if (( elapsed >= VISIBLE_AFTER )); then echo existing
+      elif [[ "$SCENARIO" == provenance ]]; then echo retry
+      else echo absent; fi
+    }
+  ` : '';
+  const script = source.split('\n').map((line) => line.slice(10)).join('\n')
+    .replace('\nstate=retry\n', `${pollingBoundary}\nstate=retry\n`);
   const result = spawnSync('bash', ['-c', `
-    sleep() { echo "$(( $(cat "$CASE_ROOT/elapsed") + $1 ))" > "$CASE_ROOT/elapsed"; }
+    node() { "$NODE_BINARY" "$@"; }
+    sleep() { echo "$(( $(< "$CASE_ROOT/elapsed") + $1 ))" > "$CASE_ROOT/elapsed"; }
     npm() {
       if [[ "$1" == publish ]]; then echo publish >> "$CASE_ROOT/published"; return; fi
       if [[ "$1" != view ]]; then return 90; fi
       echo "$*" >> "$CASE_ROOT/queries"
-      elapsed=$(cat "$CASE_ROOT/elapsed")
+      elapsed=$(< "$CASE_ROOT/elapsed")
       if [[ "$SCENARIO" == existing ]]; then echo "$MATCHING"; return; fi
       if [[ ! -s "$CASE_ROOT/published" ]]; then
         echo '{"error":{"code":"E404"}}'; return 1
@@ -41,20 +56,25 @@ function runRegistry(scenario: string, visibleAfter = 360) {
         auth401) echo '{"error":{"code":"E401"}}'; return 1 ;;
         auth403) echo '{"error":{"code":"E403"}}'; return 1 ;;
         malformed) echo 'not json'; return ;;
+        fetch-other) echo '{"error":{"code":"FETCH_ERROR","summary":"invalid response"}}'; return 1 ;;
       esac
       if (( elapsed >= VISIBLE_AFTER )); then echo "$MATCHING"; return; fi
+      if [[ "$SCENARIO" == timeout ]]; then
+        echo '{"error":{"code":"FETCH_ERROR","summary":"network timeout at: https://registry.npmjs.org/voidmachine","detail":""}}'
+        return 1
+      fi
       if [[ "$SCENARIO" == provenance ]]; then
         echo "$DELAYED"
       else
         echo '{"error":{"code":"E404"}}'; return 1
       fi
     }
-    ${source.split('\n').map((line) => line.slice(10)).join('\n')}
+    ${script}
   `], {
     encoding: 'utf8',
     timeout: 8_000,
     env: {
-      ...process.env, ...limits, CASE_ROOT: root, SCENARIO: scenario,
+      ...process.env, ...limits, CASE_ROOT: root, SCENARIO: scenario, NODE_BINARY: process.execPath,
       VISIBLE_AFTER: String(visibleAfter), MATCHING, DELAYED: JSON.stringify({ integrity: INTEGRITY }),
       EXPECTED_INTEGRITY: INTEGRITY,
       EXPECTED_PACKAGE: 'voidmachine', RELEASE_VERSION: '4.0.0', TARBALL_PATH: 'fixture.tgz',
@@ -117,7 +137,15 @@ describe('registry convergence in the publishing workflow', () => {
     expect(publish).toMatch(/^ {4}timeout-minutes: 30$/m);
   });
 
-  it.each(['conflict', 'auth401', 'auth403', 'malformed'])(
+  it('continues after the actual npm HTTP-timeout error without publishing again', () => {
+    const result = runRegistry('timeout', 10);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.elapsed).toBe(10);
+    expect(result.output).toBe('state=new\n');
+    expect(result.published).toBe('publish\n');
+  });
+
+  it.each(['conflict', 'auth401', 'auth403', 'malformed', 'fetch-other'])(
     'rejects %s immediately after publishing', (state) => {
     const result = runRegistry(state);
     expect(result.status).not.toBe(0);

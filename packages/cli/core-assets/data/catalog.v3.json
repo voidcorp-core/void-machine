@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:607962ba58706b1ab0eb4af417d2ba7e5cd0698cf7a4871f91d98d540aa98ece"
+    "rootHash": "sha256:175bd2ef8585c3a731249dc0fd6e1d3a493515514157d5d40f78c170dfee8270"
   },
   "nodes": [
     {
@@ -3534,7 +3534,7 @@
       "label": "void-autopilot",
       "data": {
         "legacy": {
-          "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a bounded review gates the GitHub merge queue until drained or stopped.",
+          "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a local review verdict gates each merge until drained or stopped.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3551,7 +3551,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 358,
+          "lines": 391,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 6056,
+          "staticTokens": 6886,
           "type": "skill"
         }
       },
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 5527,
+          "staticTokens": 5536,
           "type": "skill"
         }
       },
@@ -4649,6 +4649,54 @@
           {
             "kind": "path",
             "ref": "packages/core/skills/void-observability/SKILL.md",
+            "hashOrVersion": "catalog-v1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog:skill:skill:void-orchestrate",
+      "kind": "skill",
+      "label": "void-orchestrate",
+      "data": {
+        "legacy": {
+          "description": "Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.",
+          "enforcement": {
+            "floor": "ci",
+            "inline": {
+              "claude": "pretooluse",
+              "codex": "pretooluse",
+              "hermes": "ci-only"
+            }
+          },
+          "evalTargets": [
+            {
+              "provider": "anthropic",
+              "runtime": "claude",
+              "tier": "opus"
+            }
+          ],
+          "id": "skill:void-orchestrate",
+          "lines": 219,
+          "name": "void-orchestrate",
+          "owner": "folpe",
+          "pack": null,
+          "runtimes": [
+            "claude",
+            "codex"
+          ],
+          "source": "packages/core/skills/void-orchestrate/SKILL.md",
+          "staticTokens": 2845,
+          "type": "skill"
+        }
+      },
+      "provenance": {
+        "origin": "extracted",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "path",
+            "ref": "packages/core/skills/void-orchestrate/SKILL.md",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -5172,7 +5220,7 @@
             }
           ],
           "id": "skill:void-ticket",
-          "lines": 239,
+          "lines": 238,
           "name": "void-ticket",
           "owner": "folpe",
           "pack": null,
@@ -5181,7 +5229,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-ticket/SKILL.md",
-          "staticTokens": 3276,
+          "staticTokens": 3317,
           "type": "skill"
         }
       },

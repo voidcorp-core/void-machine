@@ -15,6 +15,8 @@ import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js
 import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
 import { sessionStartOutput } from './lifecycle/context.js';
 import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
+import { executeHerdrMetadata } from './lifecycle/herdr-metadata-executor.js';
+import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
 import { executeFormat } from './lifecycle/format-executor.js';
@@ -55,19 +57,49 @@ async function readStdin(ciContent: boolean): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function writeVerdict(
-  rule: RuleName,
-  verdict: ReturnType<typeof evaluateRule>,
-  write: (message: string) => void,
-): void {
-  if (verdict.code === 'ALLOW' || verdict.code === 'OVERRIDE') return;
+function verdictMessage(rule: RuleName, verdict: ReturnType<typeof evaluateRule>): string {
   const evidence = verdict.evidence.length === 0
     ? ''
     : `\n${verdict.evidence.map((item) => `- ${item}`).join('\n')}`;
   // Name the doctrine, do not load it. A refusal that only states the rule
   // leaves the skill that explains it unopened, which is how this harness ran
   // 26,440 hook executions against 4 skill activations.
-  write(`${verdict.code}: ${withGoverningSkill(rule, verdict.message)}${evidence}\n`);
+  return `${verdict.code}: ${withGoverningSkill(rule, verdict.message)}${evidence}\n`;
+}
+
+/**
+ * Refuse the tool call in the channel the runtime reads. Claude Code takes exit
+ * 2 with the reason on stderr. Codex runs a hook through the session shell, and
+ * PowerShell, its default on Windows, turns any non-zero native exit into 1,
+ * which Codex treats as a failed hook and lets the call through. Exit 0 is the
+ * only status every shell carries, so Codex gets its documented PreToolUse
+ * denial on stdout instead, escaped to ASCII so no console code page can
+ * corrupt it on the way.
+ */
+function refuse(agentRuntime: AgentRuntime, reason: string): void {
+  if (agentRuntime !== 'codex') {
+    process.stderr.write(reason);
+    process.exitCode = 2;
+    return;
+  }
+  const denial = JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason: reason.trimEnd(),
+    },
+  }).replace(
+    /[\u007f-\uffff]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+  process.stdout.write(`${denial}\n`);
+  process.exitCode = 0;
+}
+
+function enforcementRuntime(): AgentRuntime {
+  return process.argv[2] === 'enforce'
+    ? runtime(process.argv[4] ?? process.env['VOID_AGENT_RUNTIME'])
+    : 'unknown';
 }
 
 function runtime(value: string | undefined): AgentRuntime {
@@ -257,6 +289,10 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
         ? executeTypecheck(root, process.env)
         : hook === 'large-change'
           ? executeLargeChange(root, process.env)
+        : hook === 'delegation-result'
+          ? executeDelegationResult(rawInput, Date.now())
+        : hook === 'herdr-metadata'
+          ? executeHerdrMetadata(rawInput, root, process.env, agentRuntime)
         : undefined;
   if (execution === undefined) return;
   if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);
@@ -322,17 +358,26 @@ async function main(): Promise<void> {
         projectRoot(),
       );
     }
-    writeVerdict(rule, verdict, (message) => process.stderr.write(message));
-    if (!verdict.allow) process.exitCode = 2;
+    if (verdict.allow) {
+      // An allowed verdict that still carries a finding is advice, never a decision.
+      if (verdict.code !== 'ALLOW' && verdict.code !== 'OVERRIDE') {
+        process.stderr.write(verdictMessage(rule, verdict));
+      }
+      return;
+    }
+    refuse(enforcementRuntime(), verdictMessage(rule, verdict));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ENFORCEMENT_ERROR';
-    process.stderr.write(`HOOK_INPUT_REJECTED: ${message}\n`);
-    process.exitCode = 2;
+    refuse(enforcementRuntime(), `HOOK_INPUT_REJECTED: ${message}\n`);
   }
 }
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : 'UNKNOWN_ENFORCEMENT_ERROR';
+  if (process.argv[2] === 'enforce' || process.argv[2] === 'enforce-ci') {
+    refuse(enforcementRuntime(), `HOOK_RUNNER_FAILED: ${message}\n`);
+    return;
+  }
   process.stderr.write(`HOOK_RUNNER_FAILED: ${message}\n`);
-  process.exitCode = process.argv[2] === 'enforce' || process.argv[2] === 'enforce-ci' ? 2 : 0;
+  process.exitCode = 0;
 });

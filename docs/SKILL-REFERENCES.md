@@ -32,6 +32,7 @@ target of a redirection, and a sibling test already asserts each one still ships
 | `void-implement` | `packages/cli/src/lib/claude-md.ts` |
 | `void-learn` | `packages/cli/src/lib/claude-md.ts`<br>`packages/hook-runner/src/rules/protected-file.ts` |
 | `void-observability` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
+| `void-orchestrate` | `packages/cli/src/commands/autopilot-review.ts`<br>`packages/cli/src/lib/claude-md.ts` |
 | `void-security-guidance` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
 | `void-tdd` | `packages/cli/scripts/conformance-install.mjs`<br>`packages/cli/src/commands/init.ts`<br>`packages/cli/src/lib/claude-md.ts`<br>`packages/cli/src/lib/self-host/doctor.ts`<br>`packages/harness-graph/src/behavior/index.ts`<br>`packages/hook-runner/src/enforcement/governing-skill.ts`<br>`packages/hook-runner/src/invocation.ts` |
 | `void-testing` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
@@ -62,7 +63,6 @@ says which it is.
 | `void-layout` | module owning the void directory layout |
 | `void-machine-legacy` | portable legacy conformance contract family |
 | `void-machine` | private TypeScript Machine package, `packages/void-machine/` |
-| `void-mission-presentation-v1` | presentation workspace owner metadata |
 | `void-migration` | name of the void layout migration check |
 | `void-probe` | observed write path written by the hook probe |
 | `void-project-benchmark` | project-graph benchmark fixture prefix |

@@ -22,6 +22,31 @@ const CONTRACT_VERSIONS = Object.fromEntries(
   TEST_SPECIALIST_IDS.map((id) => [id, 1]),
 );
 
+describe('opaque native context identity', () => {
+  it.each(['/root/proof1_observability', '/root/proof1_product', '/root/proof1_security',
+    '/root/proof1_qa', '/', `/${'a'.repeat(159)}`])('preserves %s as identity data', contextId => {
+    const state = review(TEST_SPECIALIST_IDS.map((id, index) => completion(id,
+      index === 0 ? { contextId } : {})));
+    expect(state.status).toBe('ready-for-verdict');
+    expect(state.issues).toEqual([]);
+  });
+
+  it.each(['', ' ', '   ', 'a'.repeat(161),
+    ...Array.from({ length: 32 }, (_, index) => `/root/${String.fromCharCode(index)}probe`),
+    ...Array.from({ length: 33 }, (_, index) => `/root/${String.fromCharCode(index + 127)}probe`),
+  ])('rejects blank, control or oversized identity %j', contextId => {
+    expect(review([completion('core:solution-architect', { contextId })])).toMatchObject({
+      status: 'degraded', issues: [{ code: 'invalid-completion' }],
+    });
+  });
+
+  it('still rejects reuse of an opaque native context by another specialist', () => {
+    const state = review(TEST_SPECIALIST_IDS.map(id => completion(id, { contextId: '/root/proof1_shared' })));
+    expect(state.status).toBe('degraded');
+    expect(state.issues.map(issue => issue.code)).toContain('reused-context');
+  });
+});
+
 function completion(
   specialistId: TestSpecialistId,
   overrides: {

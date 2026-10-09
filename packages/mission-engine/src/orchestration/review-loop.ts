@@ -92,7 +92,12 @@ interface CompletionEnvelope {
 }
 
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
-const CONTEXT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/;
+/** Native context identity is opaque data, matching lifecycle ingestion. */
+export function validNativeContextId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 160
+    && [...value].every(char => char.charCodeAt(0) >= 32
+      && (char.charCodeAt(0) < 127 || char.charCodeAt(0) > 159));
+}
 const SEVERITY_RANK: Readonly<Record<ReviewFindingSeverity, number>> = {
   low: 0,
   medium: 1,
@@ -131,7 +136,7 @@ function parseEnvelope(event: CanonicalEvent): CompletionEnvelope | undefined {
     || Number(reviewRound) > 8
     || typeof payload.inputHash !== 'string'
     || !SHA256.test(payload.inputHash)
-    || (!(typeof payload.contextId === 'string' && CONTEXT_ID.test(payload.contextId))
+    || (!validNativeContextId(payload.contextId)
       && completion?.review?.provenance.kind !== 'review-artifact')
     || (payload.stage !== 'pre-implementation' && payload.stage !== 'post-implementation')
     || completion === undefined
@@ -365,8 +370,28 @@ function latestBySpecialist(
   return latest;
 }
 
+/** Shared canonical reconciliation for controller and native local review admission. */
+export type ReviewFindingCompletion = Pick<CompletionEnvelope, 'event' | 'completion'>;
+export function reconcileReviewFindings(
+  completions: readonly ReviewFindingCompletion[], validProofIds: readonly string[],
+): readonly NormalizedReviewFinding[] {
+  const resolved = new Set<string>();
+  for (const item of [...completions].sort((left, right) => left.event.seq - right.event.seq)) {
+    for (const resolution of item.completion.review?.resolutions ?? []) {
+      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
+        && resolution.proofIds.every(id => validProofIds.includes(id))) {
+        resolved.add(resolution.findingId);
+      } else {
+        resolved.delete(resolution.findingId);
+      }
+    }
+  }
+  return mergeFindings([...completions])
+    .filter(finding => !resolved.has(finding.sourceId));
+}
+
 function mergeFindings(
-  completions: readonly CompletionEnvelope[],
+  completions: readonly ReviewFindingCompletion[],
 ): readonly NormalizedReviewFinding[] {
   const findings = new Map<string, NormalizedReviewFinding>();
   for (const envelope of completions) {
@@ -547,19 +572,7 @@ export function reduceReviewLoop(input: ReviewLoopInput): ReviewLoopState {
     ? Math.max(collected.nextRound, input.contractMigration?.reviewRound ?? 1) : collected.nextRound;
   const history = input.maxCorrectionBatches === undefined ? [] : collected.history.filter(item =>
     input.requiredSpecialists.includes(item.completion.specialistId));
-  const resolved = new Set<string>();
-  for (const item of [...history, ...current].sort((left, right) => left.event.seq - right.event.seq)) {
-    for (const resolution of item.completion.review?.resolutions ?? []) {
-      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
-        && resolution.proofIds.every(id => input.validProofIds?.includes(id))) {
-        resolved.add(resolution.findingId);
-      } else {
-        resolved.delete(resolution.findingId);
-      }
-    }
-  }
-  const findings = mergeFindings([...history, ...current])
-    .filter(finding => !resolved.has(finding.sourceId));
+  const findings = reconcileReviewFindings([...history, ...current], input.validProofIds ?? []);
   const status = decideStatus({
     issues,
     current,

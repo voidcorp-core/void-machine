@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,10 +10,82 @@ import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
 import { dispatchMissionSpecialists, planMission, recoverStoppedMission, recordMissionClosure } from '../../commands/mission.js';
 import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
+import { parseMissionRecoveryRequest } from './mission-recovery.js';
 import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 
 const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core');
 const ID = 'mis_0123456789abcdef0123456789abcdef';
+
+it.each(['fresh', 'historically-stopped'] as const)(
+  'uses actual opaque lifecycle receipts for %s preparation without re-emitting them', async mode => {
+    const root = await mkdtemp(join(tmpdir(), 'void-opaque-context-'));
+    vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-opaque-session');
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd: root });
+      await wireCodexAgents(root, CORE);
+      const body = '# PROOF-1\n\nCreate proof-1.txt containing DEV-930 proof 1.\n';
+      await writeFile(join(root, 'PROOF-1.md'), body);
+      await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'opaque-context-fixture', private: true }));
+      execFileSync('git', ['add', 'PROOF-1.md', 'package.json'], { cwd: root });
+      execFileSync('git', ['-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
+        'commit', '--quiet', '-m', 'test: seed opaque context fixture'], { cwd: root });
+      const initial = await planMission(root, 'PROOF-1.md');
+      expect(initial.context).toEqual({ status: 'complete', issues: [] });
+      const plan: MissionSpecialistPlan = { planHash: initial.planHash, context: initial.context,
+        specialists: initial.specialists.map(value => ({ specialistId: value.specialistId,
+          contractVersion: value.contractVersion, inputHash: value.proof.inputHash,
+          state: value.state, stages: value.stages })) };
+      const ticket = { path: 'PROOF-1.md', contentHash: `sha256:${createHash('sha256').update(body).digest('hex')}` };
+      await createMission(root, { missionId: ID, title: 'Opaque context recovery', mode: 'team',
+        teamController: { planHash: plan.planHash, routingHash: missionControllerRoutingHash(plan, ticket),
+          leadWriterId: 'writer:primary', runtime: 'codex', runtimeAttested: true } });
+      await writeMissionControllerPlan(root, ID, plan, ticket);
+      const roots = resolveProjectRoots(root);
+      const input = { kind: 'dispatch' as const, missionId: ID, json: true };
+      const dispatched = await dispatchMissionSpecialists(roots, input);
+      expect(dispatched.envelopes.length).toBeGreaterThan(1);
+      for (const [index, envelope] of dispatched.envelopes.entries()) {
+        const contextId = `/root/proof1_${index}`;
+        await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
+        await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
+          completion: { schemaVersion: 1, specialistId: envelope.specialistId,
+            contractVersion: envelope.contractVersion, completionId: `proof1_completion_${index}`,
+            verdict: 'pass', findings: [], evidenceRequests: [], limitations: [] } });
+      }
+      if (mode === 'historically-stopped') {
+        // Fixture of the original dispatch closure, not a replacement receipt.
+        await recordMissionClosure(root, ID, 'controller-stop', 'void-harness:mission.dispatch');
+        const path = join(root, '.void/machine/runs', ID, 'events.jsonl');
+        const before = await readFile(path, 'utf8');
+        const stream = (await inspectMission(root, ID, { dependencies: {} })).stream;
+        const request = parseMissionRecoveryRequest({ schemaVersion: 1,
+          closureEventId: stream.events.at(-1)?.eventId, expectedJournalHash: canonicalJsonHash(stream.events),
+          disposition: { kind: 'controller-defect', defect: 'opaque-native-context' } });
+        expect(await recoverStoppedMission(roots, ID, request)).toMatchObject({ recorded: true });
+        const after = await readFile(path, 'utf8');
+        expect(after.startsWith(before)).toBe(true);
+        const recovered = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
+        expect(recovered).toHaveLength(stream.events.length + 1);
+        expect(recovered.at(-1)).toMatchObject({ kind: 'mission.recovered', payload: {
+          preservedCompletionEventIds: stream.events.filter(event => event.kind === 'specialist.completed').map(event => event.eventId),
+          invalidatedCompletionEventIds: [], inadmissibleCompletionEventIds: [], roundCorrections: [],
+          consumedRounds: 1, nextAction: 'verification',
+          observation: { contractVersions: Object.fromEntries(dispatched.envelopes.map(envelope =>
+            [envelope.specialistId, envelope.contractVersion])) },
+        } });
+        const payload = recovered.at(-1)?.payload;
+        if (typeof payload !== 'object' || payload === null || !('observation' in payload)) throw new Error('Recovery receipt required');
+        expect((payload.observation as { contractVersions: object }).contractVersions)
+          .toEqual(Object.fromEntries(dispatched.envelopes.map(envelope => [envelope.specialistId, envelope.contractVersion])));
+        expect(await recoverStoppedMission(roots, ID, request)).toMatchObject({ recorded: false });
+        expect(await readFile(path, 'utf8')).toBe(after);
+      }
+      expect((await dispatchMissionSpecialists(roots, input)).action.kind).toBe('run-lead-writer');
+    } finally {
+      vi.unstubAllEnvs();
+      await rm(root, { recursive: true });
+    }
+  });
 
 it('keeps live preparation B authoritative after recovery instead of implementing from the old PASS panel A', async () => {
   const root = await mkdtemp(join(tmpdir(), 'void-recovery-routing-'));

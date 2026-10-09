@@ -9,8 +9,7 @@
 // gh 2.100: `gh pr view --json` exposes no merge queue field, so the queue is
 // read with `gh api graphql`: `repository.mergeQueue(branch)` for its presence,
 // `pullRequest.timelineItems` for the last queue event of each pull request and
-// the ejections of its head, `pullRequest.commits` for its review rounds, and
-// `pullRequest.isInMergeQueue` where the armed state itself is at stake: once
+// the ejections of its head, and `pullRequest.isInMergeQueue` where the armed state itself is at stake: once
 // the checks pass, arming queues the pull request and leaves no
 // `autoMergeRequest` for `gh pr view` to show.
 // https://docs.github.com/en/graphql/reference/objects#mergequeue
@@ -23,8 +22,7 @@ import { join, relative } from 'node:path';
 import { z } from 'zod';
 import { selectBase } from './base-selection.js';
 import { autopilotFailure } from './errors.js';
-import { judgmentsOf, latestJudgment } from './judgment-comment.js';
-import { admitReviewVerdict } from './judgments.js';
+import { latestJudgment } from './judgment-comment.js';
 import type {
   ChangedFile,
   GithubObservation,
@@ -54,15 +52,6 @@ export const PULL_REQUEST_FIELDS = [
   'changedFiles',
 ] as const;
 
-/**
- * The review check, a check run the review job creates on the head with its
- * GITHUB_TOKEN: GitHub Actions is its only source, and branch protection
- * accepts it from nowhere else. It is the review, not a job enforcing one.
- */
-export const REVIEW_CHECK_NAME = 'independent-review';
-/** The account the review job posts its verdict comment as, as `gh pr view` names it. */
-export const REVIEW_AUTHOR = 'github-actions';
-
 /** A loop holds four slots; this bounds one tick's reads with room to spare. */
 const PULL_REQUESTS_MAX = 32;
 const GH_TIMEOUT_MS = 30_000;
@@ -73,14 +62,7 @@ const checkRunSchema = z.object({
   name: z.string(),
   status: z.string(),
   conclusion: z.string(),
-  // Read only on the review job, where a GitHub Actions run URL names the run.
-  detailsUrl: z.unknown().optional(),
 });
-
-// `https://github.com/<owner>/<repo>/actions/runs/<run>/job/<id>`: the run is
-// what `gh run rerun <run> --failed` takes. The trailing id is not a job id gh
-// accepts (see `gh run rerun --help`), so it is not read.
-const ACTIONS_RUN_URL = /\/actions\/runs\/([1-9][0-9]{0,18})\//;
 
 const statusContextSchema = z.object({
   __typename: z.literal('StatusContext'),
@@ -102,12 +84,9 @@ const pullRequestViewSchema = z.object({
   statusCheckRollup: z.array(
     z.discriminatedUnion('__typename', [checkRunSchema, statusContextSchema]),
   ),
-  // Oldest first, as gh prints them: the body for judgment blocks, the author
-  // to tell the review job's verdict from anyone else's text.
-  comments: z.array(z.object({
-    body: z.string(),
-    author: z.object({ login: z.string() }).nullable().optional(), // allow-null: a deleted account
-  })),
+  // Oldest first, as gh prints them: the body for the conflict class a worker
+  // posts. A review verdict found there is a copy for humans and is not read.
+  comments: z.array(z.object({ body: z.string() })),
   // GitHub's own count, which tells the kernel a file list was cut short.
   changedFiles: z.int().nonnegative(),
 });
@@ -131,6 +110,7 @@ export const PULL_REQUEST_FILE_PAGES_MAX = 10;
 
 type RollupEntry = z.infer<typeof pullRequestViewSchema>['statusCheckRollup'][number];
 type CheckState = 'pending' | 'passing' | 'failing';
+type RollupState = CheckState | 'none';
 
 // Check run conclusions that do not hold a merge back, per the GitHub docs on
 // required status checks: success, neutral and skipped all satisfy one.
@@ -145,31 +125,18 @@ function checkStateOf(entry: RollupEntry): CheckState {
   return entry.state === 'PENDING' || entry.state === 'EXPECTED' ? 'pending' : 'failing';
 }
 
-function checksOf(rollup: readonly RollupEntry[]): CheckState {
-  const states = rollup
-    .filter((entry) =>
-      entry.__typename !== 'CheckRun' || entry.name !== REVIEW_CHECK_NAME,
-    )
-    .map(checkStateOf);
+/**
+ * Every check on the head, a review check a repository runs on GitHub included:
+ * the loop's own verdict is local, and a check is one more thing that must pass.
+ */
+function checksOf(rollup: readonly RollupEntry[]): RollupState {
+  const states = rollup.map(checkStateOf);
   if (states.includes('failing')) return 'failing';
-  // Nothing registered yet is not a pass: the checks of a fresh push are pending.
-  if (states.length === 0 || states.includes('pending')) return 'pending';
-  return 'passing';
-}
-
-/** The review check on the head, and the Actions run that published it. */
-function reviewOf(
-  rollup: readonly RollupEntry[],
-): Pick<PullRequestObservation, 'review' | 'reviewCheckRun'> {
-  const check = rollup.find(
-    (entry) => entry.__typename === 'CheckRun' && entry.name === REVIEW_CHECK_NAME,
-  );
-  if (check === undefined || check.__typename !== 'CheckRun') return { review: 'absent' };
-  const url = typeof check.detailsUrl === 'string' ? check.detailsUrl : '';
-  const run = ACTIONS_RUN_URL.exec(url)?.[1];
-  const state = checkStateOf(check);
-  const review = state === 'passing' ? 'success' : state === 'failing' ? 'failure' : 'pending';
-  return { review, ...(run === undefined ? {} : { reviewCheckRun: Number(run) }) };
+  // No check at all is a project without CI, which merges on its local verdict.
+  // The rollup is read on the head that verdict judged, and the verdict takes
+  // minutes: a CI a push starts has registered its checks long before.
+  if (states.length === 0) return 'none';
+  return states.includes('pending') ? 'pending' : 'passing';
 }
 
 function unreadable(what: string, cause: string): never {
@@ -192,44 +159,6 @@ function parseJson<T>(what: string, schema: z.ZodType<T>, text: string): T {
   if (parsed.success) return parsed.data;
   const issues = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
   return unreadable(what, issues.join('; '));
-}
-
-/** Every admissible verdict the review job posted, oldest first. */
-function postedVerdicts(comments: readonly PullRequestComment[]) {
-  return comments
-    .filter((comment) => comment.author?.login === REVIEW_AUTHOR)
-    .flatMap((comment) => judgmentsOf([comment.body], 'review-verdict'))
-    .flatMap((raw) => {
-      const admission = admitReviewVerdict(raw);
-      return admission.ok ? [admission.value] : [];
-    });
-}
-
-/**
- * The verdict the review job posted last on this head, when the review check
- * on the same head agrees with it: clean with success, blocking with failure.
- * The check is what branch protection trusts; the comment carries the findings
- * a worker answers, so one that disagrees with the check is believed nowhere.
- */
-function believedVerdict(
-  comments: readonly PullRequestComment[],
-  headSha: string,
-  review: PullRequestObservation['review'],
-): unknown {
-  if (review !== 'success' && review !== 'failure') return undefined;
-  const latest = postedVerdicts(comments).filter((verdict) => verdict.headSha === headSha).at(-1);
-  if (latest === undefined) return undefined;
-  return (latest.blocking.length === 0) === (review === 'success') ? latest : undefined;
-}
-
-/**
- * The review rounds a pull request used: its distinct heads the review job
- * blocked. Read from what the job posted, so a job that failed without a
- * verdict, a crash the loop re-runs, is not a round.
- */
-function reviewRoundsOf(comments: readonly PullRequestComment[]): number {
-  const blocked = postedVerdicts(comments).filter((verdict) => verdict.blocking.length > 0);
-  return new Set(blocked.map((verdict) => verdict.headSha)).size;
 }
 
 /** One page of a pull request's files, each rename with its source. */
@@ -263,23 +192,18 @@ function readPullRequestFiles(run: GhRunner, number: number, changedFiles: numbe
 }
 
 
-type PullRequestComment = z.infer<typeof pullRequestViewSchema>['comments'][number];
 
 /**
  * One `gh pr view --json <PULL_REQUEST_FIELDS>` answer, without its GraphQL and
- * REST parts. The verdict and the rounds are read from the review job's own
- * comments, the review from the check it published.
+ * REST parts.
  */
 export function parsePullRequestView(
   text: string,
 ): Omit<PullRequestObservation, 'queue' | 'ejections' | 'files'> {
   const view = parseJson('pull request', pullRequestViewSchema, text);
   const bodies = view.comments.map((comment) => comment.body);
-  const { review, reviewCheckRun } = reviewOf(view.statusCheckRollup);
-  const verdict = believedVerdict(view.comments, view.headRefOid, review);
   const conflict = latestJudgment(bodies, 'conflict-class');
   return {
-    ...(verdict === undefined ? {} : { verdict }),
     ...(conflict === undefined ? {} : { conflict }),
     number: view.number,
     state: view.state === 'OPEN' ? 'open' : view.state === 'MERGED' ? 'merged' : 'closed',
@@ -291,18 +215,8 @@ export function parsePullRequestView(
     behind: view.mergeStateStatus === 'BEHIND',
     autoMerge: view.autoMergeRequest !== null, // allow-null: the absence gh reports
     checks: checksOf(view.statusCheckRollup),
-    review,
-    ...(reviewCheckRun === undefined ? {} : { reviewCheckRun }),
-    reviewFailures: reviewRoundsOf(view.comments),
     changedFiles: view.changedFiles,
   };
-}
-
-const runAttemptSchema = z.object({ attempt: z.int().positive() });
-
-/** The attempt of one Actions run, from `gh run view <run> --json attempt`. */
-export function parseRunAttempt(text: string): number {
-  return parseJson('run attempt', runAttemptSchema, text).attempt;
 }
 
 const graphqlErrors = z.array(z.object({ message: z.string() })).max(64).optional();
@@ -453,66 +367,87 @@ function observed<T>(what: string, read: () => T): T {
   }
 }
 
-const classicChecksSchema = z.object({ strict: z.boolean() });
-const branchRulesSchema = z.array(
-  z.object({ type: z.string(), parameters: z.unknown().optional() }),
-);
-
-const strictParameters = z.object({ strict_required_status_checks_policy: z.literal(true) });
+const defaultBranchSchema = z.object({
+  // allow-null: an empty repository has no default branch, and gh reports none.
+  defaultBranchRef: z.object({ name: z.string() }).nullable(),
+});
 
 /**
- * Without a merge queue the loop merges one pull request at a time, and that is
- * only safe when the base refuses a pull request that is not up to date: a
- * second one would otherwise merge on a combination no check ever ran. GitHub
- * says so in two places, classic protection (`strict`, readable with admin
- * rights) and rulesets (`strict_required_status_checks_policy`, readable by
- * anyone); either one suffices. Nothing readable saying so is a refusal.
- * https://docs.github.com/en/rest/branches/branch-protection#get-status-checks-protection
- * https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch
+ * The repository's default branch: the one that deploys when the programme
+ * names none. An empty name, or none at all, is undefined, and the kernel then
+ * refuses to merge anywhere it cannot tell apart from it.
  */
-function requireUpToDateBase(run: GhRunner, base: string): void {
-  const causes: string[] = [];
-  const read = <T>(
-    what: string,
-    schema: z.ZodType<T>,
-    args: readonly string[],
-  ): T | undefined => {
-    try {
-      return parseJson(what, schema, run(args));
-    } catch (error) {
-      causes.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
-      return undefined;
-    }
-  };
-  const classicEndpoint = `repos/{owner}/{repo}/branches/${base}/protection/required_status_checks`;
-  const classicArgs = ['api', classicEndpoint];
-  const classic = read('classic protection', classicChecksSchema, classicArgs);
-  if (classic?.strict === true) return;
-  if (classic !== undefined) causes.push('classic protection: `strict` is false');
-  const rulesArgs = ['api', `repos/{owner}/{repo}/rules/branches/${base}`];
-  const rules = read('branch rules', branchRulesSchema, rulesArgs);
-  const strict = rules?.some(
-    (rule) =>
-      rule.type === 'required_status_checks' && strictParameters.safeParse(rule.parameters).success,
-  );
-  if (strict === true) return;
-  if (rules !== undefined) {
-    causes.push('branch rules: no required status check demands an up to date branch');
-  }
-  throw autopilotFailure(
-    'AUTOPILOT_PROGRAM',
-    `${base} has no merge queue and does not require a branch up to date before merging`,
-    causes.join('; '),
-    `turn on the merge queue for ${base}, or require branches to be up to date before merging`,
-  );
+export function parseDefaultBranch(text: string): string | undefined {
+  const name = parseJson('default branch', defaultBranchSchema, text).defaultBranchRef?.name;
+  return name === undefined || name.trim().length === 0 ? undefined : name;
+}
+
+/** The default branch, read now: what `merge` and `arm` refuse to target. */
+export function readDefaultBranch(run: GhRunner): string | undefined {
+  return parseDefaultBranch(run(['repo', 'view', '--json', 'defaultBranchRef']));
+}
+
+const mergeMethodsSchema = z.object({
+  mergeCommitAllowed: z.boolean(),
+  squashMergeAllowed: z.boolean(),
+  rebaseMergeAllowed: z.boolean(),
+});
+
+export type MergeMethodFlag = '--merge' | '--squash' | '--rebase';
+
+/**
+ * The merge method the repository allows, a merge commit first: it keeps each
+ * commit of the unit, which the commit discipline makes bisectable. gh asks for
+ * one when it runs without a terminal and the base has no merge queue.
+ * https://cli.github.com/manual/gh_pr_merge
+ */
+export function parseMergeMethod(text: string): MergeMethodFlag {
+  const allowed = parseJson('merge methods', mergeMethodsSchema, text);
+  if (allowed.mergeCommitAllowed) return '--merge';
+  if (allowed.squashMergeAllowed) return '--squash';
+  if (allowed.rebaseMergeAllowed) return '--rebase';
+  return unreadable('merge methods', 'the repository allows no merge method at all');
+}
+
+export function readMergeMethod(run: GhRunner): MergeMethodFlag {
+  const fields = 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed';
+  return parseMergeMethod(run(['repo', 'view', '--json', fields]));
+}
+
+const compareSchema = z.object({ behind_by: z.int().nonnegative() });
+
+/**
+ * Whether the base has commits the head lacks. `mergeStateStatus` says BEHIND
+ * only when a protection requires the branch up to date, and a project with no
+ * protection is exactly the one that needs the loop to check it.
+ * https://docs.github.com/en/rest/commits/commits#compare-two-commits
+ */
+export function parseBehind(text: string): boolean {
+  return parseJson('base comparison', compareSchema, text).behind_by > 0;
+}
+
+/** Only the counts: the full comparison carries every commit and file. */
+const COMPARE_FIELDS = '{behind_by: .behind_by, ahead_by: .ahead_by, status: .status}';
+
+export function readBehind(run: GhRunner, base: string, headSha: string): boolean {
+  const endpoint = `repos/{owner}/{repo}/compare/${base}...${headSha}`;
+  return parseBehind(run(['api', endpoint, '--jq', COMPARE_FIELDS]));
 }
 
 export interface GithubRequest {
   readonly base: string;
   readonly pullRequests: readonly number[];
+  /**
+   * Whether the kernel needs the default branch: only when the programme names
+   * no deploying branch, so a tick depends on nothing it does not use.
+   */
+  readonly defaultBranch: boolean;
 }
 
-/** One tick's view of GitHub: the queue once, then each pull request and its queue event. */
+/**
+ * One tick's view of GitHub: the default branch and the queue once, then each
+ * pull request with its queue event and, without a queue, whether its base moved.
+ */
 export function observeGithub(run: GhRunner, request: GithubRequest): GithubObservation {
   if (request.pullRequests.length > PULL_REQUESTS_MAX) {
     throw autopilotFailure(
@@ -526,6 +461,9 @@ export function observeGithub(run: GhRunner, request: GithubRequest): GithubObse
   const mergeQueue = observed('the merge queue', () =>
     parseMergeQueuePresence(run([...queueArgs, '-f', `query=${QUEUE_QUERY}`])),
   );
+  const defaultBranch = request.defaultBranch
+    ? observed('the default branch', () => readDefaultBranch(run))
+    : undefined;
   const pullRequests = new Map<number, PullRequestObservation>();
   for (const number of request.pullRequests) {
     const viewArgs = ['pr', 'view', String(number), '--json', PULL_REQUEST_FIELDS.join(',')];
@@ -541,23 +479,15 @@ export function observeGithub(run: GhRunner, request: GithubRequest): GithubObse
     const event = observed(`#${number}`, () => parseQueueTimeline(timeline));
     const queue = queued ? 'queued' : event === 'queued' ? 'none' : event;
     const ejections = observed(`#${number}`, () => parseEjections(timeline));
-    // Read only when the loop may re-run the review: a review that failed and
-    // posted no verdict on this head crashed rather than judged.
-    const crashed = view.review === 'failure' && view.verdict === undefined;
-    const checkRun = crashed ? view.reviewCheckRun : undefined;
-    const attempt =
-      checkRun === undefined
-        ? {}
-        : {
-            reviewCheckAttempt: observed(`#${number}`, () =>
-              parseRunAttempt(run(['run', 'view', String(checkRun), '--json', 'attempt'])),
-            ),
-          };
     const files = observed(`#${number}`, () => readPullRequestFiles(run, number, view.changedFiles));
-    pullRequests.set(number, { ...view, files, queue, ejections, ...attempt });
+    // With a queue, GitHub rebuilds the combination itself; without one, the
+    // loop updates a head the base moved past before it merges it.
+    const behind = view.behind
+      || (!mergeQueue && view.state === 'open'
+        && observed(`#${number}`, () => readBehind(run, request.base, view.headSha)));
+    pullRequests.set(number, { ...view, behind, files, queue, ejections });
   }
-  if (!mergeQueue) requireUpToDateBase(run, request.base);
-  return { base: request.base, mergeQueue, pullRequests };
+  return { base: request.base, defaultBranch, mergeQueue, pullRequests };
 }
 
 /**

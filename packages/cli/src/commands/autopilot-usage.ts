@@ -2,7 +2,8 @@
 // loop. `runAutopilotCommand` is a function of (argv, stdin, context) and returns
 // what to print and with which exit code. The loop reads GitHub and git through
 // runners the context injects, so every command stays testable on captured
-// outputs; it never contacts the tracker and spawns no agent.
+// outputs; it never contacts the tracker. `review` is the one subcommand that
+// delegates an agent, the reviewer, through the kernel's delegation.
 
 import { autopilotFailure } from '../lib/autopilot/errors.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
@@ -11,22 +12,28 @@ export const USAGE = `
 ${PRODUCT_COMMAND} autopilot -- the deterministic kernel of the continuous delivery loop.
 
 Invoked by the /void-autopilot skill, which reads the tracker and pipes it in.
-The CLI decides; it never contacts Linear and spawns no agent. It reaches GitHub
-through gh and the shared Git state itself, because GitHub is the authority on a
-merge and the shared state is what a unit must not have touched.
+The CLI decides; it never contacts Linear. It reaches GitHub through gh and the
+shared Git state itself, because GitHub is the authority on a merge and the
+shared state is what a unit must not have touched. The one agent it delegates
+is coordinated natively; review collects the authentic receipt a merge rests on.
 
 Usage:
   echo '<LoopTracker>'           | ${PRODUCT_COMMAND} autopilot next [--json]
   ${PRODUCT_COMMAND} autopilot stop --drain | --now [--json]
   ${PRODUCT_COMMAND} autopilot fingerprint [--before <ticket> | --after <ticket>] [--json]
+  ${PRODUCT_COMMAND} autopilot merges [--by-human | --automatic] [--json]
+  ${PRODUCT_COMMAND} autopilot merge --ticket <id> --pr <number> --head <sha> [--json]
+  ${PRODUCT_COMMAND} autopilot update-branch --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
+  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
 signal, and prints the actions for each slot: assign, wait, hand-back-to-worker,
-mark-human-wait, enable-auto-merge, disable-auto-merge, rerun-review-check,
-requeue, drain, freeze, recap, with the humanWaitLabel a mark-human-wait sets
+mark-human-wait, review, merge, update-branch, enable-auto-merge,
+disable-auto-merge, requeue, drain, freeze, recap, with who merges this tick
+(merges) and the humanWaitLabel a mark-human-wait sets
 (autopilot.humanWaitLabel, default void:human-wait); humanWait on stdin is that
 label's presence. It never acts on them. stop writes
 .void/machine/autopilot/stop, read before every assignment; delete the file to
@@ -35,17 +42,30 @@ the digests of the shared Git state around one unit: local config and its
 includes, stash, tags, notes, remotes, the local base and deploy branches,
 replace refs, hooks/ and info/. The upstream (remote, merge) of every branch but
 those is left out, since units in flight set and remove their own. --after fails
-when it moved, and a second --before is refused. The review is not posted from here: a GitHub Actions job reviews every ready
-pull request and publishes its verdict as the independent-review check, which
-branch protection accepts from GitHub Actions alone, beside a verdict comment
-next reads back. arm answers
-enable-auto-merge: it records the head in .void/machine/autopilot/armed/<id>.json,
-arms on exactly that head, and reads GitHub back: armed is an auto-merge request
-or, once the checks pass on a base with a merge queue, a queue entry; a head
-already merged counts. disarm answers
+when it moved, and a second --before is refused. review answers review: it
+checks out the exact head in a detached worktree at the durable worktree
+location, checks its HEAD before and after and collects a fresh-context, read-only
+independent-code-reviewer receipt bound to exact commit, base, criteria and actual
+invocation. Awaiting-native-review asks ORCH to invoke and record it, then repeat
+the command under the same attempt deadline. The local record lives in
+.void/machine/autopilot/reviews/<id>/<sha>.json. next merges on that record
+alone; a verdict posted on GitHub is a copy nothing reads. merges --by-human
+writes .void/machine/autopilot/merge-hold.json: from the next tick every
+reviewed pull request goes to a person instead of merging; --automatic removes
+it, and an unreadable file counts as a hold. merge answers merge, on a base with
+no merge queue, and arm answers enable-auto-merge, on one with a queue: both
+prove again that no person holds the merges, that a clean local verdict holds
+exactly that head, and that the pull request targets the loop's base, never the
+branch that deploys. merge runs gh pr merge --match-head-commit, and when the
+base's policy refuses a direct merge it arms the native auto-merge on the same
+head; arm records the head in .void/machine/autopilot/armed/<id>.json, arms on
+exactly that head, and reads GitHub back: armed is an auto-merge request or,
+once the checks pass on a base with a merge queue, a queue entry; a head
+already merged counts. update-branch answers update-branch: GitHub merges the
+base into the branch if its head is still the one named. disarm answers
 disable-auto-merge, which next returns before any outcome that stops watching
-an armed pull request: its head moved since arm recorded it, no verdict of the review job
-proves it, no arm recorded it, a worker or a person takes the ticket, or an
+an armed pull request: its head moved since arm recorded it, no clean local
+verdict holds it, no arm recorded it, a worker or a person takes the ticket, or an
 immediate stop; it turns the auto-merge off, dequeues, reads GitHub back and
 fails while still armed. judgment admits a conflict class, bound to its
 headSha, and prints the comment block to post; next reads the latest one back
@@ -59,9 +79,10 @@ stdin JSON (LoopTracker):
              | { "ticketId", "outcome": "human-wait", "reason" }],
     "liveWorkers": ["<ticket id>"], "quota": "ok" | "low" }
 
-There is no --auto-merge flag. A machine merge is declared once in the program
-(autopilot.mergeGate: union-reviewed, plus deployBranch), and the loop arms one
-only on a head the review job passed, never into the branch that deploys.
+There is no --auto-merge flag. The loop merges on its own into the integration
+branch, only a head a local verdict passed, never into the branch that deploys
+(autopilot.deployBranch, or the repository default branch); a person who wants
+the merges runs merges --by-human.
 `.trimStart();
 
 /**
@@ -75,8 +96,12 @@ export const SUBCOMMANDS = Object.freeze({
   next: 'reads-stdin',
   stop: 'no-stdin',
   fingerprint: 'no-stdin',
+  merges: 'no-stdin',
+  merge: 'no-stdin',
+  'update-branch': 'no-stdin',
   arm: 'no-stdin',
   disarm: 'no-stdin',
+  review: 'no-stdin',
   judgment: 'reads-stdin',
 } as const);
 

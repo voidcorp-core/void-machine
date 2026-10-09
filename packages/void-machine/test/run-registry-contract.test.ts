@@ -1,0 +1,296 @@
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { createRunRegistry, resolveMachineRoot } from '../src/adapters/store/run-registry.js';
+import type { RunTransition } from '../src/core/delegation.js';
+
+const MISSION = 'mis_registry-contract';
+const RUN = 'run_0f0e0d0c-0b0a-4908-8706-050403020100';
+const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+const admitted: RunTransition = { seq: 1, at: 100, to: 'admitted', event: 'admitted', cause: 'c', action: 'a' };
+const dispatched: RunTransition = { seq: 2, at: 101, from: 'admitted', to: 'dispatched',
+  event: 'dispatched', cause: 'c', action: 'a' };
+
+function git(cwd: string, ...args: string[]): void {
+  execFileSync('git', args, { cwd, stdio: 'ignore' });
+}
+
+/** A main checkout and one linked worktree placed outside it, like a ticket worktree. */
+function repository(): { main: string; worktree: string } {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'vm-registry-')));
+  onTestFinished(() => rmSync(base, { recursive: true, force: true }));
+  const main = join(base, 'main');
+  mkdirSync(main);
+  git(main, 'init', '-q', '-b', 'main');
+  git(main, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'root');
+  const worktree = join(base, 'worktrees', 'ticket');
+  git(main, 'worktree', 'add', '-q', '-b', 'ticket', worktree);
+  return { main, worktree };
+}
+
+function registryIn(cwd: string, options: { now?: () => number; isAlive?: (pid: number) => boolean } = {}) {
+  const root = resolveMachineRoot(cwd);
+  if (!root.ok) throw new Error(root.cause);
+  return { root: root.root, registry: createRunRegistry({ machineRoot: root.root, ...options }) };
+}
+
+const run = (cwd: string) => ({ runId: RUN, missionId: MISSION, name: `vm-${RUN}`, role: 'review' as const,
+  runtime: 'claude' as const, cwd, agentType: 'independent-code-reviewer', ticket: 'DEV-923', model: undefined });
+
+describe('where runs are recorded', () => {
+  it('records a run launched from a worktree under the main checkout, via the common Git directory', async () => {
+    const { main, worktree } = repository();
+    const { root, registry } = registryIn(worktree);
+    expect(root).toBe(join(main, '.void', 'machine'));
+    const brief = await registry.create(run(worktree), admitted, 'Review the diff.');
+    expect(brief.path.startsWith(join(main, '.void', 'machine', 'runs', MISSION, 'agents', RUN))).toBe(true);
+    expect(readFileSync(brief.path, 'utf8')).toBe('Review the diff.');
+    expect(statSync(brief.path).mode & 0o777).toBe(0o600);
+    expect(existsSync(join(worktree, '.void'))).toBe(false);
+    expect(await registry.read(RUN)).toMatchObject({ runId: RUN, missionId: MISSION, transitions: [admitted] });
+  });
+
+  it('refuses a directory outside any Git repository', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'vm-outside-'));
+    onTestFinished(() => rmSync(outside, { recursive: true, force: true }));
+    expect(resolveMachineRoot(outside)).toMatchObject({ ok: false, action: expect.stringContaining('git') });
+  });
+});
+
+describe('transitions', () => {
+  it('lets exactly one writer record each sequence number', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    const outcomes = await Promise.all([registry.append(RUN, dispatched),
+      registry.append(RUN, { ...dispatched, to: 'failed' })]);
+    expect(outcomes.filter((outcome) => outcome === 'appended')).toHaveLength(1);
+    expect((await registry.read(RUN))?.transitions).toHaveLength(2);
+    expect(await registry.append(RUN, { ...dispatched, seq: 4 })).toBe('conflict');
+  });
+
+  it('lists the runs of a mission and every run recorded', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect((await registry.list(MISSION)).map((record) => record.runId)).toEqual([RUN]);
+    expect(await registry.list('mis_other-mission')).toEqual([]);
+    expect(await registry.runIds()).toEqual([RUN]);
+  });
+});
+
+describe('binding and results', () => {
+  function result(recordedAt: number, text = 'LGTM') {
+    return JSON.stringify({ schemaVersion: 1, sessionId: SESSION, recordedAt, lastAssistantMessage: text,
+      truncated: false });
+  }
+
+  it('claims the session with the result path the hook must write, and reads that result back', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(true);
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    const claim = JSON.parse(readFileSync(join(root, 'agents', 'sessions', `${SESSION}.json`), 'utf8'));
+    expect(claim).toEqual({ schemaVersion: 1,
+      resultPath: join(root, 'runs', MISSION, 'agents', RUN, 'result.json') });
+    expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(false);
+    writeFileSync(claim.resultPath, result(500));
+    expect(await registry.result(RUN)).toEqual({ sessionId: SESSION, recordedAt: 500, pendingWork: 0, text: 'LGTM',
+      truncated: false });
+    expect((await registry.read(RUN))?.binding).toEqual({ handle: '6d5ea8bb', sessionId: SESSION });
+  });
+
+  it('marks a new run as waiting for its binding in its directory, until it is bound or closed', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main, { now: () => 777 });
+    await registry.create(run(main), admitted, 'brief');
+    expect(JSON.parse(readFileSync(join(root, 'agents', 'pending', RUN), 'utf8'))).toEqual({ cwd: main, createdAt: 777 });
+    await registry.append(RUN, { ...dispatched, to: 'failed', event: 'refused' });
+    expect(existsSync(join(root, 'agents', 'pending', RUN))).toBe(false);
+  });
+
+  it('waits for a binding again when the run follows a new handle without its session', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main, { now: () => 900 });
+    await registry.create(run(main), admitted, 'brief');
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    await registry.bind(RUN, { handle: '9a012d67' });
+    expect(JSON.parse(readFileSync(join(root, 'agents', 'pending', RUN), 'utf8'))).toEqual({ cwd: main, createdAt: 900 });
+  });
+
+  it('adopts the parked answer of a copy over the older result of the first session', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    writeFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'result.json'), result(300, 'first turn'));
+    const copy = '9a012d67-1111-4222-8333-444444444444';
+    mkdirSync(join(root, 'agents', 'parked'), { recursive: true });
+    writeFileSync(join(root, 'agents', 'parked', `${copy}.json`),
+      result(900, 'copy turn').replace(SESSION, copy));
+    await registry.bind(RUN, { handle: '9a012d67', sessionId: copy });
+    expect(await registry.result(RUN)).toMatchObject({ sessionId: copy, recordedAt: 900, text: 'copy turn' });
+  });
+
+  it('keeps a recorded result newer than a parked one', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    mkdirSync(join(root, 'runs', MISSION, 'agents', RUN), { recursive: true });
+    writeFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'result.json'), result(900, 'newer'));
+    mkdirSync(join(root, 'agents', 'parked'), { recursive: true });
+    writeFileSync(join(root, 'agents', 'parked', `${SESSION}.json`), result(100, 'older'));
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    expect(await registry.result(RUN)).toMatchObject({ text: 'newer' });
+  });
+
+  it('adopts a result the hook parked before the session was bound', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    mkdirSync(join(root, 'agents', 'parked'), { recursive: true });
+    writeFileSync(join(root, 'agents', 'parked', `${SESSION}.json`), result(400, 'early'));
+    await registry.bind(RUN, { handle: '6d5ea8bb', sessionId: SESSION });
+    expect(await registry.result(RUN)).toMatchObject({ text: 'early', recordedAt: 400 });
+  });
+
+  it('reads no result from a symbolic link, an oversized file or a malformed document', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    const path = join(root, 'runs', MISSION, 'agents', RUN, 'result.json');
+    const elsewhere = join(main, 'elsewhere.json');
+    writeFileSync(elsewhere, result(1));
+    symlinkSync(elsewhere, path);
+    expect(lstatSync(path).isSymbolicLink()).toBe(true);
+    expect(await registry.result(RUN)).toBeUndefined();
+    rmSync(path);
+    writeFileSync(path, result(1, 'x'.repeat(2_200_000)));
+    expect(await registry.result(RUN)).toBeUndefined();
+    writeFileSync(path, '{"schemaVersion": 1}');
+    expect(await registry.result(RUN)).toBeUndefined();
+  });
+
+  it('writes each next message as its own private instruction file', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    const brief = await registry.create(run(main), admitted, 'brief');
+    const first = await registry.writeMessage(RUN, 'Give the final verdict.');
+    const second = await registry.writeMessage(RUN, 'Again.');
+    expect(first.directory).toBe(brief.directory);
+    expect(first.path).not.toBe(second.path);
+    expect(readFileSync(second.path, 'utf8')).toBe('Again.');
+  });
+});
+
+describe('a run of another runtime', () => {
+  const THREAD = '01a0e9f7-5d5e-7c92-b856-0c2782407fda';
+  const schema = { type: 'object', properties: { verdict: { type: 'string' } }, required: ['verdict'] };
+  const codex = (cwd: string) => ({ ...run(cwd), runtime: 'codex' as const });
+
+  it('records a Codex run beside a Claude one, bound to its thread', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief');
+    // A Codex thread id is a UUIDv7: the same session shape the registry already binds.
+    await registry.bind(RUN, { handle: THREAD.slice(-8), sessionId: THREAD });
+    expect(await registry.read(RUN)).toMatchObject({ runtime: 'codex',
+      binding: { handle: '82407fda', sessionId: THREAD } });
+  });
+
+  it('keeps the output schema beside the run, under its own bound', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief', schema);
+    const path = join(root, 'runs', MISSION, 'agents', RUN, 'output-schema.json');
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(await registry.outputSchema(RUN)).toEqual(schema);
+    writeFileSync(path, '{"type":');
+    await expect(registry.outputSchema(RUN)).rejects.toThrow(/output schema/);
+  });
+
+  it('reads no output schema for a run dispatched without one', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect(await registry.outputSchema(RUN)).toBeUndefined();
+  });
+
+  it('keeps a result the runtime reported, with its turn and its conformance', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await registry.create(codex(main), admitted, 'brief', schema);
+    const reported = { sessionId: THREAD, turnId: '01a0e9f7-5e20-7812-b9d7-920fabee855c', recordedAt: 700,
+      pendingWork: 0, text: '{"verdict":"pass"}', truncated: false,
+      conformance: { state: 'invalid' as const, cause: 'verdict: expected string' } };
+    await registry.recordResult(RUN, reported);
+    expect(await registry.result(RUN)).toEqual(reported);
+  });
+});
+
+describe('the mission lock', () => {
+  it('admits one holder, and a second only after release', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    const first = await registry.lock(MISSION, 'w1');
+    expect(first).toBeDefined();
+    expect(await registry.lock(MISSION, 'w2')).toBeUndefined();
+    await first?.release();
+    expect(await registry.lock(MISSION, 'w2')).toBeDefined();
+  });
+
+  it('takes over a lock whose holder is dead or whose lease has expired', async () => {
+    const { main } = repository();
+    let now = 1_000;
+    const dead = registryIn(main, { isAlive: () => false, now: () => now });
+    expect(await dead.registry.lock(MISSION, 'w1')).toBeDefined();
+    expect(await dead.registry.lock(MISSION, 'w2')).toBeDefined();
+    const alive = registryIn(main, { isAlive: () => true, now: () => now });
+    expect(await alive.registry.lock(MISSION, 'w3')).toBeUndefined();
+    now += 60_001;
+    expect(await alive.registry.lock(MISSION, 'w3')).toBeDefined();
+  });
+});
+
+describe('the surface a run is shown in', () => {
+  const ref = { kind: 'herdr' as const, scope: '/tmp/herdr.sock', container: 'w1', id: 'w1:p9', label: 'WORK-1',
+    runId: RUN };
+
+  it('keeps the surface beside the run, replaced whole, and absent until one is recorded', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    expect(await registry.readSurface(RUN)).toEqual({ kind: 'absent' });
+    await registry.writeSurface(RUN, { state: 'opening', at: 5 });
+    await registry.writeSurface(RUN, { state: 'open', ref });
+    expect(await registry.readSurface(RUN)).toEqual({ kind: 'recorded', record: { state: 'open', ref } });
+    const file = join(root, 'runs', MISSION, 'agents', RUN, 'surface.json');
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // The observer rewrites run.json on bind; the surface never shares that file.
+    expect(JSON.parse(readFileSync(join(root, 'runs', MISSION, 'agents', RUN, 'run.json'), 'utf8'))).not.toHaveProperty('surface');
+  });
+
+  it('reads a damaged or forged surface record as corrupt, never as absent', async () => {
+    const { main } = repository();
+    const { root, registry } = registryIn(main);
+    await registry.create(run(main), admitted, 'brief');
+    const file = join(root, 'runs', MISSION, 'agents', RUN, 'surface.json');
+    for (const text of ['{', JSON.stringify({ state: 'open', ref: { ...ref, kind: 'screen' } }),
+      JSON.stringify({ state: 'open', ref: { ...ref, scope: 'relative.sock' } })]) {
+      writeFileSync(file, text);
+      expect(await registry.readSurface(RUN)).toEqual({ kind: 'corrupt' });
+    }
+  });
+
+  it('refuses to record a surface for an unknown run', async () => {
+    const { main } = repository();
+    const { registry } = registryIn(main);
+    await expect(registry.writeSurface(RUN, { state: 'opening', at: 1 })).rejects.toThrow('unknown run');
+  });
+});

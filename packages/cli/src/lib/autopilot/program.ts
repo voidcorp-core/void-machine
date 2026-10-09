@@ -6,18 +6,15 @@
 //
 // Every field is validated on read. A file that is present but wrong is an
 // error, never a shrug: silently falling back to a default would let a typo in
-// `mergeGate` hand a merge to a machine.
+// the base or the deploying branch put a merge in the wrong place.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 import { autopilotFailure } from './errors.js';
 
 export type ProgramStatus = 'executing' | 'completed';
-
-export type MergeGate = 'human' | 'union-reviewed';
-
-const MERGE_GATES: readonly MergeGate[] = ['human', 'union-reviewed'];
 
 export interface ProgressStates {
   readonly ready: readonly string[];
@@ -44,7 +41,12 @@ export interface AutopilotOwnership {
 }
 
 export interface AutopilotConfig {
-  readonly schemaVersion: 1;
+  /**
+   * 2 is the single merge mode. 1 is the 4.0 contract, whose `mergeGate` chose
+   * between a person and the machine: still read, so resume and doctor work on
+   * a programme not migrated yet, and refused by the loop until it is.
+   */
+  readonly schemaVersion: 1 | 2;
   /**
    * Tickets the continuous loop keeps in flight at once, 1..4: one worker and
    * one pull request each. The name predates the loop, from the cluster engine.
@@ -53,20 +55,17 @@ export interface AutopilotConfig {
   /** `auto` resolves develop then main; anything else must exist. */
   readonly base: string;
   /**
-   * Who may merge the integration pull request.
-   *
-   * `human` keeps every merge a person's. `union-reviewed` grants the merge to
-   * the machine on the two conditions the union-is-read-before-it-merges record
-   * states: production is not downstream, and an adversarial reading of the
-   * whole integrated diff came back clean.
+   * The `mergeGate` a schema 1 programme declared, raw. Only carried so the
+   * loop can refuse it with the migration that fits: a former human gate must
+   * never be read as consent to merge on its own.
    */
-  readonly mergeGate: MergeGate;
+  readonly legacyMergeGate?: string;
   /**
-   * The branch that deploys. Required by `union-reviewed`, absent otherwise.
+   * The branch that deploys, which the loop never merges into.
    *
-   * Never defaulted. Guessing `main` would put the human gate in the wrong place
-   * in a project that ships from `production`, or from its integration branch,
-   * and nothing would report it.
+   * Absent, it is the repository's default branch as GitHub reports it, never a
+   * guessed name: `main` would put the refusal in the wrong place in a project
+   * that ships from `production`.
    */
   readonly deployBranch?: string;
   /**
@@ -252,7 +251,7 @@ function verifyCommands(value: unknown): readonly (readonly string[])[] {
  * The autopilot block, or undefined when the program declares none.
  *
  * Declaring the block IS the consent: it carries the cluster size, the base, the
- * merge gate, the verify commands and the ownership partition, so writing all of
+ * branch that deploys, the verify commands and the ownership partition, so writing all of
  * that and then disabling it says "I configured this and I do not want it", which
  * nobody means. Omitting the block is the opt-out. See the
  * autopilot-block-is-the-consent decision.
@@ -283,48 +282,40 @@ function parseAutopilot(value: unknown): AutopilotConfig | undefined {
   const granted = consentGranted(block.enabled);
 
   const schemaVersion = block.schemaVersion;
-  if (schemaVersion !== 1) {
+  if (schemaVersion !== 1 && schemaVersion !== 2) {
     invalid(
       'the program descriptor declares an autopilot schema this CLI cannot read',
       schemaVersion === undefined
         ? '`autopilot.schemaVersion` is absent'
         : `\`autopilot.schemaVersion\` is ${String(schemaVersion)}`,
-      'set `autopilot.schemaVersion: 1`, or upgrade the harness to a version that reads this schema',
+      'set `autopilot.schemaVersion: 2`, or upgrade the harness to a version that reads this schema',
+    );
+  }
+  const legacyMergeGate = block.mergeGate;
+  if (schemaVersion === 2 && legacyMergeGate !== undefined) {
+    invalid(
+      'the program descriptor declares a merge gate, and autopilot has none',
+      `\`autopilot.mergeGate\` is ${String(legacyMergeGate)}; the loop merges on its own unless a person holds the merges`,
+      `remove \`mergeGate\`; to keep every merge yours, run \`${PRODUCT_COMMAND} autopilot merges --by-human\``,
     );
   }
 
-  if (typeof block.mergeGate !== 'string' || !MERGE_GATES.includes(block.mergeGate as MergeGate)) {
+  const deployBranch = block.deployBranch;
+  if (deployBranch !== undefined && (typeof deployBranch !== 'string' || deployBranch.trim().length === 0)) {
     invalid(
-      'the program descriptor declares a merge gate autopilot will not honour',
-      `\`autopilot.mergeGate\` is ${String(block.mergeGate)}, and only ${MERGE_GATES.join(' and ')} exist`,
-      'set `autopilot.mergeGate: human`, or `union-reviewed` with a `deployBranch`',
+      'the program descriptor declares an unusable deploying branch',
+      '`autopilot.deployBranch` is not a non-empty string',
+      'set `autopilot.deployBranch` to the exact name of the branch that ships, or remove it for the default branch',
     );
   }
-  const mergeGate = block.mergeGate as MergeGate;
-  const deployBranch = block.deployBranch;
-  if (mergeGate === 'union-reviewed') {
-    if (typeof deployBranch !== 'string' || deployBranch.trim().length === 0) {
-      invalid(
-        'the program grants a merge without saying which branch deploys',
-        '`autopilot.deployBranch` is missing, and `union-reviewed` cannot tell production from integration without it',
-        'set `autopilot.deployBranch` to the exact name of the branch that ships',
-      );
-    }
-    // Said once here rather than discovered as a refusal on every merge. The
-    // grant re-checks the resolved target at merge time regardless, since `base:
-    // auto` is only resolved then and can land on this same branch.
-    if (deployBranch === (block.base ?? 'auto')) {
-      invalid(
-        'the program integrates straight into the branch it says deploys',
-        `\`autopilot.base\` and \`autopilot.deployBranch\` are both ${String(deployBranch)}`,
-        'integrate into a branch that does not ship, or set `mergeGate: human`',
-      );
-    }
-  } else if (deployBranch !== undefined) {
+  // Said once here rather than discovered as a refusal on every merge. The loop
+  // re-checks the resolved target at merge time regardless, since `base: auto`
+  // is only resolved then and can land on this same branch.
+  if (deployBranch !== undefined && deployBranch === (block.base ?? 'auto')) {
     invalid(
-      'the program names a deploying branch under a gate that never reads it',
-      '`autopilot.deployBranch` is set while `mergeGate` is `human`',
-      'remove `deployBranch`, or set `mergeGate: union-reviewed` to use it',
+      'the program integrates straight into the branch it says deploys',
+      `\`autopilot.base\` and \`autopilot.deployBranch\` are both ${String(deployBranch)}`,
+      'integrate into a branch that does not ship, and promote it to the deploying branch by hand',
     );
   }
 
@@ -371,11 +362,11 @@ function parseAutopilot(value: unknown): AutopilotConfig | undefined {
   // back on, which is the worst moment to discover it.
   if (!granted) return undefined;
   return {
-    schemaVersion: 1,
+    schemaVersion,
     clusterSize: clusterSize as number,
     base,
-    mergeGate,
-    ...(deployBranch === undefined ? {} : { deployBranch }),
+    ...(legacyMergeGate === undefined ? {} : { legacyMergeGate: String(legacyMergeGate) }),
+    ...(deployBranch === undefined ? {} : { deployBranch: deployBranch as string }),
     ...(humanWaitLabel === undefined ? {} : { humanWaitLabel: humanWaitLabel as string }),
     protectedPaths: pathList(block.protectedPaths, 'autopilot.protectedPaths'),
     verifyCommands: verifyCommands(block.verifyCommands),

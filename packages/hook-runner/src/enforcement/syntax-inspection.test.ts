@@ -10,6 +10,7 @@ import { build } from 'esbuild';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { inspectSourceSyntax } from './syntax-inspection.js';
 import { evaluateRule } from './runner.js';
+import { syntaxVerdict } from './syntax-policy.js';
 
 let bundledInspect: typeof inspectSourceSyntax;
 let corruptInspect: typeof inspectSourceSyntax;
@@ -146,22 +147,30 @@ describe('isolated syntax inspection', () => {
     expect(check('// PRIVATE_PAYLOAD test.skip\nconst = ;').message).not.toContain('PRIVATE_PAYLOAD');
   });
 
-  it.each([
-    'throw new Error("PRIVATE_COMPILER_ERROR");',
-    'module.exports = { version: "6.0.0" };',
-    'process.stdout.write(JSON.stringify({unavailable:"PRIVATE_COMPILER_ERROR"})); process.exit(0);',
-    'process.on("SIGTERM", () => {}); while (true) {}',
-  ])('never loads a consumer compiler, even if it throws, forges output or loops', (code) => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'hook-broken-compiler-')));
+  // The rule reaches a compiler only through its syntax port. A hostile consumer
+  // compiler in the root records any load; the port is replaced by one that
+  // returns the real policy verdict for a clean parse, so the rule's own path is
+  // judged without a worker or a clock. The worker's side of the same guarantee is
+  // syntax-worker.test.ts; the end-to-end ALLOW through the hashed worker and the
+  // real budget stay above, unchanged.
+  it('reaches a compiler only through its syntax port, never the consumer one', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'hook-hostile-compiler-')));
     const directory = join(root, 'node_modules/typescript');
+    const marker = join(root, 'consumer-compiler-loaded');
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: 'typescript', main: 'index.cjs' }));
-    writeFileSync(join(directory, 'index.cjs'), code);
+    writeFileSync(join(directory, 'index.cjs'),
+      `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'loaded');\nthrow new Error("PRIVATE_COMPILER_ERROR");`);
+    const roots: string[] = [];
     const result = evaluateRule('no-focused-test', { tool_name: 'Write',
-      tool_input: { file_path: join(root, 'view.test.ts'), content: '// test.skip prose' } }, { root });
+      tool_input: { file_path: join(root, 'view.test.ts'), content: '// test.skip prose' } },
+      { root, syntaxInspector: (inspectedRoot, path, _source, _remainingMs, purpose = 'focused-tests') => {
+        roots.push(inspectedRoot);
+        return syntaxVerdict({ lines: [] }, path, purpose);
+      } });
+    expect(roots).toEqual([root]);
     expect(result.code).toBe('ALLOW');
     expect(result.message).not.toContain('PRIVATE_COMPILER_ERROR');
+    expect(existsSync(marker)).toBe(false);
   });
-
-
 });

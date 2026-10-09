@@ -23,6 +23,7 @@ import { resume } from './commands/resume.js';
 import { adoption } from './commands/adoption.js';
 import { decisions } from './commands/decisions.js';
 import { mission } from './commands/mission.js';
+import { agents } from './commands/agents.js';
 import { security } from './commands/security.js';
 import { selfHost } from './commands/self-host.js';
 import { printHelp } from './commands/help.js';
@@ -106,6 +107,7 @@ const HANDLERS = {
   'adoption': adoption,
   'decisions': decisions,
   'mission': mission,
+  'agents': agents,
   'security': security,
   'self-host': selfHost,
   'install': install,

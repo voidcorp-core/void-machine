@@ -6,11 +6,11 @@
  * `program.ts` accepted `union-reviewed` and a machine could merge on its own. A
  * consumer reading that skill believed their merges stayed theirs.
  *
- * The continuous loop moved the merge itself to GitHub: the kernel arms
- * auto-merge on the exact head SHA, the merge queue reruns the required checks,
- * and `independent-review` reads the reviewer's verdict. What the skill owes the
- * reader is therefore that gate, stated by the kernel's own vocabulary, and never
- * the claim that was false.
+ * Since the single merge mode the loop merges on its own, on a local verdict
+ * bound to the head: `merge` on a base without a queue, `arm` on one with a
+ * queue, and a person holds the merges with `autopilot merges --by-human`. What
+ * the skill owes the reader is that gate, stated by the kernel's own
+ * vocabulary, and never a claim that is false.
  */
 
 import { globSync, readFileSync } from 'node:fs';
@@ -26,15 +26,19 @@ const FLAT = SKILL.replace(/\s+/g, ' ');
 describe('the autopilot skill describes the gate the loop applies', () => {
   // The kernel returns `enable-auto-merge` with the head SHA it judged; arming
   // the merge on anything broader would merge a commit nobody reviewed.
-  it('arms a merge only on the head SHA the kernel names, never around protection', () => {
-    expect(FLAT).toMatch(/autopilot arm --ticket <id> --pr <n> --head <headSha>`: it records the head, arms on exactly that head/);
+  it('merges or arms only on the head SHA the kernel names, never around protection', () => {
+    expect(FLAT).toMatch(/autopilot merge --ticket <id> --pr <n> --head <headSha>`, on a base with no merge queue/);
+    expect(FLAT).toMatch(/merges exactly that head with `--match-head-commit`/);
+    expect(FLAT).toMatch(/autopilot arm --ticket <id> --pr <n> --head <headSha>`, on a base with a merge queue/);
+    expect(FLAT).toMatch(/arms on exactly that head/);
     expect(FLAT).toMatch(/never `--admin`/);
     expect(FLAT).toMatch(/autopilot disarm --pr <n>`, before the action that follows it/);
   });
 
-  it('names the merge queue and the required review check that gate the merge', () => {
+  it('names the merge queue and the local review verdict that gate the merge', () => {
     expect(FLAT).toMatch(/merge queue/i);
-    expect(FLAT).toMatch(/`independent-review`/);
+    expect(FLAT).toMatch(/autopilot review --ticket <id> --pr <n> --head <headSha> --round <round>/);
+    expect(FLAT).toMatch(/`next` decides on that record alone/);
   });
 
   it('keeps a serial fallback where no merge queue exists', () => {
@@ -51,7 +55,12 @@ describe('the autopilot skill describes the gate the loop applies', () => {
     expect(SKILL.replace(/\s+/g, ' ')).toMatch(/no `--auto-merge`|never merges on a flag/i);
   });
 
-  it('keeps promotion to the deploying branch human, in both gates', () => {
+  it('names the hold a person uses to keep the merges, and when it hands a pull request over', () => {
+    expect(FLAT).toMatch(/autopilot merges --by-human/);
+    expect(FLAT).toMatch(/after the review, never before/);
+  });
+
+  it('keeps promotion to the deploying branch human', () => {
     expect(SKILL.replace(/\s+/g, ' ').toLowerCase()).toMatch(/deploys stays human|promotion .{0,40}human/);
   });
 });

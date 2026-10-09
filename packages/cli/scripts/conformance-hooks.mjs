@@ -15,6 +15,9 @@ import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
 import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import {
   assertCanonicalHookReplay,
+  codexDenialReason,
+  codexHookLaunchers,
+  codexHookTimeoutMs,
   runtimesForMode,
 } from './conformance-hooks-lib.mjs';
 import {
@@ -25,12 +28,40 @@ import {
 } from './conformance-process.mjs';
 
 const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
+const DANGEROUS_COMMAND = 'rm -rf /';
 const HOOK_TIMEOUT_MS = 5_000;
 
 function requireDiagnostic(result, pattern, label) {
   const output = `${result.stdout}\n${result.stderr}`;
   if (!pattern.test(output)) {
     throw new Error(`hook conformance ${label} lacked its expected diagnostic`);
+  }
+}
+
+// Claude Code refuses on exit 2 with the reason on stderr. Codex refuses on
+// exit 0 with a PreToolUse denial on stdout, the one channel PowerShell does not
+// rewrite; its exit 2 would reach Codex as 1, a failed hook that lets the call
+// through. The refusal is read the way each runtime reads it.
+async function requireRefusal(runtime, command, args, options, pattern, label) {
+  const result = await run(command, args, {
+    ...options,
+    label,
+    expectedCodes: [runtime === 'codex' ? 0 : 2],
+  });
+  const reason = runtime === 'codex'
+    ? codexDenialReason(result.stdout)
+    : result.stderr;
+  if (reason === undefined || !pattern.test(reason)) {
+    throw new Error(
+      `hook conformance ${label} was not refused as ${runtime} reads a refusal\n`
+        + `stdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  }
+}
+
+function requireNoDecision(result, label) {
+  if (result.stdout.trim() !== '') {
+    throw new Error(`hook conformance ${label} wrote a decision: ${result.stdout}`);
   }
 }
 
@@ -43,8 +74,13 @@ async function run(command, args, options) {
     env: options.env,
     input: options.input,
     timeoutMs: options.timeoutMs,
+    windowsVerbatimArguments: options.verbatim,
   });
-  return requireConformanceExit(result, 'hook conformance command', expectedCodes);
+  return requireConformanceExit(
+    result,
+    `hook conformance ${options.label ?? 'command'} [${[command, ...args].join(' ')}]`,
+    expectedCodes,
+  );
 }
 
 async function requireRegularFile(path, label) {
@@ -108,50 +144,101 @@ async function exerciseRuntime(runner, fixture, missionId, runtime) {
     input: JSON.stringify(payload),
     timeoutMs: HOOK_TIMEOUT_MS,
   });
-  const blocked = await run(
+  const refusal = [runner, 'enforce', 'dangerous-command', runtime];
+  const base = { cwd: fixture, env, timeoutMs: HOOK_TIMEOUT_MS };
+  await requireRefusal(
+    runtime,
     process.execPath,
-    [runner, 'enforce', 'dangerous-command', runtime],
+    refusal,
     {
-      cwd: fixture,
-      env,
+      ...base,
       input: JSON.stringify({
         ...payload,
         tool_name: runtime === 'claude' ? 'Bash' : 'shell',
-        tool_input: { command: 'rm -rf /' },
+        tool_input: { command: DANGEROUS_COMMAND },
       }),
-      expectedCodes: [2],
-      timeoutMs: HOOK_TIMEOUT_MS,
     },
+    /DANGEROUS_COMMAND/,
+    `${runtime} blocked command`,
   );
-  requireDiagnostic(blocked, /DANGEROUS_COMMAND/, `${runtime} blocked command`);
-  const invalid = await run(
+  await requireRefusal(
+    runtime,
     process.execPath,
-    [runner, 'enforce', 'dangerous-command', runtime],
-    {
-      cwd: fixture,
-      env,
-      input: '{not-json}',
-      expectedCodes: [2],
-      timeoutMs: HOOK_TIMEOUT_MS,
-    },
+    refusal,
+    { ...base, input: '{not-json}' },
+    /HOOK_INPUT_REJECTED/,
+    `${runtime} invalid input`,
   );
-  requireDiagnostic(invalid, /HOOK_INPUT_REJECTED/, `${runtime} invalid input`);
-  const oversized = await run(
+  await requireRefusal(
+    runtime,
     process.execPath,
-    [runner, 'enforce', 'dangerous-command', runtime],
-    {
-      cwd: fixture,
-      env,
-      input: Buffer.alloc(MAX_HOOK_INPUT_BYTES + 1, 0x61),
-      expectedCodes: [2],
-      timeoutMs: HOOK_TIMEOUT_MS,
-    },
-  );
-  requireDiagnostic(
-    oversized,
+    refusal,
+    { ...base, input: Buffer.alloc(MAX_HOOK_INPUT_BYTES + 1, 0x61) },
     /HOOK_RUNNER_FAILED: HOOK_INPUT_TOO_LARGE/,
     `${runtime} oversized input`,
   );
+}
+
+function manifestHook(manifest, suffix) {
+  const hook = Object.values(manifest.hooks)
+    .flatMap((groups) => groups.flatMap((group) => group.hooks))
+    .find((candidate) => candidate.command.endsWith(suffix));
+  if (hook === undefined) throw new Error(`hook conformance manifest lacks ${suffix}`);
+  return hook;
+}
+
+// Runs the installed .codex/hooks.json commands the way Codex launches them,
+// from the project root and from a subdirectory, with no project-root variable:
+// the command itself must find the runner (DEV-918). Each launch is bounded by
+// the timeout Codex would give that hook.
+async function exerciseCodexManifest(fixture, mode) {
+  const manifest = JSON.parse(await readFile(join(fixture, '.codex', 'hooks.json'), 'utf8'));
+  const blockHook = manifestHook(manifest, ' enforce dangerous-command codex');
+  const allowHook = manifestHook(manifest, ' enforce no-console codex');
+  const nested = join(fixture, 'src', 'nested');
+  await mkdir(nested, { recursive: true });
+  const env = conformanceFixtureEnvironment(fixture, {
+    VOID_AGENT_RUNTIME: 'codex',
+    VOID_MISSION_ID: `mis_conformance_launch_${mode}`,
+  });
+  const payload = payloadFor('codex', fixture);
+  const blockInput = JSON.stringify({
+    ...payload,
+    tool_name: 'shell',
+    tool_input: { command: DANGEROUS_COMMAND },
+  });
+  const blockLaunchers = codexHookLaunchers(process.platform, blockHook.command, env);
+  const allowLaunchers = codexHookLaunchers(process.platform, allowHook.command, env);
+  for (const cwd of [fixture, nested]) {
+    for (const [index, launcher] of blockLaunchers.entries()) {
+      const label = `codex ${launcher.shell} in ${cwd === fixture ? 'root' : 'subdirectory'}`;
+      await requireRefusal(
+        'codex',
+        launcher.command,
+        launcher.args,
+        {
+          cwd,
+          env,
+          input: blockInput,
+          timeoutMs: codexHookTimeoutMs(blockHook),
+          verbatim: launcher.verbatim,
+        },
+        /DANGEROUS_COMMAND/,
+        `${label} block`,
+      );
+      const allow = allowLaunchers[index];
+      const allowed = await run(allow.command, allow.args, {
+        label: `${label} allow`,
+        cwd,
+        env,
+        input: JSON.stringify(payload),
+        timeoutMs: codexHookTimeoutMs(allowHook),
+        verbatim: allow.verbatim,
+      });
+      requireNoDecision(allowed, `${label} allow`);
+    }
+  }
+  return blockLaunchers.map((launcher) => launcher.shell);
 }
 
 async function assertBrokenWiring(bin, fixture, mode, env) {
@@ -228,6 +315,8 @@ async function exerciseFixture(temporary, tarball, npmCache, mode) {
     runtimes,
   });
 
+  const shells = runtimes.includes('codex') ? await exerciseCodexManifest(fixture, mode) : [];
+
   await run(process.execPath, [bin, 'doctor', '--no-remote'], {
     cwd: fixture,
     env,
@@ -237,6 +326,7 @@ async function exerciseFixture(temporary, tarball, npmCache, mode) {
     cwd: fixture,
     env,
   });
+  return shells;
 }
 
 const npm = packageManagerCommand('npm');
@@ -245,11 +335,15 @@ try {
   const { manifest, tarball } = await conformanceArtifactFromEnvironment();
   const npmCache = join(temporary, 'npm-cache');
   await mkdir(npmCache, { recursive: true });
+  const codexShells = new Set();
   for (const mode of ['claude', 'codex', 'both']) {
-    await exerciseFixture(temporary, tarball, npmCache, mode);
+    for (const shell of await exerciseFixture(temporary, tarball, npmCache, mode)) {
+      codexShells.add(shell);
+    }
   }
   process.stdout.write(
-    `hook conformance passed (${process.platform}) for ${manifest.sourceSha}: claude, codex, both\n`,
+    `hook conformance passed (${process.platform}) for ${manifest.sourceSha}: claude, codex, both; `
+      + `codex manifest from root and subdirectory via ${[...codexShells].join(', ')}\n`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

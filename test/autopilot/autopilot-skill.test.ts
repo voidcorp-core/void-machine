@@ -19,7 +19,7 @@ const LOOP_ACTION_KINDS = [
   'mark-human-wait',
   'enable-auto-merge',
   'disable-auto-merge',
-  'rerun-review-check',
+  'review',
   'requeue',
   'drain',
   'freeze',
@@ -94,7 +94,7 @@ describe('remote effects stay with the roles that own them', () => {
     const mayNot = /May not:([\s\S]*?)\n\n/.exec(body(SKILL))?.[1] ?? '';
     expect(mayNot).toMatch(/enable auto-merge/i);
     expect(mayNot).toMatch(/merge anything/i);
-    expect(mayNot).toMatch(/post a verdict or re-run the review job/);
+    expect(mayNot).toMatch(/post or record a verdict, run `autopilot review`/);
     expect(mayNot).toMatch(/Done/);
     expect(mayNot).toMatch(/close or cancel/i);
   });
@@ -113,9 +113,9 @@ describe('remote effects stay with the roles that own them', () => {
     expect(mayNot).toMatch(/prune the mission journals/i);
   });
 
-  it('keeps the merge a declaration, never a flag', () => {
+  it('keeps who merges an explicit instruction, never a flag', () => {
     expect(body(SKILL)).toMatch(/never merges/i);
-    expect(body(SKILL)).toMatch(/mergeGate: human/);
+    expect(body(SKILL).replace(/\s+/g, ' ')).toMatch(/autopilot merges --by-human/);
     // The flag must not reappear as a CAPABILITY. Naming it to say it does not
     // exist is the opposite, and forbidding the string outright forbids saying so
     // -- which is how this assertion first fired on prose that agreed with it.
@@ -129,6 +129,20 @@ describe('remote effects stay with the roles that own them', () => {
   it('gives every worker its worktree before it starts', () => {
     expect(flat(body(SKILL))).toMatch(/worktree before it starts/i);
     expect(flat(body(SKILL))).toMatch(/never chooses its own checkout and never works in the main one/i);
+  });
+
+  it('launches durable workers through the shared native orchestration contract', () => {
+    const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
+    expect(spawning).toMatch(/void-orchestrate/);
+    expect(spawning).toMatch(/label \+ worktree/);
+    // The sentence this replaced let the agent choose between two launch paths.
+    expect(spawning).not.toMatch(/native subagents|cockpit presentation|\bwhen the project uses\b/i);
+  });
+
+  it('hands a ticket back to the run that holds it, and never seats a second one', () => {
+    const respawning = flat(body(SKILL)).match(/\*\*Respawning\.\*\*.*?(?=\*\*The fingerprint\.\*\*)/)?.[0] ?? '';
+    expect(respawning).toMatch(/same native session/);
+    expect(respawning).toMatch(/never a second run/i);
   });
 
   it('keeps migrations out of production', () => {
@@ -150,21 +164,22 @@ describe('the curator ranks, and never disposes', () => {
   });
 });
 
-describe('the review runs in GitHub, out of the reach of every worker', () => {
-  // A verdict the orchestration checkout signed could be signed by anything
-  // running there; a check only GitHub Actions can create cannot.
-  it('names the job, its trigger and the check only the review App creates', () => {
-    expect(flat(body(SKILL))).toMatch(/`\.github\/workflows\/independent-review\.yml` reviews every ready pull request/);
-    expect(flat(body(SKILL))).toMatch(/on `pull_request_target`/);
-    expect(flat(body(SKILL))).toMatch(/Branch protection requires the check from that App/);
-    expect(flat(body(SKILL))).toMatch(/`independent-review-queue\.yml`, on `workflow_run` of `ci`/);
-    expect(flat(body(SKILL))).toMatch(/No key or secret for it lives on this machine/);
+describe('the review is local, bound to the head and to the session it delegated', () => {
+  // A verdict read on GitHub can be written by anyone who comments; the loop
+  // merges on the record the kernel wrote after delegating the reviewer itself.
+  it('delegates the reviewer on the exact head and records its verdict locally', () => {
+    expect(flat(body(SKILL))).toMatch(/checks its `HEAD` before and after/);
+    expect(flat(body(SKILL))).toMatch(/protected path/);
+    expect(flat(body(SKILL))).toMatch(/canonical.*receipt/);
+    expect(flat(body(SKILL))).toMatch(/acceptanceCriteriaHash/);
+    expect(flat(body(SKILL))).toMatch(/`\.void\/machine\/autopilot\/reviews\/<ticket>\/<head>\.json`; `next` decides on that record alone/);
+    expect(flat(body(SKILL))).toMatch(/A verdict posted on the pull request is a copy for people/);
   });
 
-  it('lets no agent post a verdict, and re-runs a crash rather than approving it', () => {
-    expect(flat(body(SKILL))).toMatch(/The verdict is posted only by the review job/);
-    expect(flat(body(SKILL))).toMatch(/May not: enable auto-merge, merge anything, post a verdict or re-run the review job/);
-    expect(flat(body(SKILL))).toMatch(/a job that failed without a verdict is a crash it re-runs, not a round/);
+  it('lets no agent post a verdict, and delegates a failed review again rather than approving it', () => {
+    expect(flat(body(SKILL))).toMatch(/The review verdict is the local record above, never a comment/);
+    expect(flat(body(SKILL))).toMatch(/May not: enable auto-merge, merge anything, post or record a verdict, run `autopilot review`/);
+    expect(flat(body(SKILL))).toMatch(/a reviewer that failed without a verdict is an attempt it delegates again, not a round/);
   });
 
   it('blocks only on a scenario, files advisories once, and stops at two rounds', () => {

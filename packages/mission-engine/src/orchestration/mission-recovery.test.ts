@@ -10,6 +10,164 @@ import { planStoppedMissionRecovery, validatedRecoveredReviewEvents, type Missio
 const id = (seq: number) => `evt_00000000-0000-4000-8000-${String(seq).padStart(12, '0')}`;
 const HASH = `sha256:${'a'.repeat(64)}`;
 const SPECIALIST = 'core:test-qa-engineer';
+
+function opaqueContextHistory(contextId = '/root/proof1_qa'): readonly CanonicalEvent[] {
+  const binding = { stage: 'pre-implementation', reviewRound: 1, inputHash: HASH, contractVersion: 1 };
+  return [
+    { ...entry(1, 'mission.started', { planHash: HASH, runtime: 'codex', runtimeAttested: true, mode: 'team' }), source: 'void-harness:mission' },
+    { ...entry(2, 'specialist.requested', { ...binding, runtime: 'codex', planHash: HASH }),
+      subject: SPECIALIST, source: 'void-harness:mission.dispatch' },
+    { ...entry(3, 'specialist.started', { ...binding, contextId }), subject: SPECIALIST },
+    { ...entry(4, 'specialist.completed', { ...binding, contextId, completion: {
+      schemaVersion: 1, specialistId: SPECIALIST, contractVersion: 1, completionId: 'proof1_qa_completion',
+      verdict: 'pass', findings: [], evidenceRequests: [], limitations: [],
+    } }), subject: SPECIALIST },
+    { ...entry(5, 'mission.closed', { reason: 'controller-stop' }), source: 'void-harness:mission.dispatch' },
+  ];
+}
+
+function opaqueContextInput(events = opaqueContextHistory()) {
+  const candidate = input([...events]);
+  return { ...candidate, request: { ...candidate.request, closureEventId: id(5),
+    disposition: { kind: 'controller-defect' as const, defect: 'opaque-native-context' as const } },
+  observation: { ...candidate.observation, currentInputHashes: { [SPECIALIST]: HASH } } };
+}
+
+describe('recovery of the proven opaque context validator defect', () => {
+  it('refuses a required specialist entirely absent from the dispatched panel', () => {
+    const candidate = opaqueContextInput();
+    expect(planStoppedMissionRecovery({ ...candidate, observation: { ...candidate.observation,
+      contractVersions: { [SPECIALIST]: 1, 'core:security-engineer': 2 },
+      currentInputHashes: { [SPECIALIST]: HASH, 'core:security-engineer': HASH },
+    } })).toMatchObject({ kind: 'refused', code: 'incomplete-required-panel' });
+  });
+
+  it('preserves the complete four-specialist preparation with its exact required panel', () => {
+    const specialists = [
+      ['core:observability-sre-engineer', 1], ['core:product-challenger', 1],
+      ['core:security-engineer', 2], ['core:test-qa-engineer', 2],
+    ] as const;
+    const original = opaqueContextHistory();
+    const [start, requested, started, completed, closure] = original;
+    if (!start || !requested || !started || !completed || !closure) throw new Error('Complete fixture required');
+    const retarget = (event: CanonicalEvent, specialist: string, version: number): CanonicalEvent => {
+      const payload = event.payload as Readonly<Record<string, JsonValue>>;
+      return { ...event, subject: specialist, payload: { ...payload, contractVersion: version,
+        ...(event.kind === 'specialist.requested' ? {} : { contextId: `/root/proof1_${specialist.slice(5)}` }),
+        ...(event.kind !== 'specialist.completed' ? {} : { completion: {
+          ...(payload['completion'] as Readonly<Record<string, JsonValue>>), specialistId: specialist,
+          contractVersion: version, completionId: `proof1_${specialist.slice(5)}`,
+        } }),
+      } };
+    };
+    const events = [start, ...specialists.map(([id, version]) => retarget(requested, id, version)),
+      ...specialists.flatMap(([id, version]) => [retarget(started, id, version), retarget(completed, id, version)]),
+      closure].map((event, index) => ({ ...event, seq: index + 1, eventId: id(index + 1) }));
+    const candidate = opaqueContextInput(events);
+    expect(planStoppedMissionRecovery({ ...candidate,
+      request: { ...candidate.request, closureEventId: id(14) }, observation: { ...candidate.observation,
+        contractVersions: Object.fromEntries(specialists),
+        currentInputHashes: Object.fromEntries(specialists.map(([id]) => [id, HASH])),
+      },
+    })).toMatchObject({ kind: 'recover', receipt: { nextAction: 'verification', consumedRounds: 1,
+      preservedCompletionEventIds: [id(7), id(9), id(11), id(13)], invalidatedCompletionEventIds: [],
+    } });
+  });
+
+  it('preserves original receipts and round budget and replays the exact admission', () => {
+    const candidate = opaqueContextInput();
+    const before = canonicalJsonHash(candidate.stream.events);
+    const result = planStoppedMissionRecovery(candidate);
+    expect(result).toMatchObject({ kind: 'recover', receipt: {
+      preservedCompletionEventIds: [id(4)], invalidatedCompletionEventIds: [],
+      inadmissibleCompletionEventIds: [], roundCorrections: [], consumedRounds: 1, remainingRounds: 1,
+      nextAction: 'verification',
+    } });
+    expect(canonicalJsonHash(candidate.stream.events)).toBe(before);
+    if (result.kind !== 'recover') throw new Error('Expected recovery of the validator defect');
+    const recovered = parseEvent({ ...entry(6, 'mission.recovered'),
+      source: 'void-harness:mission.recover', payload: result.receipt });
+    if (!recovered.ok) throw new Error('Expected canonical recovery receipt');
+    const events = [...candidate.stream.events, recovered.value];
+    expect(validatedRecoveredReviewEvents(events)).toEqual({ ok: true, events });
+    expect(planStoppedMissionRecovery({ ...candidate,
+      stream: replayEventLog(events.map(serializeEvent).join('\n')) })).toMatchObject({ kind: 'already-recovered' });
+  });
+
+  it.each(['context_accepted_before', '', ' ', `/root/${String.fromCharCode(0)}bad`,
+    `/root/${String.fromCharCode(159)}bad`, 'a'.repeat(161)])('refuses unproven or invalid context %j', contextId => {
+    expect(planStoppedMissionRecovery(opaqueContextInput(opaqueContextHistory(contextId))))
+      .toMatchObject({ kind: 'refused', code: 'unproven-controller-defect' });
+  });
+
+  it.each([
+    ['missing start', 3, { kind: 'runtime.tool.started' }],
+    ['wrong runtime', 3, { source: 'runtime:claude' }],
+    ['wrong request source', 2, { source: 'runtime:codex' }],
+    ['non-controller closure', 5, { source: 'void-harness:mission' }],
+  ] as const)('refuses %s instead of approving absent provenance', (_label, seq, patch) => {
+    const events = opaqueContextHistory().map(item => item.seq === seq ? { ...item, ...patch } : item);
+    expect(planStoppedMissionRecovery(opaqueContextInput(events)))
+      .toMatchObject({ kind: 'refused', code: 'unproven-controller-defect' });
+  });
+
+  it('refuses stale inputs and contract changes without invalidating old receipts', () => {
+    const candidate = opaqueContextInput();
+    for (const observation of [
+      { ...candidate.observation, currentInputHashes: { [SPECIALIST]: `sha256:${'b'.repeat(64)}` } },
+      { ...candidate.observation, contractVersions: { [SPECIALIST]: 2 } },
+      { ...candidate.observation, stage: 'post-implementation' as const },
+    ]) expect(planStoppedMissionRecovery({ ...candidate, observation }))
+      .toMatchObject({ kind: 'refused', code: 'unproven-controller-defect' });
+  });
+
+  it.each([
+    ['unmatched started identity', 3, { contextId: '/root/someone_else' }],
+    ['unmatched started input', 3, { inputHash: `sha256:${'b'.repeat(64)}` }],
+    ['unmatched request plan', 2, { planHash: `sha256:${'b'.repeat(64)}` }],
+    ['unmatched request contract', 2, { contractVersion: 2 }],
+    ['later review round', 4, { reviewRound: 2 }],
+    ['unattested runtime', 1, { runtimeAttested: false }],
+  ] as const)('refuses %s', (_label, seq, patch) => {
+    const events = opaqueContextHistory().map(item => item.seq !== seq ? item : {
+      ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), ...patch },
+    });
+    expect(planStoppedMissionRecovery(opaqueContextInput(events))).toMatchObject({ kind: 'refused' });
+  });
+
+  it.each([
+    { verdict: 'degraded', limitations: ['Missing evidence'] },
+    { evidenceRequests: ['Run real conformance'] },
+    { limitations: ['No real observation'] },
+  ])('never upgrades unresolved evidence %j', patch => {
+    const events = opaqueContextHistory().map(item => item.kind !== 'specialist.completed' ? item : {
+      ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), completion: {
+        ...((item.payload as Readonly<Record<string, JsonValue>>)['completion'] as Readonly<Record<string, JsonValue>>), ...patch,
+      } },
+    });
+    expect(planStoppedMissionRecovery(opaqueContextInput(events)))
+      .toMatchObject({ kind: 'refused', code: 'unproven-controller-defect' });
+  });
+
+  it('refuses an incomplete or repeated preparation panel', () => {
+    const history = opaqueContextHistory();
+    const [, requested, started, completed, closure] = history;
+    if (!requested || !started || !completed || !closure) throw new Error('Complete fixture required');
+    for (const extra of [
+      { ...requested, subject: 'core:security-engineer' },
+      started,
+      completed,
+      { ...requested, kind: 'lead-writer.completed' },
+    ]) {
+      const events = [...history.slice(0, -1), extra, closure]
+        .map((item, index) => ({ ...item, seq: index + 1, eventId: id(index + 1) }));
+      const candidate = opaqueContextInput(events);
+      expect(planStoppedMissionRecovery({ ...candidate,
+        request: { ...candidate.request, closureEventId: id(events.length) } }))
+        .toMatchObject({ kind: 'refused', code: 'unproven-controller-defect' });
+    }
+  });
+});
 function entry(seq: number, kind: string, payload: JsonValue = {}): CanonicalEvent {
   return event({ seq, eventId: id(seq), kind, subject: 'mission', payload });
 }
@@ -425,4 +583,103 @@ it.each(['current-review', 'post-implementation'])('recovers for a preparation o
 it.each(['completion', 'no-request', 'unauthorized', 'discharged'])('refuses an ineligible preparation obligation at post stage: %s', cause => {
   const candidate = preparationObligationAtPost(cause === 'completion' ? 'completion' : 'post-implementation', cause);
   expect(planStoppedMissionRecovery(candidate).kind).toBe('refused');
+});
+
+
+function reclosedPreparation() {
+  const closed = blockerHistory();
+  const candidate = input(closed);
+  const originalInput = { ...candidate,
+    request: { ...candidate.request, closureEventId: id(3) },
+    observation: { ...candidate.observation, currentInputHashes: { [SPECIALIST]: HASH } },
+  };
+  const first = planStoppedMissionRecovery(originalInput);
+  if (first.kind !== 'recover') throw new Error('Expected initial recovery');
+  const reopened = [...closed, recoveryEvent(closed, first.receipt)];
+  const events = [...reopened, { ...entry(5, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(4),
+  }), source: 'void-harness:mission.dispatch' }];
+  return { ...originalInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...originalInput.request, closureEventId: id(5),
+      expectedJournalHash: canonicalJsonHash(events) },
+  };
+}
+
+it('recovers preparation reclosed on pending proof without demanding an impossible writer completion', () => {
+  const secondInput = reclosedPreparation();
+  const events = secondInput.stream.events;
+  const before = canonicalJsonHash(events);
+  const second = planStoppedMissionRecovery(secondInput);
+  expect(second).toMatchObject({ kind: 'recover', receipt: {
+    consumedRounds: 1, remainingRounds: 1, nextAction: 'clarification',
+    preservedCompletionEventIds: [id(2)], invalidatedCompletionEventIds: [],
+  } });
+  expect(canonicalJsonHash(events)).toBe(before);
+  if (second.kind !== 'recover') throw new Error('Expected pending-proof recovery');
+  const recovered = [...events, recoveryEvent(events, second.receipt)];
+  expect(validatedRecoveredReviewEvents(recovered).ok).toBe(true);
+  expect(planStoppedMissionRecovery({ ...secondInput,
+    stream: replayEventLog(recovered.map(serializeEvent).join('\n')),
+  })).toMatchObject({ kind: 'already-recovered' });
+});
+
+
+it.each(['abandoned', 'interrupted'])('preserves explicit human closure after clarification: %s', reason => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, payload: { reason, episodeId: id(4) } } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'unsupported-closure' });
+});
+
+it.each(['human.decision', 'runtime.unknown'])('requires reconciliation for intervening %s', kind => {
+  const candidate = reclosedPreparation();
+  const events = [...candidate.stream.events.slice(0, 4), entry(5, kind),
+    { ...entry(6, 'mission.closed', { reason: 'controller-stop', episodeId: id(4) }),
+      source: 'void-harness:mission.dispatch' }];
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, closureEventId: id(6), expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+});
+
+it('retains the real review budget when recovering a premature evidence closure', () => {
+  const candidate = reclosedPreparation();
+  expect(planStoppedMissionRecovery({ ...candidate,
+    observation: { ...candidate.observation, maxRounds: 1 },
+  })).toMatchObject({ kind: 'refused', code: 'review-budget-exhausted' });
+});
+
+it('refuses manual controller-stop as proof of the legacy dispatch defect', () => {
+  const candidate = reclosedPreparation();
+  const events = candidate.stream.events.map(item => item.seq === 5
+    ? { ...item, source: 'void-harness:mission.close' } : item);
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+});
+
+
+it('refuses a third clarification recovery without progress after consuming the one-time exception', () => {
+  const secondInput = reclosedPreparation();
+  const second = planStoppedMissionRecovery(secondInput);
+  if (second.kind !== 'recover') throw new Error('Expected the first exceptional recovery');
+  const recovered = [...secondInput.stream.events,
+    recoveryEvent(secondInput.stream.events, second.receipt)];
+  const events = [...recovered, { ...entry(7, 'mission.closed', {
+    reason: 'controller-stop', episodeId: id(6),
+  }), source: 'void-harness:mission.dispatch' }];
+  const before = canonicalJsonHash(events);
+  const thirdInput = { ...secondInput,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...secondInput.request, closureEventId: id(7), expectedJournalHash: before },
+  };
+  expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+  expect(planStoppedMissionRecovery(thirdInput))
+    .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  expect(canonicalJsonHash(events)).toBe(before);
 });

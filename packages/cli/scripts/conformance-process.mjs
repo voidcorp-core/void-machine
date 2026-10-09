@@ -112,6 +112,7 @@ export function runConformanceProcess(options) {
       shell: false,
       stdio: ['pipe', 'pipe', captureStderr ? 'pipe' : 'ignore'],
       windowsHide: true,
+      windowsVerbatimArguments: options.windowsVerbatimArguments === true,
     });
     const stdout = [];
     const stderr = [];
@@ -173,8 +174,11 @@ export function requireConformanceExit(result, label, expectedCodes = [0]) {
   const detail = safeConformanceDiagnostic(
     `${result.stdout}\n${result.stderr}`.trim(),
   );
+  const outcome = result.outcome.kind === 'exited'
+    ? `exited with code ${result.outcome.code}, expected ${expectedCodes.join(' or ')}`
+    : result.outcome.kind;
   throw new Error([
-    `${label}: ${result.outcome.kind}`,
+    `${label}: ${outcome}`,
     detail === '' ? undefined : detail,
   ].filter(Boolean).join('\n'));
 }

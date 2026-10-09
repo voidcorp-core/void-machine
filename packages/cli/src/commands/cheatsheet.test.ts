@@ -58,14 +58,9 @@ describe('cheatsheet CLI', () => {
       expect(document.entries.find((entry: { id: string }) => entry.id === agentId).relatedIds).toEqual([id]);
       expect(specialist.invocations).not.toHaveLength(0);
     }
-    for (const format of ['html', 'markdown']) {
-      const rendered = run(['--format', format]);
-      expect(rendered.status).toBe(0);
-      const identities = format === 'html'
-        ? [...rendered.stdout.matchAll(/<p class="meta">([^<]+?) ·/g)].map(match => match[1])
-        : rendered.stdout.split('\n').filter(line => /^(skill|hook|agent|core|command):/.test(line)).map(line => line.split(' | ')[0]);
-      expect(identities).toEqual(expectedIds);
-    }
+    // That HTML and Markdown carry every identity of the catalogue, in order, is
+    // the renderer's projection: proven in process by lib/cheatsheet/render.test.ts,
+    // and from the installed archive in every format by test/cli/cheatsheet.test.ts.
   });
 
   it.each([['--format'], ['--format', 'xml'], ['json'], ['--wat'], ['--format', 'json', '--format', 'json']])(

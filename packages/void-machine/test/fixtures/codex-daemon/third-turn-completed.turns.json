@@ -1,0 +1,47 @@
+{
+ "id": 13,
+ "result": {
+  "data": [
+   {
+    "id": "01a0ea7c-4eb1-7500-a405-8311c50b7ff7",
+    "items": [
+     {
+      "type": "userMessage",
+      "id": "01a0ea7c-4ed1-7822-8eeb-f3684ce0dc7d",
+      "clientId": null,
+      "content": [
+       {
+        "type": "text",
+        "text": "Reply with verdict pass and a one-sentence summary saying bye. Do not run any command.",
+        "text_elements": []
+       }
+      ]
+     },
+     {
+      "type": "reasoning",
+      "id": "rs_047877be1d2c6c32016abb011baff487d2ad4094024b0b5374",
+      "summary": [],
+      "content": []
+     },
+     {
+      "type": "agentMessage",
+      "id": "msg_047877be1d2c6c32016abb011c131887d282990ab8b3f34a54",
+      "text": "{\"verdict\":\"pass\",\"summary\":\"Bye.\"}",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": null,
+      "questions": null
+     }
+    ],
+    "itemsView": "full",
+    "status": "completed",
+    "error": null,
+    "startedAt": 1790640410,
+    "completedAt": 1790640412,
+    "durationMs": 2014
+   }
+  ],
+  "nextCursor": "{\"requestedThreadId\":\"01a0ea7c-0a16-7d92-a048-70f5effc1707\",\"rolloutOrdinal\":36,\"includeAnchor\":false,\"scope\":{\"kind\":\"turns\"}}",
+  "backwardsCursor": "{\"requestedThreadId\":\"01a0ea7c-0a16-7d92-a048-70f5effc1707\",\"rolloutOrdinal\":36,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+ }
+}

@@ -3,13 +3,14 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from '../../packages/hook-runner/src/identity.js';
 
 const RELEASE = readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8');
 const INTEGRITY = `sha512-${Buffer.alloc(64, 7).toString('base64')}`;
 const MATCHING = JSON.stringify({
   integrity: INTEGRITY,
   attestations: {
-    url: 'https://registry.npmjs.org/-/npm/v1/attestations/voidmachine@4.0.0',
+    url: `https://registry.npmjs.org/-/npm/v1/attestations/${PRODUCT_IDENTITY.packageName}@4.0.0`,
     provenance: { predicateType: 'https://slsa.dev/provenance/v1' },
   },
 });
@@ -60,7 +61,7 @@ function runRegistry(scenario: string, visibleAfter = 360) {
       esac
       if (( elapsed >= VISIBLE_AFTER )); then echo "$MATCHING"; return; fi
       if [[ "$SCENARIO" == timeout ]]; then
-        echo '{"error":{"code":"FETCH_ERROR","summary":"network timeout at: https://registry.npmjs.org/voidmachine","detail":""}}'
+        echo '{"error":{"code":"FETCH_ERROR","summary":"network timeout at: https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}","detail":""}}'
         return 1
       fi
       if [[ "$SCENARIO" == provenance ]]; then
@@ -77,7 +78,8 @@ function runRegistry(scenario: string, visibleAfter = 360) {
       ...process.env, ...limits, CASE_ROOT: root, SCENARIO: scenario, NODE_BINARY: process.execPath,
       VISIBLE_AFTER: String(visibleAfter), MATCHING, DELAYED: JSON.stringify({ integrity: INTEGRITY }),
       EXPECTED_INTEGRITY: INTEGRITY,
-      EXPECTED_PACKAGE: 'voidmachine', RELEASE_VERSION: '4.0.0', TARBALL_PATH: 'fixture.tgz',
+      EXPECTED_PACKAGE: PRODUCT_IDENTITY.packageName,
+      RELEASE_VERSION: '4.0.0', TARBALL_PATH: 'fixture.tgz',
       REGISTRY_RESPONSE: join(root, 'response'), REGISTRY_ERROR: join(root, 'error'),
       GITHUB_OUTPUT: join(root, 'output'),
     },

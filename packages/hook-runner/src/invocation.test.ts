@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, utimesSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { journalFingerprint, readMissionJournals } from './journal.js';
@@ -431,6 +431,30 @@ describe('the cached verdict', () => {
     recorded(root, 'void-ticket');
     refreshInvocationVerdict(root);
     expect(cachedInvocationAlert(root)).toBeUndefined();
+  });
+
+  it('keeps Claude silence in the cache beyond twenty newer Codex missions', async () => {
+    const root = project();
+    for (let session = 0; session < 23; session += 1) {
+      const runtime = session < 3 ? 'claude' : 'codex';
+      for (let call = 0; call < 20; call += 1) {
+        const recorded = await recordRuntimeEvent({
+          root, runtime, phase: 'activation',
+          rawInput: {
+            session_id: `${runtime}-${session}`, hook_event_name: 'PreToolUse', tool_name: 'Bash',
+            tool_input: { command: 'cat README.md' },
+          },
+        });
+        if (recorded === undefined) throw new Error('Expected a collected tool call');
+        const path = join(root, '.void', 'machine', 'runs', recorded.missionId, 'events.jsonl');
+        utimesSync(path, 1_000 + session, 1_000 + session);
+      }
+    }
+    expect(livenessVerdict(readMissionJournals(root)).ok).toBe(false);
+    refreshInvocationVerdict(root);
+    const alert = cachedInvocationAlert(root);
+    expect(alert).toContain('no skill fired in the last 3 working missions (60 tool calls)');
+    expect(alert).toContain('not observable for runtime:codex (400 tool calls)');
   });
 
   it('recomputes a legacy cache even when journals have not changed', () => {

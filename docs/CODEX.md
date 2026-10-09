@@ -76,7 +76,9 @@ The invocation-health check preserves the event's runtime source. Only
 Codex and missing/unknown sources remain explicitly **not observable**, with
 collected tool-call counts and an unknown activation count. `doctor` reports
 `unknown`, never a passing zero; the session banner states the same limitation.
-Mixed journals cannot use Codex activity to mask Claude silence. Recorded retired
+The banner and doctor inspect the same bounded journal corpus (64 MiB, at most
+10,000 mission directories per location); runtime filtering precedes the
+three-mission window, so newer Codex missions cannot evict Claude evidence. Recorded retired
 skill names still fail independently of runtime. Reading `SKILL.md` or declaring
 that a skill was applied never synthesizes a skill activation.
 

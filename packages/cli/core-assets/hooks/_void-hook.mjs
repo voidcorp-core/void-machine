@@ -2105,7 +2105,7 @@ function invocationAlert(resolution, liveness) {
   }
   if (!liveness.ok) {
     lines.push(
-      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`
+      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls); runtime:claude`
     );
   }
   for (const { source: source2, toolCalls } of liveness.unobservable) {
@@ -2145,7 +2145,6 @@ function livenessVerdict(body) {
   };
 }
 var VERDICT_VERSION = 2;
-var REFRESH_MISSIONS = 20;
 function cachePath(root) {
   return voidMachinePath(root, "invocation.json");
 }
@@ -2169,7 +2168,7 @@ function refreshInvocationVerdict(root) {
       if (typeof previous === "object" && previous !== null && previous["version"] === VERDICT_VERSION && previous["fingerprint"] === fingerprint) return;
     } catch {
     }
-    const journals = readMissionJournals(root, { recentMissions: REFRESH_MISSIONS });
+    const journals = readMissionJournals(root);
     const alert = invocationAlert(
       resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
       livenessVerdict(journals)

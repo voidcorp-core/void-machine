@@ -231,7 +231,7 @@ export function invocationAlert(
   }
   if (!liveness.ok) {
     lines.push(
-      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`,
+      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls); runtime:claude`,
     );
   }
   for (const { source, toolCalls } of liveness.unobservable) {
@@ -331,9 +331,6 @@ interface CachedVerdict {
   readonly alert?: string;
 }
 
-/** How far back the refresh looks. Bounded: the whole corpus is 11 MB. */
-const REFRESH_MISSIONS = 20;
-
 function cachePath(root: string): string {
   return voidMachinePath(root, 'invocation.json');
 }
@@ -373,7 +370,9 @@ export function refreshInvocationVerdict(root: string): void {
     } catch {
       // No usable cache: compute one.
     }
-    const journals = readMissionJournals(root, { recentMissions: REFRESH_MISSIONS });
+    // Same bounded corpus as doctor: 64 MiB, 10,000 missions per location.
+    // Filter runtime before the liveness window so Codex cannot evict Claude.
+    const journals = readMissionJournals(root);
     const alert = invocationAlert(
       resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
       livenessVerdict(journals),

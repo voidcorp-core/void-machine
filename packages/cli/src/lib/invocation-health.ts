@@ -71,7 +71,7 @@ function evidence(observation: InvocationObservation): string {
   }
   return (
     `${observation.installedSkills} skill(s) installed, ${liveness.skillCalls} activation(s) `
-    + `across ${liveness.toolCalls} tool calls (${ratio(liveness)}) over ${liveness.missions} observable working mission(s)`
+    + `across ${liveness.toolCalls} tool calls (${ratio(liveness)}) over ${liveness.missions} observable Claude working mission(s)`
     + (unseen === '' ? '' : `; ${unseen}`)
   );
 }
@@ -88,7 +88,7 @@ export function judgeInvocation(observation: InvocationObservation): CheckResult
   if (!observation.liveness.ok) {
     faults.push(
       `no skill fired across ${observation.liveness.missions} working mission(s) `
-      + `and ${observation.liveness.toolCalls} tool calls`,
+      + `and ${observation.liveness.toolCalls} tool calls (runtime:claude)`,
     );
   }
   if (faults.length === 0) {

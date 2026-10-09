@@ -15,7 +15,7 @@ Invoked by the /void-autopilot skill, which reads the tracker and pipes it in.
 The CLI decides; it never contacts Linear. It reaches GitHub through gh and the
 shared Git state itself, because GitHub is the authority on a merge and the
 shared state is what a unit must not have touched. The one agent it delegates
-is the reviewer whose verdict a merge rests on.
+is coordinated natively; review collects the authentic receipt a merge rests on.
 
 Usage:
   echo '<LoopTracker>'           | ${PRODUCT_COMMAND} autopilot next [--json]
@@ -26,7 +26,7 @@ Usage:
   ${PRODUCT_COMMAND} autopilot update-branch --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
-  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> [--json]
+  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
@@ -44,9 +44,10 @@ replace refs, hooks/ and info/. The upstream (remote, merge) of every branch but
 those is left out, since units in flight set and remove their own. --after fails
 when it moved, and a second --before is refused. review answers review: it
 checks out the exact head in a detached worktree at the durable worktree
-location, checks its HEAD before and after, delegates a fresh-context, read-only
-independent-code-reviewer there, and records the verdict, bound to that head and
-to the session the runtime listed, in
+location, checks its HEAD before and after and collects a fresh-context, read-only
+independent-code-reviewer receipt bound to exact commit, base, criteria and actual
+invocation. Awaiting-native-review asks ORCH to invoke and record it, then repeat
+the command under the same attempt deadline. The local record lives in
 .void/machine/autopilot/reviews/<id>/<sha>.json. next merges on that record
 alone; a verdict posted on GitHub is a copy nothing reads. merges --by-human
 writes .void/machine/autopilot/merge-hold.json: from the next tick every

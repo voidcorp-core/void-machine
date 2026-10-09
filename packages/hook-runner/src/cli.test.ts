@@ -37,6 +37,7 @@ beforeAll(async () => {
     platform: 'node',
     format: 'esm',
     target: 'node24',
+    banner: { js: "import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" },
     outfile: hook,
   });
 }, 30_000);
@@ -555,7 +556,7 @@ describe('delegation-capture lifecycle', () => {
     expect(result.stdout).toBe('');
   });
 
-  it('refuses the native Agent call on stdout once the kernel has dispatched the run', () => {
+  it('does not intercept Agent even when a multiplexer and kernel are available', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-capture-')));
     try {
       spawnSync('git', ['init', '-q'], { cwd: root });
@@ -570,9 +571,7 @@ describe('delegation-capture lifecycle', () => {
         env: { PATH: process.env['PATH'], HERDR_ENV: '1', VOID_PROJECT_ROOT: root },
       });
       expect(result.status).toBe(0);
-      const output = JSON.parse(result.stdout ?? '{}').hookSpecificOutput;
-      expect(output).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' });
-      expect(output.permissionDecisionReason).toContain(`agents wait ${runId}`);
+      expect(result.stdout).toBe('');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

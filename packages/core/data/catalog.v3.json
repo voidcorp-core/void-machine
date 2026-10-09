@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:5e626c4f5e97880bda0b9ece84d89152b8b6ffb5b661cfcde7aaf07f2b41b710"
+    "rootHash": "sha256:175bd2ef8585c3a731249dc0fd6e1d3a493515514157d5d40f78c170dfee8270"
   },
   "nodes": [
     {
@@ -3551,7 +3551,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 399,
+          "lines": 391,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7050,
+          "staticTokens": 6886,
           "type": "skill"
         }
       },
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6234,
+          "staticTokens": 5536,
           "type": "skill"
         }
       },
@@ -4649,6 +4649,54 @@
           {
             "kind": "path",
             "ref": "packages/core/skills/void-observability/SKILL.md",
+            "hashOrVersion": "catalog-v1"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog:skill:skill:void-orchestrate",
+      "kind": "skill",
+      "label": "void-orchestrate",
+      "data": {
+        "legacy": {
+          "description": "Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.",
+          "enforcement": {
+            "floor": "ci",
+            "inline": {
+              "claude": "pretooluse",
+              "codex": "pretooluse",
+              "hermes": "ci-only"
+            }
+          },
+          "evalTargets": [
+            {
+              "provider": "anthropic",
+              "runtime": "claude",
+              "tier": "opus"
+            }
+          ],
+          "id": "skill:void-orchestrate",
+          "lines": 219,
+          "name": "void-orchestrate",
+          "owner": "folpe",
+          "pack": null,
+          "runtimes": [
+            "claude",
+            "codex"
+          ],
+          "source": "packages/core/skills/void-orchestrate/SKILL.md",
+          "staticTokens": 2845,
+          "type": "skill"
+        }
+      },
+      "provenance": {
+        "origin": "extracted",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "path",
+            "ref": "packages/core/skills/void-orchestrate/SKILL.md",
             "hashOrVersion": "catalog-v1"
           }
         ]

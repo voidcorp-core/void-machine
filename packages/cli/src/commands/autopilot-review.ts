@@ -1,21 +1,10 @@
-// `autopilot review --ticket <id> --pr <n> --head <sha>`: the kernel's `review`.
-//
-// The loop merges on a verdict it obtains itself. This command checks out the
-// exact head in a detached worktree at the durable worktree location, checks
-// its `HEAD` before and after the run, delegates a fresh-context, read-only
-// reviewer there through the kernel's delegation, and records what it found
-// under `.void/machine/autopilot/reviews/<ticket>/<head>.json`. The head and
-// the round are the kernel's; the reviewer never states what it judged.
-//
-// The result is taken only from the native session the runtime lists under the
-// run (`acceptReview`). What remains is written where any agent on this machine
-// can write, which the decision on the local verdict accepts as residual risk
-// and bounds: the verdict binds to one head, a protected path goes to a person,
-// the shared Git state is fingerprinted around each unit, and a person promotes
-// to the branch that deploys. A verdict block posted on the pull request is a
-// copy for humans; nothing reads it back.
+// Native review preparation/collection binds canonical invocation receipts to the
+// exact head, base and frozen ticket under existing admission and merge policy.
+// Already-admitted legacy runs retain their transport and result journals.
+// A central worker report is coordination state, never independent evidence.
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { type ReviewSubject, sameReviewSubject } from '@voidcorp/mission-engine';
 import {
   existsSync,
   mkdirSync,
@@ -51,6 +40,10 @@ import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX, REVIEW_RUNNING_MS
 import { type GhRunner, type GitRunner, PULL_REQUEST_FIELDS, parsePullRequestView } from '../lib/autopilot/loop-observe.js';
 import { readProgramDescriptor } from '../lib/autopilot/program.js';
 import { flagValue } from './autopilot-usage.js';
+import { collectNativeReview } from '../lib/autopilot/native-review.js';
+import { inspectMission, loadMissionControllerPlan } from '../lib/runs/store.js';
+import { readTicket } from '../lib/mission-inputs.js';
+import { computeProjectState } from '../lib/runs/project-state.js';
 
 /** Where each head's review is recorded, one directory per ticket. */
 export const REVIEW_DIRECTORY = join('.void', 'machine', 'autopilot', 'reviews');
@@ -81,7 +74,7 @@ export interface ReviewRunners {
   readonly gh: GhRunner;
   /** git with argv in one directory, never through a shell. */
   readonly git: (cwd: string) => GitRunner;
-  readonly agents: AgentsContext;
+  readonly agents?: AgentsContext;
   readonly now: () => number;
   /** `${VOID_WORKTREES:-${XDG_DATA_HOME:-$HOME/.local/share}/git-worktrees}`, resolved. */
   readonly worktrees: string;
@@ -492,7 +485,7 @@ async function stopped(agents: AgentsContext, runId: string): Promise<string> {
  * a few times, never taken for an end.
  */
 async function awaitTurn(runners: ReviewRunners, runId: string, deadline: number): Promise<TurnEnd> {
-  const { agents } = runners;
+  const agents = legacyAgents(runners);
   const slices = Math.ceil((runners.timeoutMs ?? REVIEW_TIMEOUT_MS) / WAIT_SLICE_MS) + UNREADABLE_READS_MAX + 2;
   let unreadable = 0;
   for (let slice = 0; slice < slices; slice += 1) {
@@ -536,12 +529,12 @@ async function reconciled(runners: ReviewRunners, path: string, target: ReviewTa
   : Promise<Started> {
   const last = record.attempts.at(-1);
   if (last === undefined || last.endedAt !== undefined) return { record };
-  const runs = await runners.agents.store.list(reviewMissionId(target));
+  const runs = await legacyAgents(runners).store.list(reviewMissionId(target));
   const open = runs.filter((run) => OPEN_RUN_STATES.has(run.transitions.at(-1)?.to ?? 'unknown'));
   const resumable = open.find((run) => run.runId === last.runId);
   let unstopped = '';
   for (const run of open) {
-    if (run !== resumable) unstopped += await stopped(runners.agents, run.runId);
+    if (run !== resumable) unstopped += await stopped(legacyAgents(runners), run.runId);
   }
   if (resumable !== undefined && unstopped === '') return { record, runId: resumable.runId };
   const cause = `the review was interrupted before it recorded a verdict${unstopped}`;
@@ -589,7 +582,7 @@ async function startedRun(
     const cause = error instanceof Error ? error.message.split('\n')[0] ?? error.message : String(error);
     return { record, failure: `the review could not be prepared: ${cause}` };
   }
-  const receipt = await dispatchAgent(runners.agents, {
+  const receipt = await dispatchAgent(legacyAgents(runners), {
     role: 'review', agentType: REVIEWER_AGENT, cwd: worktree, ticket: target.ticket, brief,
     missionId: reviewMissionId(target),
   });
@@ -608,6 +601,17 @@ async function startedRun(
  * next` delegates again once, then hands the ticket to a person.
  */
 export async function reviewCommand(argv: readonly string[], runners: ReviewRunners): Promise<ReviewCommandOutput> {
+  return executeReviewCommand(argv, runners, false);
+}
+
+/** Legacy transport remains callable to finish admitted runs and read their journals. */
+export async function reviewLegacyCommand(argv: readonly string[], runners: ReviewRunners): Promise<ReviewCommandOutput> {
+  return executeReviewCommand(argv, runners, true);
+}
+
+async function executeReviewCommand(
+  argv: readonly string[], runners: ReviewRunners, legacy: boolean,
+): Promise<ReviewCommandOutput> {
   const target = targetOf(argv);
   const fields = PULL_REQUEST_FIELDS.join(',');
   const view = parsePullRequestView(runners.gh(['pr', 'view', String(target.pullRequest), '--json', fields]));
@@ -635,9 +639,103 @@ export async function reviewCommand(argv: readonly string[], runners: ReviewRunn
   }
   const release = lockHead(path, runners.now());
   try {
+    const last = existing?.attempts.at(-1);
+    const legacyOpen = last?.runId !== undefined && last.endedAt === undefined;
+    if (!legacy && !legacyOpen) {
+      const mission = flagValue(argv, '--mission');
+      if (mission === undefined) throw Error('NATIVE_REVIEW_REQUIRED: pass --mission with the canonical review mission; use void-orchestrate for the actual native reviewer');
+      return await reviewNativeHead(runners, target, path, existing, view.baseRef, mission);
+    }
     return await reviewHead(runners, target, path, existing, view.baseRef);
   } finally {
     release();
+  }
+}
+
+function legacyAgents(runners: ReviewRunners): AgentsContext {
+  if (runners.agents === undefined) throw Error('LEGACY_REVIEW_UNAVAILABLE: restore the admitted run transport');
+  return runners.agents;
+}
+
+function payloadField(payload: unknown, key: string): unknown {
+  return typeof payload === 'object' && payload && key in payload ? Reflect.get(payload, key) : undefined;
+}
+
+async function reviewNativeHead(
+  runners: ReviewRunners, target: ReviewTarget, path: string, existing: LocalReview | undefined,
+  base: string, mission: string,
+): Promise<ReviewCommandOutput> {
+  let record: LocalReview = existing ?? { schemaVersion: 1, ticketId: target.ticket,
+    pullRequest: target.pullRequest, headSha: target.head, attempts: [] };
+  const previous = record.attempts.at(-1);
+  if (previous === undefined || previous.endedAt !== undefined) {
+    if (record.attempts.length >= REVIEW_ATTEMPTS_MAX) throw Error('NATIVE_REVIEW_REFUSED: review attempt budget exhausted');
+    record = { ...record, attempts: [...record.attempts, { startedAt: runners.now() }] };
+    writeRecord(path, record);
+  }
+  const startedAt = record.attempts.at(-1)?.startedAt ?? runners.now();
+  if (runners.now() - startedAt >= (runners.timeoutMs ?? REVIEW_TIMEOUT_MS)) {
+    return failed(path, record, runners.now(), 'the native review attempt ran out of time');
+  }
+  try {
+    const worktree = reviewWorktreePath(runners.worktrees, repositoryName(runners), target);
+    ensureWorktree(runners, worktree, target);
+    const drift = worktreeDrift(runners, worktree, target.head);
+    if (drift !== undefined) throw Error(drift);
+    const change = changeOf(runners, worktree, base);
+    const guarded = protectedPathOf(runners.root, change.paths);
+    if (guarded !== undefined) throw Error(`the change touches ${guarded}, which only a person reviews and merges`);
+    const stored = await loadMissionControllerPlan(runners.root, mission);
+    const ticket = await readTicket(runners.root, stored.ticket.path);
+    if (ticket.id !== target.ticket || ticket.path !== stored.ticket.path
+      || `sha256:${createHash('sha256').update(ticket.body).digest('hex')}` !== stored.ticket.contentHash) {
+      throw Error('native review ticket binding differs from the target ticket or frozen criteria');
+    }
+    if (stored.baseCommit !== change.mergeBase) throw Error('native review base differs from the frozen mission base');
+    const subject: ReviewSubject = { taskId: mission, reviewedCommit: target.head,
+      baseCommit: change.mergeBase, acceptanceCriteriaHash: stored.ticket.contentHash };
+    if (record.subject !== undefined && !sameReviewSubject(record.subject, subject)) {
+      throw Error('native review subject changed during the attempt');
+    }
+    record = { ...record, subject };
+    writeRecord(path, record);
+    const project = await computeProjectState(worktree);
+    const evidenceContext = { dependencies: { 'git:working-tree': project.diffHash } };
+    const inspection = await inspectMission(runners.root, mission, evidenceContext);
+    if (inspection.stream.issues.length > 0) throw Error('native mission journal is incomplete or invalid');
+    const events = inspection.stream.events;
+    const start = events.find(event => event.kind === 'mission.started');
+    if (payloadField(start?.payload, 'routingHash') !== stored.routingHash) {
+      throw Error('native review routing binding differs from the canonical mission');
+    }
+    const writer = payloadField(start?.payload, 'leadWriterId');
+    if (typeof writer !== 'string') throw Error('native mission has no canonical lead writer identity');
+    const writerSeq = events.filter(event => event.kind === 'lead-writer.completed').at(-1)?.seq ?? 0;
+    const completed = events.some(event => event.kind === 'specialist.completed'
+      && event.subject === REVIEWER_SPECIALIST && event.seq > writerSeq
+      && payloadField(event.payload, 'stage') === 'post-implementation');
+    if (!completed) {
+      return { value: { outcome: 'awaiting-native-review', subject, worktree,
+        brief: reviewBrief({ target, base, ...change, round: target.round,
+          previous: target.round === 1 ? [] : previousBlocking(runners.root, target) }) },
+        human: `Native independent review required for ${target.ticket} at ${target.head}; preserve this attempt and record the actual invocation in ${mission}\n` };
+    }
+    const native = await collectNativeReview(runners.root, events, subject, writer, target.round, evidenceContext);
+    const after = worktreeDrift(runners, worktree, target.head);
+    if (after !== undefined) throw Error(after);
+    const verdict = admitReviewCompletion(JSON.stringify(native.completion), target.head, target.round);
+    if (!verdict.ok) throw Error(verdict.reason);
+    const at = runners.now();
+    const attempts = record.attempts.map((attempt, index) => index === record.attempts.length - 1
+      ? { ...attempt, invocationEventId: native.invocationEventId } : attempt);
+    record = { ...endAttempt({ ...record, attempts }, at), verdict: { receipt: native.receipt,
+      invocationEventId: native.invocationEventId, completionEventId: native.completionEventId,
+      recordedAt: at, verdict: verdict.value } };
+    writeRecord(path, record);
+    return { value: { ...record, copy: postCopy(runners.gh, target, verdict.value) },
+      human: `${target.ticket} at ${target.head}: ${verdict.value.blocking.length} blocking (native receipt)\n` };
+  } catch (error) {
+    return failed(path, record, runners.now(), error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -661,10 +759,10 @@ async function reviewHead(
   const turn = await awaitTurn(runners, runId, startedAt + (runners.timeoutMs ?? REVIEW_TIMEOUT_MS));
   if (!turn.ended) return failed(path, record, runners.now(), turn.failure);
   const drift = worktreeDrift(runners, worktree, target.head);
-  if (drift !== undefined) return failed(path, record, runners.now(), `${drift}${await stopped(runners.agents, runId)}`);
-  const accepted = await acceptReview(runners.agents, runId);
+  if (drift !== undefined) return failed(path, record, runners.now(), `${drift}${await stopped(legacyAgents(runners), runId)}`);
+  const accepted = await acceptReview(legacyAgents(runners), runId);
   if (!accepted.ok) {
-    return failed(path, record, runners.now(), `${accepted.cause}${await stopped(runners.agents, runId)}`);
+    return failed(path, record, runners.now(), `${accepted.cause}${await stopped(legacyAgents(runners), runId)}`);
   }
   if (accepted.result.truncated) return failed(path, record, runners.now(), 'the reviewer answer was truncated');
   const verdict = admitReviewCompletion(accepted.result.text, target.head, target.round);

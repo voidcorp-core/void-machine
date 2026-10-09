@@ -6,6 +6,7 @@ import { compileContextPack } from '@voidcorp/mission-engine';
 import { describe, expect, it } from 'vitest';
 import { parseSpecialistLifecycleInput, recordSpecialistLifecycle, recordSpecialistRequests } from './specialist-lifecycle.js';
 import { createMission, inspectMission } from './store.js';
+import { collectNativeReview } from '../autopilot/native-review.js';
 
 const ID = 'mis_artifact_12345678';
 const HASH = `sha256:${'a'.repeat(64)}`;
@@ -50,6 +51,17 @@ describe('artifact backed independent invocation', () => {
     expect(terminal).toMatchObject({ kind: 'specialist.completed',
       payload: { reviewInvocationEventId: invocationEventId, completion } });
     expect(terminal?.payload).not.toHaveProperty('contextId');
+    const events = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
+    const collected = await collectNativeReview(root, events, subject, review.writerId, 1);
+    expect(collected.invocationEventId).toBe(invocationEventId);
+    const otherInvocation = events.map(event => event.kind === 'specialist.started'
+      ? { ...event, payload: { reviewerId: 'reviewer:different', stage: 'post-implementation',
+        reviewRound: 1, inputHash: HASH, contractVersion: 1, reviewSubject: subject, reviewScope: { kind: 'general' } } }
+      : event);
+    await expect(collectNativeReview(root, otherInvocation, subject, review.writerId, 1))
+      .rejects.toThrow('matching actual independent invocation');
+    await writeFile(join(root, completion.review.provenance.path), '{}');
+    await expect(collectNativeReview(root, events, subject, review.writerId, 1)).rejects.toThrow('artifact bytes changed');
   });
   it('refuses a self-declared artifact without the independent invocation it claims', async () => {
     const { root, completion } = await fixture(false);

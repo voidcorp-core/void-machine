@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/hook-runner/src/cli.test.ts
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -26,6 +27,8 @@ export async function buildHookRuntime({ root, outfile, writeIdentity = false })
     absWorkingDir: root, entryPoints: [join(root, 'packages/hook-runner/src/cli.ts')],
     alias: { '@voidcorp/mission-engine/events': join(root, 'packages/mission-engine/src/events/index.ts') },
     bundle: true, platform: 'node', format: 'esm', target: 'node24', outfile,
+    // YAML's Node distribution is CommonJS and imports the built-in process module.
+    banner: { js: "import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" },
     define: { __VOID_SYNTAX_WORKER_URL__: JSON.stringify('./_syntax-worker.cjs'),
       __VOID_SYNTAX_WORKER_IDENTITY__: JSON.stringify(identity) },
   });

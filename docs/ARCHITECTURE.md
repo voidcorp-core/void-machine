@@ -220,22 +220,24 @@ once even when two processes observe. The final message comes from the `lifecycl
 delegation-result` Stop hook, which follows a claim keyed by the native session id
 ([decision](decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)).
 `dispatch` refuses, with the repairing command, when Claude Code is missing or older than
-2.1.257, the workspace is not trusted, or that hook is not installed. Under a multiplexer, the
-`lifecycle delegation-capture` PreToolUse hook on `Agent` turns the coordinator's native delegation
-into a `dispatch` and refuses the native call with the runId and the `wait` command; it passes
-without a surface, for a `fork`, for a session the kernel launched (same session-id rule), and on
-any failure, which it reports instead of blocking. How a run is shown in a multiplexer is described
-in `NATIVE-SUPERVISION.md`.
+2.1.257, the workspace is not trusted, or that hook is not installed. These adapters
+remain available to finish legacy runs and read their journals.
 
-Three callers launch agents, and all three go through `agents dispatch`: the coordinator (that
-capture hook, or the CLI directly), `void-autopilot` (one `work` run per ticket in its worktree;
-its reviewers through `autopilot review`) and `void-implement` (one `review` run per
-`invoke-specialists` envelope, with the envelope's `agentName`, `runtime` and `missionId`). No
-skill chooses a launch path from what the terminal can display. The specialist lifecycle events
-of the [dispatch closure](specs/2026-08-21-agent-dispatch-closure.md) keep their shape; their
-`contextId` is the run's id. A specialist launched this way is a CLI call, not a native `Agent`
-or `spawn_agent` tool call, so the `runtime.tool.*` agent signal no longer sees it: the run
-record under `agents/<runId>/` is the proof that it ran.
+New orchestration composes `void-orchestrate`: native runtime contexts for short
+specialists, Herdr sessions for durable workers, no PreToolUse capture of Agent.
+The hook-runner owns strict bounded central-file reads and metadata projection,
+with YAML as a direct dependency. It never writes mission state in home. ORCH owns
+mission/brief writes; the worker owns its report. Identity is label plus canonical
+worktree, re-resolved from `herdr pane list`; remembered pane/workspace IDs are hints.
+See [central contract](ORCHESTRA.md) and [supervision](NATIVE-SUPERVISION.md).
+
+Mission Engine remains the policy authority. Native specialist request/start/completion
+receipts preserve actual opaque context IDs or digest-bound artifact provenance.
+`autopilot review --mission` collects only exact commit/base/acceptance-criteria-bound
+independent receipts after worktree and protected-path checks. Missing evidence stays
+pending under the existing deadline/budget; a report status never authorizes merge.
+Existing legacy attempts keep their collector, while new attempts need no kernel
+transport. The local verdict, merge hold, admission and protected-path gates remain.
 
 Each run keeps the runtime it was dispatched to (`--runtime claude|codex`), and every command
 reaches it through that runtime's port; one runtime that cannot be read never holds another's

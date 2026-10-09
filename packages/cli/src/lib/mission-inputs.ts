@@ -20,7 +20,7 @@ import { detectProfileInput, detectStack } from './stack.js';
 const execFile = promisify(nodeExecFile);
 const MAX_TICKET_BYTES = 100_000;
 
-async function readTicket(root: string, ticketPath: string): Promise<{
+export async function readTicket(root: string, ticketPath: string): Promise<{
   readonly id: string;
   readonly title: string;
   readonly body: string;
@@ -351,4 +351,3 @@ export async function planBoundMission(
     ticket: controllerTicketBinding(ticket),
   });
 }
-

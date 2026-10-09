@@ -30,6 +30,12 @@ describe.each([
     expect(commands(source, 'SessionStart').join('\n')).toContain('lifecycle context-continuity');
   });
 
+  it('projects verified orchestra metadata at each lifecycle boundary', () => {
+    for (const event of ['SessionStart', 'Stop', 'SessionEnd']) {
+      expect(commands(source, event).join('\n')).toContain('lifecycle herdr-metadata');
+    }
+  });
+
   it('seals mechanical state before compaction through the shared handler', () => {
     expect(commands(source, 'PreCompact').join('\n')).toContain('lifecycle context-continuity');
   });
@@ -58,9 +64,9 @@ describe('Claude Code delegation hooks', () => {
     expect(stop).toContain('stop claude');
   });
 
-  it('routes the coordinator\'s Agent tool through the kernel before it runs', () => {
+  it('leaves short native Agent delegations unintercepted', () => {
     const capture = (manifest('packages/core/.claude-plugin/plugin.json').hooks.PreToolUse ?? [])
       .filter((entry) => entry.matcher === 'Agent').flatMap((entry) => entry.hooks.map((hook) => hook.command));
-    expect(capture).toEqual([expect.stringContaining('lifecycle delegation-capture claude')]);
+    expect(capture).toEqual([]);
   });
 });

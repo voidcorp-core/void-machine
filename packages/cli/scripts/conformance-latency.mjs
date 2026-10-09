@@ -79,7 +79,7 @@ async function observeSyntaxWorkerLatency(fixture, environment, worker, workerSh
 
 async function main() {
   const { tarball } = await conformanceArtifactFromEnvironment();
-  const temporary = await mkdtemp(join(tmpdir(), 'void-latency-conformance-'));
+  const temporary = await mkdtemp(join(tmpdir(), 'harness-latency-conformance-'));
   try {
     const bin = await installPackage(temporary, tarball);
     const worker = join(dirname(bin), '../core-assets/hooks/_syntax-worker.cjs');

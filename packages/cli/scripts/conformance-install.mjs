@@ -188,7 +188,7 @@ async function assertDoctrine(fixture, bin, stage) {
   }
 }
 
-async function exerciseRuntime(temporary, bin, runtime) {
+export async function exerciseRuntime(temporary, bin, runtime) {
   const fixture = join(temporary, `fixture-${runtime}`);
   await mkdir(join(fixture, 'tmp'), { recursive: true });
   await writeFile(join(fixture, 'package.json'), JSON.stringify({

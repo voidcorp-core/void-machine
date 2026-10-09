@@ -869,3 +869,128 @@ describe('a hook fired from a worktree', () => {
     }
   });
 });
+
+// Fixture executables keep this globally invoked route away from active Herdr and personal hooks.
+describe('global Herdr session guard', () => {
+  function fixture() {
+    const root = mkdtempSync(join(workspace, 'herdr-session-'));
+    const bin = join(root, 'bin');
+    const home = join(root, 'home');
+    const codex = join(home, '.codex');
+    mkdirSync(bin); mkdirSync(codex, { recursive: true });
+    const capture = join(root, 'relayed');
+    writeFileSync(join(codex, 'herdr-agent-state.sh'),
+      'test "$1" = session || exit 42\ncat > "$RELAY_CAPTURE"\nprintf "native-output\\n"\n');
+    writeFileSync(join(bin, 'herdr'), `#!${process.execPath}\n`
+      + 'const mode = process.env.DISCOVERY_MODE;\n'
+      + 'if (mode === "timeout") { setTimeout(() => {}, 10000); }\n'
+      + 'else if (mode === "failure") { process.stderr.write("private-payload"); process.exitCode = 1; }\n'
+      + 'else if (mode === "invalid") { process.stdout.write("private-payload"); }\n'
+      + 'else { const entries = JSON.parse(process.env.FOREGROUND_PIDS).map(pid => ({ pid }));\n'
+      + 'process.stdout.write(JSON.stringify({ result: { process_info: {\n'
+      + 'pane_id: process.env.RESPONSE_PANE, shell_pid: 2, foreground_process_group_id: 3,\n'
+      + 'foreground_processes: entries } } })); }\n', { mode: 0o755 });
+    const env: NodeJS.ProcessEnv = {
+      PATH: `${bin}:/usr/bin:/bin`, HOME: home, CODEX_HOME: codex,
+      HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1', HERDR_SOCKET_PATH: join(root, 'unused.socket'),
+      RESPONSE_PANE: 'w1:p1', FOREGROUND_PIDS: JSON.stringify([process.pid]),
+      RELAY_CAPTURE: capture,
+    };
+    const input = Buffer.from(' { "hook_event_name": "SessionStart", "session_id": "fixture" } \n\n');
+    const run = (payload: Buffer = input, runtime = 'codex') => spawnSync(process.execPath,
+      [hook, 'lifecycle', 'herdr-session', runtime], {
+        cwd: root, env, input: payload, timeout: 4000, maxBuffer: 262144,
+      });
+    const fakePs = (body: string) => writeFileSync(join(bin, 'ps'),
+      `#!${process.execPath}\n${body}\n`, { mode: 0o755 });
+    return { root, codex, capture, env, input, run, fakePs };
+  }
+
+  it('relays original bytes once only when a real foreground ancestor owns the hook', () => {
+    const f = fixture();
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toBe('');
+    expect(result.stdout.toString()).toBe('native-output\n');
+    expect(readFileSync(f.capture)).toEqual(f.input);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+    expect(existsSync(join(f.env.HOME ?? '', '.void'))).toBe(false);
+  });
+
+  it.each([
+    ['unrelated foreground or shared daemon', [2147483647], 'ownership-unproven'],
+    ['empty foreground', [], 'invalid-discovery'],
+    ['non-numeric PID', ['123'], 'invalid-discovery'],
+    ['mixed invalid PID', [process.pid, '123'], 'invalid-discovery'],
+    ['root PID', [1], 'invalid-discovery'],
+    ['negative PID', [-2], 'invalid-discovery'],
+    ['fractional PID', [2.5], 'invalid-discovery'],
+    ['unsafe PID', [Number.MAX_SAFE_INTEGER + 1], 'invalid-discovery'],
+    ['oversized foreground', Array.from({ length: 257 }, () => process.pid), 'invalid-discovery'],
+  ])('refuses %s without native relay', (_name, pids, reason) => {
+    const f = fixture(); f.env.FOREGROUND_PIDS = JSON.stringify(pids);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain(`herdr-session: ${reason}`);
+    expect(result.stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['invalid', 'failure', 'timeout'])('diagnoses discovery %s without leaking output', mode => {
+    const f = fixture(); f.env.DISCOVERY_MODE = mode;
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session:');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(result.stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it('refuses a response for a different pane', () => {
+    const f = fixture(); f.env.RESPONSE_PANE = 'w2:p9';
+    expect(f.run().stderr.toString()).toContain('herdr-session: invalid-discovery');
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each([
+    ['cycle', 'process.stdout.write(process.argv.at(-1));'],
+    ['depth', 'process.stdout.write(String(Number(process.argv.at(-1)) + 1));'],
+    ['malformed', 'process.stdout.write("2 3");'],
+    ['failure', 'process.stderr.write("private-payload"); process.exitCode = 1;'],
+    ['timeout', 'setTimeout(() => {}, 10000);'],
+  ])('refuses parent lookup %s within its fixed budget', (_mode, body) => {
+    const f = fixture(); f.env.FOREGROUND_PIDS = '[2147483647]'; f.fakePs(body);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session:');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['claude', 'unknown'])('does not relay for runtime %s', runtime => {
+    const f = fixture(); expect(f.run(f.input, runtime).stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['{}', '{"hook_event_name":"Stop"}', 'broken', '', '[1]'])('does not relay payload %s', payload => {
+    const f = fixture(); const result = f.run(Buffer.from(payload));
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it('refuses an absent native hook without creating project state', () => {
+    const f = fixture(); f.env.CODEX_HOME = join(f.root, 'absent');
+    expect(f.run().stderr.toString()).toContain('herdr-session: native-hook-unavailable');
+    expect(existsSync(f.capture)).toBe(false); expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it.each(['exit 8', 'exec /bin/sleep 10'])('reports native failure without exposing stderr: %s', body => {
+    const f = fixture();
+    writeFileSync(join(f.codex, 'herdr-agent-state.sh'), `printf private-payload >&2\n${body}\n`);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session: native-relay-failed');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(result.stdout.length).toBe(0);
+  });
+});

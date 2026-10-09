@@ -1,3 +1,5 @@
+import { readMissionJournals } from '@voidcorp/hook-runner';
+import { recordRuntimeEvent } from '../../../hook-runner/src/record.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -89,6 +91,34 @@ describe('judgeInvocation', () => {
 });
 
 describe('observeInvocation', () => {
+  it('reports Codex skill reads as unobservable through the real collection path', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-codex-observability-'));
+    roots.push(root);
+    for (let session = 0; session < 3; session += 1) {
+      for (let call = 0; call < 20; call += 1) {
+        await recordRuntimeEvent({
+          root, runtime: 'codex', phase: 'activation',
+          rawInput: {
+            session_id: `codex-${session}`, hook_event_name: 'PreToolUse', tool_name: 'Bash',
+            tool_input: { command: 'cat .agents/skills/void-tdd/SKILL.md' },
+          },
+        });
+      }
+    }
+    const journal = readMissionJournals(root);
+    expect(journal.match(/runtime.tool.started/g)).toHaveLength(60);
+    expect(journal).not.toContain('skill:void-tdd');
+    const check = judgeInvocation(observeInvocation(root));
+    expect(check.status).toBe('unknown');
+    expect(check.ok).toBe(false);
+    expect(check.message).toContain('not observable');
+    expect(check.message).toContain('runtime:codex');
+    expect(check.message).toContain('60 tool calls');
+    expect(check.message).not.toContain('0 activation');
+    expect(check.message).not.toContain('no skill fired');
+    expect(check.fix).toBeUndefined();
+  });
+
   it('reads the project on disk, both journal locations and both runtimes', () => {
     const root = mkdtempSync(join(tmpdir(), 'void-doctor-invocation-'));
     roots.push(root);

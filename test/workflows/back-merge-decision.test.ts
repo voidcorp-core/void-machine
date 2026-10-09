@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from '../../packages/hook-runner/src/identity.js';
 
 // The guard back-merge.yml runs before it opens anything, executed against a
 // real history: main requires a promotion to be up to date with it, so every
@@ -118,8 +119,8 @@ fi
   writeFileSync(calls, '');
   const identity = {
     baseRefName: 'develop', headRefName: 'chore/back-merge-main',
-    headRepository: { nameWithOwner: 'voidcorp-core/void-machine' },
-    headRepositoryOwner: { login: 'voidcorp-core' }, isCrossRepository: false,
+    headRepository: { nameWithOwner: PRODUCT_IDENTITY.repositorySlug },
+    headRepositoryOwner: { login: PRODUCT_IDENTITY.repository.owner }, isCrossRepository: false,
     ...options.identity,
   };
   writeFileSync(join(bin, 'gh'), `#!${process.execPath}
@@ -139,7 +140,7 @@ if (command === 'pr list') {
   if (!args.some(arg => arg.includes('isInMergeQueue'))) process.exit(2);
   process.stdout.write(process.env.GH_QUEUE_RESPONSE);
 } else if (command === 'pr create') {
-  process.stdout.write('https://github.com/voidcorp-core/void-machine/pull/425');
+  process.stdout.write('${PRODUCT_IDENTITY.repositoryUrl}/pull/425');
 } else if (command !== 'pr merge') {
   process.stderr.write('Unexpected gh command: ' + command);
   process.exit(2);
@@ -150,7 +151,8 @@ if (command === 'pr list') {
   spawnSync('bash', ['-c', run], {
     cwd: root, encoding: 'utf8', timeout: 10_000,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`,
-      EXPECTED_REPOSITORY: 'voidcorp-core/void-machine', EXPECTED_OWNER: 'voidcorp-core',
+      EXPECTED_REPOSITORY: PRODUCT_IDENTITY.repositorySlug,
+      EXPECTED_OWNER: PRODUCT_IDENTITY.repository.owner,
       EXPECTED_HEAD: 'chore/back-merge-main', EXPECTED_BASE: 'develop',
       PUSH_LOG: pushes, QUEUE_LOCKED: String(next.locked ?? next.queued ?? queued), GH_CALLS: calls,
       GH_FAILURE: options.failure ?? '', GH_PRS: JSON.stringify(next.prs ?? options.prs ?? [425]),

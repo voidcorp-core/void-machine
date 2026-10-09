@@ -34,6 +34,46 @@ function opaqueContextInput(events = opaqueContextHistory()) {
 }
 
 describe('recovery of the proven opaque context validator defect', () => {
+  it('refuses a required specialist entirely absent from the dispatched panel', () => {
+    const candidate = opaqueContextInput();
+    expect(planStoppedMissionRecovery({ ...candidate, observation: { ...candidate.observation,
+      contractVersions: { [SPECIALIST]: 1, 'core:security-engineer': 2 },
+      currentInputHashes: { [SPECIALIST]: HASH, 'core:security-engineer': HASH },
+    } })).toMatchObject({ kind: 'refused', code: 'incomplete-required-panel' });
+  });
+
+  it('preserves the complete four-specialist preparation with its exact required panel', () => {
+    const specialists = [
+      ['core:observability-sre-engineer', 1], ['core:product-challenger', 1],
+      ['core:security-engineer', 2], ['core:test-qa-engineer', 2],
+    ] as const;
+    const original = opaqueContextHistory();
+    const [start, requested, started, completed, closure] = original;
+    if (!start || !requested || !started || !completed || !closure) throw new Error('Complete fixture required');
+    const retarget = (event: CanonicalEvent, specialist: string, version: number): CanonicalEvent => {
+      const payload = event.payload as Readonly<Record<string, JsonValue>>;
+      return { ...event, subject: specialist, payload: { ...payload, contractVersion: version,
+        ...(event.kind === 'specialist.requested' ? {} : { contextId: `/root/proof1_${specialist.slice(5)}` }),
+        ...(event.kind !== 'specialist.completed' ? {} : { completion: {
+          ...(payload['completion'] as Readonly<Record<string, JsonValue>>), specialistId: specialist,
+          contractVersion: version, completionId: `proof1_${specialist.slice(5)}`,
+        } }),
+      } };
+    };
+    const events = [start, ...specialists.map(([id, version]) => retarget(requested, id, version)),
+      ...specialists.flatMap(([id, version]) => [retarget(started, id, version), retarget(completed, id, version)]),
+      closure].map((event, index) => ({ ...event, seq: index + 1, eventId: id(index + 1) }));
+    const candidate = opaqueContextInput(events);
+    expect(planStoppedMissionRecovery({ ...candidate,
+      request: { ...candidate.request, closureEventId: id(14) }, observation: { ...candidate.observation,
+        contractVersions: Object.fromEntries(specialists),
+        currentInputHashes: Object.fromEntries(specialists.map(([id]) => [id, HASH])),
+      },
+    })).toMatchObject({ kind: 'recover', receipt: { nextAction: 'verification', consumedRounds: 1,
+      preservedCompletionEventIds: [id(7), id(9), id(11), id(13)], invalidatedCompletionEventIds: [],
+    } });
+  });
+
   it('preserves original receipts and round budget and replays the exact admission', () => {
     const candidate = opaqueContextInput();
     const before = canonicalJsonHash(candidate.stream.events);

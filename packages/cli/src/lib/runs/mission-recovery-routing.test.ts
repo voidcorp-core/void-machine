@@ -70,7 +70,13 @@ it.each(['fresh', 'historically-stopped'] as const)(
           preservedCompletionEventIds: stream.events.filter(event => event.kind === 'specialist.completed').map(event => event.eventId),
           invalidatedCompletionEventIds: [], inadmissibleCompletionEventIds: [], roundCorrections: [],
           consumedRounds: 1, nextAction: 'verification',
+          observation: { contractVersions: Object.fromEntries(dispatched.envelopes.map(envelope =>
+            [envelope.specialistId, envelope.contractVersion])) },
         } });
+        const payload = recovered.at(-1)?.payload;
+        if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new Error('Recovery receipt required');
+        expect((payload['observation'] as { contractVersions: object }).contractVersions)
+          .toEqual(Object.fromEntries(dispatched.envelopes.map(envelope => [envelope.specialistId, envelope.contractVersion])));
         expect(await recoverStoppedMission(roots, ID, request)).toMatchObject({ recorded: false });
         expect(await readFile(path, 'utf8')).toBe(after);
       }

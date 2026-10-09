@@ -914,7 +914,7 @@ describe('global Herdr session guard', () => {
     expect(result.stdout.toString()).toBe('native-output\n');
     expect(readFileSync(f.capture)).toEqual(f.input);
     expect(existsSync(join(f.root, '.void'))).toBe(false);
-    expect(existsSync(join(f.env.HOME ?? '', '.void'))).toBe(false);
+    expect(existsSync(join(f.env['HOME'] ?? '', '.void'))).toBe(false);
   });
 
   it.each([
@@ -928,7 +928,7 @@ describe('global Herdr session guard', () => {
     ['unsafe PID', [Number.MAX_SAFE_INTEGER + 1], 'invalid-discovery'],
     ['oversized foreground', Array.from({ length: 257 }, () => process.pid), 'invalid-discovery'],
   ])('refuses %s without native relay', (_name, pids, reason) => {
-    const f = fixture(); f.env.FOREGROUND_PIDS = JSON.stringify(pids);
+    const f = fixture(); f.env['FOREGROUND_PIDS'] = JSON.stringify(pids);
     const result = f.run();
     expect(result.status).toBe(0);
     expect(result.stderr.toString()).toContain(`herdr-session: ${reason}`);
@@ -937,7 +937,7 @@ describe('global Herdr session guard', () => {
   });
 
   it.each(['invalid', 'failure', 'timeout'])('diagnoses discovery %s without leaking output', mode => {
-    const f = fixture(); f.env.DISCOVERY_MODE = mode;
+    const f = fixture(); f.env['DISCOVERY_MODE'] = mode;
     const result = f.run();
     expect(result.status).toBe(0);
     expect(result.stderr.toString()).toContain('herdr-session:');
@@ -947,7 +947,7 @@ describe('global Herdr session guard', () => {
   });
 
   it('refuses a response for a different pane', () => {
-    const f = fixture(); f.env.RESPONSE_PANE = 'w2:p9';
+    const f = fixture(); f.env['RESPONSE_PANE'] = 'w2:p9';
     expect(f.run().stderr.toString()).toContain('herdr-session: invalid-discovery');
     expect(existsSync(f.capture)).toBe(false);
   });
@@ -959,7 +959,7 @@ describe('global Herdr session guard', () => {
     ['failure', 'process.stderr.write("private-payload"); process.exitCode = 1;'],
     ['timeout', 'setTimeout(() => {}, 10000);'],
   ])('refuses parent lookup %s within its fixed budget', (_mode, body) => {
-    const f = fixture(); f.env.FOREGROUND_PIDS = '[2147483647]'; f.fakePs(body);
+    const f = fixture(); f.env['FOREGROUND_PIDS'] = '[2147483647]'; f.fakePs(body);
     const result = f.run();
     expect(result.status).toBe(0);
     expect(result.stderr.toString()).toContain('herdr-session:');
@@ -979,9 +979,33 @@ describe('global Herdr session guard', () => {
   });
 
   it('refuses an absent native hook without creating project state', () => {
-    const f = fixture(); f.env.CODEX_HOME = join(f.root, 'absent');
+    const f = fixture(); f.env['CODEX_HOME'] = join(f.root, 'absent');
     expect(f.run().stderr.toString()).toContain('herdr-session: native-hook-unavailable');
     expect(existsSync(f.capture)).toBe(false); expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it('uses the native default directory when CODEX_HOME is empty', () => {
+    const f = fixture(); f.env['CODEX_HOME'] = '';
+    expect(f.run().stderr.toString()).toBe('');
+    expect(readFileSync(f.capture)).toEqual(f.input);
+  });
+
+  it('bounds the global input without logging it or creating telemetry', () => {
+    const f = fixture(); const result = f.run(Buffer.alloc(1048577, 32));
+    expect(result.stderr.toString()).toContain('HOOK_INPUT_TOO_LARGE');
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it.each(['HERDR_ENV', 'HERDR_PANE_ID', 'HERDR_SOCKET_PATH'])('cannot relay without %s', name => {
+    const f = fixture(); delete f.env[name];
+    expect(f.run().stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it('refuses binary input without logging its contents', () => {
+    const f = fixture(); const result = f.run(Buffer.from([0, 255]));
+    expect(result.stderr.toString()).toBe('herdr-session: invalid-input\n');
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
   });
 
   it.each(['exit 8', 'exec /bin/sleep 10'])('reports native failure without exposing stderr: %s', body => {

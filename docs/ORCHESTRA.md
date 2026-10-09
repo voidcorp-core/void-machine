@@ -54,6 +54,27 @@ DEV-1017 owns their removal. No personal hook is changed by this migration.
 `resume_argv` requires Herdr 0.9.2; 0.9.0/0.9.1 cannot preserve extra launch options
 through server restart. No real restart proof has been executed for DEV-1016.
 
+## Guarding native Codex session attachment
+
+`lifecycle herdr-session codex` in the shipped hook bundle is the temporary global
+ownership guard for Herdr integration 8. It proves foreground ancestry before
+delegating the untouched payload to Herdr's native script. It neither publishes
+session state nor alters Orchestra metadata, central files or project telemetry.
+The separate `herdr-metadata` handler remains responsible for mission projection.
+
+Configure this route only through a deliberate personal migration with one guarded
+SessionStart call and no parallel unguarded native call. Keep the existing cockpit
+guard until the replacement artifact and exact configuration diff are accepted.
+Before activation, save private backups, compare the current source hashes, inspect
+all effective hook entries and retain a byte-exact rollback. No installer changes
+personal configuration automatically. Integration reinstallation requires checking
+that the guarded route is still the sole native session caller.
+
+The [Codex guard contract](CODEX.md#global-herdr-session-ownership-guard) describes
+limits, diagnostic visibility and residual process-identity assumptions. Fixture
+relay proofs do not close DEV-1016's live clear/kill/restart gates or authorize a
+server restart, permanent layout change, plugin retirement or personal activation.
+
 ## Native review identities
 
 Canonical specialist lifecycle context IDs are opaque bounded strings, including

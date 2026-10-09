@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -68,5 +70,37 @@ describe('Claude Code delegation hooks', () => {
     const capture = (manifest('packages/core/.claude-plugin/plugin.json').hooks.PreToolUse ?? [])
       .filter((entry) => entry.matcher === 'Agent').flatMap((entry) => entry.hooks.map((hook) => hook.command));
     expect(capture).toEqual([]);
+  });
+});
+
+describe('distributed global Herdr guard', () => {
+  it('keeps global relay out of both project manifests to avoid duplicate session publication', () => {
+    for (const path of ['packages/core/codex/hooks.json', 'packages/core/.claude-plugin/plugin.json']) {
+      expect(commands(manifest(path), 'SessionStart').join('\n')).not.toContain('herdr-session');
+    }
+  });
+
+  it('ships the guarded byte-preserving native route without project telemetry', () => {
+    const root = mkdtempSync(resolve(tmpdir(), 'distributed-herdr-session-'));
+    try {
+      const bin = resolve(root, 'bin'); mkdirSync(bin);
+      const codex = resolve(root, '.codex'); mkdirSync(codex);
+      const capture = resolve(root, 'capture');
+      writeFileSync(resolve(codex, 'herdr-agent-state.sh'), 'cat > "$RELAY_CAPTURE"\n');
+      writeFileSync(resolve(bin, 'herdr'), `#!${process.execPath}\n`
+        + 'process.stdout.write(JSON.stringify({result:{process_info:{pane_id:"w1:p1",'
+        + 'foreground_processes:[{pid:process.ppid}]}}}));\n', { mode: 0o755 });
+      const input = Buffer.from('{"hook_event_name":"SessionStart"}\n\n');
+      const result = spawnSync(process.execPath, [resolve('packages/core/hooks/_void-hook.mjs'),
+        'lifecycle', 'herdr-session', 'codex'], {
+        cwd: root, input, timeout: 4000,
+        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root, HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1',
+          HERDR_SOCKET_PATH: resolve(root, 'unused'), RELAY_CAPTURE: capture },
+      });
+      expect(result.status).toBe(0); expect(result.stderr.length).toBe(0);
+      expect(existsSync(capture)).toBe(true);
+      expect(readFileSync(capture)).toEqual(input);
+      expect(existsSync(resolve(root, '.void'))).toBe(false);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

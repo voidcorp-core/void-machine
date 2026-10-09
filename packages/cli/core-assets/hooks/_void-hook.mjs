@@ -9463,6 +9463,7 @@ function eachEvent(body, visit2) {
     const payload = record9["payload"];
     const category = typeof payload === "object" && payload !== null ? payload["category"] : void 0;
     visit2({
+      source: typeof record9["source"] === "string" ? record9["source"] : "",
       kind: typeof record9["kind"] === "string" ? record9["kind"] : "",
       missionId: typeof record9["missionId"] === "string" ? record9["missionId"] : "",
       category: typeof category === "string" ? category : "",
@@ -9521,7 +9522,7 @@ function withSuccessor(name) {
 }
 var MAX_NAMED = 5;
 function invocationAlert(resolution, liveness) {
-  if (resolution.ok && liveness.ok) return void 0;
+  if (resolution.ok && liveness.ok && liveness.unobservable.length === 0) return void 0;
   const lines = [`${PRODUCT_COMMAND}, invocation surface:`];
   if (!resolution.ok) {
     const named = resolution.unresolved.slice(0, MAX_NAMED).map(withSuccessor).join(", ");
@@ -9533,8 +9534,11 @@ function invocationAlert(resolution, liveness) {
   }
   if (!liveness.ok) {
     lines.push(
-      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`
+      `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls); runtime:claude`
     );
+  }
+  for (const { source: source2, toolCalls } of liveness.unobservable) {
+    lines.push(`  skill usage not observable for ${source2} (${toolCalls} tool calls); activation count unknown`);
   }
   lines.push(`  run \`${PRODUCT_COMMAND} doctor\` for the detail`);
   return lines.join("\n");
@@ -9543,8 +9547,14 @@ var WORKING_MISSION_CALLS = 20;
 var LIVENESS_WINDOW = 3;
 function livenessVerdict(body) {
   const tallies = /* @__PURE__ */ new Map();
+  const unobservable = /* @__PURE__ */ new Map();
   eachEvent(body, (event) => {
     if (event.kind !== "runtime.tool.started" || event.missionId === "") return;
+    if (event.source !== "runtime:claude") {
+      const source2 = event.source || "runtime:unknown";
+      unobservable.set(source2, (unobservable.get(source2) ?? 0) + 1);
+      return;
+    }
     const tally = tallies.get(event.missionId) ?? { toolCalls: 0, skillCalls: 0, lastTs: "" };
     tally.toolCalls += 1;
     if (event.category === "skill") tally.skillCalls += 1;
@@ -9555,9 +9565,15 @@ function livenessVerdict(body) {
   const toolCalls = judged.reduce((total, tally) => total + tally.toolCalls, 0);
   const skillCalls = judged.reduce((total, tally) => total + tally.skillCalls, 0);
   const ok = judged.length < LIVENESS_WINDOW || judged.some((tally) => tally.skillCalls > 0);
-  return { ok, missions: judged.length, toolCalls, skillCalls };
+  return {
+    ok,
+    missions: judged.length,
+    toolCalls,
+    skillCalls,
+    unobservable: [...unobservable].sort(([a], [b]) => a.localeCompare(b)).map(([source2, calls]) => ({ source: source2, toolCalls: calls }))
+  };
 }
-var REFRESH_MISSIONS = 20;
+var VERDICT_VERSION = 2;
 function cachePath(root) {
   return voidMachinePath(root, "invocation.json");
 }
@@ -9565,6 +9581,7 @@ function cachedInvocationAlert(root) {
   try {
     const parsed = JSON.parse(readFileSync9(cachePath(root), "utf8"));
     if (typeof parsed !== "object" || parsed === null) return void 0;
+    if (parsed["version"] !== VERDICT_VERSION) return void 0;
     const alert = parsed["alert"];
     return typeof alert === "string" && alert !== "" ? alert : void 0;
   } catch {
@@ -9577,15 +9594,15 @@ function refreshInvocationVerdict(root) {
     const path2 = cachePath(root);
     try {
       const previous = JSON.parse(readFileSync9(path2, "utf8"));
-      if (typeof previous === "object" && previous !== null && previous["fingerprint"] === fingerprint) return;
+      if (typeof previous === "object" && previous !== null && previous["version"] === VERDICT_VERSION && previous["fingerprint"] === fingerprint) return;
     } catch {
     }
-    const journals = readMissionJournals(root, { recentMissions: REFRESH_MISSIONS });
+    const journals = readMissionJournals(root);
     const alert = invocationAlert(
       resolutionVerdict(journals, installedSkillNames(root), { nowMs: Date.now() }),
       livenessVerdict(journals)
     );
-    const entry = alert === void 0 ? { fingerprint } : { fingerprint, alert };
+    const entry = { version: VERDICT_VERSION, fingerprint, ...alert === void 0 ? {} : { alert } };
     mkdirSync2(dirname4(path2), { recursive: true });
     const temporary = `${path2}.${process.pid}.tmp`;
     writeFileSync2(temporary, `${JSON.stringify(entry)}

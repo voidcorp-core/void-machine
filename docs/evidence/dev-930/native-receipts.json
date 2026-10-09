@@ -1,0 +1,222 @@
+{
+  "mission": "mis_98a644f5-6596-41d5-89b6-41226613e6d7",
+  "journalSha256": "1b842a7d7798f127e06db21dfbffdc1f6a90f067ed95eef9e7954173d224e841",
+  "events": [
+    {
+      "seq": 2,
+      "eventId": "evt_395c68bf6890448bbb75d7af448e1e2f914cf9486679df4c765bc6e9a3d7b013",
+      "kind": "specialist.requested",
+      "source": "void-harness:mission.dispatch",
+      "subject": "core:observability-sre-engineer",
+      "payload": {
+        "planHash": "sha256:4035a9712e6bfddd9b97347301730cd909f8e8bb7b5ef9125c18cca034f1864d",
+        "runtime": "codex",
+        "agentName": "observability-sre-engineer",
+        "contractVersion": 1,
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05"
+      }
+    },
+    {
+      "seq": 3,
+      "eventId": "evt_fb3d20be073ba952dbbc15cbfe70ea84987f248e3071faea82d1d1eb5a54362e",
+      "kind": "specialist.requested",
+      "source": "void-harness:mission.dispatch",
+      "subject": "core:product-challenger",
+      "payload": {
+        "planHash": "sha256:4035a9712e6bfddd9b97347301730cd909f8e8bb7b5ef9125c18cca034f1864d",
+        "runtime": "codex",
+        "agentName": "product-challenger",
+        "contractVersion": 1,
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05"
+      }
+    },
+    {
+      "seq": 4,
+      "eventId": "evt_0a1012ae6c5fcad6a769d72701a44afd6f828fad8571d13184f4eed1e276b01b",
+      "kind": "specialist.requested",
+      "source": "void-harness:mission.dispatch",
+      "subject": "core:security-engineer",
+      "payload": {
+        "planHash": "sha256:4035a9712e6bfddd9b97347301730cd909f8e8bb7b5ef9125c18cca034f1864d",
+        "runtime": "codex",
+        "agentName": "security-engineer",
+        "contractVersion": 2,
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05"
+      }
+    },
+    {
+      "seq": 5,
+      "eventId": "evt_80e4fc07b10feb288131dd291dfe3b96ab393282c79dfe6cc8eace2b353e6f53",
+      "kind": "specialist.requested",
+      "source": "void-harness:mission.dispatch",
+      "subject": "core:test-qa-engineer",
+      "payload": {
+        "planHash": "sha256:4035a9712e6bfddd9b97347301730cd909f8e8bb7b5ef9125c18cca034f1864d",
+        "runtime": "codex",
+        "agentName": "test-qa-engineer",
+        "contractVersion": 2,
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05"
+      }
+    },
+    {
+      "seq": 6,
+      "eventId": "evt_218f4b1eb732983cf0ae79c3625c44f4a7fea912e0362a9a486dec2cb94de7b1",
+      "kind": "specialist.started",
+      "source": "runtime:codex",
+      "subject": "core:observability-sre-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 1,
+        "contextId": "/root/proof1_observability"
+      }
+    },
+    {
+      "seq": 7,
+      "eventId": "evt_75dde6892371bac8e0db5992608593f274ba34ce5655b6d18e86885d43d725d0",
+      "kind": "specialist.completed",
+      "source": "runtime:codex",
+      "subject": "core:observability-sre-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 1,
+        "contextId": "/root/proof1_observability",
+        "completion": {
+          "schemaVersion": 1,
+          "specialistId": "core:observability-sre-engineer",
+          "contractVersion": 1,
+          "completionId": "dev930-proof1-preparation-sre-a9b09591-r1",
+          "verdict": "pass",
+          "findings": [],
+          "evidenceRequests": [],
+          "limitations": []
+        }
+      }
+    },
+    {
+      "seq": 8,
+      "eventId": "evt_e3003c79ade7fd633f990e3bbca27c660c641bcc00bf403ee4a52bb77235bbc8",
+      "kind": "specialist.started",
+      "source": "runtime:codex",
+      "subject": "core:product-challenger",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 1,
+        "contextId": "/root/proof1_product"
+      }
+    },
+    {
+      "seq": 9,
+      "eventId": "evt_2b3bbc309adc7453c7acfafab61e13b294f7108c4be0d6ac26994a55b454e288",
+      "kind": "specialist.completed",
+      "source": "runtime:codex",
+      "subject": "core:product-challenger",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 1,
+        "contextId": "/root/proof1_product",
+        "completion": {
+          "schemaVersion": 1,
+          "specialistId": "core:product-challenger",
+          "contractVersion": 1,
+          "completionId": "dev930-proof1-product-preparation-r1-c437c1d0",
+          "verdict": "pass",
+          "findings": [],
+          "evidenceRequests": [],
+          "limitations": []
+        }
+      }
+    },
+    {
+      "seq": 10,
+      "eventId": "evt_ba96c3bcf993f2d2d219b8622d3c07a7faf0637cbed7d943c62595f6f39d74f3",
+      "kind": "specialist.started",
+      "source": "runtime:codex",
+      "subject": "core:security-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 2,
+        "contextId": "/root/proof1_security"
+      }
+    },
+    {
+      "seq": 11,
+      "eventId": "evt_70ac628316b9f01d518c2f717e7dc5d8a7015ab435a83066e5856a985106c900",
+      "kind": "specialist.completed",
+      "source": "runtime:codex",
+      "subject": "core:security-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 2,
+        "contextId": "/root/proof1_security",
+        "completion": {
+          "schemaVersion": 1,
+          "specialistId": "core:security-engineer",
+          "contractVersion": 2,
+          "completionId": "dev930-proof1-security-pre-98a644f5-r1",
+          "verdict": "pass",
+          "findings": [],
+          "evidenceRequests": [],
+          "limitations": []
+        }
+      }
+    },
+    {
+      "seq": 12,
+      "eventId": "evt_d6865940a299fc602c93b55e999a61862d0e75d4ec940e4c3bd7770e8e3d1a07",
+      "kind": "specialist.started",
+      "source": "runtime:codex",
+      "subject": "core:test-qa-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 2,
+        "contextId": "/root/proof1_qa"
+      }
+    },
+    {
+      "seq": 13,
+      "eventId": "evt_7f0b356550c279af069e305ab2730959a4e8208c7ab12c73873d6edba8702fd5",
+      "kind": "specialist.completed",
+      "source": "runtime:codex",
+      "subject": "core:test-qa-engineer",
+      "payload": {
+        "stage": "pre-implementation",
+        "reviewRound": 1,
+        "inputHash": "sha256:a9b0959104480515d49d54a5200c203051d03a5768d71d11b38e925c03035d05",
+        "contractVersion": 2,
+        "contextId": "/root/proof1_qa",
+        "completion": {
+          "schemaVersion": 1,
+          "specialistId": "core:test-qa-engineer",
+          "contractVersion": 2,
+          "completionId": "dev930-proof1-preparation-qa-98a644f5-r1",
+          "verdict": "pass",
+          "findings": [],
+          "evidenceRequests": [],
+          "limitations": []
+        }
+      }
+    }
+  ]
+}

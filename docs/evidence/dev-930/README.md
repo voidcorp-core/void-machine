@@ -5,7 +5,8 @@ locales sur `8fee97c9ba8ab7ad17c24a45204dd849f54acf24`, avant les merges DEV-916
 Le pack porte encore **4.0.0**. Ce n'est ni le candidat final ni une certification
 `voidmachine@4.1.0` publiée. Aucune version n'a été modifiée.
 La première phase locale est terminée; les deux essais privés ont ensuite été
-autorisés explicitement et sont suivis dans `remote.log`.
+autorisés explicitement. Le premier est bloqué avant PR par un défaut reproduit
+d'admission des identifiants natifs; voir le rapport dédié et `remote.log`.
 
 Ticket complet et relations relus par MCP Linear le 9 octobre, statut In Progress.
 Références : [Step 10 du plan](../../plans/2026-09-28-release-4-1-delegation-and-autonomous-merge-plan.md),
@@ -32,8 +33,8 @@ une expérience non exécutée. Les simulations sont nommées comme telles.
 | Conformité hooks | PASS local macOS | Claude, Codex, both; manifeste Codex depuis racine et sous-dossier via sh, sh login, bash, zsh |
 | Conformité autopilot | PASS surface hors réseau | CLI/skills installés et calcul sur entrées synthétiques; **aucun merge GitHub prouvé** |
 | Retenue humaine persistée | PASS local | Commande du pack `autopilot merges --by-human`; JSON `schemaVersion:1`, `mergedBy:human` conservé |
-| Retenue arrêtant une PR prête | EN COURS | Deuxième essai autorisé; tests de décision locaux distincts de la preuve réelle |
-| Ticket mergé en intégration sans App/protection | EN COURS | Dépôt privé autorisé, main/develop poussées; mission de la première unité en préparation, aucun merge à ce stade |
+| Retenue arrêtant une PR prête | BLOCKED | Même défaut de revue; aucune PR encore créée, état local de retenue et tests déjà prouvés |
+| Ticket mergé en intégration sans App/protection | BLOCKED | Dépôt privé autorisé, main/develop poussées; mission bloquée par le refus des vrais contextId natifs; aucun merge |
 | Worker terminal visible Herdr | PASS observation partielle | WORK-3 identifié par label + worktree, session `01a1202c-90e6-7b11-98b7-813fc5882069`, processus `codex --no-daemon`; [runtime.log](runtime.log) |
 | Délégation consommateur via artefact final sous Herdr | NON MESURÉ | Le worker observé est cette collecte, pas une délégation lancée depuis le tarball consommateur |
 | Sous-agent natif sans multiplexeur | NON MESURÉ | Ni un test de CLI hors réseau, ni une observation Herdr ne prouvent cette cellule |
@@ -51,8 +52,8 @@ Ces 147 tests utilisent des observations locales/synthétiques, pas une PR réel
 
 Le contrôle négatif doctor a également été reproduit par un subprocess direct sur
 un second clone frais : exit 1. Une première lecture orale attribuant exit 0 à
-ce contrôle était erronée; les journaux conservés font foi. **Aucun défaut code
-reproduit dans cette collecte.**
+ce contrôle était erronée; les journaux conservés font foi. Aucun défaut doctor reproduit. **Un défaut produit de revue native a ensuite été
+reproduit et bloque les deux essais privés**, décrit dans [NATIVE-CONTEXT-BLOCKER.md](NATIVE-CONTEXT-BLOCKER.md).
 
 `doctor` sur la worktree du harnais via le wrapper local `void-machine` a répondu
 `self-host not-installed` (reçu manquant). Cette observation n'est pas un doctor
@@ -134,7 +135,8 @@ L'identité opératrice doit pouvoir lire les propriétés, créer deux branches
 merger dans `develop`, une fois cette exécution autorisée. Aucun token ni secret
 ne doit être copié dans les preuves.
 
-Après autorisation et merges DEV-916/917, ORCH pourra :
+Après correction du défaut natif, réception des merges DEV-916/917 et nouvelle
+preuve du pack final, ORCH pourra :
 
 1. Figer le SHA final et reconstruire le pack sans changer manuellement la version.
 2. Initialiser une copie locale synthétique; garder le programme/ticket prêts et

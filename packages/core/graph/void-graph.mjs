@@ -16304,6 +16304,18 @@ function stalenessOf(snapshot2, observation2) {
   return { stale: false };
 }
 
+// ../hook-runner/src/co-owned.ts
+var PROJECT_DOCTRINE_PATH = ".void/PROJECT-DOCTRINE.md";
+var CO_OWNED_FILES = [
+  ".gitignore",
+  ".void/config.json",
+  PROJECT_DOCTRINE_PATH,
+  ".claude/settings.json",
+  "CLAUDE.md",
+  "AGENTS.md"
+];
+var CO_OWNED = new Set(CO_OWNED_FILES);
+
 // ../hook-runner/src/journal.ts
 import { lstatSync as lstatSync2, readFileSync as readFileSync2, readdirSync as readdirSync2, statSync } from "node:fs";
 import { join as join5 } from "node:path";

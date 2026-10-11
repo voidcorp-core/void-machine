@@ -7878,6 +7878,22 @@ function noNull(edits) {
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { readFileSync as readFileSync3 } from "node:fs";
 import { basename, isAbsolute, relative, resolve as resolve2 } from "node:path";
+
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
+var PROJECT_DOCTRINE_PATH = ".void/PROJECT-DOCTRINE.md";
+var CO_OWNED_FILES = [
+  ".gitignore",
+  ".void/config.json",
+  PROJECT_DOCTRINE_PATH,
+  ".claude/settings.json",
+  "CLAUDE.md",
+  "AGENTS.md"
+];
+var CO_OWNED = new Set(CO_OWNED_FILES);
+function isCoOwned(path2) {
+  return CO_OWNED.has(path2);
+}
+
 function manifestOwnedPaths(root) {
   try {
     const parsed = JSON.parse(readFileSync3(resolve2(root, ".void/install-manifest.json"), "utf8"));
@@ -7901,7 +7917,7 @@ function projectPath(root, path2) {
 function protectedReason(path2, root) {
   if (root !== void 0) {
     const relativePath = projectPath(root, path2);
-    if (relativePath !== void 0 && manifestOwnedPaths(root).has(relativePath)) {
+    if (relativePath !== void 0 && !isCoOwned(relativePath) && manifestOwnedPaths(root).has(relativePath)) {
       return "delivered harness asset; change the harness through void-learn";
     }
   }

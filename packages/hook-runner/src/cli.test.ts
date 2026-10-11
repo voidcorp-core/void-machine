@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { replayEventLog } from '@voidcorp/mission-engine';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from './identity.js';
 
 // The entrypoint runs on import, so it is exercised the way a hook actually runs
 // it: bundled exactly as `pnpm build` does, then executed as a child process with
@@ -55,6 +56,52 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
   });
   return { code: result.status ?? 0, stderr: result.stderr ?? '' };
 }
+
+describe('bundled co-owned enforcement', () => {
+  it.each(['claude', 'codex'])('preserves allow and denial protocols for %s', (runtime) => {
+    const root = join(workspace, `${PRODUCT_IDENTITY.packageName}-${runtime}-ownership`);
+    mkdirSync(join(root, '.void'), { recursive: true });
+    mkdirSync(join(root, '.git'));
+    const exclusive = '.void/hooks/runner.mjs';
+    writeFileSync(join(root, '.void/install-manifest.json'), JSON.stringify({
+      files: ['AGENTS.md', exclusive].map((path) => ({ path })),
+    }));
+    const cases = [
+      ['protected-file', 'AGENTS.md', 'approved prose', 'ALLOW'],
+      ['protected-file', exclusive, 'changed', 'PROTECTED_FILE'],
+      ['protected-file', '.env', 'changed', 'PROTECTED_FILE'],
+      ['secret-content', 'AGENTS.md', `AKIA${'Z'.repeat(16)}`, 'SECRET_IN_CONTENT'],
+      ['control-character', 'AGENTS.md', String.fromCharCode(1), 'CONTROL_CHARACTER_IN_SOURCE'],
+    ] as const;
+    for (const [rule, file, content, code] of cases) {
+      const path = join(root, file);
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Write', tool_input: { file_path: path, content } }
+        : { tool_name: 'apply_patch', tool_input: {
+          patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${content}\n*** End Patch`,
+        } };
+      const result = spawnSync(process.execPath, [hook, 'enforce', rule, runtime], {
+        input: JSON.stringify(payload), encoding: 'utf8', cwd: root,
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(code === 'ALLOW' || runtime === 'codex' ? 0 : 2);
+      if (code === 'ALLOW') {
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toBe('');
+      } else if (runtime === 'codex') {
+        const output = JSON.parse(result.stdout).hookSpecificOutput;
+        expect(output.permissionDecision).toBe('deny');
+        expect(output.permissionDecisionReason).toContain(code);
+        expect(output.permissionDecisionReason).toContain(path);
+      } else {
+        expect(result.stderr).toContain(code);
+        expect(result.stderr).toContain(path);
+      }
+    }
+  });
+});
 
 describe('CI TDD source evidence', () => {
   it('accepts the generated worker identity with its actual syntax inspection coverage', () => {

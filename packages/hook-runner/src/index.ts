@@ -1,3 +1,4 @@
+export { CO_OWNED_FILES, isCoOwned, PROJECT_DOCTRINE_PATH } from './co-owned.js';
 export { journalFingerprint, readMissionJournals, type JournalReadOptions } from './journal.js';
 export { type ProjectRoots, resolveProjectRoots } from './project-roots.js';
 export {

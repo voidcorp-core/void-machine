@@ -7,6 +7,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { PRODUCT_IDENTITY } from '../identity.js';
 import {
   configuredStrings,
   evaluateRule,
@@ -167,6 +168,73 @@ describe('complete TDD evidence and operation bounds', () => {
   });
 });
 
+describe('co-owned enforcement across tool adapters', () => {
+  function rootWithManifest(paths: readonly string[]): string {
+    const root = mkdtempSync(join(tmpdir(), `${PRODUCT_IDENTITY.packageName}-co-owned-`));
+    write(root, '.void/install-manifest.json', JSON.stringify({ files: paths.map((path) => ({ path })) }));
+    return root;
+  }
+
+  function edit(tool: string, path: string, content: string): unknown {
+    return tool === 'apply_patch'
+      ? { tool_name: tool, tool_input: {
+        patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${content}\n*** End Patch`,
+      } }
+      : { tool_name: tool, tool_input: { file_path: path, content, new_string: content } };
+  }
+
+  it.each(['Write', 'Edit', 'apply_patch'])(
+    'permits project doctrine in tool-input and checked-out evidence through %s', (tool) => {
+      const path = '.void/PROJECT-DOCTRINE.md';
+      const root = rootWithManifest([path]);
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        const verdict = evaluateRule('protected-file', edit(tool, join(root, path), 'approved prose'),
+          { root, source, env: {} });
+        expect(verdict).toMatchObject({ allow: true, code: 'ALLOW' });
+      }
+    },
+  );
+
+  it.each(['Bash', 'apply_patch'])(
+    'judges every normalized target of a multi-file %s operation', (tool) => {
+      const exclusive = '.void/hooks/runner.mjs';
+      const namesakes = ['nested/AGENTS.md', 'agents.md', 'AGENTS.md.bak'];
+      const root = rootWithManifest(['AGENTS.md', 'CLAUDE.md', exclusive, ...namesakes]);
+      const payload = (paths: readonly string[]) => tool === 'Bash'
+        ? { tool_name: tool, tool_input: { command: paths.map((path) => `printf updated > '${path}'`).join('; ') } }
+        : { tool_name: tool, tool_input: { patch: ['*** Begin Patch', ...paths.flatMap((path) =>
+          [`*** Update File: ${path}`, '@@', '-old', '+updated']), '*** End Patch'].join('\n') } };
+      const allowed = ['./folder/../AGENTS.md', join(root, 'CLAUDE.md')];
+      expect(evaluateRule('protected-file', payload(allowed), { root, env: {} }).code).toBe('ALLOW');
+      for (const path of [exclusive, ...namesakes, '.env', 'private.key', 'pnpm-lock.yaml', '.git/config']) {
+        const denied = join(root, path);
+        for (const paths of [[...allowed, denied], [denied, ...allowed]]) {
+          const verdict = evaluateRule('protected-file', payload(paths), { root, env: {} });
+          expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+          expect(verdict.evidence[0]?.startsWith(`${denied}:`)).toBe(true);
+        }
+      }
+    },
+  );
+
+  it.each(['Write', 'apply_patch'])('retains co-owned content checks through %s', (tool) => {
+    const root = rootWithManifest(['AGENTS.md']);
+    const cases = [
+      ['secret-content', `AKIA${'Z'.repeat(16)}`, 'SECRET_IN_CONTENT'],
+      ['control-character', `prose${String.fromCharCode(1)}`, 'CONTROL_CHARACTER_IN_SOURCE'],
+    ] as const;
+    for (const [rule, content, code] of cases) {
+      const payload = edit(tool, 'AGENTS.md', content);
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        expect(evaluateRule('protected-file', payload, { root, source, env: {} }).code).toBe('ALLOW');
+        const verdict = evaluateRule(rule, payload, { root, source, env: {} });
+        expect(verdict).toMatchObject({ allow: false, code });
+        expect(verdict.evidence[0]).toContain('AGENTS.md:1');
+      }
+    }
+  });
+});
+
 describe('parseHookPayload', () => {
   it('accepts bounded UTF-8 JSON', () => {
     expect(parseHookPayload(Buffer.from('{"tool_name":"Read"}'))).toEqual({
@@ -207,7 +275,7 @@ describe('evaluateRule', () => {
     expect(claude.allow).toBe(false);
   });
 
-  it.each(['.void/hooks/runner.mjs', '.codex/hooks.json', '.void/PROJECT-DOCTRINE.md'])(
+  it.each(['.void/hooks/runner.mjs', '.codex/hooks.json'])(
     'distinguishes an attempted installed-asset edit from a committed diff: %s', (path) => {
       const root = mkdtempSync(join(tmpdir(), 'void-installed-diff-'));
       write(root, '.void/install-manifest.json', JSON.stringify({ files: [{ path }] }));

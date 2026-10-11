@@ -393,7 +393,7 @@ export function evaluateRule(
   }
   if (rule === 'protected-file') {
     if (productSetting(env, 'ALLOW_SECRET_EDIT') === '1') return allow('OVERRIDE', 'one-shot override');
-    // Manifest ownership prohibits tool writes, not reviewed installer commits.
+    // Exclusive manifest ownership prohibits tool writes, not reviewed installer commits.
     // Committed diffs still receive lexical protected-path and content checks.
     const ownership = options.source === 'checked-out' ? {} : { root: options.root };
     return protectedFile(call.edits.map((edit) => edit.path), ownership);

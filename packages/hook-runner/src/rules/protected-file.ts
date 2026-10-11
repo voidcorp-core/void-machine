@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
+import { isCoOwned } from '../co-owned.js';
 import type { RuleVerdict } from '../enforcement/types.js';
 import { allow, block } from './verdict.js';
 
@@ -34,7 +35,11 @@ function projectPath(root: string, path: string): string | undefined {
 function protectedReason(path: string, root: string | undefined): string | undefined {
   if (root !== undefined) {
     const relativePath = projectPath(root, path);
-    if (relativePath !== undefined && manifestOwnedPaths(root).has(relativePath)) {
+    if (
+      relativePath !== undefined
+      && !isCoOwned(relativePath)
+      && manifestOwnedPaths(root).has(relativePath)
+    ) {
       return 'delivered harness asset; change the harness through void-learn';
     }
   }

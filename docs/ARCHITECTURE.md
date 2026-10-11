@@ -323,6 +323,24 @@ Rules:
   See the ownership-is-union-of-receipt-and-manifest decision.
 - `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
 
+### Co-owned project files and pre-write protection
+
+`packages/hook-runner/src/co-owned.ts` owns the pure, exact co-owned path policy.
+The CLI re-exports it from `src/lib/co-owned.ts` for installation and manifest
+verification. Its six paths are `.gitignore`, `.void/config.json`,
+`.void/PROJECT-DOCTRINE.md`, `.claude/settings.json`, `CLAUDE.md` and `AGENTS.md`.
+
+For tool writes, `protected-file` refuses manifest-listed exclusive assets,
+including delivered skills, agents and hooks. A normalized project-relative
+co-owned path skips only that ownership refusal; nested namesakes and prefixes
+do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
+remain active, as do independent content scans. Claude and Codex share this rule.
+
+Checked-out CI evidence retains its existing exemption from pre-write ownership
+checks. Neither boundary proves human approval or enforces managed blocks;
+doctrine changes still require the explicit approval owned by `void-learn`.
+See the [co-owned protection decision](decisions-log/2026-10-11-co-owned-tool-write-protection--6d3bbad2-35d7-4bfe-884a-70e95cff0239.md).
+
 ### Capability, not lowest common denominator
 
 Parity settles *what* is installed. It does not settle *how* a pass runs when the

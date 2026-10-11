@@ -468,12 +468,13 @@ Commit history (grouped Features / Bug Fixes). Do not hand-edit it.
 ## Enforcement at promotion
 
 The separate `void-enforce` workflow judges the complete committed diff against
-its target branch. Installation-manifest ownership is a pre-write restriction on
-agent tools, not proof that a reviewed installer commit is forbidden. Checked-out
-CI evidence retains protected secret/key/credential/Git paths and content scans;
-local tool writes retain ownership protection. CI does not certify installer
-provenance or human approval of doctrine changes. See the
-[committed-evidence decision](decisions-log/2026-09-14-committed-enforcement-ownership--0ee50693-062d-4eb8-b870-840ef6453879.md).
+its target branch. Installation-manifest ownership restricts tool writes to
+exclusively managed assets; the six exact co-owned project paths skip only that
+ownership refusal. Local writes retain lexical protected-path and content checks.
+Checked-out CI evidence retains protected secret/key/credential/Git paths and
+content scans without the pre-write ownership restriction. CI does not certify
+installer provenance or human approval of doctrine changes. See the
+[co-owned protection decision](decisions-log/2026-10-11-co-owned-tool-write-protection--6d3bbad2-35d7-4bfe-884a-70e95cff0239.md).
 
 The bounded source reader still requires complete source within 64 KiB. When a
 command exceeds it, extract a cohesive module and preserve behavior with tests;

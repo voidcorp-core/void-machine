@@ -115,3 +115,12 @@ identity and existing discovery bounds, and specifies invalid/stale/terminal cas
 It adds no daemon, generic registry, automatic migration or review bypass.
 Folpe approved explicit selection on 12 October 2026. Implementation follows the
 linked execution plan; no personal activation is included in that approval.
+
+## Implementation boundary
+
+The [selection ADR](../decisions-log/2026-10-12-orchestra-explicit-selection--e7be95ab-5bca-4542-9f38-e811a6bd9b10.md)
+records the approved choice. The codec validates selection through JSON syntax and
+the shared duplicate-key-aware parser; the reader owns filesystem discovery and
+live identity. The existing metadata command builder retains guarded cleanup.
+The worker proves isolated lifecycle inputs; ORCH separately owns real-reader
+verification against unchanged central mission/report files.

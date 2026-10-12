@@ -12984,6 +12984,12 @@ import { isAbsolute as isAbsolute5 } from "node:path";
 var identifier = string2().check(_regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/));
 var text = string2().check(_minLength(1), _maxLength(4096), refine((value) => [...value].every((char) => char.charCodeAt(0) >= 32 && !(char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159))));
 var path = text.check(refine((value) => isAbsolute5(value) && !value.split(/[\\/]/).includes("..")));
+var selectionSchema = strictObject({
+  schema: literal(1),
+  project: string2().check(_regex(/^[a-f0-9]{64}$/)),
+  mission: identifier,
+  coordinator: strictObject({ label: identifier, worktree: path })
+});
 var instant = iso_exports.datetime();
 var status = _enum(["planned", "running", "blocked", "done", "failed"]);
 var workerSchema = strictObject({
@@ -13019,13 +13025,8 @@ var reportSchema = strictObject({
   updated_at: instant
 });
 var briefSchema = strictObject({ schema: literal(1), mission: identifier, attempt: identifier, worker: identifier });
-function frontmatter(input, limit) {
-  if (Buffer.byteLength(input) > limit) throw Error("orchestra document exceeds byte limit");
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(input);
-  if (match?.[1] === void 0 || /^---(?:\r?\n|$)/.test(match[2] ?? "")) {
-    throw Error("orchestra document requires one delimited frontmatter");
-  }
-  const document = (0, import_yaml.parseDocument)(match[1], {
+function strictDocument(input) {
+  const document = (0, import_yaml.parseDocument)(input, {
     strict: true,
     stringKeys: true,
     uniqueKeys: true,
@@ -13036,6 +13037,19 @@ function frontmatter(input, limit) {
     if ((0, import_yaml.isAlias)(node) || (0, import_yaml.isNode)(node) && ("tag" in node && node.tag !== void 0 || "anchor" in node && node.anchor !== void 0)) throw Error("YAML aliases/tags refused");
   });
   return document.toJS({ maxAliasCount: 0 });
+}
+function frontmatter(input, limit) {
+  if (Buffer.byteLength(input) > limit) throw Error("orchestra document exceeds byte limit");
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(input);
+  if (match?.[1] === void 0 || /^---(?:\r?\n|$)/.test(match[2] ?? "")) {
+    throw Error("orchestra document requires one delimited frontmatter");
+  }
+  return strictDocument(match[1]);
+}
+function parseSelection(input) {
+  if (Buffer.byteLength(input) > 4096) throw Error("orchestra selection exceeds byte limit");
+  JSON.parse(input);
+  return selectionSchema.parse(strictDocument(input));
 }
 function parseMission(input) {
   return missionSchema.parse(frontmatter(input, 65536));
@@ -13145,19 +13159,47 @@ function effectiveWorkers(directory, mission) {
     return { ...worker, status: report.status };
   });
 }
+function readSelection(cwd, project) {
+  const relativePath = ".void/machine/orchestra-selection.json";
+  try {
+    safePath(join11(cwd, relativePath));
+  } catch (error) {
+    if (absent(error)) return void 0;
+    throw error;
+  }
+  const selection = parseSelection(readDocument(cwd, relativePath, 4096));
+  if (selection.project !== project || selection.coordinator.worktree !== cwd) {
+    throw Error("foreign orchestra selection project or coordinator worktree");
+  }
+  return selection;
+}
+function selectCandidates(candidates, binding, cwd, panes) {
+  if (binding !== void 0) {
+    const selected = candidates.filter(({ mission }) => mission.mission === binding.mission);
+    const coordinator = selected[0]?.mission.coordinator;
+    if (selected.length !== 1 || coordinator?.label !== binding.coordinator.label || coordinator.worktree !== binding.coordinator.worktree) {
+      throw Error("orchestra selection target absent or coordinator mismatch");
+    }
+    return selected;
+  }
+  const active = candidates.filter((item) => !["done", "failed"].includes(item.mission.status));
+  return active.length ? active : candidates.filter(({ mission }) => [mission.coordinator, ...mission.workers].some((person) => canonical(person.worktree) === cwd && panes.some((pane) => pane.label === person.label && canonical(pane.cwd) === cwd && pane.tokens?.["mission"] === mission.mission)));
+}
 function readOrchestra(state, common, cwd, inventory) {
   const repository = realpathSync4(common);
   const project = projectIdentity(repository);
+  const canonicalCwd = realpathSync4(cwd);
+  const binding = readSelection(canonicalCwd, project);
   const root = join11(state, project);
   let entries;
   try {
     entries = missionEntries2(root);
   } catch (error) {
-    if (absent(error)) return void 0;
-    throw error;
+    if (!absent(error)) throw error;
+    if (binding !== void 0) throw Error("orchestra selection target absent: central state missing");
+    return void 0;
   }
   if (entries.length > MAX_MISSIONS) throw Error("orchestra discovery incomplete: entry limit");
-  const canonicalCwd = realpathSync4(cwd);
   const candidates = [];
   let bytes = 0;
   for (const entry of entries) {
@@ -13173,13 +13215,15 @@ function readOrchestra(state, common, cwd, inventory) {
     const participants = [mission2.coordinator, ...mission2.workers];
     if (participants.some((person) => canonical(person.worktree) === canonicalCwd)) candidates.push({ directory: directory2, mission: mission2 });
   }
-  if (candidates.length === 0) return void 0;
+  if (candidates.length === 0 && binding === void 0) return void 0;
   const inventoryPanes = inventory();
-  const active = candidates.filter((item) => !["done", "failed"].includes(item.mission.status));
-  const selected = active.length ? active : candidates.filter(({ mission: mission2 }) => [mission2.coordinator, ...mission2.workers].some((person) => canonical(person.worktree) === canonicalCwd && inventoryPanes.some((pane2) => pane2.label === person.label && canonical(pane2.cwd) === canonicalCwd && pane2.tokens?.["mission"] === mission2.mission)));
+  const selected = selectCandidates(candidates, binding, canonicalCwd, inventoryPanes);
   if (selected.length === 0) return void 0;
   const candidate = selected[0];
-  if (selected.length !== 1 || candidate === void 0) throw Error("ambiguous orchestra missions");
+  if (selected.length !== 1 || candidate === void 0) {
+    const names = selected.map((item) => item.mission.mission).sort().join(", ").slice(0, 300);
+    throw Error(`ambiguous orchestra missions: ${names}; ORCH must choose an explicit selection`);
+  }
   const { mission, directory } = candidate;
   const identities = [mission.coordinator, ...mission.workers].filter((person) => canonical(person.worktree) === canonicalCwd);
   if (identities.length !== 1 || identities[0] === void 0) throw Error("ambiguous orchestra participant");

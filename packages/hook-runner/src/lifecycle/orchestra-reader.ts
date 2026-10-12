@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, lstatSync, opendirSync, openSync, readSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import {
-  type OrchestraMission, type OrchestraPane, type OrchestraWorker,
-  matchReport, parseBrief, parseMission, parseReport, resolvePane,
+  type OrchestraMission, type OrchestraPane, type OrchestraWorker, type OrchestraSelection,
+  matchReport, parseBrief, parseMission, parseReport, parseSelection, resolvePane,
 } from './orchestra-codec.js';
 
 const MAX_MISSIONS = 64;
@@ -91,19 +91,57 @@ function effectiveWorkers(directory: string, mission: OrchestraMission): Orchest
   });
 }
 
+function readSelection(cwd: string, project: string): OrchestraSelection | undefined {
+  const relativePath = '.void/machine/orchestra-selection.json';
+  try { safePath(join(cwd, relativePath)); }
+  catch (error) { if (absent(error)) return undefined; throw error; }
+  // Once observed, a disappearing/replaced binding is an error, never absence.
+  const selection = parseSelection(readDocument(cwd, relativePath, 4096));
+  if (selection.project !== project || selection.coordinator.worktree !== cwd) {
+    throw Error('foreign orchestra selection project or coordinator worktree');
+  }
+  return selection;
+}
+
+type Candidate = { readonly directory: string; readonly mission: OrchestraMission };
+function selectCandidates(
+  candidates: readonly Candidate[], binding: OrchestraSelection | undefined,
+  cwd: string, panes: readonly OrchestraPane[],
+): readonly Candidate[] {
+  if (binding !== undefined) {
+    const selected = candidates.filter(({ mission }) => mission.mission === binding.mission);
+    const coordinator = selected[0]?.mission.coordinator;
+    if (selected.length !== 1 || coordinator?.label !== binding.coordinator.label
+      || coordinator.worktree !== binding.coordinator.worktree) {
+      throw Error('orchestra selection target absent or coordinator mismatch');
+    }
+    return selected;
+  }
+  const active = candidates.filter(item => !['done', 'failed'].includes(item.mission.status));
+  return active.length ? active : candidates.filter(({ mission }) =>
+    [mission.coordinator, ...mission.workers].some(person => canonical(person.worktree) === cwd
+      && panes.some(pane => pane.label === person.label && canonical(pane.cwd) === cwd
+        && pane.tokens?.['mission'] === mission.mission)));
+}
+
 /** Includes terminal missions for safe cleanup; a discovery limit is never a false unique result. */
 export function readOrchestra(
   state: string, common: string, cwd: string, inventory: () => readonly OrchestraPane[],
 ): OrchestraSnapshot | undefined {
   const repository = realpathSync(common);
   const project = projectIdentity(repository);
+  const canonicalCwd = realpathSync(cwd);
+  const binding = readSelection(canonicalCwd, project);
   const root = join(state, project);
   let entries: string[];
   try { entries = missionEntries(root); }
-  catch (error) { if (absent(error)) return undefined; throw error; }
+  catch (error) {
+    if (!absent(error)) throw error;
+    if (binding !== undefined) throw Error('orchestra selection target absent: central state missing');
+    return undefined;
+  }
   if (entries.length > MAX_MISSIONS) throw Error('orchestra discovery incomplete: entry limit');
-  const canonicalCwd = realpathSync(cwd);
-  const candidates: { directory: string; mission: OrchestraMission }[] = [];
+  const candidates: Candidate[] = [];
   let bytes = 0;
   for (const entry of entries) {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(entry)) throw Error('invalid orchestra mission directory');
@@ -118,16 +156,15 @@ export function readOrchestra(
     const participants = [mission.coordinator, ...mission.workers];
     if (participants.some(person => canonical(person.worktree) === canonicalCwd)) candidates.push({ directory, mission });
   }
-  if (candidates.length === 0) return undefined;
+  if (candidates.length === 0 && binding === undefined) return undefined;
   const inventoryPanes = inventory();
-  const active = candidates.filter(item => !['done', 'failed'].includes(item.mission.status));
-  const selected = active.length ? active : candidates.filter(({ mission }) =>
-    [mission.coordinator, ...mission.workers].some(person => canonical(person.worktree) === canonicalCwd
-      && inventoryPanes.some(pane => pane.label === person.label && canonical(pane.cwd) === canonicalCwd
-        && pane.tokens?.['mission'] === mission.mission)));
+  const selected = selectCandidates(candidates, binding, canonicalCwd, inventoryPanes);
   if (selected.length === 0) return undefined;
   const candidate = selected[0];
-  if (selected.length !== 1 || candidate === undefined) throw Error('ambiguous orchestra missions');
+  if (selected.length !== 1 || candidate === undefined) {
+    const names = selected.map(item => item.mission.mission).sort().join(', ').slice(0, 300);
+    throw Error(`ambiguous orchestra missions: ${names}; ORCH must choose an explicit selection`);
+  }
   const { mission, directory } = candidate;
   const identities = [mission.coordinator, ...mission.workers]
     .filter(person => canonical(person.worktree) === canonicalCwd);

@@ -6,6 +6,11 @@ const identifier = z.string().check(z.regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/))
 const text = z.string().check(z.minLength(1), z.maxLength(4096), z.refine(value =>
   [...value].every(char => char.charCodeAt(0) >= 32 && !(char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159))));
 const path = text.check(z.refine(value => isAbsolute(value) && !value.split(/[\\/]/).includes('..')));
+const selectionSchema = z.strictObject({
+  schema: z.literal(1), project: z.string().check(z.regex(/^[a-f0-9]{64}$/)), mission: identifier,
+  coordinator: z.strictObject({ label: identifier, worktree: path }),
+});
+export type OrchestraSelection = z.infer<typeof selectionSchema>;
 const instant = z.iso.datetime();
 const status = z.enum(['planned', 'running', 'blocked', 'done', 'failed']);
 const workerSchema = z.strictObject({
@@ -38,14 +43,9 @@ export interface OrchestraPane {
   readonly tokens?: Readonly<Record<string, string>>;
 }
 
-/** YAML 2 AST validation rejects tags and anchors, including unused anchors. */
-function frontmatter(input: string, limit: number): unknown {
-  if (Buffer.byteLength(input) > limit) throw Error('orchestra document exceeds byte limit');
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(input);
-  if (match?.[1] === undefined || /^---(?:\r?\n|$)/.test(match[2] ?? '')) {
-    throw Error('orchestra document requires one delimited frontmatter');
-  }
-  const document = parseDocument(match[1], {
+/** YAML 2 AST validation rejects duplicate keys, tags and anchors, including unused anchors. */
+function strictDocument(input: string): unknown {
+  const document = parseDocument(input, {
     strict: true, stringKeys: true, uniqueKeys: true, version: '1.2',
   });
   if (document.errors.length || document.warnings.length) throw Error('invalid orchestra YAML');
@@ -54,6 +54,22 @@ function frontmatter(input: string, limit: number): unknown {
       || 'anchor' in node && node.anchor !== undefined))) throw Error('YAML aliases/tags refused');
   });
   return document.toJS({ maxAliasCount: 0 });
+}
+
+function frontmatter(input: string, limit: number): unknown {
+  if (Buffer.byteLength(input) > limit) throw Error('orchestra document exceeds byte limit');
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(input);
+  if (match?.[1] === undefined || /^---(?:\r?\n|$)/.test(match[2] ?? '')) {
+    throw Error('orchestra document requires one delimited frontmatter');
+  }
+  return strictDocument(match[1]);
+}
+
+/** JSON syntax stays mandatory even though the shared AST checks duplicate keys. */
+export function parseSelection(input: string): OrchestraSelection {
+  if (Buffer.byteLength(input) > 4096) throw Error('orchestra selection exceeds byte limit');
+  JSON.parse(input);
+  return selectionSchema.parse(strictDocument(input));
 }
 
 export function parseMission(input: string): OrchestraMission {

@@ -84,3 +84,19 @@ Each step has a scope, mode and observable gate. No new CLI, daemon, registry or
 automatic state migration. Runtime admission limitations are recorded separately
 from actual native preparation/review. Archive readiness remains an operational
 DEV-1017 gate after this code is delivered and activated.
+
+## Worker implementation evidence
+
+The selection boundary is recorded in
+[ADR e7be95ab](../decisions-log/2026-10-12-orchestra-explicit-selection--e7be95ab-5bca-4542-9f38-e811a6bd9b10.md).
+RED commit `647413f67b2658708edd98366e41944b8bba1d8f` precedes production:
+23 reader failures/12 passes, then 3 executor failures/7 passes after building the
+mission-engine dependency. Initial registry transport and missing-build failures
+remain separate in ignored evidence. The first GREEN passes 88 lifecycle tests.
+
+The reader and existing codec own the change; no new registry, CLI or executor
+production wiring is needed. Selection shares strict duplicate-key parsing while
+requiring JSON syntax, and reuses the bounded filesystem reader. Final verification
+and exact candidate evidence live in WORK-2's central report. ORCH owns the actual
+live-reader proof, independent review and delivery; fixture projection is not live
+runtime evidence. No personal activation is included.

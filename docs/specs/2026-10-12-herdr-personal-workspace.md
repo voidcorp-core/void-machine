@@ -1,7 +1,7 @@
 ---
 title: Herdr personal workspace for agent coding
 date: 2026-10-12
-status: in-design
+status: approved
 author: Folpe + Codex
 ticket:
 related: []
@@ -42,10 +42,13 @@ Ctrl+Q is the prefix, with existing agent, worktree and popup bindings to preser
 | [PR Board](https://github.com/cdowell09/herdr-pr-board) | One reusable global tab for pull requests and CI status. |
 | [Linear](https://github.com/mrolafsson/herdr-linear) | Ticket popup; project-specific worktree base and agent launch settings. |
 
-First reshape MACHINE only: approximately 65% width for the coordinator, 35%
+Apply globally to existing and future project workspaces, as approved by Folpe
+on 2026-10-12. First validate on MACHINE, then apply the same organization: approximately 65% width for the coordinator, 35%
 for review above a run terminal. Move PIPELINE to a separate tab without stopping
 its process; lazygit remains available through the existing popup shortcut.
-Other workspace layouts, processes, cwd and conversations remain unchanged.
+Preserve every existing process, cwd and conversation while adapting project
+layouts. Do not reorganize scratch tabs or additional worker tabs. New project
+workspaces receive the same layout through an idempotent native plugin hook.
 Review must follow the explicitly selected worktree/base rather than remain
 pinned to the completed DEV-1017 diff. Never guess which concurrent worker to review.
 
@@ -80,7 +83,8 @@ reusing the retired collector is outside this proposal.
 
 - Eight plugins installed at recorded versions, with successful relevant smoke
   checks; any unmet authentication or compatibility gate listed individually.
-- Existing sessions and non-MACHINE layouts preserved by before/after inventory.
+- Existing sessions preserved by before/after inventory across every project;
+  new project creation automatically receives the common layout exactly once.
 - Native mission fields remain visible; existing shortcuts still work.
 - Review displays the intended worktree; PR Board displays actual PR/CI data.
 - Annotate opens without sending; Zoetrope resolves the intended session.
@@ -96,4 +100,19 @@ code becomes necessary, stop to scope it and select its test mode separately.
 
 Design self-review: eight distinct roles, explicit preservation and rollback,
 no missing approval implied, no claim of completed installation. This document
-is a proposal awaiting Folpe's approval, not an accepted architectural decision.
+was approved by Folpe, including global application to all current and future
+projects. Implementation is authorized; this is personal configuration, not a
+new harness-wide doctrine rule.
+
+# Implementation record
+
+The approved rollout is recorded in
+[the execution plan](../plans/2026-10-12-herdr-personal-workspace-plan.md).
+Its result section distinguishes the original proposal above from the final
+workstation state and the remaining verification limits. In particular, World
+is now a local persistent service, the active reviewr installation no longer
+depends on the old Cockpit vendor directory, and the Cockpit agent has exited
+without this setup stopping it. Existing project layouts and newly created
+single-pane Git workspaces are covered; full server restart restoration is not
+claimed. Personal configuration, inventories and the usage guide stay local in
+`.void/machine/herdr-setup-20261012/`, outside the distributed harness.

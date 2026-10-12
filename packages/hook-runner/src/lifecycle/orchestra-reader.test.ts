@@ -1,8 +1,19 @@
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, readFileSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readDocument, projectIdentity, readOrchestra } from './orchestra-reader.js';
+
+const readRace = vi.hoisted(() => ({ afterRead: undefined as (() => void) | undefined }));
+vi.mock('node:fs', async importOriginal => {
+  const fs = await importOriginal<typeof import('node:fs')>();
+  return { ...fs, readSync: (...args: Parameters<typeof fs.readSync>) => {
+    const count = fs.readSync(...args);
+    const race = readRace.afterRead; readRace.afterRead = undefined;
+    race?.();
+    return count;
+  } };
+});
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orchestra-')));
@@ -118,5 +129,142 @@ describe('discovery and current report reconciliation', () => {
     const f = fixture();
     for (let i = 0; i < 65; i++) mkdirSync(join(f.directory, '..', `extra-${i}`));
     expect(() => readOrchestra(f.state, f.repository, f.worktree, () => f.panes)).toThrow(/incomplete/);
+  });
+});
+
+function selectionFixture() {
+  const f = fixture();
+  const selection = { schema: 1, project: f.mission.project, mission: 'mission-1',
+    coordinator: f.mission.coordinator };
+  const binding = join(f.repository, '.void/machine/orchestra-selection.json');
+  mkdirSync(join(f.repository, '.void/machine'), { recursive: true });
+  const select = (value: unknown = selection) => writeFileSync(binding, JSON.stringify(value));
+  const add = (mission: string, status = 'blocked') => {
+    const directory = join(f.directory, '..', mission); mkdirSync(directory);
+    f.put(join(directory, 'mission.md'), { ...f.mission, mission, status, workers: [] });
+    return directory;
+  };
+  const read = () => readOrchestra(f.state, f.repository, f.repository, () => f.panes);
+  return { ...f, selection, binding, select, add, read };
+}
+
+describe('explicit coordinator mission selection', () => {
+  it('selects a blocked mission among two blocked and one running with fresh ORCH identity', () => {
+    const f = selectionFixture();
+    f.put(join(f.directory, 'mission.md'), { ...f.mission, status: 'blocked' });
+    f.add('other-blocked'); f.add('other-running', 'running'); f.select();
+    const before = readFileSync(join(f.directory, 'mission.md'), 'utf8');
+    const read = () => readOrchestra(f.state, f.repository, f.repository,
+      () => f.panes.map(pane => ({ ...pane, pane_id: 'fresh:p7', workspace_id: 'fresh' })));
+    expect(read()).toMatchObject({ mission: { mission: 'mission-1', status: 'blocked' },
+      coordinator: true, pane: { pane_id: 'fresh:p7', workspace_id: 'fresh' } });
+    expect(readFileSync(join(f.directory, 'mission.md'), 'utf8')).toBe(before);
+    expect(JSON.parse(readFileSync(f.binding, 'utf8'))).toEqual(f.selection);
+  });
+  it('preserves unique discovery and names ambiguous candidates when unbound', () => {
+    const f = selectionFixture();
+    expect(f.read()?.mission.mission).toBe('mission-1');
+    f.add('mission-2');
+    expect(f.read).toThrow(/ambiguous orchestra missions.*mission-1.*mission-2.*ORCH/);
+  });
+  it('re-reads atomic selection switches and pane changes without changing worker discovery', () => {
+    const f = selectionFixture(); f.add('mission-2'); f.select();
+    expect(f.read()?.mission.mission).toBe('mission-1');
+    const replacement = f.binding + '.next';
+    writeFileSync(replacement, JSON.stringify({ ...f.selection, mission: 'mission-2' }));
+    renameSync(replacement, f.binding);
+    f.panes[0] = { pane_id: 'new:p8', workspace_id: 'new', cwd: f.repository, label: 'ORCH' };
+    expect(f.read()).toMatchObject({ mission: { mission: 'mission-2' }, pane: { pane_id: 'new:p8' } });
+    expect(readOrchestra(f.state, f.repository, f.worktree, () => f.panes))
+      .toMatchObject({ mission: { mission: 'mission-1' }, worker: { attempt: 'attempt-2' } });
+  });
+  it.each(['absent', '../mission-1', '/mission-1'])('refuses stale or path-like selection %s without fallback', mission => {
+    const f = selectionFixture(); f.select({ ...f.selection, mission });
+    expect(f.read).toThrow();
+  });
+  it.each([
+    { schema: 2 }, { project: '0'.repeat(64) }, { extra: true }, { mission: 1 },
+    { coordinator: { label: 'WORK-1', worktree: '/foreign' } },
+  ])('refuses an invalid binding without using the unique mission: %j', change => {
+    const f = selectionFixture(); f.select({ ...f.selection, ...change });
+    expect(f.read).toThrow();
+  });
+  it('refuses a binding when central state is absent', () => {
+    const f = selectionFixture(); f.select();
+    expect(() => readOrchestra(join(f.root, 'missing'), f.repository, f.repository, () => f.panes)).toThrow(/selection/);
+  });
+  it('refuses selection of a worker role or a noncanonical coordinator worktree', () => {
+    const f = selectionFixture();
+    const binding = join(f.worktree, '.void/machine/orchestra-selection.json');
+    mkdirSync(join(f.worktree, '.void/machine'), { recursive: true });
+    writeFileSync(binding, JSON.stringify({ ...f.selection,
+      coordinator: { label: 'WORK-1', worktree: f.worktree } }));
+    expect(() => readOrchestra(f.state, f.repository, f.worktree, () => f.panes)).toThrow();
+    f.select({ ...f.selection, coordinator: { label: 'ORCH', worktree: f.repository + '/.' } });
+    expect(f.read).toThrow();
+  });
+  it.each(['{', 'schema: 1', '{"schema":1,}', '{"schema":1,"schema":1}',
+    '{"schema":1,"coordinator":{"label":"ORCH","label":"ORCH"}}'])
+    ('rejects invalid JSON or duplicate keys: %s', input => {
+      const f = selectionFixture(); writeFileSync(f.binding, input); expect(f.read).toThrow();
+    });
+  it('rejects duplicate keys in otherwise valid bindings including escaped equivalents', () => {
+    const f = selectionFixture();
+    const raw = JSON.stringify(f.selection);
+    for (const input of [raw.replace('"schema":1', '"schema":1,"schema":1'),
+      raw.replace('"label":"ORCH"', '"label":"ORCH","label":"ORCH"'),
+      raw.replace('"schema":1', '"schema":1,"\\u0073chema":1')]) {
+      writeFileSync(f.binding, input); expect(f.read).toThrow();
+    }
+  });
+  it('accepts exactly 4096 bytes and refuses oversized or invalid UTF-8 bindings', () => {
+    const f = selectionFixture(); const raw = JSON.stringify(f.selection);
+    writeFileSync(f.binding, raw.padEnd(4096));
+    expect(f.read()?.mission.mission).toBe('mission-1');
+    writeFileSync(f.binding, raw.padEnd(4097)); expect(f.read).toThrow();
+    writeFileSync(f.binding, Buffer.concat([Buffer.from(raw), Buffer.from([0xff])]));
+    expect(f.read).toThrow();
+  });
+  it('refuses selection symlinks and symlinked machine directories', () => {
+    const f = selectionFixture();
+    const target = join(f.root, 'binding.json'); writeFileSync(target, JSON.stringify(f.selection));
+    symlinkSync(target, f.binding); expect(f.read).toThrow(/symlink/);
+    const g = fixture(); mkdirSync(join(g.repository, '.void'));
+    symlinkSync(join(f.repository, '.void/machine'), join(g.repository, '.void/machine'));
+    expect(() => readOrchestra(g.state, g.repository, g.repository, () => g.panes)).toThrow(/symlink/);
+  });
+  it('refuses missing or duplicate live ORCH identities even with a binding', () => {
+    const f = selectionFixture(); f.select();
+    expect(() => readOrchestra(f.state, f.repository, f.repository, () => [])).toThrow(/pane identity/);
+    expect(() => readOrchestra(f.state, f.repository, f.repository, () => [...f.panes, ...f.panes]))
+      .toThrow(/pane identity/);
+  });
+  it('validates unrelated malformed missions and both discovery limits before selection', () => {
+    const f = selectionFixture(); f.select();
+    const other = f.add('unrelated'); writeFileSync(join(other, 'mission.md'), 'partial');
+    expect(f.read).toThrow();
+    const g = selectionFixture(); g.select();
+    for (let i = 0; i < 64; i++) g.add(`extra-${i}`);
+    expect(g.read).toThrow(/entry limit/);
+    const h = selectionFixture(); h.select();
+    for (let i = 0; i < 17; i++) {
+      const directory = h.add(`extra-${i}`);
+      const path = join(directory, 'mission.md');
+      writeFileSync(path, readFileSync(path, 'utf8').padEnd(65536));
+    }
+    expect(h.read).toThrow(/byte limit/);
+  });
+  it('refuses an atomic replacement during the binding read deterministically', () => {
+    const f = selectionFixture(); f.select();
+    const replacement = f.binding + '.next';
+    writeFileSync(replacement, JSON.stringify(f.selection));
+    readRace.afterRead = () => renameSync(replacement, f.binding);
+    try { expect(f.read).toThrow(/changed during read/); }
+    finally { readRace.afterRead = undefined; }
+  });
+  it('selects the named terminal mission without relying on another projected mission', () => {
+    const f = selectionFixture(); f.select(); f.add('running', 'running');
+    f.put(join(f.directory, 'mission.md'), { ...f.mission, status: 'done' });
+    expect(f.read()?.mission).toMatchObject({ mission: 'mission-1', status: 'done' });
   });
 });

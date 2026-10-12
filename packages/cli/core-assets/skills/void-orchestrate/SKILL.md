@@ -30,6 +30,27 @@ in its assigned worktree. Do not affect any other project, workspace or pane.
 An uncertain launch or prompt acknowledgement requires reconciliation of that same
 worker before retrying. A timeout proves neither launch failure nor prompt loss.
 
+## Explicit coordinator context
+
+If unique discovery refuses multiple compatible missions, ORCH reads the target
+mission and reports, then atomically replaces its local, unversioned
+`<canonical worktree>/.void/machine/orchestra-selection.json`. Schema 1 is strict
+JSON, at most 4096 UTF-8 bytes: `{ "schema": 1, "project": "<project-sha256>",
+"mission": "<existing-id>", "coordinator": { "label": "ORCH", "worktree":
+"/absolute/canonical/worktree" } }`. ORCH alone writes it; hooks never repair it.
+No unknown or duplicate keys, YAML, traversal, symlinks or partial writes.
+
+This selects context only, never execution state or permissions. Full bounded
+central discovery still runs; malformed unrelated missions or limits refuse.
+A stale/invalid binding never falls back. Verify selected coordinator label and
+canonical worktree against the current worktree and a fresh `herdr pane list`;
+missing or duplicate live matches refuse. Never prefer timestamps, running status
+or pane tokens to decide intent. Without a binding, preserve unique discovery.
+Clear/compact/resume re-read selection and central state without launching workers.
+Separate worker worktrees retain their own mission, attempt and report discovery.
+A selected terminal mission retains the guarded cleanup below: never clear tokens
+belonging to another mission. No binding belongs in the programme descriptor.
+
 ## Central files and ownership
 
 Use schema: 1 YAML frontmatter, strict string keys and one document, followed by

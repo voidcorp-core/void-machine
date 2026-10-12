@@ -27,8 +27,44 @@ result. Historical missing worktrees and unrelated pane working directories do n
 invalidate a live target. Pane identity is label plus canonical worktree, re-read
 from Herdr every time. Cached pane/workspace IDs and inherited environment never
 select a target. Multiple compatible active missions refuse automatic selection.
-Terminal missions remain readable; with no active mission only the currently
-projected, identity-verified mission selects terminal cleanup.
+Without an explicit binding, terminal missions remain readable; with no active
+mission only the currently projected, identity-verified mission selects cleanup.
+
+## Explicit coordinator selection
+
+When several missions share a coordinator worktree, ORCH chooses context without
+changing their execution state. After reading the target mission and reports, ORCH
+alone atomically replaces `<canonical worktree>/.void/machine/orchestra-selection.json`:
+
+```json
+{
+  "schema": 1,
+  "project": "<SHA-256 of canonical Git common-directory path>",
+  "mission": "<existing central mission identifier>",
+  "coordinator": { "label": "ORCH", "worktree": "/absolute/canonical/worktree" }
+}
+```
+
+This optional, local, unversioned file contains no status, pane/workspace/session
+ID, timestamp, permission or review verdict. It is reconstructible from central
+state and never belongs in the programme. Strict JSON (not YAML), duplicate and
+unknown key rejection, a 4096 UTF-8 byte maximum and the existing symlink-safe,
+bounded reader apply. A partial write, concurrent replacement, stale target or
+foreign project/worktree refuses use with a diagnostic; there is no fallback.
+
+Full discovery still validates every mission within the 64-entry/1-MiB limits,
+including unrelated malformed missions. Selection must name the selected mission's
+coordinator at the current canonical worktree, then resolve label plus worktree
+against a fresh `herdr pane list`. Missing or duplicate live matches refuse.
+Neither status nor timestamps break ties. Without a binding, unique discovery is
+unchanged and ambiguity names bounded candidate identifiers for ORCH to choose.
+
+Clear, compact and resume re-read the file and central state; resuming never launches
+a worker by itself. Workers in separate worktrees keep their own discovery, attempts
+and reports. Hooks never write or repair the binding. A selected terminal mission
+can clear only pane/workspace tokens still displaying that mission, preserving
+another mission's tokens. See the [approved selection design](specs/2026-10-12-orchestra-explicit-selection.md)
+and [decision](decisions-log/2026-10-12-orchestra-explicit-selection--e7be95ab-5bca-4542-9f38-e811a6bd9b10.md).
 
 ## Metadata lifecycle
 

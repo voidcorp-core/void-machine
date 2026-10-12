@@ -1,7 +1,7 @@
 ---
 title: Select an Orchestra mission without changing its execution state
 date: 2026-10-12
-status: in-design
+status: approved
 author: Folpe + Codex
 ticket: DEV-1016, DEV-1017
 related:
@@ -113,4 +113,5 @@ separate concrete activation gate. The currently active guard bundle remains pin
 The design separates selection from execution state, preserves label/worktree
 identity and existing discovery bounds, and specifies invalid/stale/terminal cases.
 It adds no daemon, generic registry, automatic migration or review bypass.
-User approval of this written design is pending; no implementation has begun.
+Folpe approved explicit selection on 12 October 2026. Implementation follows the
+linked execution plan; no personal activation is included in that approval.

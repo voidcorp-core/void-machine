@@ -73,6 +73,12 @@ it('validates a self-contained package without executing its entrypoints', async
   await expect(validateReleasePackage(root, '5.1.0', '24.15.0')).resolves.toMatchObject({ version: '5.1.0' });
 });
 
+it('declares the updater protocol in the actual published package metadata', async () => {
+  const { releaseContractSchema } = await import('./update-release.js');
+  const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
+  expect(releaseContractSchema.parse(pkg.voidUpdate).protocol).toBe(1);
+});
+
 it.each(['identity', 'version', 'engine', 'unknown-engine', 'protocol', 'missing-contract', 'bin', 'dependency', 'linked-entry', 'linked-asset'])(
   'refuses %s installed package before candidate execution', async attack => {
     const { validateReleasePackage } = await import('./update-release.js');

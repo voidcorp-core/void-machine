@@ -2,7 +2,11 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it } from 'vitest';
+import { cliVersion } from './paths.js';
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -45,4 +49,33 @@ it.each(['foreign', 'failure'] as const)('refuses candidate %s without publishin
   const { root, pkg, request } = await fixture(behavior);
   await expect(prepareWithCandidate(pkg, request, join(root, 'workspace'))).rejects.toThrow();
   await expect(readFile(join(request.root, '.void/config.json'))).rejects.toThrow();
+});
+
+it('ships a fixed candidate entrypoint that rejects malformed requests with a protocol diagnostic', async () => {
+  const { root } = await fixture('valid');
+  const requestPath = join(root, 'invalid.json');
+  await writeFile(requestPath, '{}');
+  const bin = fileURLToPath(new URL('../../bin/prepare-update.mjs', import.meta.url));
+  await expect(promisify(execFile)(process.execPath, [bin, requestPath, join(root, 'response.json')], {
+    cwd: root, timeout: 10_000, maxBuffer: 1024 * 1024,
+  })).rejects.toMatchObject({ stderr: expect.stringContaining('Candidate protocol:') });
+});
+
+it('the shipped candidate entrypoint returns its own compiled plan without installing into the project', async () => {
+  const { root, request } = await fixture('valid');
+  await mkdir(join(request.root, '.void'));
+  await mkdir(join(request.root, '.codex'));
+  await writeFile(join(request.root, '.void/config.json'), '{"packs":{}}');
+  await writeFile(join(request.root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version: cliVersion(), files: [] }));
+  const requestPath = join(root, 'request.json');
+  const responsePath = join(root, 'response.json');
+  await writeFile(requestPath, JSON.stringify({ ...request, version: cliVersion() }));
+  const bin = fileURLToPath(new URL('../../bin/prepare-update.mjs', import.meta.url));
+  await promisify(execFile)(process.execPath, [bin, requestPath, responsePath], {
+    cwd: root, timeout: 10_000, maxBuffer: 1024 * 1024,
+  });
+  const plan = JSON.parse(await readFile(responsePath, 'utf8'));
+  expect(plan.version).toBe(cliVersion());
+  expect(plan.mutations.some((mutation: { path: string }) => mutation.path === '.void/hooks/_void-hook.mjs')).toBe(true);
+  await expect(readFile(join(request.root, '.void/hooks/_void-hook.mjs'))).rejects.toThrow();
 });

@@ -75,17 +75,23 @@ function targetFor(projectRoot: string, relativePath: string): string {
   return target;
 }
 
-async function atomicWrite(target: string, content: Uint8Array, mode: number): Promise<void> {
+async function atomicWrite(target: string, content: Uint8Array, mode: number, snapshotMode?: number): Promise<number> {
   await mkdir(dirname(target), { recursive: true });
   const temporary = join(dirname(target), `.${basename(target)}.void-tx-${randomUUID()}`);
   try {
     const file = await open(temporary, 'wx', mode);
+    let observedMode: number;
     try {
       await file.writeFile(content);
       await file.chmod(mode);
+      observedMode = (await file.stat()).mode & 0o777;
+      // Snapshots remain private after measuring the native representation of the
+      // requested publication mode. Windows does not implement POSIX mode bits.
+      if (snapshotMode !== undefined) await file.chmod(snapshotMode);
       await file.sync();
     } finally { await file.close(); }
     await rename(temporary, target);
+    return observedMode;
   } finally {
     await rm(temporary, { force: true });
   }
@@ -208,13 +214,16 @@ export async function prepareFileTransaction(
       parent = dirname(parent);
     }
   }
-  const journal = journalSchema.parse({ schemaVersion: 1, operationId, root,
-    entries, createdDirectories: [...created] });
   await mkdir(journalRoot, { mode: 0o700 });
   for (const [index, snapshot] of snapshots.entries()) {
     if (snapshot.before) await atomicWrite(join(journalRoot, `${index}.before`), snapshot.before, 0o600);
-    if (snapshot.after) await atomicWrite(join(journalRoot, `${index}.after`), snapshot.after, 0o600);
+    const entry = entries[index];
+    if (snapshot.after && entry?.after.exists) {
+      entry.after.mode = await atomicWrite(join(journalRoot, `${index}.after`), snapshot.after, entry.after.mode, 0o600);
+    }
   }
+  const journal = journalSchema.parse({ schemaVersion: 1, operationId, root,
+    entries, createdDirectories: [...created] });
   await atomicWrite(join(journalRoot, 'journal.json'), Buffer.from(JSON.stringify(journal)), 0o600);
 }
 

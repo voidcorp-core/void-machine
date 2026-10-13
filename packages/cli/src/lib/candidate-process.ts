@@ -21,7 +21,7 @@ export async function writeCandidatePlan(requestPath: string, responsePath: stri
 
 export async function prepareWithCandidate(packageRoot: string, request: CandidateRequest, workspace: string) {
   candidateRequestSchema.parse(request);
-  await validateReleasePackage(packageRoot, request.version);
+  const metadata = await validateReleasePackage(packageRoot, request.version);
   const stage = await mkdtemp(join(workspace, 'candidate-'));
   try {
     const requestPath = join(stage, 'request.json');
@@ -45,6 +45,10 @@ export async function prepareWithCandidate(packageRoot: string, request: Candida
         ? error.stderr.slice(0, 4096) : 'no candidate diagnostic';
       throw new Error(`Candidate preparation failed without publication: ${detail}`);
     }
-    return decodeCandidatePlan(await boundedFile(responsePath, 192 * 1024 * 1024), request);
+    const plan = decodeCandidatePlan(await boundedFile(responsePath, 192 * 1024 * 1024), request);
+    for (const runtime of plan.runtimes) {
+      if (!metadata.voidUpdate.runtimeAdapters.includes(runtime)) throw new Error(`Candidate release does not support runtime ${runtime}`);
+    }
+    return plan;
   } finally { await rm(stage, { recursive: true, force: true }); }
 }

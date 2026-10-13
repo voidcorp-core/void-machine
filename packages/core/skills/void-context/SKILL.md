@@ -50,7 +50,7 @@ Exploration is the biggest context sink: reading twenty files to answer one ques
 
 This is the cure for "infinite exploration," where the agent keeps reading more files in a widening search and the window fills with material it will never cite. Dispatch a subagent, state the question, accept the conclusion.
 
-Vendored targets: `superpowers:dispatching-parallel-agents` (fan out several investigations at once) and `superpowers:subagent-driven-development` (run independent plan steps in subagents). Until vendored, use those directly.
+Invoke `void-orchestrate` for the native delegation contract. If capabilities are unavailable, follow its explicit fallback without weakening a mandatory independent review.
 
 A subagent must return a **compacted structured summary** — findings, the answer, the relevant file:line pointers — never the raw bytes it read. Raw output dumped back into the main window defeats the delegation.
 
@@ -129,8 +129,7 @@ Decompose long tasks into sub-tasks with their own gates (composes with `void-pl
 - **`void-debug`**: investigate without drowning the window — gather evidence in a subagent, bring back the timeline and root cause, not every log line read.
 - **`void-plan`**: owns the approved execution structure; mutable progress remains with its declared provider.
 - **`void-checkpoint`**: owns semantic session residue; the lifecycle hook owns only the delimited mechanical block it must preserve.
-- **`superpowers:dispatching-parallel-agents`** (vendored target): fan out independent investigations to protect the main window.
-- **`superpowers:subagent-driven-development`** (vendored target): run independent plan steps in fresh-context subagents.
+- **`void-orchestrate`**: delegate bounded independent investigations with fresh context by default; it owns capability fallback, dispatch bounds, isolation and collection. Keep conclusions and evidence references in the coordinator rather than full child transcripts.
 
 This skill absorbs the "context-engineering / anti-context-rot" concept; other skills do the work, this one keeps the window clean enough for them to do it well.
 

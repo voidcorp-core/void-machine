@@ -230,7 +230,7 @@ describe('minimal OIDC publication and independent provenance verification', () 
   it('fails closed on artifact corruption and bounds registry retries', () => {
     expect(publishJob).toContain('verify-release-artifact');
     expect(publishJob).toContain('MAX_CLASSIFICATION_ATTEMPTS: 3');
-    expect(publishJob).toContain('MAX_PUBLICATION_ATTEMPTS: 12');
+    expect(publishJob).toContain('MAX_PUBLICATION_ATTEMPTS: 73');
     expect(publishJob).toContain('E404');
     expect(publishJob).toContain('dist.integrity');
     expect(publishJob).toContain('dist.attestations?.url');

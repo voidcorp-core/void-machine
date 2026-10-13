@@ -18,7 +18,7 @@ describe('contained conformance process', () => {
       cwd: process.cwd(),
     }, (event) => events.push(event));
     expect(events).toEqual([{ phase: 'started', label: 'codex update' }]);
-    await expect(pending).rejects.toThrow('codex update: exited');
+    await expect(pending).rejects.toThrow('codex update: exited with code 3, expected 0');
     expect(events[1]).toMatchObject({ phase: 'finished', label: 'codex update', outcome: 'exited', code: 3 });
   });
 

@@ -46,6 +46,107 @@ is not silently replaced by this candidate. The verified delivery must include t
 candidate command and recovery request demonstrated against an isolated existing mission.
 No claim of consumer activation is implied by this source document.
 
+## Preparation waiting for evidence
+
+Before implementation, `dispatch` returns `await-evidence` when a valid specialist
+obligation is still due. The verdict remains blocked. This action leaves the mission
+open and dispatches neither a writer nor another panel. Repeating it without new events
+has no journal effect. A PASS carrying an evidence request still needs its author response.
+
+Use `mission evidence-request --id <same-id> --input <request.json> --json`. For an
+unclassified request, the input identifies the original completion and a fresh actual
+native author context:
+
+```json
+{
+  "operation": "classification",
+  "completionEventId": "evt_original_completion",
+  "contextId": "actual-fresh-author-context"
+}
+```
+
+The original specialist determines the deadline; the writer must not infer it from
+prose. Record the actual `started` and `completed` responses with `mission evidence-event`.
+For proof already due, request `operation: "discharge"` with its `obligationIds` and
+submit the author's response referencing fresh canonical proof event IDs. The request
+alone discharges nothing. Dispatch again only after the response. Original findings,
+proofs and consumed rounds remain authoritative; a writer receipt cannot erase them.
+
+A legacy binary may already have closed the mission while prescribing this response.
+Use `mission recover` on the same mission with the existing `review-blocker` request:
+`schemaVersion: 1`, the active `closureEventId`, the canonical `expectedJournalHash`,
+and a disposition containing `kind: "review-blocker"`, the original
+`completionEventIds` and a `resolutionArtifact` with repository-relative `path` and
+`sha256`. The CLI re-observes the bound ticket, runtime, contracts and artifact. The
+journal hash uses `canonicalJsonHash(events)`, not a hash of JSONL bytes. A source
+helper for obtaining canonical hashes appears below.
+
+If a previous clarification was immediately reclosed by `dispatch`, the same recovery
+may be admitted without a writer completion that the closed mission could not accept.
+This exception requires preparation, the same completion IDs and a still-blocking valid
+obligation. It may be consumed once without writer progress: if the preceding recovery
+already used that exception, another closure refuses with `no-recovery-progress`.
+The authenticated journal determines this; no caller supplies an allowance or resets it.
+Any intervening event, unknown effect, human closure, incompatible observation
+or exhausted review budget still refuses. Identical concurrent requests append at most
+one recovery receipt. The existing schema and original journal are retained; this is
+neither review approval nor another correction round.
+
+After recovery, obtain the author response through the evidence commands above. A fresh
+candidate dispatch remains `await-evidence` until that response permits the next action.
+To end unfinished work explicitly, use `mission close --id <same-id> --reason abandoned`
+(or `interrupted`); these human closures are not eligible for `mission recover`.
+
+Post-implementation obligations retain their existing gates. Pass command arguments
+separately, for example `mission verify --id <id> -- pnpm typecheck`. A corrected argv
+has a different input hash: its success does not implicitly supersede another command's
+failed proof. An exit 127 is never treated as success or silently removed from history.
+
+### Correct an already recorded malformed command invocation
+
+If the stopped journal contains a mono-string invocation such as `["pnpm typecheck"]`
+with spawn ENOENT/127 and a later successful `["pnpm", "typecheck"]` proof, use the
+same `mission recover --id <same-id> --input <request.json> --json` boundary. Retain
+`schemaVersion`, the current `closureEventId` and canonical `expectedJournalHash`;
+use this disposition:
+
+```json
+{
+  "kind": "command-correction",
+  "pairs": [{
+    "failedEventId": "evt_original_failed_proof",
+    "replacementEventId": "evt_later_corrected_proof"
+  }],
+  "resolutionArtifact": {
+    "path": ".void/machine/command-resolution.md",
+    "sha256": "sha256:<actual-artifact-digest>"
+  }
+}
+```
+
+Explain the correction and identify the original proof pair in the resolution artifact.
+The CLI reads and hashes this file under the original native runtime. Admission checks
+both seals, source, mission, environment, diff and current dependencies; the replacement
+must still be the latest proof of its input and have passed. Up to 64 disjoint pairs may
+be named within the existing receipt size bound. No command runs during recovery.
+
+The complete corrected argv, joined by single spaces, must equal the original string,
+including the executable path. Arguments containing whitespace or shell syntax are not
+eligible. `pnpm` and `/tools/pnpm`, or two paths sharing a basename, are not assumed
+equivalent. The observed DEV-927 relative/absolute change remains refused without
+executable provenance; its journal was still open when inspected.
+
+Only the named original failure leaves the effective verdict; its event and hashes stay
+in the journal. The latest proof per input is selected before applying the correction,
+so an older superseded failure cannot reappear. A later failed rerun, security blocker, unknown effect, human closure or
+exhausted budget remains effective. Identical concurrent requests append one recovery
+receipt. Dispatch then observes the normal review and proof gates; recovery itself does
+not approve the mission. If the corrected proof is absent or stale, reconcile the
+missing evidence; this path does not authorize an unrecorded command or a new mission.
+
+See the [command correction decision](decisions-log/2026-10-05-bind-command-corrections-to-recovery--ded6f423-1c89-4676-a6bb-60eb181e4db9.md)
+for the authority boundary and rejected alternatives.
+
 ## Run the candidate without changing the installation
 
 Use a checkout whose CLI and bundled assets have been built and verified together.

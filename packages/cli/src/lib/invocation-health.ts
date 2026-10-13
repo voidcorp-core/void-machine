@@ -60,12 +60,19 @@ function settledRenames(resolution: ResolutionVerdict): string {
 
 function evidence(observation: InvocationObservation): string {
   const { liveness } = observation;
+  const unseen = liveness.unobservable.map(({ source, toolCalls }) =>
+    `skill usage not observable for ${source} (${toolCalls} tool calls); activation count unknown`,
+  ).join('; ');
+  if (liveness.missions === 0 && unseen !== '') {
+    return `${observation.installedSkills} skill(s) installed; ${unseen}`;
+  }
   if (liveness.missions === 0) {
     return `${observation.installedSkills} skill(s) installed, no working mission recorded yet`;
   }
   return (
     `${observation.installedSkills} skill(s) installed, ${liveness.skillCalls} activation(s) `
-    + `across ${liveness.toolCalls} tool calls (${ratio(liveness)}) over ${liveness.missions} working mission(s)`
+    + `across ${liveness.toolCalls} tool calls (${ratio(liveness)}) over ${liveness.missions} observable Claude working mission(s)`
+    + (unseen === '' ? '' : `; ${unseen}`)
   );
 }
 
@@ -81,14 +88,14 @@ export function judgeInvocation(observation: InvocationObservation): CheckResult
   if (!observation.liveness.ok) {
     faults.push(
       `no skill fired across ${observation.liveness.missions} working mission(s) `
-      + `and ${observation.liveness.toolCalls} tool calls`,
+      + `and ${observation.liveness.toolCalls} tool calls (runtime:claude)`,
     );
   }
   if (faults.length === 0) {
     return {
       name: NAME,
-      ok: true,
-      status: 'pass',
+      ok: observation.liveness.unobservable.length === 0,
+      status: observation.liveness.unobservable.length === 0 ? 'pass' : 'unknown',
       message: `${evidence(observation)}${settledRenames(observation.resolution)}`,
     };
   }
@@ -102,6 +109,8 @@ export function judgeInvocation(observation: InvocationObservation): CheckResult
     // Never "reinstall": the file is not missing, the name moved. What the reader
     // has to change is whatever still calls the old name -- a saved command, a
     // habit, another skill's text.
-    fix: 'invoke each successor named above instead, and update whatever still calls the old name',
+    fix: !observation.resolution.ok
+      ? 'invoke each successor named above instead, and update whatever still calls the old name'
+      : 'inspect the Claude Skill invocation path and activation collector for the silent missions',
   };
 }

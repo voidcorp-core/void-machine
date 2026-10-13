@@ -52,7 +52,10 @@ const MISSION_ID = /^mis_[A-Za-z0-9_-]{8,100}$/;
 const SPECIALIST_ID = /^core:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const AGENT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HASH = /^sha256:[a-f0-9]{64}$/;
-const CONTEXT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/;
+// A runtime identity is opaque data, never a path or a filename we open.
+const validContextId = (value: string): boolean => value.trim().length > 0 && value.length <= 160
+  && [...value].every(char => char.charCodeAt(0) >= 32
+    && (char.charCodeAt(0) < 127 || char.charCodeAt(0) > 159));
 const ENVELOPE_KEYS = [
   'schemaVersion',
   'missionId',
@@ -144,7 +147,7 @@ function parseEnvelope(value: unknown): SpecialistDispatchEnvelope {
 }
 
 function parseContextId(value: unknown): string {
-  if (typeof value !== 'string' || !CONTEXT_ID.test(value)) {
+  if (typeof value !== 'string' || !validContextId(value)) {
     invalid('contextId is malformed');
   }
   return value;

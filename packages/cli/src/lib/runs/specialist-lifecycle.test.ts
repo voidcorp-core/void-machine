@@ -54,6 +54,20 @@ const COMPLETION = {
 } as const;
 
 describe('specialist lifecycle adapter', () => {
+  it('preserves native opaque context names as data throughout lifecycle parsing', () => {
+    const contextId = '/root/preparation_panel/security';
+    expect(parseSpecialistLifecycleInput('started', { envelope: ENVELOPE, contextId }))
+      .toMatchObject({ contextId });
+    expect(parseSpecialistLifecycleInput('completed', { envelope: ENVELOPE, contextId, completion: COMPLETION }))
+      .toMatchObject({ contextId });
+    expect(parseSpecialistLifecycleInput('failed', { envelope: ENVELOPE, contextId, reason: 'runtime stopped' }))
+      .toMatchObject({ contextId });
+  });
+  it.each(['', '   ', 'x'.repeat(161), 'name\ncontrol', 'name\u0000control', 'name\u007fcontrol'])
+  ('rejects unbounded or control-bearing native identities (%#)', contextId => {
+    expect(() => parseSpecialistLifecycleInput('started', { envelope: ENVELOPE, contextId }))
+      .toThrow('SPECIALIST_LIFECYCLE_INVALID');
+  });
   it('parses only bounded lifecycle data that matches the dispatch envelope', () => {
     expect(parseSpecialistLifecycleInput('completed', {
       envelope: ENVELOPE,

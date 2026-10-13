@@ -32,10 +32,9 @@ const INJECTED = harnessBlock({
 });
 
 const BLOCK = `autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: 2
   base: auto
-  mergeGate: human
   verifyCommands:
     - [pnpm, test]
   ownership:
@@ -81,7 +80,7 @@ const WITHHOLDINGS = [
   {
     what: 'a block that says enabled: false',
     named: /enabled:\s*false/,
-    descriptor: descriptor(BLOCK.replace('  schemaVersion: 1', '  schemaVersion: 1\n  enabled: false')),
+    descriptor: descriptor(BLOCK.replace('  schemaVersion: 2', '  schemaVersion: 2\n  enabled: false')),
   },
   {
     what: 'no block at all',

@@ -1,13 +1,14 @@
 import { type EventStreamState, initialEventStream, reduceEventStream } from '../events/reducer.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
 import { canonicalJson, canonicalJsonHash } from '../evidence/canonical-json.js';
+import { type CommandEvidenceCorrection, isCommandEvidenceCorrections, validCommandEvidenceCorrections } from '../evidence/command-correction.js';
 import { parseEvidence } from '../evidence/schema.js';
 import { parseSpecialistCompletionValue, type SpecialistCompletion } from '../specialist/completion.js';
 import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js';
 import { type IndependentReviewReceipt, isReviewSubject, parseReviewReceipt, type ReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import type { SpecialistId, SpecialistInvocationStage } from '../specialist/routing.js';
 import { projectMissionLifecycle } from './mission-lifecycle.js';
-import { reduceReviewLoop } from './review-loop.js';
+import { reduceReviewLoop, validNativeContextId } from './review-loop.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
 
 export interface RecoveryResolutionArtifact {
@@ -19,7 +20,9 @@ export interface MissionRecoveryRequest {
   readonly closureEventId: string;
   readonly expectedJournalHash: string;
   readonly disposition:
-    | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' }
+    | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' | 'opaque-native-context' }
+    | { readonly kind: 'command-correction'; readonly pairs: readonly CommandEvidenceCorrection[];
+        readonly resolutionArtifact: RecoveryResolutionArtifact }
     | { readonly kind: 'review-blocker' | 'review-provenance'; readonly completionEventIds: readonly string[];
         readonly resolutionArtifact: RecoveryResolutionArtifact };
 }
@@ -98,6 +101,54 @@ function matchesRequest(completion: CanonicalEvent, request: CanonicalEvent): bo
     && request.source === 'void-harness:mission.dispatch'
     && completion.subject === request.subject
     && ['stage', 'reviewRound', 'inputHash'].every((key) => field(completion, key) === field(request, key));
+}
+
+/** Admit only the initial Codex PASS panel rejected by the former identity regex. */
+function opaqueNativeContextDefect(input: MissionRecoveryInput): boolean {
+  const { events } = input.stream;
+  const { observation } = input;
+  const start = events[0];
+  const closure = events.at(-1);
+  if (start === undefined || closure?.kind !== 'mission.closed'
+    || closure.source !== 'void-harness:mission.dispatch'
+    || start.source !== 'void-harness:mission' || field(start, 'mode') !== 'team'
+    || field(start, 'runtime') !== 'codex' || field(start, 'runtimeAttested') !== true
+    || observation.expectedSource !== 'runtime:codex' || observation.stage !== 'pre-implementation'
+    || !/^sha256:[a-f0-9]{64}$/.test(String(field(start, 'planHash')))) return false;
+  const panel = events.slice(1, -1);
+  if (panel.some(event => !['specialist.requested', 'specialist.started', 'specialist.completed'].includes(event.kind)
+    || field(event, 'stage') !== 'pre-implementation' || field(event, 'reviewRound') !== 1)) return false;
+  const requests = panel.filter(event => event.kind === 'specialist.requested');
+  const completed = completions(panel);
+  if (requests.length === 0 || completed.length !== requests.length || panel.length !== requests.length * 3
+    || new Set(requests.map(event => event.subject)).size !== requests.length
+    || new Set(completed.map(item => item.event.subject)).size !== requests.length
+    || !completed.some(({ event }) => {
+      const context = field(event, 'contextId');
+      // The old predicate is incident evidence only, never the current contract.
+      return validNativeContextId(context) && !/^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/.test(context);
+    })) return false;
+  return completed.every(({ event, completion }) => {
+    const context = field(event, 'contextId');
+    if (!validNativeContextId(context) || event.source !== observation.expectedSource
+      || completion.verdict !== 'pass' || completion.findings.length > 0
+      || completion.evidenceRequests.length > 0 || completion.limitations.length > 0
+      || completion.specialistId !== event.subject
+      || completion.contractVersion !== observation.contractVersions[event.subject]
+      || field(event, 'contractVersion') !== completion.contractVersion
+      || field(event, 'inputHash') !== observation.currentInputHashes[event.subject]) return false;
+    const requested = requests.find(request => matchesRequest(event, request)
+      && request.seq < event.seq && field(request, 'planHash') === field(start, 'planHash')
+      && field(request, 'runtime') === 'codex'
+      && field(request, 'contractVersion') === completion.contractVersion);
+    if (requested === undefined) return false;
+    const starts = panel.filter(candidate => candidate.kind === 'specialist.started' && candidate.subject === event.subject);
+    const started = starts[0];
+    return starts.length === 1 && started !== undefined
+      && started.source === event.source && started.seq > requested.seq && started.seq < event.seq
+      && ['stage', 'reviewRound', 'inputHash', 'contractVersion', 'contextId'].every(key =>
+        field(started, key) === field(event, key));
+  });
 }
 
 /** Only the observed initial preparation fanout defect is eligible for a round correction. */
@@ -224,6 +275,47 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   });
 }
 
+/** Admit one clarification reclosure; authenticated history proves whether it was spent. */
+function pendingPreparationClarification(
+  input: MissionRecoveryInput, previousRecovery: CanonicalEvent,
+): boolean {
+  const { stream, request, observation } = input;
+  const precedingRecovery = stream.events.filter(event => event.kind === 'mission.recovered'
+    && event.seq < previousRecovery.seq).at(-1);
+  // Without a writer boundary, that admitted receipt already consumed the exception.
+  if (precedingRecovery !== undefined && !stream.events.some(event =>
+    event.kind === 'lead-writer.completed' && event.seq > precedingRecovery.seq
+      && event.seq < previousRecovery.seq)) return false;
+  const priorRequest = field(previousRecovery, 'request');
+  const priorDisposition = priorRequest !== undefined && record(priorRequest)
+    ? priorRequest['disposition'] : undefined;
+  const priorObservation = field(previousRecovery, 'observation');
+  if (observation.stage !== 'pre-implementation' || request.disposition.kind !== 'review-blocker'
+    || field(previousRecovery, 'nextAction') !== 'clarification'
+    || priorObservation === undefined || !record(priorObservation)
+    || priorObservation['stage'] !== 'pre-implementation'
+    || priorDisposition === undefined || !record(priorDisposition)
+    || priorDisposition['kind'] !== 'review-blocker'
+    || canonicalJsonHash(priorDisposition['completionEventIds'])
+      !== canonicalJsonHash(request.disposition.completionEventIds)) return false;
+  // Any intervening work, human decision or unknown event requires reconciliation.
+  const intervening = stream.events.filter(event => event.seq > previousRecovery.seq);
+  if (intervening.length !== 1 || intervening[0]?.kind !== 'mission.closed'
+    || intervening[0].source !== 'void-harness:mission.dispatch') return false;
+  const proofs = stream.events.flatMap(event => {
+    if (event.kind !== 'evidence.recorded') return [];
+    const parsed = parseEvidence(field(event, 'evidence'));
+    return parsed.ok ? [{ eventId: event.eventId, evidence: parsed.value }] : [];
+  });
+  const obligations = reduceEvidenceObligations({ events: stream.events,
+    expectedSource: observation.expectedSource, phase: 'pre-implementation', proofs,
+    evidenceContext: { dependencies: observation.evidenceDependencies ?? {} } });
+  const blocking = new Set(obligations.blockingObligationIds);
+  const completionEventIds = request.disposition.completionEventIds;
+  return obligations.issues.length === 0 && obligations.obligations.some(item =>
+    blocking.has(item.obligationId) && completionEventIds.includes(item.completionEventId));
+}
+
 function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = input.stream.events): MissionRecoveryDecision {
   const { stream, request, observation } = input;
   const events = stream.events;
@@ -242,7 +334,8 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
-    && event.kind === 'lead-writer.completed')) {
+    && event.kind === 'lead-writer.completed')
+    && !pendingPreparationClarification(input, previousRecovery)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
   }
   const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
@@ -250,11 +343,21 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const inadmissible = staleDispatchCompletions(projectedHistory);
   const disposition = request.disposition;
   if (disposition.kind === 'controller-defect' && (disposition.defect === 'partial-fanout-round'
-    ? roundCorrections.length === 0 : inadmissible.length === 0)) {
+    ? roundCorrections.length === 0 : disposition.defect === 'stale-input-dispatch'
+      ? inadmissible.length === 0 : !opaqueNativeContextDefect(input))) {
     return refuse('unproven-controller-defect', 'The journal must prove the requested controller defect; do not reset its budget');
   }
   if (disposition.kind === 'review-provenance' && !validProvenanceRecovery(input, existing)) {
     return refuse('invalid-review-provenance', 'Preserve the actual independent invocation, exact subject, original passing result and contract; provenance cannot upgrade degraded evidence');
+  }
+  if (disposition.kind === 'command-correction') {
+    if (observation.resolutionArtifact?.path !== disposition.resolutionArtifact.path
+      || observation.resolutionArtifact.sha256 !== disposition.resolutionArtifact.sha256) {
+      return refuse('stale-resolution-artifact', 'Read and hash the command correction artifact again before recovery');
+    }
+    if (!validCommandEvidenceCorrections(events, disposition.pairs, observation.evidenceDependencies ?? {})) {
+      return refuse('invalid-command-correction', 'Name intact fresh command proofs with exact argv correspondence; exit 127 or a matching basename cannot authorize replacement');
+    }
   }
   if (disposition.kind === 'review-blocker') {
     let eligible = existing;
@@ -320,6 +423,11 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   if (review.issues.length > 0) {
     return refuse('inconsistent-review', 'Resolve inconsistent source, contract, context or round evidence before recovery');
   }
+  if (disposition.kind === 'controller-defect' && disposition.defect === 'opaque-native-context'
+    && (!review.readyForVerdict || existing.length !== required.length
+      || required.some(id => !existing.some(item => item.event.subject === id)))) {
+    return refuse('incomplete-required-panel', 'Every required preparation specialist must have its original matching PASS triplet before recovery');
+  }
   const consumedRounds = Math.max(0, ...projected.filter((event) =>
     ['specialist.completed', 'specialist.failed'].includes(event.kind)
       && field(event, 'stage') === observation.stage).map((event) => Number(field(event, 'reviewRound'))));
@@ -342,7 +450,9 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, observation.maxRounds - consumedRounds),
     ...(disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
-    nextAction: disposition.kind === 'review-provenance' ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
+    nextAction: disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
+      || (disposition.kind === 'controller-defect' && disposition.defect === 'opaque-native-context')
+      ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
   };
   if (new TextEncoder().encode(canonicalJson(receipt)).length > 16_384) {
     return refuse('recovery-receipt-too-large', 'Narrow the recovery scope to the supported bounded incident');
@@ -369,9 +479,13 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
     || typeof value['expectedJournalHash'] !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value['expectedJournalHash'])
     || value['disposition'] === undefined || !record(value['disposition'])) return false;
   const disposition = value['disposition'];
+  if (disposition['kind'] === 'command-correction') {
+    return exactKeys(disposition, ['kind', 'pairs', 'resolutionArtifact'])
+      && isCommandEvidenceCorrections(disposition['pairs']) && artifact(disposition['resolutionArtifact']);
+  }
   return disposition['kind'] === 'controller-defect'
     ? exactKeys(disposition, ['kind', 'defect'])
-      && ['partial-fanout-round', 'stale-input-dispatch'].includes(String(disposition['defect']))
+      && ['partial-fanout-round', 'stale-input-dispatch', 'opaque-native-context'].includes(String(disposition['defect']))
     : (disposition['kind'] === 'review-blocker' || disposition['kind'] === 'review-provenance')
       && exactKeys(disposition, ['kind', 'completionEventIds', 'resolutionArtifact'])
       && Array.isArray(disposition['completionEventIds']) && disposition['completionEventIds'].length <= 64
@@ -425,6 +539,8 @@ interface ValidatedRecovery {
 function projectRecoveries(events: readonly CanonicalEvent[], recoveries: readonly ValidatedRecovery[]): readonly CanonicalEvent[] {
   return recoveries.reduce((projected, item) => applyRoundCorrections(projected, item.receipt.roundCorrections)
     .filter((event) => !item.receipt.inadmissibleCompletionEventIds.includes(event.eventId))
+    .filter(event => item.receipt.request.disposition.kind !== 'command-correction'
+      || !item.receipt.request.disposition.pairs.some(pair => pair.failedEventId === event.eventId))
     .map(event => {
       const binding = item.receipt.observation.reviewBindings?.find(value => value.completionEventId === event.eventId);
       const completion = field(event, 'completion');

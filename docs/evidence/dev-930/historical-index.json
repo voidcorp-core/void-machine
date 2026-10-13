@@ -1,0 +1,12 @@
+[
+  {
+    "path": "<USER_HOME>/.local/share/void-dev923-probe/dev926/proof.log",
+    "sha256": "4d11cc8b39210a9911f8cb6940e75b44fd5c91cfd6c0bb6bd78512c40c8830ed",
+    "bytes": 15063
+  },
+  {
+    "path": "<USER_HOME>/.local/share/void-dev923-probe/dev927-proof.log",
+    "sha256": "3159bc63ea7362b3af920bfc698c2dd5b9f315295776f6f433fcc9b34e47a465",
+    "bytes": 7243
+  }
+]

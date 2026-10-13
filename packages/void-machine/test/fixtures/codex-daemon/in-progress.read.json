@@ -1,0 +1,54 @@
+{
+ "id": 3,
+ "result": {
+  "thread": {
+   "id": "01a0ea7c-0a16-7d92-a048-70f5effc1707",
+   "environments": [
+    {
+     "environmentId": "local",
+     "cwd": "/work/review",
+     "runtimeWorkspaceRoots": [
+      "/work/review"
+     ]
+    }
+   ],
+   "extra": null,
+   "sessionId": "01a0ea7c-0a16-7d92-a048-70f5effc1707",
+   "forkedFromId": null,
+   "parentThreadId": null,
+   "preview": "Run the shell command `sleep 6`, then reply with verdict pass and a one-sentence summary saying hello.",
+   "ephemeral": false,
+   "section": null,
+   "sectionEnteredAt": null,
+   "projectId": null,
+   "historyMode": "paginated",
+   "modelProvider": "openai",
+   "model": "gpt-5.6-sol",
+   "reasoningEffort": "high",
+   "createdAt": 1790640393,
+   "updatedAt": 1790640397,
+   "recencyAt": 1790640393,
+   "status": {
+    "type": "active",
+    "activeFlags": []
+   },
+   "path": "/home/user/.codex/sessions/2026/09/29/rollout-2026-09-29T02-06-33-01a0ea7c-0a16-7d92-a048-70f5effc1707.jsonl",
+   "cwd": "/work/review",
+   "cliVersion": "0.158.0",
+   "originator": "void_machine_probe",
+   "source": "vscode",
+   "canAcceptDirectInput": true,
+   "threadSource": null,
+   "agentNickname": null,
+   "agentRole": null,
+   "gitInfo": {
+    "sha": "dd246a8972ef8b8ee787ffdf880a80b840c725d5",
+    "branch": "probe/dev-928-agent-capture",
+    "originUrl": "/home/user/.local/share/void-dev923-probe/consumer-origin.git"
+   },
+   "name": "vm-run_00000000-0000-4000-8000-000000000001",
+   "daybreakEnabled": null,
+   "turns": []
+  }
+ }
+}

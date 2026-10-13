@@ -17,7 +17,7 @@ const allowedPackages: Readonly<Record<string, readonly string[]>> = {
   core: ['zod'],
   runtime: ['zod'],
   verticals: ['zod'],
-  adapters: ['zod', 'smol-toml'],
+  adapters: ['zod', 'smol-toml', 'ws'],
   application: ['zod'],
 };
 const pureLayers: ReadonlySet<string> = new Set(['core', 'runtime', 'verticals']);

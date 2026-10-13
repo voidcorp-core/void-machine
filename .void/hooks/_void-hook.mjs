@@ -197,10 +197,10 @@ function unquote(command) {
   return command.replaceAll('"', "").replaceAll("'", "");
 }
 function shellSegments(command) {
-  return command.split(/&&|\|\||[;\n]/).map((segment) => segment.trim()).filter(Boolean);
+  return command.split(/&&|\|\||[;\n]/).map((segment2) => segment2.trim()).filter(Boolean);
 }
-function recursiveRootOperation(segment, operation) {
-  const tokens = unquote(segment).split(/\s+/);
+function recursiveRootOperation(segment2, operation) {
+  const tokens = unquote(segment2).split(/\s+/);
   const index = tokens.indexOf(operation);
   if (index < 0) return false;
   const args = tokens.slice(index + 1);
@@ -219,15 +219,15 @@ function violation(command) {
   if (/\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i.test(command)) {
     return "destructive SQL (DROP / TRUNCATE)";
   }
-  for (const segment of shellSegments(command)) {
-    if (recursiveRootOperation(segment, "rm")) return "recursive delete of a root path";
-    if (recursiveRootOperation(segment, "chmod") || recursiveRootOperation(segment, "chown")) {
+  for (const segment2 of shellSegments(command)) {
+    if (recursiveRootOperation(segment2, "rm")) return "recursive delete of a root path";
+    if (recursiveRootOperation(segment2, "chmod") || recursiveRootOperation(segment2, "chown")) {
       return "recursive permission/ownership change on a root path";
     }
-    if (/\bgit\s+push\b/.test(segment) && /(?:^|\s)(?:--force(?:\s|$)|-f(?:\s|$))/.test(segment) && !/--force-with-lease/.test(segment)) {
+    if (/\bgit\s+push\b/.test(segment2) && /(?:^|\s)(?:--force(?:\s|$)|-f(?:\s|$))/.test(segment2) && !/--force-with-lease/.test(segment2)) {
       return "git push --force (use --force-with-lease)";
     }
-    if (/\bgit(?:\s+-\S+)*\s+(?:rebase|am|apply|cherry-pick)\b/.test(segment) && /(?:--exec(?:\s|=|$)|--rebase-merges|--strategy-option|--unsafe-paths)/.test(segment)) {
+    if (/\bgit(?:\s+-\S+)*\s+(?:rebase|am|apply|cherry-pick)\b/.test(segment2) && /(?:--exec(?:\s|=|$)|--rebase-merges|--strategy-option|--unsafe-paths)/.test(segment2)) {
       return "git command-execution / unsafe-path flag";
     }
   }
@@ -307,8 +307,8 @@ var CONFIGS = ["biome.json", "biome.jsonc"];
 function normalize(path) {
   return path.replaceAll("\\", "/").replace(/^\.\//, "");
 }
-function globMatches(pattern, path) {
-  const source2 = normalize(pattern);
+function globMatches(pattern2, path) {
+  const source2 = normalize(pattern2);
   const target = normalize(path);
   let regex = "";
   for (let index = 0; index < source2.length; index += 1) {
@@ -422,7 +422,7 @@ function isRuleSuppressed(projectRoot2, rule, path) {
   if (config === void 0) return false;
   const target = normalize(path);
   for (const override of [...config.overrides ?? []].reverse()) {
-    if (!pathList(override).some((pattern) => globMatches(pattern, target))) continue;
+    if (!pathList(override).some((pattern2) => globMatches(pattern2, target))) continue;
     const severity = severityOf(override.linter?.rules, rule);
     if (severity !== void 0) return severity === "off";
   }
@@ -557,7 +557,7 @@ var PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|
 var EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
 function lineHasSecret(line) {
   if (line.includes("allow-secret-pattern:")) return false;
-  if (HIGH_CONFIDENCE.some((pattern) => pattern.test(line))) return true;
+  if (HIGH_CONFIDENCE.some((pattern2) => pattern2.test(line))) return true;
   const assignment = line.match(GENERIC_ASSIGNMENT);
   if (assignment === null || PLACEHOLDER.test(line)) return false;
   const value = assignment[1] ?? "";
@@ -578,19 +578,19 @@ function secretContent(edits) {
 }
 
 function globRegExp(glob) {
-  let pattern = "^";
+  let pattern2 = "^";
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index] ?? "";
     if (char === "*" && glob[index + 1] === "*") {
-      pattern += ".*";
+      pattern2 += ".*";
       index += 1;
     } else if (char === "*") {
-      pattern += "[^/]*";
+      pattern2 += "[^/]*";
     } else {
-      pattern += char.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+      pattern2 += char.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
     }
   }
-  return new RegExp(`${pattern}$`);
+  return new RegExp(`${pattern2}$`);
 }
 function matches(path, globs) {
   return globs.some((glob) => globRegExp(glob).test(path));
@@ -734,8 +734,8 @@ function unquote2(target) {
 }
 function shellWriteTargets(command) {
   const targets = /* @__PURE__ */ new Set();
-  for (const pattern of [REDIRECTION, TEE]) {
-    for (const match of command.matchAll(pattern)) {
+  for (const pattern2 of [REDIRECTION, TEE]) {
+    for (const match of command.matchAll(pattern2)) {
       const target = match[1];
       if (target === void 0) continue;
       const path = unquote2(target);
@@ -1057,6 +1057,131 @@ function inspectSourceSyntax(root, path, source2, remainingMs = SYNTAX_OPERATION
   }
 }
 
+// packages/core/data/identity.json
+var identity_default = {
+  repository: { owner: "voidcorp-core", name: "void-machine", formerNames: ["void-harness"] },
+  packageName: "voidmachine",
+  formerPackages: [{ name: "voidharness", lastMajor: 3 }],
+  commands: { primary: "void-machine", aliases: ["vm"], deprecated: ["void-harness"] },
+  markers: { namespace: "void-machine", deprecated: ["void-harness"] },
+  environment: { prefix: "VOID_MACHINE_", deprecated: ["VOID_HARNESS_"] }
+};
+
+var SEGMENT = /^[a-z0-9][a-z0-9._-]*$/;
+function isRecord(value) {
+  return typeof value === "object" && value !== void 0 && value !== null && !Array.isArray(value);
+}
+function segment(value, field) {
+  if (typeof value !== "string" || !SEGMENT.test(value)) {
+    throw new Error(`product identity: ${field} must be a lowercase name without separators`);
+  }
+  return value;
+}
+function segments(value, field) {
+  if (!Array.isArray(value)) throw new Error(`product identity: ${field} must be a list`);
+  return value.map((entry, index) => segment(entry, `${field}[${index}]`));
+}
+function formerPackages(value) {
+  if (value === void 0) return [];
+  if (!Array.isArray(value)) throw new Error("product identity: formerPackages must be a list");
+  return value.map((entry, index) => {
+    const record8 = isRecord(entry) ? entry : {};
+    const lastMajor = record8["lastMajor"];
+    if (typeof lastMajor !== "number" || !Number.isInteger(lastMajor) || lastMajor < 0) {
+      throw new Error(`product identity: formerPackages[${index}].lastMajor must be a whole number`);
+    }
+    return { name: segment(record8["name"], `formerPackages[${index}].name`), lastMajor };
+  });
+}
+var NAMESPACE = SEGMENT;
+var PREFIX = /^[A-Z][A-Z0-9_]*_$/;
+function exclusive(current, deprecated, field) {
+  if (deprecated.includes(current)) throw new Error(`product identity: ${current} is both current and deprecated (${field})`);
+}
+function pattern(value, shape, field, rule) {
+  if (typeof value !== "string" || !shape.test(value)) throw new Error(`product identity: ${field} must be ${rule}`);
+  return value;
+}
+function patterns(value, shape, field, rule) {
+  if (!Array.isArray(value)) throw new Error(`product identity: ${field} must be a list`);
+  return value.map((entry, index) => pattern(entry, shape, `${field}[${index}]`, rule));
+}
+function managed(namespaces, pair) {
+  const recognized = namespaces.map(pair);
+  const [current] = recognized;
+  if (current === void 0) throw new Error("product identity: markers.namespace is required");
+  return { current, recognized };
+}
+function markers(value) {
+  const record8 = isRecord(value) ? value : {};
+  const rule = "a lowercase name without separators";
+  const namespace = pattern(record8["namespace"], NAMESPACE, "markers.namespace", rule);
+  const deprecated = patterns(record8["deprecated"], NAMESPACE, "markers.deprecated", rule);
+  exclusive(namespace, deprecated, "markers");
+  const namespaces = [namespace, ...deprecated];
+  return {
+    agentDoc: managed(namespaces, (name) => ({ begin: `<!-- ${name}:begin -->`, end: `<!-- ${name}:end -->` })),
+    contextContinuity: managed(namespaces, (name) => ({
+      begin: `<!-- ${name}:context-continuity:begin -->`,
+      end: `<!-- ${name}:context-continuity:end -->`
+    })),
+    gitignore: managed(namespaces, (name) => ({ begin: `# ${name}:begin`, end: `# ${name}:end` }))
+  };
+}
+function environment(value) {
+  const record8 = isRecord(value) ? value : {};
+  const rule = "an upper-case prefix ending in _";
+  const prefix = pattern(record8["prefix"], PREFIX, "environment.prefix", rule);
+  const deprecated = patterns(record8["deprecated"], PREFIX, "environment.deprecated", rule);
+  exclusive(prefix, deprecated, "environment");
+  return { prefix, deprecated };
+}
+var MAJOR = /^(0|[1-9]\d*)\.\d+\.\d+/;
+function parseProductIdentity(value) {
+  if (!isRecord(value)) throw new Error("product identity: document must be an object");
+  const repository = isRecord(value["repository"]) ? value["repository"] : {};
+  const owner = segment(repository["owner"], "repository.owner");
+  const name = segment(repository["name"], "repository.name");
+  const formerNames = repository["formerNames"] === void 0 ? [] : segments(repository["formerNames"], "repository.formerNames");
+  const commands = isRecord(value["commands"]) ? value["commands"] : {};
+  const primary = segment(commands["primary"], "commands.primary");
+  const aliases = segments(commands["aliases"], "commands.aliases");
+  const deprecated = segments(commands["deprecated"], "commands.deprecated");
+  const current = [primary, ...aliases];
+  const clash = deprecated.find((command) => current.includes(command));
+  if (clash !== void 0) throw new Error(`product identity: ${clash} is both current and deprecated`);
+  const packageName = segment(value["packageName"], "packageName");
+  const former = formerPackages(value["formerPackages"]);
+  const byLastMajor = [...former].sort((left, right) => left.lastMajor - right.lastMajor);
+  const packageFor = (version) => {
+    const match = MAJOR.exec(version);
+    if (match === null) return packageName;
+    const major = Number(match[1]);
+    return byLastMajor.find((entry) => major <= entry.lastMajor)?.name ?? packageName;
+  };
+  return {
+    repository: { owner, name },
+    repositorySlug: `${owner}/${name}`,
+    repositoryUrl: `https://github.com/${owner}/${name}`,
+    formerRepositorySlugs: formerNames.map((former2) => `${owner}/${former2}`),
+    packageName,
+    formerPackages: former,
+    packageFor,
+    commands: { primary, aliases, deprecated },
+    markers: markers(value["markers"]),
+    environment: environment(value["environment"])
+  };
+}
+var PRODUCT_IDENTITY = parseProductIdentity(identity_default);
+var PRODUCT_COMMAND = PRODUCT_IDENTITY.commands.primary;
+function productSetting(env, name, identity = PRODUCT_IDENTITY) {
+  for (const prefix of [identity.environment.prefix, ...identity.environment.deprecated]) {
+    const value = env[`${prefix}${name}`];
+    if (value !== void 0) return value;
+  }
+  return void 0;
+}
+
 var MAX_HOOK_INPUT_BYTES = 1024 * 1024;
 var MAX_CI_CONTENT_BYTES = 8 * 1024 * 1024;
 var BINARY_INPUT_MESSAGE = "HOOK_INPUT_BINARY: a NUL byte in the tool payload. A source file holding one is dropped from the project graph, and no diff shows it. A fixture that needs the byte builds it (String.fromCharCode(0), Buffer.concat) instead of holding it literally.";
@@ -1310,14 +1435,14 @@ function evaluateRule(rule, rawInput, options) {
   const env = options.env ?? process.env;
   if (rule === "dangerous-command") {
     if (call.tool !== "Bash" && call.tool !== "shell") return allow();
-    if (env["VOID_HARNESS_ALLOW_DANGEROUS"] === "1") return allow("OVERRIDE", "one-shot override");
+    if (productSetting(env, "ALLOW_DANGEROUS") === "1") return allow("OVERRIDE", "one-shot override");
     return dangerousCommand(call.command);
   }
   if (call.tool !== "Edit" && call.tool !== "Write" && call.tool !== "apply_patch" && call.tool !== "Bash" && call.tool !== "shell") {
     return allow();
   }
   if (rule === "protected-file") {
-    if (env["VOID_HARNESS_ALLOW_SECRET_EDIT"] === "1") return allow("OVERRIDE", "one-shot override");
+    if (productSetting(env, "ALLOW_SECRET_EDIT") === "1") return allow("OVERRIDE", "one-shot override");
     const ownership = options.source === "checked-out" ? {} : { root: options.root };
     return protectedFile(call.edits.map((edit) => edit.path), ownership);
   }
@@ -1351,12 +1476,12 @@ function evaluateRule(rule, rawInput, options) {
 import { mkdirSync, readFileSync as readFileSync6, renameSync, writeFileSync } from "node:fs";
 import { dirname as dirname3, join as join4 } from "node:path";
 var CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
-var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var isRecord2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function cacheFilePath(env) {
   const xdg = env["XDG_CACHE_HOME"]?.trim();
   const home = env["HOME"]?.trim();
   const base = xdg !== void 0 && xdg !== "" ? xdg : home !== void 0 && home !== "" ? join4(home, ".cache") : void 0;
-  return base === void 0 ? void 0 : join4(base, "void-harness", "freshness.json");
+  return base === void 0 ? void 0 : join4(base, PRODUCT_COMMAND, "freshness.json");
 }
 function parseEntry(raw) {
   let json;
@@ -1365,7 +1490,7 @@ function parseEntry(raw) {
   } catch {
     return void 0;
   }
-  if (!isRecord(json)) return void 0;
+  if (!isRecord2(json)) return void 0;
   const { latest, checkedAt } = json;
   if (typeof latest !== "string" || latest.trim() === "") return void 0;
   if (typeof checkedAt !== "number" || !Number.isFinite(checkedAt)) return void 0;
@@ -1447,9 +1572,9 @@ function compareFreshness(installed, latest) {
 }
 
 var DEFAULT_REGISTRY = "https://registry.npmjs.org";
-var NPM_PACKAGE = "voidharness";
+var NPM_PACKAGE = PRODUCT_IDENTITY.packageName;
 var DEFAULT_TIMEOUT_MS = 1500;
-var isRecord2 = (v) => typeof v === "object" && v !== void 0 && v !== null && !Array.isArray(v);
+var isRecord3 = (v) => typeof v === "object" && v !== void 0 && v !== null && !Array.isArray(v);
 function safeRegistry(candidate) {
   if (candidate === void 0 || candidate.trim() === "") return void 0;
   let url;
@@ -1484,7 +1609,7 @@ function distTagsUrl(registry, pkg) {
   return `${registry}/-/package/${encodeURIComponent(name)}/dist-tags`;
 }
 function parseLatestTag(json) {
-  if (!isRecord2(json)) return void 0;
+  if (!isRecord3(json)) return void 0;
   const latest = json["latest"];
   return typeof latest === "string" && latest.trim() !== "" ? latest.trim() : void 0;
 }
@@ -1505,7 +1630,7 @@ async function fetchLatestVersion(options = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, {
-      headers: { "user-agent": "void-harness" },
+      headers: { "user-agent": PRODUCT_COMMAND },
       signal: controller.signal
     });
     if (!res.ok) {
@@ -1568,7 +1693,7 @@ async function resolveFreshness(options) {
 function freshnessRelay(freshness, source2) {
   if (freshness.verdict !== "behind" || source2 !== "local") return void 0;
   const { installed, latest } = freshness;
-  return `A newer harness is published: ${installed} is installed, ${latest ?? "a newer version"} is available. Tell the user this once, near the start of your first reply, and name the command that installs it: \`void-harness update\`. Do not repeat it later in the session.`;
+  return `A newer harness is published: ${installed} is installed, ${latest ?? "a newer version"} is available. Tell the user this once, near the start of your first reply, and offer to run \`${PRODUCT_COMMAND} update\`. Explain that update writes project files and link the release notes for possible breaking changes: ${PRODUCT_IDENTITY.repositoryUrl}/releases. Wait for explicit human permission before running it, even in autonomous mode. If the user declines or does not reply, continue the task without updating. Do not repeat the offer later in this session.`;
 }
 
 import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as readFileSync9, readdirSync as readdirSync2, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
@@ -1598,7 +1723,7 @@ var VOID_OWNERSHIP = Object.freeze({
   // current autopilot writes to `machine/autopilot/`. So there is no writer to
   // redirect, only a classification that was wrong.
   "autonomous-runs": "project",
-  // Derived: `void-harness install` re-materializes these, byte for byte from a
+  // Derived: `void-machine install` re-materializes these, byte for byte from a
   // pin. Not committed — 1.2 MB of vendored prose rewritten on every bump — but
   // their absence degrades the agent rather than breaking the project.
   "PHILOSOPHY.md": "derived",
@@ -1687,26 +1812,27 @@ var MACHINE_ENTRIES = Object.freeze(
 var INSTALLED_ENTRIES = Object.freeze(
   Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "derived").filter((entry) => !DERIVED_LOAD_BEARING.includes(`${VOID_DIR}/${entry}/`)).sort()
 );
+var IGNORE_MARKERS = PRODUCT_IDENTITY.markers.gitignore;
 function voidDir(root) {
   return join6(root, VOID_DIR);
 }
 function voidMachineDir(root) {
   return join6(root, VOID_DIR, VOID_MACHINE_DIR);
 }
-function previousMachinePath(root, ...segments) {
-  return join6(root, VOID_DIR, VOID_PREVIOUS_MACHINE_DIR, ...segments);
+function previousMachinePath(root, ...segments2) {
+  return join6(root, VOID_DIR, VOID_PREVIOUS_MACHINE_DIR, ...segments2);
 }
-function voidMachinePath(root, ...segments) {
-  return join6(voidMachineDir(root), ...segments);
+function voidMachinePath(root, ...segments2) {
+  return join6(voidMachineDir(root), ...segments2);
 }
-function legacyVoidPath(root, ...segments) {
-  return join6(voidDir(root), ...segments);
+function legacyVoidPath(root, ...segments2) {
+  return join6(voidDir(root), ...segments2);
 }
-function voidReadPath(root, ...segments) {
+function voidReadPath(root, ...segments2) {
   const candidates = [
-    voidMachinePath(root, ...segments),
-    previousMachinePath(root, ...segments),
-    legacyVoidPath(root, ...segments)
+    voidMachinePath(root, ...segments2),
+    previousMachinePath(root, ...segments2),
+    legacyVoidPath(root, ...segments2)
   ];
   return candidates.find((candidate) => existsSync4(candidate)) ?? candidates[0];
 }
@@ -1967,7 +2093,7 @@ function withSuccessor(name) {
 var MAX_NAMED = 5;
 function invocationAlert(resolution, liveness) {
   if (resolution.ok && liveness.ok) return void 0;
-  const lines = ["void-harness, invocation surface:"];
+  const lines = [`${PRODUCT_COMMAND}, invocation surface:`];
   if (!resolution.ok) {
     const named = resolution.unresolved.slice(0, MAX_NAMED).map(withSuccessor).join(", ");
     const rest = resolution.unresolved.length - MAX_NAMED;
@@ -1981,7 +2107,7 @@ function invocationAlert(resolution, liveness) {
       `  no skill fired in the last ${liveness.missions} working missions (${liveness.toolCalls} tool calls)`
     );
   }
-  lines.push("  run `void-harness doctor` for the detail");
+  lines.push(`  run \`${PRODUCT_COMMAND} doctor\` for the detail`);
   return lines.join("\n");
 }
 var WORKING_MISSION_CALLS = 20;
@@ -2060,7 +2186,7 @@ function auditCheckpoint(input) {
 
 function sessionStartOutput(version, notice, invocationAlert2, resumeContext) {
   const installed = version.trim() === "" ? "unknown" : version.trim();
-  const base = `void-harness ${installed} is active. Non-negotiable floor: never edit secrets or keys; never hand-edit lockfiles; regenerate them via the package manager for requested dependency changes; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`void-harness doctor\` if runtime health is uncertain.`;
+  const base = `${PRODUCT_COMMAND} ${installed} is active. Non-negotiable floor: never edit secrets or keys; never hand-edit lockfiles; regenerate them via the package manager for requested dependency changes; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`${PRODUCT_COMMAND} doctor\` if runtime health is uncertain.`;
   const suffix = notice === void 0 || notice.trim() === "" ? "" : ` ${notice.trim()}`;
   const alert = invocationAlert2 === void 0 || invocationAlert2.trim() === "" ? "" : `
 ${invocationAlert2.trim()}`;
@@ -2113,8 +2239,6 @@ var MAX_INPUT = 5e5;
 var MAX_LINE = 200;
 var MAX_ITEMS = 20;
 var MAX_PATH = 500;
-var MECHANICAL_BEGIN = "<!-- void-harness:context-continuity:begin -->";
-var MECHANICAL_END = "<!-- void-harness:context-continuity:end -->";
 function hashCheckpointObjective(objective) {
   return `sha256:${createHash2("sha256").update(objective?.trim() ?? "").digest("hex")}`;
 }
@@ -2130,9 +2254,9 @@ function markerPositions(raw, marker) {
   }
   return positions;
 }
-function mechanicalBounds(raw) {
-  const begins = markerPositions(raw, MECHANICAL_BEGIN);
-  const ends = markerPositions(raw, MECHANICAL_END);
+function mechanicalBounds(raw, markers2) {
+  const begins = markers2.recognized.flatMap((pair) => markerPositions(raw, pair.begin).map((at) => ({ at, pair })));
+  const ends = markers2.recognized.flatMap((pair) => markerPositions(raw, pair.end).map((at) => ({ at, pair })));
   if (begins.length === 0 && ends.length === 0)
     return { status: "absent" };
   const begin = begins[0];
@@ -2140,12 +2264,17 @@ function mechanicalBounds(raw) {
   if (begins.length !== 1 || ends.length !== 1 || begin === void 0 || end === void 0) {
     return { status: "invalid" };
   }
-  if (end <= begin)
+  if (begin.pair !== end.pair || end.at <= begin.at)
     return { status: "invalid" };
-  return { status: "valid", begin, end: end + MECHANICAL_END.length };
+  return {
+    status: "valid",
+    begin: begin.at,
+    end: end.at + end.pair.end.length,
+    body: raw.slice(begin.at + begin.pair.begin.length, end.at)
+  };
 }
-function semanticMarkdown(raw) {
-  const bounds = mechanicalBounds(raw);
+function semanticMarkdown(raw, markers2) {
+  const bounds = mechanicalBounds(raw, markers2);
   return bounds.status === "valid" ? `${raw.slice(0, bounds.begin)}${raw.slice(bounds.end)}` : raw;
 }
 function scalar(block2, key) {
@@ -2225,22 +2354,21 @@ function mechanicalScalars(block2, required) {
 function isMechanicalResumeSource(value) {
   return value === "none" || value === "startup" || value === "resume" || value === "clear" || value === "compact" || value === "fork";
 }
-function parseMechanicalContextBlock(raw) {
-  const bounds = mechanicalBounds(raw);
+function parseMechanicalContextBlock(raw, markers2) {
+  const bounds = mechanicalBounds(raw, markers2);
   if (bounds.status === "absent")
     return { status: "absent" };
   if (bounds.status === "invalid")
     return { status: "invalid", reason: "ambiguous" };
-  const body = raw.slice(bounds.begin + MECHANICAL_BEGIN.length, bounds.end - MECHANICAL_END.length);
-  const state = stateFromMechanicalBody(body);
+  const state = stateFromMechanicalBody(bounds.body);
   return state === void 0 ? { status: "invalid", reason: "malformed" } : { status: "valid", state };
 }
 function renderPaths(paths) {
   return paths.map((path) => `- ${path}`).join("\n");
 }
-function renderMechanicalContextBlock(state) {
+function renderMechanicalContextBlock(state, markers2) {
   return [
-    MECHANICAL_BEGIN,
+    markers2.current.begin,
     "## Mechanical context",
     "",
     "```yaml",
@@ -2268,7 +2396,7 @@ function renderMechanicalContextBlock(state) {
     "### Modified files",
     "",
     renderPaths(state.modifiedFiles),
-    MECHANICAL_END
+    markers2.current.end
   ].join("\n");
 }
 function mergeRecentPaths(current, overflow, observed) {
@@ -2360,11 +2488,11 @@ function evaluateContextMeasurement(state, measurement) {
     ...unjudgeable === void 0 ? {} : { unjudgeable }
   };
 }
-function mergeMechanicalContextBlock(raw, state) {
-  const bounds = mechanicalBounds(raw);
+function mergeMechanicalContextBlock(raw, state, markers2) {
+  const bounds = mechanicalBounds(raw, markers2);
   if (bounds.status === "invalid")
     return { ok: false, error: "ambiguous-mechanical-block" };
-  const block2 = renderMechanicalContextBlock(state);
+  const block2 = renderMechanicalContextBlock(state, markers2);
   if (bounds.status === "absent") {
     const separator = raw === "" || raw.endsWith("\n\n") ? "" : raw.endsWith("\n") ? "\n" : "\n\n";
     return { ok: true, value: `${raw}${separator}${block2}
@@ -2436,10 +2564,10 @@ function bullets(lines) {
   }
   return items.map((item) => clamp(item)).filter((item) => item !== "").slice(0, MAX_ITEMS);
 }
-function parseCheckpoint(raw) {
+function parseCheckpoint(raw, markers2) {
   const bounded = raw.length > MAX_INPUT ? raw.slice(0, MAX_INPUT) : raw;
-  const mechanical = parseMechanicalContextBlock(bounded);
-  const semantic = semanticMarkdown(bounded);
+  const mechanical = parseMechanicalContextBlock(bounded, markers2);
+  const semantic = semanticMarkdown(bounded, markers2);
   const proseFields = {};
   const listFields = {
     openLoops: [],
@@ -2483,6 +2611,16 @@ function parseCheckpoint(raw) {
     ...mechanical.status === "valid" ? { mechanicalContext: mechanical.state } : {},
     mechanicalBlockStatus: mechanical.status,
     isEmpty
+  };
+}
+function checkpointCodec(markers2) {
+  const all = markers2.recognized.flatMap((pair) => [pair.begin, pair.end]);
+  return {
+    parseCheckpoint: (raw) => parseCheckpoint(raw, markers2),
+    parseMechanicalContextBlock: (raw) => parseMechanicalContextBlock(raw, markers2),
+    renderMechanicalContextBlock: (state) => renderMechanicalContextBlock(state, markers2),
+    mergeMechanicalContextBlock: (raw, state) => mergeMechanicalContextBlock(raw, state, markers2),
+    mentionsMarker: (text2) => all.some((marker) => text2.includes(marker))
   };
 }
 
@@ -2666,7 +2804,7 @@ function renderResumeContext(bundle) {
     "clear-unreconciled"
   ]);
   const required = [
-    "[void-harness resume]",
+    "[void-machine resume]",
     `Project: ${bundle.project.name}`,
     `Context continuity: ${bundle.continuity.status}`,
     ...bundle.continuity.status === "degraded" ? ["Reconstruct context before any mutation."] : [],
@@ -2693,6 +2831,14 @@ function renderResumeContext(bundle) {
   optional.push(...bundle.gaps.filter((gap) => !continuityReasons.has(gap.reason)).map((gap) => `Gap: ${gap.detail}`));
   return boundedResumeLines(required, optional);
 }
+
+var {
+  parseCheckpoint: parseCheckpoint2,
+  parseMechanicalContextBlock: parseMechanicalContextBlock2,
+  renderMechanicalContextBlock: renderMechanicalContextBlock2,
+  mergeMechanicalContextBlock: mergeMechanicalContextBlock2,
+  mentionsMarker: mentionsCheckpointMarker
+} = checkpointCodec(PRODUCT_IDENTITY.markers.contextContinuity);
 
 import {
   accessSync,
@@ -2766,8 +2912,6 @@ var POST_TOOL_MEASUREMENT_COOLDOWN_MS = 5e3;
 var MAX_TRANSCRIPT_BYTES = 1048576;
 var MAX_CONFIG_BYTES = 65536;
 var EMPTY_TRANSCRIPT_HASH = `sha256:${createHash3("sha256").update("").digest("hex")}`;
-var MECHANICAL_BEGIN2 = "<!-- void-harness:context-continuity:begin -->";
-var MECHANICAL_END2 = "<!-- void-harness:context-continuity:end -->";
 var MAX_RECOVERY_GENERATIONS = 16;
 function errorCode(error) {
   return typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : void 0;
@@ -2791,7 +2935,7 @@ function rawCheckpoint(path) {
   }
 }
 function initialState(raw) {
-  const parsed = parseCheckpoint(raw);
+  const parsed = parseCheckpoint2(raw);
   const hasSemantic = parsed.objective !== void 0 || parsed.nextAction !== void 0;
   return {
     schemaVersion: 1,
@@ -2946,8 +3090,8 @@ function safeMachineDirectory(root) {
   try {
     const canonicalRoot = realpathSync3(resolve5(root));
     let cursor = canonicalRoot;
-    for (const segment of [".void", "machine"]) {
-      cursor = join10(cursor, segment);
+    for (const segment2 of [".void", "machine"]) {
+      cursor = join10(cursor, segment2);
       try {
         const existing = lstatSync3(cursor);
         if (!existing.isDirectory() || existing.isSymbolicLink()) return void 0;
@@ -3322,7 +3466,7 @@ function nudgeOutput(event, thresholdPercent) {
 }
 function sealPreCompact(input, root, runtime3, now) {
   return mutateCheckpoint(root, now, (raw) => {
-    const block2 = parseMechanicalContextBlock(raw);
+    const block2 = parseMechanicalContextBlock2(raw);
     if (block2.status === "invalid") {
       return {
         execution: {
@@ -3333,11 +3477,11 @@ function sealPreCompact(input, root, runtime3, now) {
     }
     const current = block2.status === "valid" ? block2.state : initialState(raw);
     const advanced = advanceMechanicalContext(current, {
-      objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective)
+      objectiveHash: hashCheckpointObjective(parseCheckpoint2(raw).objective)
     });
     const measurement = measureContext(advanced, input, root, "PreCompact", runtime3, now);
     const sealed = advanceMechanicalContext(measurement.state, { compactionSealed: true });
-    const merged = mergeMechanicalContextBlock(raw, sealed);
+    const merged = mergeMechanicalContextBlock2(raw, sealed);
     if (!merged.ok) {
       return {
         execution: { status: "degraded", details: { reason: merged.error } }
@@ -3362,7 +3506,7 @@ function successfulToolUse(input) {
   return input["error"] === void 0 && input["tool_error"] === void 0;
 }
 function boundedProjectPath(root, candidate) {
-  if (candidate === "" || candidate.length > 500 || candidate.includes(MECHANICAL_BEGIN2) || candidate.includes(MECHANICAL_END2) || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
+  if (candidate === "" || candidate.length > 500 || mentionsCheckpointMarker(candidate) || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
   const target = isAbsolute4(candidate) ? resolve5(candidate) : resolve5(root, candidate);
   const local = relative4(resolve5(root), target);
   if (local === "" || local.startsWith("..") || isAbsolute4(local)) return void 0;
@@ -3377,7 +3521,7 @@ function toolPaths(call, root) {
 }
 function evolveCheckpoint(root, now, runtime3, observation, input, event) {
   return mutateCheckpoint(root, now, (raw) => {
-    const block2 = parseMechanicalContextBlock(raw);
+    const block2 = parseMechanicalContextBlock2(raw);
     if (block2.status === "invalid") {
       return {
         execution: {
@@ -3390,7 +3534,7 @@ function evolveCheckpoint(root, now, runtime3, observation, input, event) {
     const reconcile = observation.semanticCheckpointWritten === true;
     const advanced = advanceMechanicalContext(current, {
       ...observation,
-      ...reconcile ? { objectiveHash: hashCheckpointObjective(parseCheckpoint(raw).objective) } : {},
+      ...reconcile ? { objectiveHash: hashCheckpointObjective(parseCheckpoint2(raw).objective) } : {},
       semanticCheckpointWritten: false
     });
     const measurement = input === void 0 || event === void 0 ? { state: advanced, emitNudge: false, skippedBytes: 0, skippedLines: 0 } : measureContext(advanced, input, root, event, runtime3, now);
@@ -3403,7 +3547,7 @@ function evolveCheckpoint(root, now, runtime3, observation, input, event) {
         execution: { status: "skipped", details: { reason: "duplicate-observation" } }
       };
     }
-    const merged = mergeMechanicalContextBlock(raw, next);
+    const merged = mergeMechanicalContextBlock2(raw, next);
     if (!merged.ok) {
       return { execution: { status: "degraded", details: { reason: merged.error } } };
     }
@@ -3468,7 +3612,7 @@ function readVersion(path) {
   return typeof version === "string" && VERSION_SHAPE.test(version) ? version : void 0;
 }
 function resolveInstall(root, env) {
-  const explicit = env["VOID_HARNESS_VERSION"];
+  const explicit = productSetting(env, "VERSION");
   if (explicit !== void 0 && VERSION_SHAPE.test(explicit)) {
     return { version: explicit, source: void 0 };
   }
@@ -3528,7 +3672,7 @@ function executeFormat(rawInput, root, env) {
     return { status: "skipped", details: { reason: "formatter-unavailable" } };
   }
   const timeout = boundedInteger(
-    env["VOID_HARNESS_FORMAT_TIMEOUT_MS"],
+    productSetting(env, "FORMAT_TIMEOUT_MS"),
     1e4,
     100,
     3e4
@@ -3607,7 +3751,7 @@ function verifiedRef(git3, root, ref, env) {
   ).ok;
 }
 function baseRef(git3, root, env) {
-  const configured = env["VOID_HARNESS_BASE_REF"]?.trim();
+  const configured = productSetting(env, "BASE_REF")?.trim();
   if (configured !== void 0 && configured !== "") {
     return verifiedRef(git3, root, configured, env) ? configured : void 0;
   }
@@ -3633,7 +3777,7 @@ function executeLargeChange(root, env) {
   }
   const base = baseRef(git3, root, env);
   if (base === void 0) {
-    const configuredBase = env["VOID_HARNESS_BASE_REF"]?.trim();
+    const configuredBase = productSetting(env, "BASE_REF")?.trim();
     return {
       status: "skipped",
       details: {
@@ -3657,7 +3801,7 @@ function executeLargeChange(root, env) {
     return { status: "degraded", details: { reason: "change-query-failed" } };
   }
   const threshold = boundedInteger(
-    env["VOID_HARNESS_LARGE_CHANGE_THRESHOLD"] ?? env["VOIDCORP_LARGE_CL_THRESHOLD"],
+    productSetting(env, "LARGE_CHANGE_THRESHOLD") ?? env["VOIDCORP_LARGE_CL_THRESHOLD"],
     400,
     1,
     1e6
@@ -3799,9 +3943,9 @@ function checkpointObservation(root) {
     const raw = readBounded(path);
     if (raw === void 0) continue;
     try {
-      return { checkpoint: parseCheckpoint(raw), checkpointWrittenAt: statSync6(path).mtimeMs };
+      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync6(path).mtimeMs };
     } catch {
-      return { checkpoint: parseCheckpoint(raw) };
+      return { checkpoint: parseCheckpoint2(raw) };
     }
   }
   return {};
@@ -3845,8 +3989,8 @@ var EXPLICIT_CLOSE = [
 ];
 function detectsSessionCloseIntent(prompt) {
   const searchable = searchablePrompt(prompt);
-  if (NEGATED_CLOSE.some((pattern) => pattern.test(searchable))) return false;
-  return EXPLICIT_CLOSE.some((pattern) => pattern.test(searchable));
+  if (NEGATED_CLOSE.some((pattern2) => pattern2.test(searchable))) return false;
+  return EXPLICIT_CLOSE.some((pattern2) => pattern2.test(searchable));
 }
 function checkpointReminderOutput(prompt) {
   if (!detectsSessionCloseIntent(prompt)) return void 0;
@@ -3946,7 +4090,7 @@ function safeOutputDirectory(root) {
   }
 }
 function executeTrim(rawInput, root, env) {
-  if (env["VOID_HARNESS_NO_TRIM"] === "1") {
+  if (productSetting(env, "NO_TRIM") === "1") {
     return { status: "skipped", details: { reason: "disabled" } };
   }
   const extracted = extractToolOutput(rawInput);
@@ -3954,7 +4098,7 @@ function executeTrim(rawInput, root, env) {
     return { status: "skipped", details: { reason: "output-not-applicable" } };
   }
   const thresholdBytes = boundedInteger(
-    env["VOID_HARNESS_TRIM_BYTES"],
+    productSetting(env, "TRIM_BYTES"),
     12e3,
     1,
     10 * 1024 * 1024
@@ -4195,7 +4339,7 @@ function executeTypecheck(root, env) {
     };
   }
   const timeout = boundedInteger(
-    env["VOID_HARNESS_TYPECHECK_TIMEOUT_MS"],
+    productSetting(env, "TYPECHECK_TIMEOUT_MS"),
     45e3,
     100,
     12e4
@@ -4581,8 +4725,8 @@ function isJsonValue(value, depth, budget) {
     ([key, entry]) => key.length <= 100 && isPrintable(key) && isJsonValue(entry, depth + 1, budget)
   );
 }
-function boundedLabel(value, min, max, pattern) {
-  return typeof value === "string" && value.length >= min && value.length <= max && isPrintable(value) && (pattern === void 0 || pattern.test(value));
+function boundedLabel(value, min, max, pattern2) {
+  return typeof value === "string" && value.length >= min && value.length <= max && isPrintable(value) && (pattern2 === void 0 || pattern2.test(value));
 }
 function contractError(message) {
   return {
@@ -5228,7 +5372,7 @@ async function runLifecycle(input) {
       status: audit.status,
       details: { reasons: [...audit.reasons] },
       ...audit.reasons.length === 0 ? {} : {
-        diagnostic: `void-harness SessionEnd audit: ${audit.reasons.join(", ")}
+        diagnostic: `${PRODUCT_COMMAND} SessionEnd audit: ${audit.reasons.join(", ")}
 `
       }
     };

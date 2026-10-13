@@ -193,11 +193,66 @@ The harness assumes **TypeScript + web**. The core is not framework-agnostic acr
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
-The private TypeScript package `packages/void-machine/` is the Machine foundation and ships in no
-tarball. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
+The private TypeScript package `packages/void-machine/` is the Machine foundation. Only its
+delegation capability reaches users, embedded in the published CLI as `void-machine agents`
+([decision](decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md));
+the package itself is never published. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
 and collision rules, the shared-state fingerprint and the merge refusals) lives in
 `packages/cli/src/lib/autopilot/`. A future independent Rust/Go/Python product could still live in
 a sibling repo, reusing mechanics not skills.
+
+## Delegated agent runs
+
+`void-machine agents` (`packages/cli/src/commands/agents.ts`) is the one path by which a
+coordinator launches, follows and closes a delegated agent. The CLI only parses and prints; the
+kernel owns the rest, in its layers: `core/delegation.ts` (run states, admission, transitions,
+pure), `runtime/delegation.ts` (ports and the observation loop, pure), `adapters/runtime/claude-session.ts`
+(Claude Code background sessions), `adapters/store/run-registry.ts` (files) and
+`application/agents.ts` (composition). A run is a `claude --bg` session named `vm-<runId>`; its
+live state is read from `claude agents --json --all` every five seconds, one observation at a
+time per mission. The brief travels in a file the session is pointed at, never on argv, and the
+role fixes the permissions (`work`: `auto`; `review`: the native `--agent` type with `dontAsk`).
+
+Runs are recorded under `<main checkout>/.void/machine/runs/<mission-id>/agents/<runId>/`,
+resolved from the common Git directory so a run dispatched from a worktree lands where the
+coordinator reads it. Each transition is linked under its sequence number, so it is recorded
+once even when two processes observe. The final message comes from the `lifecycle
+delegation-result` Stop hook, which follows a claim keyed by the native session id
+([decision](decisions-log/2026-09-28-delegated-result-correlated-by-session-id--af7d9cc5-2dab-4908-a908-44e4121510e9.md)).
+`dispatch` refuses, with the repairing command, when Claude Code is missing or older than
+2.1.257, the workspace is not trusted, or that hook is not installed. These adapters
+remain available to finish legacy runs and read their journals.
+
+New orchestration composes `void-orchestrate`: native runtime contexts for short
+specialists, Herdr sessions for durable workers, no PreToolUse capture of Agent.
+The hook-runner owns strict bounded central-file reads and metadata projection,
+with YAML as a direct dependency. It never writes mission state in home. ORCH owns
+mission/brief writes; the worker owns its report. Identity is label plus canonical
+worktree, re-resolved from `herdr pane list`; remembered pane/workspace IDs are hints.
+See [central contract](ORCHESTRA.md) and [supervision](NATIVE-SUPERVISION.md).
+
+Mission Engine remains the policy authority. Native specialist request/start/completion
+receipts preserve actual opaque context IDs or digest-bound artifact provenance.
+`autopilot review --mission` collects only exact commit/base/acceptance-criteria-bound
+independent receipts after worktree and protected-path checks. Missing evidence stays
+pending under the existing deadline/budget; a report status never authorizes merge.
+Existing legacy attempts keep their collector, while new attempts need no kernel
+transport. The local verdict, merge hold, admission and protected-path gates remain.
+
+Each run keeps the runtime it was dispatched to (`--runtime claude|codex`), and every command
+reaches it through that runtime's port; one runtime that cannot be read never holds another's
+runs. A Codex run (`adapters/runtime/codex-daemon.ts`, `adapters/runtime/codex-thread.ts`) is a
+thread of Codex's own app-server daemon, named after the run and reached on the daemon's control
+socket for one bounded exchange per command
+([proposed decision](decisions-log/2026-09-28-codex-runs-are-threads-of-native-daemon--5dd5306b-721f-4e9b-b592-c765c8eb823e.md)): the
+daemon supervises the thread, and the kernel owns no Codex process. The role fixes the thread's
+sandbox (`work`: `workspace-write`; `review`: `read-only`) with `approvalPolicy: never`; an
+approval asked anyway is surfaced as `waiting-human`, never answered. The runtime reports the
+final message itself: the kernel records it once per turn and checks it against the output schema
+the run was dispatched with (`--output-schema`), keeping an answer that does not conform, marked
+so. A launch acknowledgement may carry the whole native session id, so the run's view exists from
+the dispatch on. Each adapter declares its view, capture and structured-output capabilities with
+their provenance, and `status` says why a run has no view.
 
 ## Stack profile compilation
 
@@ -248,6 +303,20 @@ Rules:
   config pack set and prune only unchanged receipt-owned stale assets. Local `update` recompiles
   from the running CLI without a remote fetch. Legacy/explicit marketplace receipts retain their
   cache and remote-pin adapter.
+  `init` resolves one effective pack set before staging: the deduplicated union of retained
+  declarations and requested packs, or only the requested set under `--replace-packs`.
+  Configuration, runtime assets and the installation summary use that same set. Existing pins
+  and unrelated project settings stay intact; replacement uses the existing owned-asset pruning.
+  `hydrate` inherits this reconciliation through `init`, including a clone with no local assets.
+  A fresh noninteractive install without pack declarations or flags remains core-only. Unreadable
+  configuration refuses reconciliation unless the existing `--force` overwrite verdict applies;
+  malformed pack maps or pins and unknown retained names receive explicit diagnostics rather
+  than a successful core-only install. `--force` does not erase readable project configuration.
+  Local `add` also refuses an unreadable `.void/config.json`: it cannot reconstruct the retained
+  selection safely, so it leaves the configuration, installed packs and receipt untouched and
+  reports no successful addition. Restore valid JSON with the complete retained pack map and
+  pins, then rerun `void-machine add <pack-name>`. The legacy marketplace settings-only fallback
+  remains separate; it is not a recovery path for a local installation.
 - **The harness owns exactly the skills it ships; the project owns every other one.**
   `.claude/skills/` and its siblings are shared directories, and the manifest — not the path —
   answers which side a file is on. A skill the harness does not ship is never ignored and never
@@ -267,6 +336,41 @@ Rules:
   receipt (every fresh clone) is the degenerate case of the same mechanism, not a separate route.
   See the ownership-is-union-of-receipt-and-manifest decision.
 - `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
+
+### Co-owned project files and pre-write protection
+
+`packages/hook-runner/src/co-owned.ts` owns the pure, exact co-owned path policy.
+The CLI re-exports it from `src/lib/co-owned.ts` for installation and manifest
+verification. Its six paths are `.gitignore`, `.void/config.json`,
+`.void/PROJECT-DOCTRINE.md`, `.claude/settings.json`, `CLAUDE.md` and `AGENTS.md`.
+
+For tool writes, `protected-file` refuses manifest-listed exclusive assets,
+including delivered skills, agents and hooks. A normalized project-relative
+co-owned path skips only that ownership refusal; nested namesakes and prefixes
+do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
+remain active, as do independent content scans. Claude and Codex share this rule.
+
+Checked-out CI evidence retains its existing exemption from pre-write ownership
+checks. Neither boundary proves human approval or enforces managed blocks;
+doctrine changes still require the explicit approval owned by `void-learn`.
+See the [co-owned protection decision](decisions-log/2026-10-11-co-owned-tool-write-protection--6d3bbad2-35d7-4bfe-884a-70e95cff0239.md).
+
+### Scoped external credential operations
+
+`packages/hook-runner/src/lifecycle/context.ts` emits the short session-start condition;
+`void-security-guidance` owns the detailed operational policy. Explicit consent may authorize
+external creation, storage or rotation for named resources and an approved destination, with
+least privilege and a bounded lifetime. Values stay outside model context through verified
+confidential tools; success is checked with non-sensitive metadata. Broad delivery or autopilot
+consent is insufficient, and an uncertain mutation is reconciled before a retry.
+
+This instruction boundary adds no broker, provider integration or local guard exception.
+Protected-file and secret-content rules still refuse local writes, and runtime permissions,
+sandboxing, role restrictions and higher-priority instructions remain binding. Shell inspection
+and MCP hooks do not prove external transfer confidentiality; the selected provider/runtime tool
+owns execution. Synthetic policy scenarios qualify instructions, not a live provider integration.
+See the [approved contract](specs/2026-10-13-scoped-credential-operations.md) and
+[decision](decisions-log/2026-10-13-scoped-external-credential-operations--a8bc006f-7264-4788-b804-62ae23e2214a.md).
 
 ### Capability, not lowest common denominator
 
@@ -337,7 +441,9 @@ evidence live only in the provider.
 
 `packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
 validates every field on read and refuses a file that is present but wrong, rather than falling
-back to a default: a typo in `mergeGate` must never be what hands a merge to a machine. Paths
+back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
+place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by
+the loop with its migration, so a former human gate never becomes consent to merge. Paths
 declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
 a YAML syntax.
 
@@ -1036,7 +1142,9 @@ native `spawn_agent`; Claude Code with native `Agent`.
 - `writer-event --id ...` consumes the controller's pending writer-action receipt, deriving the
   single lead writer and round rather than accepting either from the caller;
 - `close --id ... --reason interrupted|abandoned` records an explicit terminal boundary for
-  unfinished work; controller `complete` and `stop` actions close automatically;
+  unfinished work; controller `complete` and `stop` actions close automatically. A preparation
+  `await-evidence` action remains blocked and open for its authorized author response; see
+  [preparation recovery](BOUNDED-REVIEWS.md#preparation-waiting-for-evidence);
 - `resume --id ... [--json]` replays the durable journal, records one resume
   checkpoint, and returns the next safe action without dispatching a proven
   side effect again;
@@ -1544,3 +1652,14 @@ Advisories, incomplete responses and transport retries never consume correction 
 Native context identity is provenance metadata; absent identity alone is not a delivery
 refusal when actual independent execution and the review subject remain evidenced.
 Unresolved concrete blockers, invalid evidence and missing required isolation still refuse.
+
+Every implementation under `bounded-corrections-v1` requires the canonical
+`core:independent-code-reviewer`, including text, documentation and configuration changes.
+The existing `profile-base` routing signal includes it even when the initial diff is empty;
+these changes need not be classified as code changes. Preparation advice and passing command
+proofs never replace its post-implementation receipt. After implementation, a frozen plan
+without an applicable post-implementation reviewer produces `stop`: CLI dispatch closes that
+episode as `controller-stop`, never `completed`, with a diagnostic directing a new mission
+from a compatible plan. Historical plans and journals stay unchanged. Missions without the
+bounded policy retain their review semantics, and exploratory missions without an implementation
+controller acquire no implementation stage.

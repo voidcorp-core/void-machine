@@ -61,7 +61,7 @@
         "void-ticket",
         "void-implement",
         "void-merge",
-        "void-autopilot",
+        "void-autopilot", "void-orchestrate",
         "void-retrospective",
         "void-make-pdf"
       ]

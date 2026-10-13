@@ -3,6 +3,59 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { protectedFile } from './protected-file.js';
+import { PRODUCT_IDENTITY } from '../identity.js';
+
+function manifestRoot(paths: readonly string[]): string {
+  const root = mkdtempSync(join(tmpdir(), `${PRODUCT_IDENTITY.packageName}-ownership-`));
+  mkdirSync(join(root, '.void'));
+  writeFileSync(join(root, '.void/install-manifest.json'), JSON.stringify({
+    files: paths.map((path) => ({ path })),
+  }));
+  return root;
+}
+
+describe('co-owned manifest paths', () => {
+  it.each([
+    '.gitignore', '.void/config.json', '.void/PROJECT-DOCTRINE.md',
+    '.claude/settings.json', 'CLAUDE.md', 'AGENTS.md',
+  ])('allows only the exact project path after normalization: %s', (path) => {
+    const root = manifestRoot([path]);
+    for (const target of [path, `./${path}`, `folder/../${path}`, join(root, path)]) {
+      expect(protectedFile([target], { root })).toMatchObject({ allow: true, code: 'ALLOW' });
+    }
+    expect(protectedFile([path.replaceAll('/', '\\')], { root }).code).toBe('ALLOW');
+  });
+
+  it.each([
+    '.claude/skills/void-tdd/SKILL.md', '.agents/skills/void-tdd/SKILL.md',
+    '.claude/agents/reviewer.md', '.codex/agents/reviewer.toml',
+    '.claude/commands/check.md', '.void/hooks/runner.mjs', '.codex/hooks.json',
+    '.void/installed/PHILOSOPHY.md', 'nested/CLAUDE.md', 'nested/AGENTS.md',
+    'nested/.void/config.json', '.void/PROJECT-DOCTRINE.md.bak', 'AGENTS.md.bak',
+    'claude.md', 'agents.md', '.VOID/config.json', '.claude/settings.json/extra',
+  ])('keeps manifest-owned assets and namesakes exclusive: %s', (path) => {
+    const root = manifestRoot([path]);
+    for (const target of [path, join(root, path)]) {
+      const verdict = protectedFile([target], { root });
+      expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      expect(verdict.evidence).toEqual([
+        `${target}: delivered harness asset; change the harness through void-learn`,
+      ]);
+    }
+  });
+
+  it.each(['.env.local', '.npmrc', 'private.key', 'pnpm-lock.yaml', '.git/config'])(
+    'continues lexical checks after an allowed co-owned target: %s', (path) => {
+      const root = manifestRoot(['AGENTS.md']);
+      for (const paths of [['AGENTS.md', path], [path, 'AGENTS.md']]) {
+        const verdict = protectedFile(paths, { root });
+        expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+        expect(verdict.evidence[0]?.startsWith(`${path}:`)).toBe(true);
+        expect(verdict.evidence[0]).not.toContain('delivered harness asset');
+      }
+    },
+  );
+});
 
 describe('protectedFile', () => {
   it.each([

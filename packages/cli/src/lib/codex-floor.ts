@@ -13,7 +13,7 @@
 // logic — they format results this module returns.
 
 import { chmod, cp, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { syntaxWorkerHealth } from './syntax-worker-health.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
@@ -45,56 +45,100 @@ export const CODEX_FLOOR_SCRIPTS = [
 // target). Kept relative so it composes with any root.
 export const CODEX_HOOKS_DIR = '.void/hooks';
 
-// Pure-compilation default. Production wiring passes the final project's
-// absolute hooks directory so sessions started in subdirectories remain live
-// without POSIX-only command substitution. The compiler JSON-escapes Windows
-// separators after replacement.
-export const CODEX_MANIFEST_HOOKS_DIR = CODEX_HOOKS_DIR;
-
 // biome-ignore lint/suspicious/noTemplateCurlyInString: this IS the literal placeholder token, matched verbatim.
 const PLACEHOLDER = '${VOID_HOOKS_DIR}';
 
-function substituteHooksDir(template: string, hooksDir: string): string {
-  return template.split(PLACEHOLDER).join(hooksDir);
+// The only command shape the template may use: Node running one staged asset.
+const RUNNER_COMMAND = /^node "\$\{VOID_HOOKS_DIR\}\/([A-Za-z0-9._-]+\.mjs)"(?= |$)/;
+
+// Bounds the upward walk. Deeper than any real checkout, shallow enough to stay free.
+const LOOKUP_DEPTH_MAX = 64;
+
+/**
+ * The inline program that finds and runs a staged hook asset. `.codex/hooks.json`
+ * is versioned, so it cannot carry the path of the checkout that ran `init`
+ * (DEV-918). Codex runs a hook in the session cwd, through the session shell:
+ * sh, bash or zsh on POSIX, PowerShell or cmd.exe on Windows. No path syntax
+ * and no command substitution means the same thing in all five, so Node itself
+ * walks up from the cwd to the nearest `.void/hooks/<asset>`. The program uses
+ * no `$`, `%`, backtick, backslash, `!` or double quote, which those shells
+ * would expand or end the argument on.
+ *
+ * A missing or unloadable runner fails closed on `enforce` and open elsewhere,
+ * like the runner itself. Closed means the runner's Codex refusal: exit 0 with a
+ * PreToolUse denial on stdout, since PowerShell turns any other exit into 1 and
+ * Codex lets a call through on 1. The denial carries a fixed ASCII reason; the
+ * detail, which may hold a non-ASCII path, goes to stderr.
+ */
+export function codexHookBootstrap(asset: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(asset)) throw new Error(`unsafe hook asset name: ${asset}`);
+  return [
+    "const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],",
+    'l=String.fromCharCode(10),',
+    'x=function(r,t){process.stderr.write(r+t+l);',
+    "if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:",
+    "{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};",
+    `let d=process.cwd(),h='',i=${LOOKUP_DEPTH_MAX};`,
+    `while(i--){const c=p.join(d,'.void','hooks','${asset}');`,
+    'if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}',
+    'if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){',
+    `x('HOOK_RUNNER_FAILED: cannot load .void/hooks/${asset}',': '+String(e))})}`,
+    `else{x('HOOK_RUNNER_MISSING: .void/hooks/${asset} not found above the session directory',`,
+    "' '+process.cwd())}",
+  ].join('');
 }
 
-function substituteHooksDirInValue(value: unknown, hooksDir: string): unknown {
-  if (typeof value === 'string') return substituteHooksDir(value, hooksDir);
-  if (Array.isArray(value)) return value.map((item) => substituteHooksDirInValue(item, hooksDir));
+function compileCommand(command: string): string {
+  if (!command.includes(PLACEHOLDER)) return command;
+  const match = RUNNER_COMMAND.exec(command) ?? undefined;
+  const asset = match?.[1];
+  if (match === undefined || asset === undefined || command.split(PLACEHOLDER).length !== 2) {
+    throw new Error(`unsupported hook command in codex template: ${command}`);
+  }
+  return `node -e "${codexHookBootstrap(asset)}"${command.slice(match[0].length)}`;
+}
+
+function compileCommands(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(compileCommands);
   if (typeof value !== 'object' || value === null) return value;
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => [
       key,
-      substituteHooksDirInValue(child, hooksDir),
+      key === 'command' && typeof child === 'string'
+        ? compileCommand(child)
+        : compileCommands(child),
     ]),
   );
 }
 
 /**
  * Compile the shipped Codex hooks template into the manifest written to
- * <project>/.codex/hooks.json: substitute every ${VOID_HOOKS_DIR} with the
- * staged hooks dir, and rewrite the `description` — the template's is a manual
- * install guide that no longer applies once `init` automates the wiring.
- * Throws on a template that isn't a JSON object (a corrupt shipped asset must
- * fail loudly at wire time, never write a garbage manifest).
+ * <project>/.codex/hooks.json: every `node "${VOID_HOOKS_DIR}/<asset>"` becomes
+ * `node -e "<bootstrap>"`, which finds the staged asset from the session cwd.
+ * The output depends on the template alone, never on the machine or checkout
+ * that compiles it. The template's `description`, a manual install guide, is
+ * rewritten. Throws on a template that isn't a JSON object or that uses the
+ * placeholder in any other shape: a corrupt shipped asset must fail loudly at
+ * wire time, never write a garbage manifest.
  */
-export function compileCodexHooksManifest(template: string, hooksDir: string = CODEX_MANIFEST_HOOKS_DIR): string {
-  const parsed: unknown = substituteHooksDirInValue(JSON.parse(template), hooksDir);
+export function compileCodexHooksManifest(template: string): string {
+  const parsed: unknown = JSON.parse(template);
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('codex hooks template is not a JSON object');
   }
   const manifest: Record<string, unknown> = { ...parsed };
+  manifest.hooks = compileCommands(manifest.hooks);
   manifest.description =
-    `Generated by \`${PRODUCT_COMMAND} init\` — the Codex-side safety floor, mirror of the Claude Code ` +
-    `PreToolUse hooks. Scripts are staged in ${hooksDir}/; re-run \`${PRODUCT_COMMAND} init\` to refresh. ` +
-    `See docs/CODEX.md.`;
+    `Generated by \`${PRODUCT_COMMAND} init\` — the Codex-side safety floor, mirror of the ` +
+    `Claude Code PreToolUse hooks. Each command finds ${CODEX_HOOKS_DIR}/ from the session ` +
+    `directory, so the file holds no machine path; re-run \`${PRODUCT_COMMAND} init\` to refresh. See docs/CODEX.md.`;
   return JSON.stringify(manifest, null, 2);
 }
 
 /**
  * Every hook asset basename the manifest invokes. Accepts the raw template (with the
- * ${VOID_HOOKS_DIR} placeholder), a compiled manifest (Git-root `$(...)` paths),
- * or an absolute/relative on-disk one. Commands may invoke a shell adapter or
+ * ${VOID_HOOKS_DIR} placeholder), a compiled manifest (the asset quoted inside
+ * its bootstrap), or an older absolute-path one. Commands may invoke a shell adapter or
  * pass a bundled `.mjs` file to Node. A malformed (non-object) manifest
  * yields `[]` rather than throwing. Drift guard: the result must be a subset of
  * CODEX_FLOOR_SCRIPTS, else a hook would be wired-but-absent after `init`.
@@ -115,7 +159,7 @@ export function referencedScripts(manifest: string): string[] {
     if (typeof value !== 'object' || value === null) return;
     for (const [key, child] of Object.entries(value)) {
       if (key === 'command' && typeof child === 'string') {
-        for (const match of child.matchAll(/([A-Za-z0-9._-]+\.(?:sh|mjs))(?=["\s]|$)/g)) {
+        for (const match of child.matchAll(/([A-Za-z0-9._-]+\.(?:sh|mjs))(?=["'\s]|$)/g)) {
           if (match[1] !== undefined) found.add(match[1]);
         }
       } else {
@@ -142,11 +186,7 @@ export function referencedScripts(manifest: string): string[] {
  * The manifest is written via a temp-file rename so a reader never observes a
  * half-written .codex/hooks.json.
  */
-export async function wireCodexFloor(
-  stageRoot: string,
-  sourceRoot: string,
-  installRoot: string = stageRoot,
-): Promise<number> {
+export async function wireCodexFloor(stageRoot: string, sourceRoot: string): Promise<number> {
   const hooksSrc = join(sourceRoot, 'hooks');
   const hooksDst = join(stageRoot, CODEX_HOOKS_DIR);
   await mkdir(hooksDst, { recursive: true });
@@ -161,10 +201,7 @@ export async function wireCodexFloor(
     if (hook.endsWith('.sh')) await chmod(join(hooksDst, hook), 0o755);
   }
 
-  const manifest = compileCodexHooksManifest(
-    template,
-    join(resolve(installRoot), CODEX_HOOKS_DIR),
-  );
+  const manifest = compileCodexHooksManifest(template);
   const codexDir = join(stageRoot, '.codex');
   await mkdir(codexDir, { recursive: true });
   const manifestPath = join(codexDir, 'hooks.json');
@@ -197,7 +234,7 @@ export async function codexFloorDrift(projectRoot: string, sourceRoot: string): 
   const template = await readOrUndefined(join(sourceRoot, 'codex', 'hooks.json'));
   const expected = template === undefined
     ? undefined
-    : compileCodexHooksManifest(template, join(resolve(projectRoot), CODEX_HOOKS_DIR));
+    : compileCodexHooksManifest(template);
   const actual = await readOrUndefined(join(projectRoot, '.codex', 'hooks.json'));
   const trimEnd = (s: string | undefined): string => (s ?? '').replace(/\n+$/, '');
   if (trimEnd(actual) !== trimEnd(expected)) drift.push('hooks.json');

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { writeSequencedEventOnce } from '@voidcorp/hook-runner';
 import {
   canonicalJsonHash, parseEvidence, parseSpecialistCompletionValue, reduceEvidenceObligations,
+  validNativeContextId,
   type CanonicalEvent, type EventDraft, type JsonValue,
 } from '@voidcorp/mission-engine';
 import type { ProjectRoots } from '../project-roots.js';
@@ -37,7 +38,7 @@ function identity(events: readonly CanonicalEvent[]): 'runtime:codex' | 'runtime
   return runtime === 'codex' ? 'runtime:codex' : 'runtime:claude';
 }
 function freshContext(events: readonly CanonicalEvent[], contextId: string): void {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/.test(contextId)
+  if (!validNativeContextId(contextId)
     || events.some(event => field(event.payload, 'contextId') === contextId
       || field(event.payload, 'nativeContextId') === contextId)) invalid('provide a fresh native author context');
 }
@@ -157,9 +158,6 @@ function exact(value: Readonly<Record<string, JsonValue>>, keys: readonly string
 function identifier(value: unknown): value is string {
   return typeof value === 'string' && /^evt_[A-Za-z0-9_-]{8,100}$/.test(value);
 }
-function context(value: unknown): value is string {
-  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{3,159}$/.test(value);
-}
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= 1_000 && !value.includes('\0');
 }
@@ -167,7 +165,7 @@ function hash(value: unknown): value is string {
   return typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value);
 }
 export function parseSpecialistEvidenceRequest(value: unknown): SpecialistEvidenceRequest {
-  if (!record(value) || !identifier(value['completionEventId']) || !context(value['contextId'])
+  if (!record(value) || !identifier(value['completionEventId']) || !validNativeContextId(value['contextId'])
     || (value['operation'] !== 'classification' && value['operation'] !== 'discharge')) invalid('malformed evidence request');
   const base = { completionEventId: value['completionEventId'], contextId: value['contextId'] };
   if (value['operation'] === 'classification') {
@@ -203,7 +201,7 @@ function responseItem(value: unknown): JsonValue {
 export function parseSpecialistEvidenceResponse(
   status: 'started' | 'completed', value: unknown,
 ): SpecialistEvidenceResponse {
-  if (!record(value) || !identifier(value['requestEventId']) || !context(value['contextId'])
+  if (!record(value) || !identifier(value['requestEventId']) || !validNativeContextId(value['contextId'])
     || !exact(value, ['requestEventId', 'contextId', ...(status === 'completed' ? ['items'] : [])])) {
     invalid('response fields must match the requested native context and lifecycle status');
   }

@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   utimesSync,
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { replayEventLog } from '@voidcorp/mission-engine';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from './identity.js';
 
 // The entrypoint runs on import, so it is exercised the way a hook actually runs
 // it: bundled exactly as `pnpm build` does, then executed as a child process with
@@ -36,6 +38,7 @@ beforeAll(async () => {
     platform: 'node',
     format: 'esm',
     target: 'node24',
+    banner: { js: "import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" },
     outfile: hook,
   });
 }, 30_000);
@@ -53,6 +56,52 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
   });
   return { code: result.status ?? 0, stderr: result.stderr ?? '' };
 }
+
+describe('bundled co-owned enforcement', () => {
+  it.each(['claude', 'codex'])('preserves allow and denial protocols for %s', (runtime) => {
+    const root = join(workspace, `${PRODUCT_IDENTITY.packageName}-${runtime}-ownership`);
+    mkdirSync(join(root, '.void'), { recursive: true });
+    mkdirSync(join(root, '.git'));
+    const exclusive = '.void/hooks/runner.mjs';
+    writeFileSync(join(root, '.void/install-manifest.json'), JSON.stringify({
+      files: ['AGENTS.md', exclusive].map((path) => ({ path })),
+    }));
+    const cases = [
+      ['protected-file', 'AGENTS.md', 'approved prose', 'ALLOW'],
+      ['protected-file', exclusive, 'changed', 'PROTECTED_FILE'],
+      ['protected-file', '.env', 'changed', 'PROTECTED_FILE'],
+      ['secret-content', 'AGENTS.md', `AKIA${'Z'.repeat(16)}`, 'SECRET_IN_CONTENT'],
+      ['control-character', 'AGENTS.md', String.fromCharCode(1), 'CONTROL_CHARACTER_IN_SOURCE'],
+    ] as const;
+    for (const [rule, file, content, code] of cases) {
+      const path = join(root, file);
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Write', tool_input: { file_path: path, content } }
+        : { tool_name: 'apply_patch', tool_input: {
+          patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${content}\n*** End Patch`,
+        } };
+      const result = spawnSync(process.execPath, [hook, 'enforce', rule, runtime], {
+        input: JSON.stringify(payload), encoding: 'utf8', cwd: root,
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(code === 'ALLOW' || runtime === 'codex' ? 0 : 2);
+      if (code === 'ALLOW') {
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toBe('');
+      } else if (runtime === 'codex') {
+        const output = JSON.parse(result.stdout).hookSpecificOutput;
+        expect(output.permissionDecision).toBe('deny');
+        expect(output.permissionDecisionReason).toContain(code);
+        expect(output.permissionDecisionReason).toContain(path);
+      } else {
+        expect(result.stderr).toContain(code);
+        expect(result.stderr).toContain(path);
+      }
+    }
+  });
+});
 
 describe('CI TDD source evidence', () => {
   it('accepts the generated worker identity with its actual syntax inspection coverage', () => {
@@ -209,6 +258,56 @@ describe('enforce', () => {
     });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('HOOK_INPUT_REJECTED:');
+  });
+
+  // Codex runs a hook through the session shell, PowerShell by default on
+  // Windows, and `powershell -Command` turns every non-zero exit into 1, which
+  // Codex reads as a failed hook, not a refusal. The one decision every shell
+  // carries is exit 0 with the documented PreToolUse JSON on stdout.
+  function enforceCodex(rule: string, input: string): { code: number; stdout: string } {
+    const result = spawnSync(process.execPath, [hook, 'enforce', rule, 'codex'], {
+      input,
+      encoding: 'utf8',
+      env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+    });
+    return { code: result.status ?? -1, stdout: result.stdout ?? '' };
+  }
+
+  // Codex rejects unknown fields, so the denial is compared whole.
+  function expectCodexDenial(stdout: string, reason: string): void {
+    expect(JSON.parse(stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: expect.stringContaining(reason),
+      },
+    });
+  }
+
+  it('refuses a Codex tool call with a denial every shell passes through intact', () => {
+    const { code, stdout } = enforceCodex(
+      'no-any',
+      JSON.stringify(write('src/café.ts', 'const a: any = 1;')),
+    );
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/^[\x20-\x7e]*\n$/);
+    expectCodexDenial(stdout, 'TYPESCRIPT_ANY:');
+    expectCodexDenial(stdout, 'src/café.ts');
+  });
+
+  it('refuses a Codex payload it cannot parse through the same denial', () => {
+    const { code, stdout } = enforceCodex('no-any', 'not json');
+    expect(code).toBe(0);
+    expectCodexDenial(stdout, 'HOOK_INPUT_REJECTED:');
+  });
+
+  it('lets a clean Codex tool call through without any decision', () => {
+    const { code, stdout } = enforceCodex(
+      'no-any',
+      JSON.stringify(write('src/x.ts', 'const a: number = 1;')),
+    );
+    expect(code).toBe(0);
+    expect(stdout).toBe('');
   });
 });
 
@@ -459,6 +558,67 @@ describe('lifecycle context', () => {
         /void-checkpoint/i,
       );
       expect(result.stdout).not.toContain('continue the implementation');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('delegation-result lifecycle', () => {
+  it('records the claimed result of a delegated session without writing stdout', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-delegation-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      const session = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+      const run = join(root, '.void', 'machine', 'runs', 'mis_cli-contract', 'agents', 'run_x');
+      mkdirSync(run, { recursive: true });
+      mkdirSync(join(root, '.void', 'machine', 'agents', 'sessions'), { recursive: true });
+      writeFileSync(join(root, '.void', 'machine', 'agents', 'sessions', `${session}.json`),
+        JSON.stringify({ schemaVersion: 1, resultPath: join(run, 'result.json') }));
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-result', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'Stop', session_id: session, cwd: root,
+          last_assistant_message: 'Done.' }),
+        encoding: 'utf8',
+        env: { ...process.env, VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('');
+      expect(JSON.parse(readFileSync(join(run, 'result.json'), 'utf8')))
+        .toMatchObject({ sessionId: session, lastAssistantMessage: 'Done.' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('delegation-capture lifecycle', () => {
+  it('lets the native Agent call through, with nothing on stdout, when no multiplexer shows the caller', () => {
+    const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: workspace,
+        session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'], VOID_PROJECT_ROOT: workspace },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('does not intercept Agent even when a multiplexer and kernel are available', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-capture-')));
+    try {
+      spawnSync('git', ['init', '-q'], { cwd: root });
+      mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+      const runId = 'run_0f1e2d3c-4b5a-4968-8776-655443322110';
+      writeFileSync(join(root, 'node_modules', '.bin', 'void-machine'),
+        `#!/bin/sh\necho '${JSON.stringify({ ok: true, runId })}'\n`, { mode: 0o755 });
+      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'delegation-capture', 'claude'], {
+        input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Agent', cwd: root, permission_mode: 'auto',
+          session_id: '6d5ea8bb-764f-4463-b733-8b94509eb25e', tool_input: { prompt: 'Review it.' } }),
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'], HERDR_ENV: '1', VOID_PROJECT_ROOT: root },
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -754,5 +914,154 @@ describe('a hook fired from a worktree', () => {
     } finally {
       rmSync(main, { recursive: true, force: true });
     }
+  });
+});
+
+// Fixture executables keep this globally invoked route away from active Herdr and personal hooks.
+describe('global Herdr session guard', () => {
+  function fixture() {
+    const root = mkdtempSync(join(workspace, 'herdr-session-'));
+    const bin = join(root, 'bin');
+    const home = join(root, 'home');
+    const codex = join(home, '.codex');
+    mkdirSync(bin); mkdirSync(codex, { recursive: true });
+    const capture = join(root, 'relayed');
+    writeFileSync(join(codex, 'herdr-agent-state.sh'),
+      'test "$1" = session || exit 42\ncat > "$RELAY_CAPTURE"\nprintf "native-output\\n"\n');
+    writeFileSync(join(bin, 'herdr'), `#!${process.execPath}\n`
+      + 'const mode = process.env.DISCOVERY_MODE;\n'
+      + 'if (mode === "timeout") { setTimeout(() => {}, 10000); }\n'
+      + 'else if (mode === "failure") { process.stderr.write("private-payload"); process.exitCode = 1; }\n'
+      + 'else if (mode === "invalid") { process.stdout.write("private-payload"); }\n'
+      + 'else { const entries = JSON.parse(process.env.FOREGROUND_PIDS).map(pid => ({ pid }));\n'
+      + 'process.stdout.write(JSON.stringify({ result: { process_info: {\n'
+      + 'pane_id: process.env.RESPONSE_PANE, shell_pid: 2, foreground_process_group_id: 3,\n'
+      + 'foreground_processes: entries } } })); }\n', { mode: 0o755 });
+    const env: NodeJS.ProcessEnv = {
+      PATH: `${bin}:/usr/bin:/bin`, HOME: home, CODEX_HOME: codex,
+      HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1', HERDR_SOCKET_PATH: join(root, 'unused.socket'),
+      RESPONSE_PANE: 'w1:p1', FOREGROUND_PIDS: JSON.stringify([process.pid]),
+      RELAY_CAPTURE: capture,
+    };
+    const input = Buffer.from(' { "hook_event_name": "SessionStart", "session_id": "fixture" } \n\n');
+    const run = (payload: Buffer = input, runtime = 'codex') => spawnSync(process.execPath,
+      [hook, 'lifecycle', 'herdr-session', runtime], {
+        cwd: root, env, input: payload, timeout: 4000, maxBuffer: 262144,
+      });
+    const fakePs = (body: string) => writeFileSync(join(bin, 'ps'),
+      `#!${process.execPath}\n${body}\n`, { mode: 0o755 });
+    return { root, codex, capture, env, input, run, fakePs };
+  }
+
+  it('relays original bytes once only when a real foreground ancestor owns the hook', () => {
+    const f = fixture();
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toBe('');
+    expect(result.stdout.toString()).toBe('native-output\n');
+    expect(readFileSync(f.capture)).toEqual(f.input);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+    expect(existsSync(join(f.env['HOME'] ?? '', '.void'))).toBe(false);
+  });
+
+  it.each([
+    ['unrelated foreground or shared daemon', [2147483647], 'ownership-unproven'],
+    ['empty foreground', [], 'invalid-discovery'],
+    ['non-numeric PID', ['123'], 'invalid-discovery'],
+    ['mixed invalid PID', [process.pid, '123'], 'invalid-discovery'],
+    ['root PID', [1], 'invalid-discovery'],
+    ['negative PID', [-2], 'invalid-discovery'],
+    ['fractional PID', [2.5], 'invalid-discovery'],
+    ['unsafe PID', [Number.MAX_SAFE_INTEGER + 1], 'invalid-discovery'],
+    ['oversized foreground', Array.from({ length: 257 }, () => process.pid), 'invalid-discovery'],
+  ])('refuses %s without native relay', (_name, pids, reason) => {
+    const f = fixture(); f.env['FOREGROUND_PIDS'] = JSON.stringify(pids);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain(`herdr-session: ${reason}`);
+    expect(result.stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['invalid', 'failure', 'timeout'])('diagnoses discovery %s without leaking output', mode => {
+    const f = fixture(); f.env['DISCOVERY_MODE'] = mode;
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session:');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(result.stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it('refuses a response for a different pane', () => {
+    const f = fixture(); f.env['RESPONSE_PANE'] = 'w2:p9';
+    expect(f.run().stderr.toString()).toContain('herdr-session: invalid-discovery');
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each([
+    ['cycle', 'process.stdout.write(process.argv.at(-1));'],
+    ['depth', 'process.stdout.write(String(Number(process.argv.at(-1)) + 1));'],
+    ['malformed', 'process.stdout.write("2 3");'],
+    ['failure', 'process.stderr.write("private-payload"); process.exitCode = 1;'],
+    ['timeout', 'setTimeout(() => {}, 10000);'],
+  ])('refuses parent lookup %s within its fixed budget', (_mode, body) => {
+    const f = fixture(); f.env['FOREGROUND_PIDS'] = '[2147483647]'; f.fakePs(body);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session:');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['claude', 'unknown'])('does not relay for runtime %s', runtime => {
+    const f = fixture(); expect(f.run(f.input, runtime).stdout.length).toBe(0);
+    expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['{}', '{"hook_event_name":"Stop"}', 'broken', '', '[1]'])('does not relay payload %s', payload => {
+    const f = fixture(); const result = f.run(Buffer.from(payload));
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it('refuses an absent native hook without creating project state', () => {
+    const f = fixture(); f.env['CODEX_HOME'] = join(f.root, 'absent');
+    expect(f.run().stderr.toString()).toContain('herdr-session: native-hook-unavailable');
+    expect(existsSync(f.capture)).toBe(false); expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it('uses the native default directory when CODEX_HOME is empty', () => {
+    const f = fixture(); f.env['CODEX_HOME'] = '';
+    expect(f.run().stderr.toString()).toBe('');
+    expect(readFileSync(f.capture)).toEqual(f.input);
+  });
+
+  it('bounds the global input without logging it or creating telemetry', () => {
+    const f = fixture(); const result = f.run(Buffer.alloc(1048577, 32));
+    expect(result.stderr.toString()).toContain('HOOK_INPUT_TOO_LARGE');
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+    expect(existsSync(join(f.root, '.void'))).toBe(false);
+  });
+
+  it.each(['HERDR_ENV', 'HERDR_PANE_ID', 'HERDR_SOCKET_PATH'])('cannot relay without %s', name => {
+    const f = fixture(); delete f.env[name];
+    expect(f.run().stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it('refuses binary input without logging its contents', () => {
+    const f = fixture(); const result = f.run(Buffer.from([0, 255]));
+    expect(result.stderr.toString()).toBe('herdr-session: invalid-input\n');
+    expect(result.stdout.length).toBe(0); expect(existsSync(f.capture)).toBe(false);
+  });
+
+  it.each(['exit 8', 'exec /bin/sleep 10'])('reports native failure without exposing stderr: %s', body => {
+    const f = fixture();
+    writeFileSync(join(f.codex, 'herdr-agent-state.sh'), `printf private-payload >&2\n${body}\n`);
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toContain('herdr-session: native-relay-failed');
+    expect(result.stderr.toString()).not.toContain('private-payload');
+    expect(result.stdout.length).toBe(0);
   });
 });

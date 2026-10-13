@@ -20,6 +20,7 @@ import {
   type QueueEvent,
   type StopSignal,
 } from './loop.js';
+import type { MergeHold } from './merge-hold.js';
 import { parseProgramDescriptor } from './program.js';
 import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from './shared-state.js';
 
@@ -30,7 +31,8 @@ import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from '
 
 interface ProgramSpec {
   readonly clusterSize?: number;
-  readonly mergeGate?: string;
+  /** The branch that ships, when the programme names it; the repository default otherwise. */
+  readonly deployBranch?: string;
   readonly protectedPaths?: readonly string[];
 }
 
@@ -39,10 +41,7 @@ function programText(options: ProgramSpec = {}): string {
     options.protectedPaths === undefined
       ? ''
       : `  protectedPaths:\n${options.protectedPaths.map((path) => `    - ${path}\n`).join('')}`;
-  const gate =
-    (options.mergeGate ?? 'union-reviewed') === 'human'
-      ? 'mergeGate: human'
-      : 'mergeGate: union-reviewed\n  deployBranch: main';
+  const deploy = options.deployBranch === undefined ? '' : `\n  deployBranch: ${options.deployBranch}`;
   return `---
 schemaVersion: 1
 status: executing
@@ -59,10 +58,9 @@ progress:
     review: [In Review]
     done: [Done, Canceled]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: ${options.clusterSize ?? 4}
-  base: develop
-  ${gate}
+  base: develop${deploy}
   ownership:
     sequential:
       - pnpm-lock.yaml
@@ -155,18 +153,18 @@ interface PullSpec {
   readonly mergeState?: string;
   readonly autoMerge?: boolean;
   readonly failingCheck?: boolean;
+  /** Every check still running, or no check registered at all; passing unless given. */
+  readonly checks?: 'pending' | 'none';
+  /** The head GitHub reports; the padded number unless given. */
+  readonly headSha?: string;
+  /** An `independent-review` check on the head, which the loop reads as any other check. */
   readonly review?: 'SUCCESS' | 'FAILURE' | 'PENDING' | undefined;
   readonly queue?: QueueEvent;
-  /** The judgment blocks posted as comments; `undefined` posts none. */
+  /** A verdict block posted as a comment by the Actions bot: text the loop never believes. */
   readonly verdict?: unknown;
   readonly conflict?: unknown;
-  /** Distinct heads GitHub shows the review failed on; one when the head failed, by default. */
-  readonly reviewFailures?: number;
   /** Ejections of this head from the queue; one when it was just ejected, by default. */
   readonly ejections?: number;
-  /** The conclusion of the `independent-review` job, absent unless given. */
-  /** The attempt of the run that published a review which failed with no verdict; its first unless given. */
-  readonly reviewAttempt?: number;
   /** The paths the pull request changes; one ordinary document unless given. */
   readonly files?: readonly string[];
   /** Renamed files, destination to source, as REST reports them in `previous_filename`. */
@@ -192,8 +190,9 @@ function pull(spec: PullSpec): PullRequestObservation {
   const view = openView();
   const passing = view.statusCheckRollup as Raw[];
   const [firstRun] = passing;
+  const running = passing.map((run) => ({ ...run, status: 'IN_PROGRESS', conclusion: '' }));
   const rollup = [
-    ...passing,
+    ...(spec.checks === 'none' ? [] : spec.checks === 'pending' ? running : passing),
     ...(spec.failingCheck === true ? [{ ...firstRun, name: 'validate', conclusion: 'FAILURE' }] : []),
     // The review check the job publishes on the head, with the run it came from.
     ...(spec.review === undefined
@@ -209,7 +208,7 @@ function pull(spec: PullSpec): PullRequestObservation {
     readFileSync(new URL('./__fixtures__/gh/pr-view-auto-merge.json', import.meta.url), 'utf8'),
   ) as Raw;
   const paths = spec.files ?? ['docs/VOID-MACHINE-VISION.md'];
-  const headSha = String(spec.number).padStart(40, 'a');
+  const headSha = spec.headSha ?? String(spec.number).padStart(40, 'a');
   const comment = (body: string) => ({ ...realComments()[0], body });
   // The verdict comment as the review job posts it, under the Actions bot.
   const posted = (body: string) => ({ ...comment(body), author: { login: 'github-actions' } });
@@ -233,15 +232,58 @@ function pull(spec: PullSpec): PullRequestObservation {
       ],
     }),
   );
-  const reviewFailures = spec.reviewFailures ?? parsed.reviewFailures;
   const ejections = spec.ejections ?? (spec.queue === 'ejected' ? 1 : 0);
-  const crashed = spec.review === 'FAILURE' && parsed.verdict === undefined;
-  const attempt = crashed ? { reviewCheckAttempt: spec.reviewAttempt ?? 1 } : {};
   const files = paths.map((path) => {
     const previousPath = spec.renamed?.[path];
     return previousPath === undefined ? { path } : { path, previousPath };
   });
-  return { ...parsed, files, queue: spec.queue ?? 'none', ejections, reviewFailures, ...attempt };
+  return { ...parsed, files, queue: spec.queue ?? 'none', ejections };
+}
+
+const RUN = 'run_00000000-0000-4000-8000-000000000001';
+const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
+/** The instant every decision is taken at, unless a test moves it. */
+const NOW = 100_000_000;
+
+interface LocalSpec {
+  /** The head the record is for; the head of the pull request unless given. */
+  readonly headSha?: string;
+  /** The verdict the kernel recorded; a clean one unless given, none when `null`. */
+  readonly verdict?: unknown;
+  readonly attempts?: readonly Record<string, unknown>[];
+}
+
+/** What `autopilot review` records for one head of a ticket's pull request. */
+function localReview(ticketId: string, number: number, spec: LocalSpec = {}): Record<string, unknown> {
+  const headSha = spec.headSha ?? headOf(number);
+  const verdict = spec.verdict === undefined ? { ...approving(number), headSha } : spec.verdict;
+  return {
+    schemaVersion: 1,
+    ticketId,
+    pullRequest: number,
+    headSha,
+    attempts: spec.attempts ?? [{ runId: RUN, startedAt: NOW - 60_000, endedAt: NOW - 1_000 }],
+    ...(verdict === null ? {} : { verdict: { runId: RUN, sessionId: SESSION, recordedAt: NOW - 1_000, verdict } }),
+  };
+}
+
+type LocalReviews = LoopInput['reviews'];
+
+/** By default, a clean verdict recorded on the head each ticket's pull request has now. */
+function localReviews(
+  spec: TrackerSpec,
+  pulls: readonly PullRequestObservation[],
+  given: Readonly<Record<string, readonly Record<string, unknown>[] | undefined>> = {},
+): LocalReviews {
+  const reviews = new Map<string, ReadonlyMap<string, unknown>>();
+  for (const ticket of spec.tickets) {
+    const observed = pulls.find((candidate) => candidate.number === ticket.pullRequest);
+    const records = Object.hasOwn(given, ticket.id)
+      ? (given[ticket.id] ?? [])
+      : observed === undefined ? [] : [localReview(ticket.id, observed.number)];
+    reviews.set(ticket.id, new Map(records.map((record) => [String(record.headSha), record])));
+  }
+  return reviews;
 }
 
 const SHARED_READING: SharedStateReading = {
@@ -277,9 +319,17 @@ function sharedState(
   return { current, before };
 }
 
-function github(pulls: readonly PullRequestObservation[], mergeQueue = true): GithubObservation {
-  return { base: 'develop', mergeQueue, pullRequests: new Map(pulls.map((observed) => [observed.number, observed])) };
+function github(
+  pulls: readonly PullRequestObservation[],
+  mergeQueue = true,
+  defaultBranch: string | undefined = 'main',
+): GithubObservation {
+  const pullRequests = new Map(pulls.map((observed) => [observed.number, observed]));
+  return { base: 'develop', defaultBranch, mergeQueue, pullRequests };
 }
+
+const NO_HOLD: MergeHold = { held: false };
+const HOLD: MergeHold = { held: true, detail: 'a person holds the merges since 2026-09-28T21:00:00.000Z' };
 
 function decide(
   spec: TrackerSpec,
@@ -288,7 +338,11 @@ function decide(
     mergeQueue?: boolean;
     signal?: StopSignal;
     clusterSize?: number;
-    mergeGate?: string;
+    /** A person holds the merges: `autopilot merges --by-human`. */
+    hold?: boolean;
+    /** The repository's default branch as GitHub reports it; `main` unless given, none when null. */
+    defaultBranch?: string | null;
+    deployBranch?: string;
     protectedPaths?: readonly string[];
     changed?: readonly string[];
     unrecorded?: readonly string[];
@@ -296,22 +350,32 @@ function decide(
     armedOn?: Readonly<Record<string, string>>;
     /** Tickets whose armed pull request no `autopilot arm` recorded. */
     unarmed?: readonly string[];
+    /** The records `autopilot review` left per ticket; a clean verdict on the current head otherwise. */
+    reviews?: Readonly<Record<string, readonly Record<string, unknown>[] | undefined>>;
+    now?: number;
   } = {},
 ): readonly LoopAction[] {
   const input: LoopInput = {
     program: program({
       ...(options.clusterSize === undefined ? {} : { clusterSize: options.clusterSize }),
-      ...(options.mergeGate === undefined ? {} : { mergeGate: options.mergeGate }),
+      ...(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch }),
       ...(options.protectedPaths === undefined ? {} : { protectedPaths: options.protectedPaths }),
     }),
     tracker: tracker(spec),
-    github: github(options.pulls ?? [], options.mergeQueue ?? true),
+    github: github(
+      options.pulls ?? [],
+      options.mergeQueue ?? true,
+      options.defaultBranch === null ? undefined : (options.defaultBranch ?? 'main'),
+    ),
+    mergeHold: options.hold === true ? HOLD : NO_HOLD,
     signal: options.signal ?? 'none',
     sharedState: sharedState(spec, {
       ...(options.changed === undefined ? {} : { changed: options.changed }),
       ...(options.unrecorded === undefined ? {} : { unrecorded: options.unrecorded }),
     }),
     armed: armedRecords(spec, options.pulls ?? [], options),
+    reviews: localReviews(spec, options.pulls ?? [], options.reviews),
+    now: options.now ?? NOW,
   };
   return decideLoop(input).actions;
 }
@@ -339,12 +403,10 @@ function actionFor(actions: readonly LoopAction[], ticketId: string): LoopAction
   return actions.find((action) => 'ticketId' in action && action.ticketId === ticketId);
 }
 
-/** A pull request the reviewer passed: a success status and a clean verdict on its head. */
+/** A pull request of ticket `id`, out of draft; `decide` records a clean verdict on its head. */
 const reviewed = (id: string, number: number, extra: Partial<PullSpec> = {}): PullSpec => ({
   number,
   branch: `work/${id}`,
-  review: 'SUCCESS',
-  verdict: approving(number),
   ...extra,
 });
 
@@ -417,6 +479,9 @@ describe('slot assignment', () => {
       signal: 'none',
       sharedState: sharedState({ tickets }),
       armed: new Map(),
+      reviews: new Map(),
+      now: NOW,
+      mergeHold: NO_HOLD,
     });
     expect(assigned(decision.actions)).toEqual(['DEV-2']);
     expect(decision.refusals.join('\n')).toMatch(/DEV-1.*ticket readiness refused: reason/);
@@ -432,6 +497,9 @@ describe('slot assignment', () => {
       signal: 'none',
       sharedState: sharedState({ tickets }),
       armed: new Map(),
+      reviews: new Map(),
+      now: NOW,
+      mergeHold: NO_HOLD,
     });
     expect(decision.actions).toEqual([]);
     expect(decision.refusals.join('\n')).toMatch(/curator queue refused/);
@@ -455,7 +523,7 @@ describe('slot assignment', () => {
   });
 
   it('keeps the ground of a ticket in human wait while its pull request is open', () => {
-    // Under `mergeGate: human` every ready pull request waits for a person, and
+    // Under a human hold every reviewed pull request waits for a person, and
     // its code is not on the base yet: an overlapping ticket seated now would
     // build on a base that lacks it, a conflict no footprint or Git would see.
     const waiting = started('DEV-1', { status: 'In Review', humanWait: true, pullRequest: 11, branch: 'work/DEV-1' });
@@ -471,8 +539,8 @@ describe('slot assignment', () => {
   it('keeps the ground of a pull request handed to a human in the same tick', () => {
     const held = started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' });
     const spec = { tickets: [held, queued('DEV-2', ['packages/dev-1/src']), queued('DEV-3')] };
-    const actions = decide(spec, { clusterSize: 1, mergeGate: 'human', pulls: [pull(reviewed('DEV-1', 11))] });
-    expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'mark-human-wait', reason: 'human-merge-gate' });
+    const actions = decide(spec, { clusterSize: 1, hold: true, pulls: [pull(reviewed('DEV-1', 11))] });
+    expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'mark-human-wait', reason: 'human-merge-hold' });
     expect(assigned(actions)).toEqual(['DEV-3']);
   });
 
@@ -576,6 +644,9 @@ describe('a held ticket and its pull request', () => {
       signal: 'none',
       sharedState: sharedState(spec),
       armed: new Map(),
+      reviews: localReviews(spec, [pull(reviewed('DEV-1', 11))]),
+      now: NOW,
+      mergeHold: NO_HOLD,
     });
     expect(actionFor(decision.actions, 'DEV-1')).toMatchObject({ kind: 'enable-auto-merge' });
   });
@@ -595,6 +666,9 @@ describe('a held ticket and its pull request', () => {
       signal: 'none',
       sharedState: sharedState(spec),
       armed: new Map(),
+      reviews: localReviews(spec, [pull(reviewed('DEV-1', 11))]),
+      now: NOW,
+      mergeHold: NO_HOLD,
     });
     expect(actionFor(decision.actions, 'DEV-1')).toMatchObject({
       kind: 'mark-human-wait',
@@ -628,135 +702,114 @@ describe('a held ticket and its pull request', () => {
     });
   });
 
-  it('waits for the reviewer while no verdict sits on the head', () => {
-    expect(one({}, { review: undefined })).toMatchObject({ kind: 'wait', reason: 'awaiting-review' });
-    expect(one({}, { review: 'PENDING' })).toMatchObject({ kind: 'wait', reason: 'awaiting-review' });
-  });
+  describe('the local verdict on the head', () => {
+    const finding = { location: 'packages/cli/src/a.ts:3', scenario: 'A merged ticket keeps its slot.', correction: 'Free the slot on merge.' };
+    const blockingOn = (headSha: string, round: 1 | 2 = 1) => ({ headSha, round, blocking: [finding], advisory: [] });
+    const review = { kind: 'review', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11), round: 1 };
 
-  it('bounds the review to two rounds', () => {
-    const finding = {
-      location: 'packages/cli/src/a.ts:3',
-      scenario: 'A merged ticket keeps its slot.',
-      correction: 'Free the slot on merge.',
-    };
-    const round = (value: 1 | 2) => ({ headSha: headOf(11), round: value, blocking: [finding], advisory: [] });
-    expect(one({}, { verdict: round(1), review: 'FAILURE', reviewFailures: 1 })).toMatchObject({
-      kind: 'hand-back-to-worker',
-      reason: 'review-blocking',
+    it('delegates a review when no verdict is recorded for the head', () => {
+      expect(one({}, {}, { reviews: { 'DEV-1': [] } })).toEqual(review);
     });
-    expect(one({}, { verdict: round(2), review: 'FAILURE', reviewFailures: 2 })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'review-rounds-exhausted',
-    });
-  });
 
-  it('counts the rounds on GitHub, whatever round the reviewer announces', () => {
-    const finding = { location: 'a.ts:1', scenario: 'Breaks.', correction: 'Fix.' };
-    const announced = (value: 1 | 2) => ({ headSha: headOf(11), round: value, blocking: [finding], advisory: [] });
-    // A reviewer restarted with no memory announces round 1 again: GitHub
-    // already shows two heads it failed, so the bound holds.
-    expect(one({}, { verdict: announced(1), review: 'FAILURE', reviewFailures: 2 })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'review-rounds-exhausted',
+    it('ignores a verdict recorded on another head: a head moved after its verdict is reviewed again', () => {
+      const older = localReview('DEV-1', 11, { headSha: headOf(12) });
+      expect(one({}, {}, { reviews: { 'DEV-1': [older] } })).toEqual(review);
+      // After a blocked head, the next one is reviewed as round 2.
+      const blocked = localReview('DEV-1', 11, { headSha: headOf(12), verdict: blockingOn(headOf(12)) });
+      expect(one({}, {}, { reviews: { 'DEV-1': [blocked] } })).toEqual({ ...review, round: 2 });
     });
-    // And an announced round 2 on the first failure does not end the review early.
-    expect(one({}, { verdict: announced(2), review: 'FAILURE', reviewFailures: 1 })).toMatchObject({
-      kind: 'hand-back-to-worker',
-      reason: 'review-blocking',
-    });
-  });
 
-  // A failed check with no admissible verdict of the job on this head did not
-  // judge it: the job crashed, or its output was refused. It is re-run.
-  it('re-runs a review that failed without a verdict it can read on this head', () => {
-    const unscenarioed = { headSha: headOf(11), round: 1, blocking: [{ location: 'a.ts:1', scenario: '', correction: 'x' }], advisory: [] };
-    const blocking = { headSha: headOf(12), round: 1, blocking: [{ location: 'a.ts:1', scenario: 'Breaks.', correction: 'Fix.' }], advisory: [] };
-    for (const verdict of [undefined, approving(11), unscenarioed, blocking]) {
-      expect(one({}, { review: 'FAILURE', verdict }), JSON.stringify(verdict)).toMatchObject({ kind: 'rerun-review-check' });
-    }
-  });
+    it('arms the auto-merge on the exact head a clean verdict was recorded on', () => {
+      expect(one({}, {})).toEqual({ kind: 'enable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11) });
+    });
 
-  it('sends a verdict that contradicts its check to a human', () => {
-    const held = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    // The parser drops a verdict its check contradicts; the kernel still refuses one.
-    const failedClean = { ...pull({ ...reviewed('DEV-1', 11), review: 'FAILURE' }), verdict: approving(11) };
-    expect(actionFor(decide({ tickets: held }, { pulls: [failedClean] }), 'DEV-1')).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'verdict-contradicts-review',
+    it('hands a blocking verdict back to the worker, two rounds at most', () => {
+      const first = [localReview('DEV-1', 11, { verdict: blockingOn(headOf(11)) })];
+      expect(one({}, {}, { reviews: { 'DEV-1': first } })).toEqual({
+        kind: 'hand-back-to-worker', ticketId: 'DEV-1', reason: 'review-blocking', pullRequest: 11,
+      });
+      const second = [
+        localReview('DEV-1', 11, { headSha: headOf(12), verdict: blockingOn(headOf(12)) }),
+        localReview('DEV-1', 11, { verdict: blockingOn(headOf(11), 2) }),
+      ];
+      expect(one({}, {}, { reviews: { 'DEV-1': second } })).toMatchObject({
+        kind: 'mark-human-wait', reason: 'review-rounds-exhausted',
+      });
     });
-    const blocking = {
-      headSha: headOf(11),
-      round: 1,
-      blocking: [{ location: 'a.ts:1', scenario: 'Breaks.', correction: 'Fix.' }],
-      advisory: [],
-    };
-    expect(one({}, { verdict: blocking, review: 'SUCCESS' })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'verdict-unproven',
-    });
-    const passedBlocking = { ...pull(reviewed('DEV-1', 11)), verdict: blocking };
-    expect(actionFor(decide({ tickets: held }, { pulls: [passedBlocking] }), 'DEV-1')).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'verdict-contradicts-review',
-    });
-  });
 
-  it('arms nothing on a success status without a clean verdict bound to that head', () => {
-    // Anyone with the same `gh` credentials can post the status; the verdict
-    // is what says a reviewer read this head and found nothing blocking.
-    expect(one({}, { verdict: undefined })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'verdict-unproven',
-      detail: expect.stringMatching(/no verdict/),
+    it('counts the rounds from the heads the verdicts blocked, whatever round a verdict announces', () => {
+      const announcedTwo = [localReview('DEV-1', 11, { verdict: blockingOn(headOf(11), 2) })];
+      expect(one({}, {}, { reviews: { 'DEV-1': announcedTwo } })).toMatchObject({ reason: 'review-blocking' });
+      // Another pull request of the ticket is another review: its rounds are its own.
+      const elsewhere = { ...localReview('DEV-1', 13, { headSha: headOf(13), verdict: blockingOn(headOf(13)) }) };
+      const current = localReview('DEV-1', 11, { verdict: blockingOn(headOf(11)) });
+      expect(one({}, {}, { reviews: { 'DEV-1': [elsewhere, current] } })).toMatchObject({ reason: 'review-blocking' });
     });
-    expect(one({}, { verdict: { ...approving(11), headSha: headOf(12) } })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'verdict-unproven',
-      detail: expect.stringMatching(/no verdict the review job posted on this head/),
-    });
-  });
 
-  it('arms the auto-merge on the exact head the reviewer approved', () => {
-    expect(one({}, {})).toEqual({
-      kind: 'enable-auto-merge',
-      ticketId: 'DEV-1',
-      pullRequest: 11,
-      headSha: String(11).padStart(40, 'a'),
+    it('waits while a review of the head runs, and delegates again once it outlived its window', () => {
+      const running = [localReview('DEV-1', 11, { verdict: null, attempts: [{ runId: RUN, startedAt: NOW - 60_000 }] })];
+      expect(one({}, {}, { reviews: { 'DEV-1': running } })).toEqual({
+        kind: 'wait', ticketId: 'DEV-1', reason: 'awaiting-review',
+      });
+      const interrupted = [localReview('DEV-1', 11, {
+        verdict: null, attempts: [{ runId: RUN, startedAt: NOW - 3 * 60 * 60_000 }],
+      })];
+      expect(one({}, {}, { reviews: { 'DEV-1': interrupted } })).toEqual(review);
     });
-  });
 
-  it('re-runs the review job that failed without judging the head', () => {
-    // Without a re-run the required check stays red and the ticket waits forever.
-    const rerun = {
-      kind: 'rerun-review-check',
-      ticketId: 'DEV-1',
-      pullRequest: 11,
-      headSha: headOf(11),
-      run: 35694132291,
-    };
-    expect(one({}, { review: 'FAILURE', verdict: undefined })).toEqual(rerun);
-  });
-
-  it('sends a failed review job that names no run to a human, as an unreadable observation', () => {
-    const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    const { reviewCheckRun, ...nameless } = pull({ ...reviewed('DEV-1', 11), review: 'FAILURE', verdict: undefined });
-    expect(reviewCheckRun).toBeDefined();
-    expect(actionFor(decide({ tickets }, { pulls: [nameless] }), 'DEV-1')).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'github-unreadable',
-      detail: expect.stringMatching(/names no run/),
+    it('delegates again after a reviewer that failed or returned nothing, then asks a human', () => {
+      const failed = (count: number) => [localReview('DEV-1', 11, {
+        verdict: null,
+        attempts: Array.from({ length: count }, (_, index) => ({
+          runId: RUN, startedAt: NOW - 60_000 + index, endedAt: NOW - 1_000, failure: 'The reviewer returned no verdict.',
+        })),
+      })];
+      expect(one({}, {}, { reviews: { 'DEV-1': failed(1) } })).toEqual(review);
+      expect(one({}, {}, { reviews: { 'DEV-1': failed(2) } })).toMatchObject({
+        kind: 'mark-human-wait', reason: 'review-failed', detail: expect.stringContaining('no verdict'),
+      });
     });
-  });
 
-  it('re-runs the review job twice at most on one head, then asks a human', () => {
-    // GitHub numbers the attempts of a run, so a restarted orchestrator cannot
-    // reset the count.
-    expect(one({}, { review: 'FAILURE', verdict: undefined, reviewAttempt: 2 })).toMatchObject({
-      kind: 'rerun-review-check',
+    it('never merges on a record it cannot read, or one that names another head', () => {
+      const cases: Record<string, unknown>[] = [
+        { ...localReview('DEV-1', 11), schemaVersion: 2 },
+        { ...localReview('DEV-1', 11), pullRequest: 12 },
+        { ...localReview('DEV-1', 11), ticketId: 'DEV-2' },
+      ];
+      for (const record of cases) {
+        const reviews = { 'DEV-1': [record] };
+        expect(one({}, {}, { reviews }), JSON.stringify(record)).toMatchObject({
+          kind: 'mark-human-wait', reason: 'verdict-unproven',
+        });
+      }
+      const forged = new Map([[headOf(11), { ...localReview('DEV-1', 11, { headSha: headOf(12) }) }]]);
+      const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
+      const spec = { tickets };
+      const decision = decideLoop({
+        program: program(), tracker: tracker(spec), github: github([pull(reviewed('DEV-1', 11))]),
+        signal: 'none', sharedState: sharedState(spec), armed: new Map(),
+        reviews: new Map([['DEV-1', forged]]), now: NOW, mergeHold: NO_HOLD,
+      });
+      expect(actionFor(decision.actions, 'DEV-1')).toMatchObject({ kind: 'mark-human-wait', reason: 'verdict-unproven' });
     });
-    expect(one({}, { review: 'FAILURE', verdict: undefined, reviewAttempt: 3 })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'review-check-reruns-exhausted',
+
+    it('gives a verdict posted on GitHub no effect, whoever posted it', () => {
+      const posted = { verdict: approving(11), review: 'SUCCESS' as const };
+      expect(one({}, posted, { reviews: { 'DEV-1': [] } })).toEqual(review);
+      const blocked = { verdict: blockingOn(headOf(11)) };
+      expect(one({}, blocked)).toMatchObject({ kind: 'enable-auto-merge' });
+    });
+
+    it('reads the review check GitHub runs as any other check', () => {
+      expect(one({}, { review: 'FAILURE' })).toMatchObject({ kind: 'hand-back-to-worker', reason: 'checks-failed' });
+      expect(one({}, { review: 'PENDING' })).toMatchObject({ kind: 'wait', reason: 'checks-pending' });
+    });
+
+    it('keeps a failing check, a draft and a conflict ahead of any review', () => {
+      const reviews = { 'DEV-1': [] };
+      expect(one({}, { failingCheck: true }, { reviews })).toMatchObject({ reason: 'checks-failed' });
+      expect(one({}, { draft: true }, { reviews })).toMatchObject({ reason: 'resume' });
+      expect(one({}, { mergeState: 'DIRTY' }, { reviews })).toMatchObject({ reason: 'conflict' });
     });
   });
 
@@ -777,7 +830,7 @@ describe('a held ticket and its pull request', () => {
       actions.filter((action) => 'ticketId' in action && action.ticketId === 'DEV-1');
     const disarm = { kind: 'disable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11) };
 
-    it('leaves it alone on the head it was armed on, while the verdict of the review job holds', () => {
+    it('leaves it alone on the head it was armed on, while the local verdict on that head holds', () => {
       expect(forDev1(decide({ tickets }, { pulls: [armedPull()] }))).toEqual([
         { kind: 'wait', ticketId: 'DEV-1', reason: 'merging' },
       ]);
@@ -791,9 +844,11 @@ describe('a held ticket and its pull request', () => {
       ]);
     });
 
-    it('disarms it when the armed head carries no verdict of the review job, then asks a human', () => {
-      for (const spec of [{ verdict: undefined }, { review: 'FAILURE' as const, verdict: undefined }]) {
-        const [first, second] = forDev1(decide({ tickets }, { pulls: [armedPull(spec)] }));
+    it('disarms it when no clean local verdict holds the armed head, then asks a human', () => {
+      const blocking = { ...approving(11), blocking: [{ location: 'a.ts:1', scenario: 'Breaks.', correction: 'Fix.' }] };
+      for (const records of [[], [localReview('DEV-1', 11, { verdict: blocking })]]) {
+        const actions = decide({ tickets }, { pulls: [armedPull()], reviews: { 'DEV-1': records } });
+        const [first, second] = forDev1(actions);
         expect(first).toEqual({ ...disarm, armedSha: headOf(11) });
         expect(second).toMatchObject({ kind: 'mark-human-wait', reason: 'armed-verdict-unproven' });
       }
@@ -853,16 +908,149 @@ describe('a held ticket and its pull request', () => {
     });
   });
 
-  it('takes the verdict and the conflict class from GitHub, never from the tracker', () => {
+  it('takes the conflict class from GitHub and the verdict from the local record, never from the tracker', () => {
     const raw = trackerRaw({ tickets: [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })] });
     const tickets = (raw.tickets as Record<string, unknown>[]).map((ticket) => ({ ...ticket, review: approving(11) }));
     expect(admitLoopTracker({ ...raw, tickets })).toMatchObject({ ok: false, reason: expect.stringMatching(/review/) });
   });
 
-  it('leaves the merge to a human under a human merge gate', () => {
-    expect(one({}, {}, { mergeGate: 'human' })).toMatchObject({
-      kind: 'mark-human-wait',
-      reason: 'human-merge-gate',
+  describe('a person holding the merges', () => {
+    it('hands a reviewed pull request to the person, naming the hold', () => {
+      expect(one({}, {}, { hold: true })).toMatchObject({
+        kind: 'mark-human-wait',
+        reason: 'human-merge-hold',
+        detail: expect.stringMatching(/#11 is reviewed on a{38}11 and ready[\s\S]*holds the merges/),
+      });
+    });
+
+    it('reviews first: the hold hands a pull request over after the review, never before', () => {
+      expect(one({}, {}, { hold: true, reviews: { 'DEV-1': [] } })).toMatchObject({ kind: 'review' });
+      const running = localReview('DEV-1', 11, { verdict: null, attempts: [{ runId: RUN, startedAt: NOW - 1_000 }] });
+      expect(one({}, {}, { hold: true, reviews: { 'DEV-1': [running] } })).toMatchObject({
+        kind: 'wait',
+        reason: 'awaiting-review',
+      });
+    });
+
+    it('returns a blocked head to its worker rather than to the person', () => {
+      const finding = { location: 'packages/cli/src/a.ts:3', scenario: 'A slot leaks.', correction: 'Free it.' };
+      const verdict = { headSha: headOf(11), round: 1, blocking: [finding], advisory: [] };
+      const blocked = localReview('DEV-1', 11, { verdict });
+      expect(one({}, {}, { hold: true, reviews: { 'DEV-1': [blocked] } })).toMatchObject({
+        kind: 'hand-back-to-worker',
+        reason: 'review-blocking',
+      });
+    });
+
+    it('keeps a draft, a conflict, a failing check and a protected path ahead of the hold', () => {
+      const hold = { hold: true };
+      expect(one({}, { draft: true }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
+      expect(one({}, { mergeState: 'DIRTY' }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'conflict' });
+      expect(one({}, { failingCheck: true }, hold)).toMatchObject({
+        kind: 'hand-back-to-worker',
+        reason: 'checks-failed',
+      });
+      expect(one({}, { files: ['.void/program.md'] }, hold)).toMatchObject({
+        kind: 'mark-human-wait',
+        reason: 'protected-path',
+      });
+    });
+
+    it('waits for pending checks before handing the pull request over', () => {
+      expect(one({}, { checks: 'pending' }, { hold: true })).toMatchObject({ kind: 'wait', reason: 'checks-pending' });
+    });
+
+    it('stops a merge already armed before it hands the pull request over', () => {
+      // Armed on the proven head, then the person says they merge themselves:
+      // GitHub would still merge it, so the disarm runs first.
+      const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
+      const pulls = [pull({ ...reviewed('DEV-1', 11), autoMerge: true })];
+      const actions = decide({ tickets }, { pulls, hold: true });
+      expect(actions.filter((action) => 'ticketId' in action && action.ticketId === 'DEV-1')).toEqual([
+        { kind: 'disable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11), armedSha: headOf(11) },
+        {
+          kind: 'mark-human-wait',
+          ticketId: 'DEV-1',
+          reason: 'human-merge-hold',
+          detail: expect.stringMatching(/holds the merges/),
+        },
+      ]);
+    });
+
+    it('merges again on its own once the hold is gone', () => {
+      expect(one({}, {}, { hold: false, mergeQueue: false })).toMatchObject({ kind: 'merge' });
+    });
+  });
+
+  describe('the checks on the head', () => {
+    it('waits while a check is pending', () => {
+      expect(one({}, { checks: 'pending' }, { mergeQueue: false })).toEqual({
+        kind: 'wait',
+        ticketId: 'DEV-1',
+        reason: 'checks-pending',
+      });
+    });
+
+    it('merges a head no check runs on, once its verdict is clean', () => {
+      expect(one({}, { checks: 'none' }, { mergeQueue: false })).toEqual({
+        kind: 'merge',
+        ticketId: 'DEV-1',
+        pullRequest: 11,
+        headSha: headOf(11),
+      });
+    });
+
+    it('still reviews a head no check runs on before anything merges', () => {
+      expect(one({}, { checks: 'none' }, { mergeQueue: false, reviews: { 'DEV-1': [] } })).toMatchObject({
+        kind: 'review',
+      });
+    });
+  });
+
+  describe('the branch that deploys', () => {
+    const onMain = (options: { defaultBranch?: string | null; deployBranch?: string }) => {
+      const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
+      const spec = { tickets };
+      const pulls = [pull({ ...reviewed('DEV-1', 11), base: 'main' })];
+      const observed = github(
+        pulls,
+        false,
+        options.defaultBranch === null ? undefined : (options.defaultBranch ?? 'main'),
+      );
+      const decision = decideLoop({
+        program: loopProgramOf(parseProgramDescriptor(
+          programText(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch })
+            .replace('base: develop', 'base: main'),
+        )),
+        tracker: tracker(spec),
+        github: { ...observed, base: 'main' },
+        signal: 'none',
+        sharedState: sharedState(spec),
+        armed: new Map(),
+        reviews: localReviews(spec, pulls),
+        now: NOW,
+        mergeHold: NO_HOLD,
+      });
+      return actionFor(decision.actions, 'DEV-1');
+    };
+
+    it('reads the repository default branch as the one that deploys when the programme names none', () => {
+      expect(onMain({})).toMatchObject({
+        kind: 'mark-human-wait',
+        reason: 'deploy-branch-target',
+        detail: expect.stringMatching(/default branch/),
+      });
+    });
+
+    it('sends the pull request to a person when the default branch cannot be read', () => {
+      expect(onMain({ defaultBranch: null })).toMatchObject({
+        kind: 'mark-human-wait',
+        reason: 'deploy-branch-target',
+      });
+    });
+
+    it('merges into the default branch when the programme names another branch as the one that ships', () => {
+      expect(onMain({ deployBranch: 'production' })).toMatchObject({ kind: 'merge', pullRequest: 11 });
     });
   });
 
@@ -954,6 +1142,33 @@ describe('protected paths', () => {
     }
   });
 
+  it('holds back the local chain of judgment: the reviewer, its delegation and its programme', () => {
+    // The verdict the loop merges on is produced on this machine: the kernel
+    // delegates the reviewer, the agents command drives it, the programme
+    // grants the merge and `judgments.ts` admits the verdict. The reviewer
+    // runs in a worktree of the head, so the runtime configuration it loads
+    // there (its agent definition, settings, MCP servers) judges too.
+    for (const file of [
+      'packages/void-machine/src/core/delegation.ts',
+      'packages/void-machine/src/adapters/runtime/claude-session.ts',
+      'packages/cli/src/commands/agents.ts',
+      'packages/cli/src/lib/autopilot/program.ts',
+      'packages/cli/src/lib/autopilot/judgments.ts',
+      'packages/cli/src/commands/autopilot-review.ts',
+      'packages/cli/src/commands/autopilot.ts',
+      'packages/cli/src/lib/autopilot/footprint-area.ts',
+      'packages/mission-engine/src/specialist/completion.ts',
+      'packages/core/agents/independent-code-reviewer.md',
+      'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',
+      '.claude/agents/independent-code-reviewer.md',
+      '.claude/settings.local.json',
+      '.mcp.json',
+    ]) {
+      const action = actionFor(decide({ tickets }, { pulls: [touching(['docs/a.md', file])] }), 'DEV-1');
+      expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
+    }
+  });
+
   it('holds back a real pull request that rewrote the programme', () => {
     const captured = (
       JSON.parse(readFileSync(new URL('./__fixtures__/gh/pr-view-files.json', import.meta.url), 'utf8')) as {
@@ -992,6 +1207,16 @@ describe('protected paths', () => {
     const renamed = { '.github/workflows/new.yml': 'docs/a.yml' };
     const pulls = [touching(['.github/workflows/new.yml'], { renamed })];
     expect(actionFor(decide({ tickets }, { pulls }), 'DEV-1')).toMatchObject({ reason: 'protected-path' });
+  });
+
+  it('hands a protected path to a person before any review: the reviewer would run its configuration', () => {
+    // The reviewer runs in a worktree of the head, where Claude loads the
+    // project's agents, settings, hooks and MCP servers: a head that changes
+    // them is never checked out for a review.
+    for (const file of ['.claude/settings.json', '.claude/agents/independent-code-reviewer.md', '.mcp.json']) {
+      const action = actionFor(decide({ tickets }, { pulls: [touching([file])], reviews: { 'DEV-1': [] } }), 'DEV-1');
+      expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
+    }
   });
 
   it('treats a file list GitHub cut short as touching a protected path', () => {
@@ -1033,6 +1258,9 @@ describe('the human-wait label', () => {
     signal: 'none',
     sharedState: sharedState({ tickets }),
     armed: new Map(),
+    reviews: localReviews({ tickets }, pulls),
+    now: NOW,
+    mergeHold: NO_HOLD,
   });
 
   it('names one label for every ticket handed to a person, the declared one first', () => {
@@ -1072,6 +1300,9 @@ describe('shared repository state', () => {
       signal: 'none',
       sharedState: { ...sharedState({ tickets }), current: { ...SHARED_READING, config } },
       armed: new Map(),
+      reviews: localReviews({ tickets }, pulls),
+      now: NOW,
+      mergeHold: NO_HOLD,
     });
     const own = `${SHARED_READING.config}branch.work/DEV-1.remote=origin\n`;
     expect(actionFor(decideLoop(input(own)).actions, 'DEV-1')).toMatchObject({ kind: 'enable-auto-merge' });
@@ -1091,6 +1322,9 @@ describe('shared repository state', () => {
       signal: 'none',
       sharedState: sharedState({ tickets }, { since }),
       armed: new Map(),
+      reviews: localReviews({ tickets }, pulls),
+      now: NOW,
+      mergeHold: NO_HOLD,
     };
     expect(actionFor(decideLoop(input).actions, 'DEV-1')).toMatchObject({ kind: 'enable-auto-merge' });
     const moved = { ...input, sharedState: sharedState({ tickets }, { since: 'branch.develop.merge=refs/heads/work/DEV-2\n' }) };
@@ -1101,11 +1335,10 @@ describe('shared repository state', () => {
   });
 
   it('protects the local refs of every branch the loop may merge into or ship from', () => {
-    expect(protectedBranches(program().autopilot)).toEqual(['develop', 'main']);
-    const auto = loopProgramOf(parseProgramDescriptor(programText({ mergeGate: 'human' }).replace('base: develop', 'base: auto')));
+    expect(protectedBranches(program({ deployBranch: 'main' }).autopilot)).toEqual(['develop', 'main']);
+    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
     expect(protectedBranches(auto.autopilot)).toEqual(['develop', 'main']);
-    const human = program({ mergeGate: 'human' });
-    expect(protectedBranches(human.autopilot)).toEqual(['develop']);
+    expect(protectedBranches(program().autopilot)).toEqual(['develop']);
   });
 
   it('publishes a unit that left the shared state as it found it', () => {
@@ -1122,7 +1355,7 @@ describe('serial merges without a merge queue', () => {
   it('lets one pull request merge at a time, the oldest first', () => {
     const pulls = [pull(reviewed('DEV-1', 11)), pull(reviewed('DEV-2', 12))];
     const actions = decide({ tickets }, { pulls, mergeQueue: false });
-    expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'enable-auto-merge', pullRequest: 11 });
+    expect(actionFor(actions, 'DEV-1')).toEqual({ kind: 'merge', ticketId: 'DEV-1', pullRequest: 11, headSha: headOf(11) });
     expect(actionFor(actions, 'DEV-2')).toMatchObject({ kind: 'wait', reason: 'serial-merge-turn' });
   });
 
@@ -1136,8 +1369,32 @@ describe('serial merges without a merge queue', () => {
   it('updates the pull request whose turn it is when its base moved', () => {
     const pulls = [pull(reviewed('DEV-1', 11, { mergeState: 'BEHIND' })), pull(reviewed('DEV-2', 12))];
     const actions = decide({ tickets }, { pulls, mergeQueue: false });
-    expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'hand-back-to-worker', reason: 'update-on-base' });
+    expect(actionFor(actions, 'DEV-1')).toEqual({
+      kind: 'update-branch',
+      ticketId: 'DEV-1',
+      pullRequest: 11,
+      headSha: headOf(11),
+    });
     expect(actionFor(actions, 'DEV-2')).toMatchObject({ kind: 'wait', reason: 'serial-merge-turn' });
+  });
+
+  it('reviews the head the update produced instead of merging on the verdict of the old one', () => {
+    // Tick 2: GitHub merged the base into the branch, so the head moved and the
+    // only verdict on record is for the head before the update.
+    const updated = pull({ ...reviewed('DEV-1', 11), headSha: headOf(13) });
+    const before = localReview('DEV-1', 11);
+    const actions = decide({ tickets: [tickets[0] as TicketSpec] }, {
+      pulls: [updated],
+      mergeQueue: false,
+      reviews: { 'DEV-1': [before] },
+    });
+    expect(actionFor(actions, 'DEV-1')).toEqual({
+      kind: 'review',
+      ticketId: 'DEV-1',
+      pullRequest: 11,
+      headSha: headOf(13),
+      round: 1,
+    });
   });
 
   it('leaves a base that moved to the merge queue when there is one', () => {
@@ -1225,13 +1482,13 @@ describe('stopping', () => {
   });
 
   it('does not count a pull request that only waits for a human merge in the streak', () => {
-    // Under `mergeGate: human` every ready pull request waits for a person by
+    // Under a human hold every reviewed pull request waits for a person by
     // design; counting those would stop the loop after three good tickets.
-    const gate = (ticketId: string) => ({ ticketId, outcome: 'human-wait' as const, reason: 'human-merge-gate' });
+    const gate = (ticketId: string) => ({ ticketId, outcome: 'human-wait' as const, reason: 'human-merge-hold' });
     const recent = [gate('DEV-7'), gate('DEV-8'), gate('DEV-9')];
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull(reviewed('DEV-1', 11))];
-    const actions = decide({ tickets, recent }, { pulls, mergeGate: 'human' });
+    const actions = decide({ tickets, recent }, { pulls, hold: true });
     expect(actions).not.toContainEqual({ kind: 'drain', reason: 'human-wait-streak' });
     expect(assigned(actions)).toEqual(['DEV-2']);
     // A wait for any other reason still counts, around the merge gates.
@@ -1284,6 +1541,10 @@ describe('no action leaves an armed merge the loop cannot vouch for', () => {
     blocking: [{ location: 'a.ts:1', scenario: 'A pushed head merges unread.', correction: 'Disarm.' }],
     advisory: [],
   };
+  const failedTwice = localReview('DEV-1', 11, { verdict: null, attempts: [
+    { runId: RUN, startedAt: 1, endedAt: 2, failure: 'No verdict.' },
+    { runId: RUN, startedAt: 3, endedAt: 4, failure: 'No verdict.' },
+  ] });
   const semantic = { headSha: headOf(11), class: 'semantic', reason: 'Both sides changed the grant.' };
   const cases: Readonly<Record<string, ArmedCase>> = {
     'proven and current': { keeps: 'wait' },
@@ -1291,8 +1552,9 @@ describe('no action leaves an armed merge the loop cannot vouch for', () => {
     // The job that lets a proven head through ran before the verdict landed.
     'head moved after arming': { options: { armedOn: { 'DEV-1': 'b'.repeat(40) } } },
     'armed outside autopilot arm': { options: { unarmed: ['DEV-1'] } },
-    'verdict unproven': { spec: { verdict: undefined } },
-    'review failed': { spec: { review: 'FAILURE', verdict: blocking } },
+    'no local verdict': { options: { reviews: { 'DEV-1': [] } } },
+    'blocking local verdict': { options: { reviews: { 'DEV-1': [localReview('DEV-1', 11, { verdict: blocking })] } } },
+    'reviewer failed twice': { options: { reviews: { 'DEV-1': [failedTwice] } } },
     'worker active': { live: true },
     'checks failed': { spec: { failingCheck: true } },
     'mechanical conflict': { spec: { mergeState: 'DIRTY' } },
@@ -1301,8 +1563,7 @@ describe('no action leaves an armed merge the loop cannot vouch for', () => {
     'unexpected base': { spec: { base: 'main' } },
     'unexpected branch': { ticket: { branch: 'work/other' } },
     'promotion head': { unbranched: true, spec: { branch: 'develop' } },
-    'review crashed without a verdict': { spec: { review: 'FAILURE', verdict: undefined } },
-    'review re-runs exhausted': { spec: { review: 'FAILURE', verdict: undefined, reviewAttempt: 3 } },
+    'review check failing on GitHub': { spec: { review: 'FAILURE' } },
     'ticket in human wait': { ticket: { humanWait: true } },
     'immediate stop': { options: { signal: 'now' } },
   };
@@ -1371,7 +1632,7 @@ describe('boundaries', () => {
   });
 
   it('refuses a program that did not consent to autopilot', () => {
-    const withheld = programText().replace('  schemaVersion: 1\n  clusterSize', '  enabled: false\n  schemaVersion: 1\n  clusterSize');
+    const withheld = programText().replace('  schemaVersion: 2\n  clusterSize', '  enabled: false\n  schemaVersion: 2\n  clusterSize');
     expect(() => loopProgramOf(parseProgramDescriptor(withheld))).toThrow(/autopilot/);
   });
 

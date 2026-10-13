@@ -22,6 +22,21 @@ describe('harnessBlock', () => {
     },
   );
 
+  it('routes native short agents and durable workers without interception', () => {
+    for (const runtime of ['claude', 'codex'] as const) {
+      const block = harnessBlock(input, runtime);
+      expect(block).toContain('void-orchestrate');
+      expect(block).toContain('native');
+      expect(block).toContain('independent research and substantial implementation');
+      expect(block).toContain('Herdr when the current session is validated there');
+      expect(block).toContain('native delegation without it elsewhere');
+      expect(block).toContain('already delegated writer');
+      expect(block).toContain('independent review');
+      expect(block).not.toContain('refuses the native call');
+      expect(block).not.toContain('agents dispatch');
+    }
+  });
+
   it('uses @imports for the Claude runtime', () => {
     const block = harnessBlock(input, 'claude');
     expect(block).toContain('@.void/installed/PHILOSOPHY.md');

@@ -86,7 +86,7 @@ export interface RuntimeWireContext {
    * on a directory it owns entirely.
    */
   readonly stageRoot: string;
-  /** Where the harness is installed, and what absolute runtime references name. */
+  /** Where the harness is installed, as opposed to where this run stages it. */
   readonly installRoot: string;
   readonly sourceRoot: string;
   readonly enabledPlugins: readonly string[];
@@ -505,11 +505,7 @@ const codexAdapter: RuntimeAdapter = {
   detect: (root) => existsSync(join(root, '.codex')) || existsSync(join(root, 'AGENTS.md')),
   prerequisites: () => [],
   async wire(ctx) {
-    const staged = await wireCodexFloor(
-      ctx.stageRoot,
-      ctx.sourceRoot,
-      ctx.installRoot,
-    );
+    const staged = await wireCodexFloor(ctx.stageRoot, ctx.sourceRoot);
     // For Codex we materialize the skills into .agents/skills (its directory-
     // convention discovery) rather than a marketplace fetch — core skills plus the
     // skills of every activated pack (marketplace name harness-<x> maps to the

@@ -176,9 +176,8 @@ progress:
     done: [<native completed states>]
 humanGates: [<ticket identifiers requiring explicit approval>]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   enabled: <true | false>
-  mergeGate: human
 ---
 ```
 
@@ -188,7 +187,7 @@ lifecycle. `progress.order` is the deterministic tie-break among simultaneously 
 scope, not mutable progress. Never store a current or next unit, copied status, assignee, or
 completion checklist in the program or checkpoint.
 
-The `void-autopilot` block is required, because consent to autonomous execution is never inferred from silence: a program that does not want it declares `enabled: false`. `mergeGate` takes `human`, or `union-reviewed` with a `deployBranch` naming the branch that ships — that pair IS the consent to a machine merge, and there is no flag for it. Add `clusterSize` (1..4), `base`, `verifyCommands` (argv arrays, run with `shell:false`) and `ownership.sequential` / `ownership.reconcileOnly` only when the program enables autopilot.
+The `void-autopilot` block is required, because consent to autonomous execution is never inferred from silence: a program that does not want it declares `enabled: false`. There is no merge gate to declare: the loop merges into the integration branch on a local review verdict, never into the branch that deploys, which `deployBranch` names when it is not the repository's default branch; a person who merges themselves says so with `void-machine autopilot merges --by-human`, local state and not the program. Add `deployBranch`, `clusterSize` (1..4), `base`, `verifyCommands` (argv arrays, run with `shell:false`) and `ownership.sequential` / `ownership.reconcileOnly` only when the program enables autopilot.
 
 Do not replace an unrelated executing programme. Stop and surface the collision. When the same
 programme already has a descriptor, preserve its routing unless the user explicitly changes

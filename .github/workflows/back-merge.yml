@@ -89,6 +89,58 @@ jobs:
           fi
 
           branch="$EXPECTED_HEAD"
+          # Capture the command status: process substitution hides a failed gh
+          # lookup and would mistake an API failure for an absent PR.
+          pr_numbers=$(gh pr list --repo "$EXPECTED_REPOSITORY" \
+            --head "$branch" --base "$EXPECTED_BASE" --state open \
+            --limit 2 --json number --jq '.[].number')
+          existing_prs=()
+          if [ -n "$pr_numbers" ]; then
+            mapfile -t existing_prs <<<"$pr_numbers"
+          fi
+          if [ "${#existing_prs[@]}" -gt 1 ]; then
+            echo "more than one canonical back-merge pull request is open." >&2
+            exit 1
+          fi
+
+          validate_identity() {
+            identity=$(gh pr view "$existing" --repo "$EXPECTED_REPOSITORY" \
+              --json baseRefName,headRefName,headRepository,headRepositoryOwner,isCrossRepository)
+            jq -e \
+              --arg repository "$EXPECTED_REPOSITORY" \
+              --arg owner "$EXPECTED_OWNER" \
+              --arg head "$EXPECTED_HEAD" \
+              --arg base "$EXPECTED_BASE" \
+              '.baseRefName == $base and .headRefName == $head and
+               .headRepository.nameWithOwner == $repository and
+               .headRepositoryOwner.login == $owner and
+               (.isCrossRepository | not)' <<<"$identity" >/dev/null || {
+              echo "the back-merge PR has the wrong repository, head, base or fork state." >&2
+              exit 1
+            }
+          }
+
+          if [ "${#existing_prs[@]}" -eq 1 ]; then
+            existing=${existing_prs[0]}
+            validate_identity
+            # Queue membership is a GraphQL field, not mergeStateStatus or an
+            # auto-merge request. Never rewrite or dequeue a queued head.
+            queue_state=$(gh api graphql \
+              -f query="query(\$owner:String!,\$name:String!,\$number:Int!){
+                repository(owner:\$owner,name:\$name){
+                  pullRequest(number:\$number){isInMergeQueue}
+                }}" \
+              -f owner="$EXPECTED_OWNER" -f name="${EXPECTED_REPOSITORY#*/}" \
+              -F number="$existing")
+            queued=$(jq -er '.data.repository.pullRequest.isInMergeQueue |
+              if type == "boolean" then tostring else error("unknown merge queue state") end' \
+              <<<"$queue_state")
+            if [ "$queued" = true ]; then
+              echo "back-merge PR #$existing is queued; deferred until the next push to main or manual dispatch."
+              exit 0
+            fi
+          fi
+
           git checkout -B "$branch" origin/develop
           # A conflict here is a real event, not a hiccup: it means develop and
           # main both changed a file release-please owns. Fail loudly rather than
@@ -97,15 +149,9 @@ jobs:
             echo "back-merge conflicts; resolve it by hand." >&2
             exit 1
           fi
+          # GitHub still refuses a race that queues the PR after inspection.
+          # Keep that refusal; never retry a push with weaker protection.
           git push --force-with-lease origin "$branch"
-
-          mapfile -t existing_prs < <(gh pr list --repo "$EXPECTED_REPOSITORY" \
-            --head "$branch" --base "$EXPECTED_BASE" --state open \
-            --limit 2 --json number --jq '.[].number')
-          if [ "${#existing_prs[@]}" -gt 1 ]; then
-            echo "more than one canonical back-merge pull request is open." >&2
-            exit 1
-          fi
 
           if [ "${#existing_prs[@]}" -eq 0 ]; then
             # printf rather than a literal multi-line string: a body line at
@@ -128,20 +174,7 @@ jobs:
             echo "back-merge pull request already open; it now carries the newer main."
           fi
 
-          identity=$(gh pr view "$existing" --repo "$EXPECTED_REPOSITORY" \
-            --json baseRefName,headRefName,headRepository,headRepositoryOwner,isCrossRepository)
-          jq -e \
-            --arg repository "$EXPECTED_REPOSITORY" \
-            --arg owner "$EXPECTED_OWNER" \
-            --arg head "$EXPECTED_HEAD" \
-            --arg base "$EXPECTED_BASE" \
-            '.baseRefName == $base and .headRefName == $head and
-             .headRepository.nameWithOwner == $repository and
-             .headRepositoryOwner.login == $owner and
-             (.isCrossRepository | not)' <<<"$identity" >/dev/null || {
-            echo "the back-merge PR has the wrong repository, head, base or fork state." >&2
-            exit 1
-          }
+          validate_identity
 
           # Native auto-merge, which waits for the required checks and respects
           # branch protection. It does not bypass anything: if a check fails the

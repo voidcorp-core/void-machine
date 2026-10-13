@@ -74,4 +74,15 @@ describe('the implement cycle briefs before it writes', () => {
     // one, which is the promise-without-a-mechanism this repository keeps paying for.
     expect(SKILL).toContain('contextPack');
   });
+
+  it('uses native orchestration with the unchanged envelope and real provenance', () => {
+    const convene = passMatching(/invoke-specialists|convene/i)?.body ?? '';
+    expect(convene).toContain('void-orchestrate');
+    for (const field of ['contextPack', 'reviewSubject', 'reviewScope', 'agentName', 'runtime', 'missionId']) {
+      expect(convene).toContain(field);
+    }
+    expect(convene).toContain('actual');
+    expect(convene).toContain('at most four');
+    expect(convene).not.toContain('agents dispatch');
+  });
 });

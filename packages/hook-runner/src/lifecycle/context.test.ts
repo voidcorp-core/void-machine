@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { sessionStartOutput } from './context.js';
 
 describe('sessionStartOutput', () => {
+  it('limits external credential operations to scoped consent and confidential transfer', () => {
+    const context = sessionStartOutput('4.0.0').hookSpecificOutput.additionalContext;
+    expect(context).not.toContain('never edit secrets or keys');
+    expect(context).toContain('explicit bounded user authorization');
+    expect(context).toContain('verified opaque or direct external transfer');
+    expect(context).toContain('never expose secret values to the model');
+    expect(context).toContain('void-security-guidance');
+    expect(context).toContain('local file/content guards and runtime restrictions remain binding');
+  });
+
   it('permits package-manager regeneration while forbidding manual lockfile edits', () => {
     const context = sessionStartOutput('3.7.0').hookSpecificOutput.additionalContext;
     expect(context).toContain('never hand-edit lockfiles');

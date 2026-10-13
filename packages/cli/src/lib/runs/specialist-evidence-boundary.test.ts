@@ -29,7 +29,7 @@ it('accepts exact request/response contracts while refusing caller-supplied sour
   expect(parseSpecialistEvidenceResponse('started', response)).toEqual(response);
   expect(() => parseSpecialistEvidenceResponse('completed', { ...response, verdict: 'pass' }))
     .toThrow('SPECIALIST_EVIDENCE_INVALID');
-  expect(() => parseSpecialistEvidenceRequest({ ...request, contextId: '../escape' }))
+  expect(() => parseSpecialistEvidenceRequest({ ...request, contextId: 'ctx\u007f' }))
     .toThrow('SPECIALIST_EVIDENCE_INVALID');
 });
 it.each(['fresh', 'stale'] as const)('validates a %s canonical proof rather than accepting a discharge assertion', async freshness => {
@@ -60,18 +60,38 @@ it.each(['fresh', 'stale'] as const)('validates a %s canonical proof rather than
     const proofEvent = (await inspectMission(root, ID, { dependencies: {} })).stream.events
       .find(value => value.kind === 'evidence.recorded');
     if (!proofEvent) throw new Error('Expected canonical proof event.');
-    const request = await requestSpecialistEvidence(roots, ID, { operation: 'discharge',
-      completionEventId: original.eventId, contextId: 'context_discharge', obligationIds: [obligation.obligationId] });
-    const response = { requestEventId: request.eventId, contextId: 'context_discharge' };
+    const request = await requestSpecialistEvidence(roots, ID, parseSpecialistEvidenceRequest({
+      operation: 'discharge', completionEventId: original.eventId,
+      contextId: '/root/discharge', obligationIds: [obligation.obligationId],
+    }));
+    const response = parseSpecialistEvidenceResponse('started', {
+      requestEventId: request.eventId, contextId: '/root/discharge',
+    });
     await recordSpecialistEvidence(roots, ID, 'started', response);
     if (freshness === 'stale') await writeFile(join(root, 'changed.ts'), 'export const changed = true;\n');
-    const complete = recordSpecialistEvidence(roots, ID, 'completed', { ...response, items: [{
+    const complete = recordSpecialistEvidence(roots, ID, 'completed',
+      parseSpecialistEvidenceResponse('completed', { ...response, items: [{
       obligationId: obligation.obligationId, proofEventIds: [proofEvent.eventId], reason: 'Observed proof addresses this request.',
-    }] });
+    }] }));
     if (freshness === 'stale') await expect(complete).rejects.toThrow('SPECIALIST_EVIDENCE_INVALID');
     else await expect(complete).resolves.toBeUndefined();
     const after = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
     expect(after.filter(value => value.kind === 'specialist.evidence-discharged'))
       .toHaveLength(freshness === 'fresh' ? 1 : 0);
   } finally { await rm(root, { recursive: true }); }
+});
+
+it.each(['', '   ', 'ctx\0', 'ctx\n', 'ctx\u001f', 'ctx\u007f', 'ctx\u0080',
+  'ctx\u009f', 'x'.repeat(161)])('rejects invalid evidence context %j in every CLI payload', contextId => {
+  for (const operation of ['classification', 'discharge']) {
+    expect(() => parseSpecialistEvidenceRequest({ operation,
+      completionEventId: 'evt_original_review_123', contextId,
+      ...(operation === 'discharge' ? { obligationIds: [HASH] } : {}),
+    })).toThrow('SPECIALIST_EVIDENCE_INVALID');
+  }
+  const response = { requestEventId: 'evt_request_review_123', contextId };
+  expect(() => parseSpecialistEvidenceResponse('started', response)).toThrow('SPECIALIST_EVIDENCE_INVALID');
+  expect(() => parseSpecialistEvidenceResponse('completed', { ...response, items: [{
+    obligationId: HASH, proofEventIds: ['evt_proof_review_123'], reason: 'Observed proof.',
+  }] })).toThrow('SPECIALIST_EVIDENCE_INVALID');
 });

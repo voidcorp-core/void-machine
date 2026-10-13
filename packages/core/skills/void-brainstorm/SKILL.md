@@ -11,6 +11,13 @@ Start by understanding the project context. Then ask questions one at a time to 
 
 ---
 
+## Delegated investigation
+
+For substantial independent research or codebase exploration, invoke `void-orchestrate`
+to delegate bounded questions before synthesizing the options. The coordinator keeps
+the user conversation, source evaluation, design decisions and the approval gate.
+Research results do not authorize implementation.
+
 ## Step 0 — Notice that the exchange has become design
 
 This skill was only ever reached when someone asked for it, which is the half of

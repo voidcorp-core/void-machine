@@ -11,7 +11,6 @@ variants from them by overriding fields; no shape here was written by hand.
 | `pr-view-comments.json` | `gh pr view 378 --json comments` (this repository); tests add it to the views above, as gh prints both when both are requested |
 | `pr-view-files.json` | `gh pr view 392 --json files,changedFiles` (this repository): a real change list, `.void/program.md` among it |
 | `pulls-files-rest.json` | `gh api 'repos/{owner}/{repo}/pulls/395/files?per_page=100&page=1' --jq '[.[] \| del(.patch)]'` (this repository): the REST file list, two renames with their `previous_filename`; `patch` dropped for size |
-| `run-view-attempt.json` | `gh run view 35748516084 -R zed-industries/zed --json attempt,databaseId,headSha,status,conclusion`: a run re-run once |
 | `check-run-queued.json` | one `statusCheckRollup` entry of zed-industries/zed PR 64608: a check run not yet completed |
 | `status-contexts.json` | two `statusCheckRollup` entries of kubernetes/kubernetes PR 142315: commit statuses, the shape `void/independent-review` takes |
 | `pr-view-queued.json` | `gh pr view 192072 -R flutter/flutter --json autoMergeRequest,state`: a pull request sitting in a merge queue, with no auto-merge request |
@@ -21,6 +20,10 @@ variants from them by overriding fields; no shape here was written by hand.
 | `queue-present.json` | the same query on zed-industries/zed `main` |
 | `protection-required-checks-strict.json` | `gh api repos/{owner}/{repo}/branches/develop/protection/required_status_checks` (this repository): classic protection with `strict: true` |
 | `rules-branch-required-checks.json` | `gh api repos/zed-industries/zed/rules/branches/main`: rulesets, one `required_status_checks` rule with `strict_required_status_checks_policy: false` |
+| `repo-view-default-branch.json` | `gh repo view --json defaultBranchRef` (this repository, 2026-09-28) |
+| `repo-view-merge-methods.json` | `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` (this repository, 2026-09-28) |
+| `compare-behind.json` | `gh api 'repos/{owner}/{repo}/compare/develop...5335320e' --jq '{behind_by: .behind_by, ahead_by: .ahead_by, status: .status}'` (this repository, 2026-09-28): a head the base moved past |
+| `compare-ahead.json` | the same query on `develop~3...develop`: a head that contains its base |
 | `timeline-*.json` | `gh api graphql` `pullRequest.timelineItems` (merge queue events and commits) of zed PRs 64552 and 64434 |
 
 No pull request of this repository carries a commit status, hence the public

@@ -1,0 +1,5 @@
+backgrounded · 9a012d67 · vm-probe-copy
+  claude agents             list sessions
+  claude attach 9a012d67    open in this terminal
+  claude logs 9a012d67      show recent output
+  claude stop 9a012d67      stop this session

@@ -1,0 +1,38 @@
+{
+ "id": 8,
+ "result": {
+  "data": [
+   {
+    "id": "01a0ea7c-3cfe-74b1-986b-951e8d308ee1",
+    "items": [
+     {
+      "type": "userMessage",
+      "id": "01a0ea7c-3d2b-7d63-9b4d-3002be507832",
+      "clientId": null,
+      "content": [
+       {
+        "type": "text",
+        "text": "Run the shell command `sleep 60`, then reply with verdict fail.",
+        "text_elements": []
+       }
+      ]
+     },
+     {
+      "type": "reasoning",
+      "id": "rs_047877be1d2c6c32016abb0116be2c87d29cb91bb36c9ea01a",
+      "summary": [],
+      "content": []
+     }
+    ],
+    "itemsView": "full",
+    "status": "interrupted",
+    "error": null,
+    "startedAt": 1790640405,
+    "completedAt": 1790640407,
+    "durationMs": 2014
+   }
+  ],
+  "nextCursor": "{\"requestedThreadId\":\"01a0ea7c-0a16-7d92-a048-70f5effc1707\",\"rolloutOrdinal\":27,\"includeAnchor\":false,\"scope\":{\"kind\":\"turns\"}}",
+  "backwardsCursor": "{\"requestedThreadId\":\"01a0ea7c-0a16-7d92-a048-70f5effc1707\",\"rolloutOrdinal\":27,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+ }
+}

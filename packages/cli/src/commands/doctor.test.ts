@@ -100,30 +100,15 @@ describe('doctor from a linked worktree', () => {
     expect(fromMain.out).not.toMatch(/^\s+installed\s+\//m);
     expect(fromWorktree.code).toBe(fromMain.code);
     expect(report(fromWorktree.out)).toBe(report(fromMain.out));
-  });
 
-  // Every remedy doctor prints is a command that acts on the directory it is
-  // typed in. Followed from the worktree, `void-machine init` would install a
-  // second copy exactly where git was told not to look: the defect this
-  // command exists to prevent. So from a worktree each remedy names the
-  // directory it must run in, and in the main checkout it names nothing.
-  it('names the installation directory in every remedy it prints from a worktree', () => {
-    const main = projectRecording(cliVersion());
-    git(main, 'init', '--quiet');
-    git(main, 'add', '.void/config.json', '.void/install-manifest.json');
-    git(
-      main,
-      '-c', 'user.name=Void Test',
-      '-c', 'user.email=void@example.test',
-      'commit', '--quiet', '-m', 'test: seed',
-    );
-    const linked = join(mkdtempSync(join(tmpdir(), 'doctor-linked-')), 'DEV-000');
-    git(main, 'worktree', 'add', '--quiet', linked, '-b', 'worker/DEV-000');
-
-    const fromMain = runDoctor(main);
-    const fromWorktree = runDoctor(linked);
-
-    // The fixture wires no runtime, so at least one remedy is printed.
+    // Every remedy doctor prints is a command that acts on the directory it is
+    // typed in. Followed from the worktree, `void-machine init` would install a
+    // second copy exactly where git was told not to look: the defect this
+    // command exists to prevent. So from a worktree each remedy names the
+    // directory it must run in, and in the main checkout it names nothing. The
+    // fixture wires no runtime, so at least one remedy is printed. These
+    // assertions share this fixture and these two runs rather than paying for
+    // an identical pair of their own.
     expect(fromMain.out).toMatch(/void-machine init/);
     expect(fromMain.out).not.toMatch(/ in \/\S+: /);
     const remedies = fromWorktree.out.split('\n').filter((line) => /^\s+\S+\s+.*void-machine (init|runtime add)/.test(line));

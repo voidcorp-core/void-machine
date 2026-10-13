@@ -36,6 +36,162 @@ import {
 
 const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
 
+// Each helper runs inside its test's timed body, through real Git, planning and
+// journal transitions. None injects a successful controller state.
+async function dispatchFixture(implementationPath = 'runtime.ts', boundedReview = false) {
+  const root = await mkdtemp(join(tmpdir(), 'void-mission-dispatch-'));
+  const missionId = 'mis_0123456789abcdef0123456789abcdef';
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    packageManager: 'pnpm@10.34.5',
+    devDependencies: { typescript: '7.0.2', next: '99.0.0' },
+  }));
+  const ticketBody = '# Runtime API review\n\nVerify the tested API runtime and observability change.\nPreparation: `docs/preparation.md`.\n';
+  await writeFile(join(root, 'DEV-500.md'), ticketBody);
+  await mkdir(join(root, 'docs'));
+  await writeFile(join(root, 'docs/preparation.md'), 'Initial preparation: review freshness needs explanation.\n');
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
+  execFileSync('git', ['add', 'package.json', 'DEV-500.md', 'docs/preparation.md'], { cwd: root });
+  execFileSync('git', [
+    '-c', 'user.name=Void Test',
+    '-c', 'user.email=void@example.test',
+    'commit', '--quiet', '-m', 'test: seed mission fixture',
+  ], { cwd: root });
+  if (implementationPath !== '') {
+    await writeFile(join(root, implementationPath), implementationPath === 'runtime.ts'
+      ? 'export const ready = true;\n' : 'Ready.\n');
+    execFileSync('git', ['add', implementationPath], { cwd: root });
+  }
+  const plan = await planMission(root, 'DEV-500.md', '2026-08-21T12:00:00.000Z');
+  const baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root, encoding: 'utf8',
+  }).trim();
+  const controllerPlan: MissionSpecialistPlan = {
+    planHash: plan.planHash,
+    context: plan.context,
+    specialists: plan.specialists.map((specialist) => ({
+      specialistId: specialist.specialistId,
+      contractVersion: specialist.contractVersion,
+      inputHash: specialist.proof.inputHash,
+      state: specialist.state,
+      stages: specialist.stages,
+    })),
+  };
+  const ticketBinding = {
+    path: 'DEV-500.md',
+    contentHash: `sha256:${createHash('sha256').update(ticketBody).digest('hex')}`,
+  };
+  await createMission(root, {
+    missionId,
+    title: 'Runtime API review',
+    mode: 'team',
+    teamController: {
+      planHash: plan.planHash,
+      routingHash: missionControllerRoutingHash(controllerPlan, ticketBinding, baseCommit),
+      leadWriterId: 'writer:primary',
+      runtime: 'codex',
+      ...(boundedReview ? { reviewPolicy: 'bounded-corrections-v1' as const } : {}),
+    },
+  });
+  await writeMissionControllerPlan(root, missionId, controllerPlan, ticketBinding, baseCommit);
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    packageManager: 'pnpm@10.34.5',
+    devDependencies: { typescript: '7.0.2', next: '99.0.0' },
+    scripts: { lint: 'tsc --noEmit' },
+  }));
+  const input = {
+    kind: 'dispatch' as const,
+    missionId,
+    json: true,
+  };
+
+  const capability = {
+    status: 'degraded' as const,
+    limitations: ['fixture cannot enforce native isolation'],
+  };
+  return { root, missionId, ticketBody, plan, input, capability };
+}
+
+type DispatchFixture = Awaited<ReturnType<typeof dispatchFixture>>;
+type SpecialistDispatch = Awaited<ReturnType<typeof dispatchMissionSpecialists>>;
+
+async function completeDispatchedSpecialists(
+  fixture: DispatchFixture,
+  dispatch: SpecialistDispatch,
+  evidenceRequest = '',
+) {
+  for (const [index, envelope] of dispatch.envelopes.entries()) {
+    const contextId = `ctx_dispatch_${envelope.stage}_${index}_${envelope.agentName}`;
+    await recordSpecialistLifecycle(fixture.root, fixture.missionId, {
+      status: 'started', envelope, contextId,
+    });
+    await recordSpecialistLifecycle(fixture.root, fixture.missionId, {
+      status: 'completed', envelope, contextId,
+      completion: {
+        schemaVersion: 1, specialistId: envelope.specialistId,
+        contractVersion: envelope.contractVersion,
+        completionId: `cmp_dispatch_${envelope.stage}_${index}_${envelope.agentName}`,
+        verdict: 'pass', findings: [],
+        evidenceRequests: index === 0 && evidenceRequest !== '' ? [evidenceRequest] : [],
+        limitations: [],
+      },
+    });
+  }
+}
+
+async function admittedWriterFixture() {
+  const fixture = await dispatchFixture();
+  const { root, input, capability } = fixture;
+  const preparation = await dispatchMissionSpecialists(
+    resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
+  );
+  await completeDispatchedSpecialists(fixture, preparation);
+  const admission = await dispatchMissionSpecialists(
+    resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
+  );
+  return { ...fixture, admission };
+}
+
+async function postImplementationFixture() {
+  const fixture = await admittedWriterFixture();
+  const { root, missionId, input, capability } = fixture;
+  await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    packageManager: 'pnpm@10.34.5',
+    devDependencies: { typescript: '7.0.2', next: '99.0.0' },
+    scripts: { test: 'vitest run' },
+  }));
+  execFileSync('git', ['add', 'package.json'], { cwd: root });
+  execFileSync('git', [
+    '-c', 'user.name=Void Test',
+    '-c', 'user.email=void@example.test',
+    'commit', '--quiet', '-m', 'test: commit implementation fixture',
+  ], { cwd: root });
+  await writeFile(join(root, 'docs/preparation.md'),
+    'Preparation: review identity follows bytes across staging and commits.\n');
+  const post = await dispatchMissionSpecialists(
+    resolveProjectRoots(root),
+    input,
+    '2026-08-21T12:01:00.000Z',
+    capability,
+  );
+  return { ...fixture, post };
+}
+
+async function committedReviewFixture() {
+  const fixture = await postImplementationFixture();
+  const { root, input, capability, post } = fixture;
+  execFileSync('git', ['add', 'package.json', 'docs/preparation.md'], { cwd: root });
+  await completeDispatchedSpecialists(fixture, post);
+  execFileSync('git', [
+    '-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
+    'commit', '--quiet', '-m', 'test: commit reviewed content',
+  ], { cwd: root });
+  const committed = await dispatchMissionSpecialists(
+    resolveProjectRoots(root), input, '2026-08-21T12:01:30.000Z', capability,
+  );
+  return { ...fixture, committed };
+}
+
 describe('parseMissionArgs', () => {
   it('persists controller ticket paths with portable separators', () => {
     expect(normalizeControllerTicketPath('tickets\\DEV-500.md')).toBe('tickets/DEV-500.md');
@@ -308,82 +464,54 @@ describe('parseMissionArgs', () => {
     expect(first.specialists.every((item) => item.proof.inputHash === first.inputHash)).toBe(true);
   });
 
-  it.each(['ordinary', 'current evidence'] as const)('dispatches a TypeScript 7 mission: %s', async (scenario) => {
-    const root = await mkdtemp(join(tmpdir(), 'void-mission-dispatch-'));
-    const missionId = 'mis_0123456789abcdef0123456789abcdef';
-    await writeFile(join(root, 'package.json'), JSON.stringify({
-      packageManager: 'pnpm@10.34.5',
-      devDependencies: { typescript: '7.0.2', next: '99.0.0' },
-    }));
-    const ticketBody = '# Runtime API review\n\nVerify the tested API runtime and observability change.\nPreparation: `docs/preparation.md`.\n';
-    await writeFile(join(root, 'DEV-500.md'), ticketBody);
-    await mkdir(join(root, 'docs'));
-    await writeFile(join(root, 'docs/preparation.md'), 'Initial preparation: review freshness needs explanation.\n');
-    execFileSync('git', ['init', '--quiet'], { cwd: root });
-    execFileSync('git', ['add', 'package.json', 'DEV-500.md', 'docs/preparation.md'], { cwd: root });
-    execFileSync('git', [
-      '-c', 'user.name=Void Test',
-      '-c', 'user.email=void@example.test',
-      'commit', '--quiet', '-m', 'test: seed mission fixture',
-    ], { cwd: root });
-    await writeFile(join(root, 'runtime.ts'), 'export const ready = true;\n');
-    execFileSync('git', ['add', 'runtime.ts'], { cwd: root });
-    const plan = await planMission(root, 'DEV-500.md', '2026-08-21T12:00:00.000Z');
+  it.each(['proof-1.txt', 'docs/guide.md', 'settings.yaml', ''])(
+    'requires independent review for a bounded implementation planned with "%s"', async path => {
+      const fixture = await dispatchFixture(path, true);
+      const { root, missionId, plan, input, capability } = fixture;
+      const reviewer = plan.specialists.find(item => item.specialistId === 'core:independent-code-reviewer');
+      expect(reviewer).toMatchObject({ state: 'applicable', stages: ['post-implementation'] });
+      expect(reviewer?.proof.inputs).toContain('profile-base');
+      expect(reviewer?.proof.inputs).not.toContain('code-change');
+      const preparation = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
+      );
+      await completeDispatchedSpecialists(fixture, preparation);
+      const admission = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:01.000Z', capability,
+      );
+      expect(admission.action.kind).toBe('run-lead-writer');
+      if (path === '') await writeFile(join(root, 'proof-1.txt'), 'Ready.\n');
+      execFileSync('git', ['add', 'package.json', path || 'proof-1.txt'], { cwd: root });
+      execFileSync('git', ['-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
+        'commit', '--quiet', '-m', 'test: commit text implementation'], { cwd: root });
+      await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
+      const post = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:02.000Z', capability,
+      );
+      expect(post.action).toMatchObject({ kind: 'invoke-specialists',
+        specialistIds: ['core:independent-code-reviewer'], stage: 'post-implementation',
+        reviewScope: { kind: 'general' } });
+      expect(post.envelopes).toHaveLength(1);
+      expect(post.envelopes[0]?.reviewSubject?.reviewedCommit).toBe(
+        execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+      );
+      const inspected = await inspectMission(root, missionId, { dependencies: {} });
+      expect(inspected.stream.events.some(item => item.kind === 'mission.closed')).toBe(false);
+    },
+  );
+
+  it('refreshes the plan and dispatches every preparation lens idempotently', async () => {
+    const { root, missionId, plan, input, capability } = await dispatchFixture();
     expect(plan.profiles).toContainEqual(expect.objectContaining({
       profileId: 'core:typescript', state: 'applicable', sourceReviewRequired: false,
     }));
     expect(plan.context).toEqual({ status: 'complete', issues: [] });
-    const baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: root, encoding: 'utf8',
-    }).trim();
-    const controllerPlan: MissionSpecialistPlan = {
-      planHash: plan.planHash,
-      context: plan.context,
-      specialists: plan.specialists.map((specialist) => ({
-        specialistId: specialist.specialistId,
-        contractVersion: specialist.contractVersion,
-        inputHash: specialist.proof.inputHash,
-        state: specialist.state,
-        stages: specialist.stages,
-      })),
-    };
-    const ticketBinding = {
-      path: 'DEV-500.md',
-      contentHash: `sha256:${createHash('sha256').update(ticketBody).digest('hex')}`,
-    };
-    await createMission(root, {
-      missionId,
-      title: 'Runtime API review',
-      mode: 'team',
-      teamController: {
-        planHash: plan.planHash,
-        routingHash: missionControllerRoutingHash(controllerPlan, ticketBinding, baseCommit),
-        leadWriterId: 'writer:primary',
-        runtime: 'codex',
-      },
-    });
-    await writeMissionControllerPlan(root, missionId, controllerPlan, ticketBinding, baseCommit);
-    await writeFile(join(root, 'package.json'), JSON.stringify({
-      packageManager: 'pnpm@10.34.5',
-      devDependencies: { typescript: '7.0.2', next: '99.0.0' },
-      scripts: { lint: 'tsc --noEmit' },
-    }));
     const changedPlan = await planMission(
       root,
       'DEV-500.md',
       '2026-08-21T12:00:00.000Z',
     );
     expect(changedPlan.inputHash).not.toBe(plan.inputHash);
-    const input = {
-      kind: 'dispatch' as const,
-      missionId,
-      json: true,
-    };
-
-    const capability = {
-      status: 'degraded' as const,
-      limitations: ['fixture cannot enforce native isolation'],
-    };
     const first = await dispatchMissionSpecialists(resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability);
     const second = await dispatchMissionSpecialists(resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability);
     const inspected = await inspectMission(root, missionId, { dependencies: {} });
@@ -437,44 +565,33 @@ describe('parseMissionArgs', () => {
       missionId,
       json: true,
     })).rejects.toThrow('no controller writer request is pending');
+  });
 
-    for (const [index, envelope] of first.envelopes.entries()) {
-      const contextId = `ctx_dispatch_1_${index}_${envelope.agentName}`;
-      await recordSpecialistLifecycle(root, missionId, {
-        status: 'started',
-        envelope,
-        contextId,
-      });
-      await recordSpecialistLifecycle(root, missionId, {
-        status: 'completed',
-        envelope,
-        contextId,
-        completion: {
-          schemaVersion: 1,
-          specialistId: envelope.specialistId,
-          contractVersion: envelope.contractVersion,
-          completionId: `cmp_dispatch_1_${index}_${envelope.agentName}`,
-          verdict: 'pass',
-          findings: [],
-          evidenceRequests: scenario === 'current evidence' && index === 0
-            ? ['Explain how corrected preparation invalidates old reviews.'] : [],
-          limitations: [],
-        },
-      });
-    }
-    const correction = await dispatchMissionSpecialists(
-      resolveProjectRoots(root),
-      input,
-      '2026-08-21T12:00:00.000Z',
-      capability,
+  it('blocks writer and closure on current evidence requests without journal mutation', async () => {
+    const fixture = await dispatchFixture();
+    const { root, missionId, input, capability } = fixture;
+    const first = await dispatchMissionSpecialists(
+      resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
     );
-    if (scenario === 'current evidence') {
-      expect(correction.action).toMatchObject({ kind: 'stop' });
-      expect(correction.action.kind === 'stop' ? correction.action.reasons.length : 0).toBeGreaterThan(0);
-      await expect(recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true }))
-        .rejects.toThrow('MISSION_CLOSED');
-      return;
-    }
+    await completeDispatchedSpecialists(fixture, first,
+      'Explain how corrected preparation invalidates old reviews.');
+    const correction = await dispatchMissionSpecialists(
+      resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
+    );
+    expect(correction.action).toMatchObject({ kind: 'await-evidence' });
+    expect(correction.action.kind === 'await-evidence' ? correction.action.reasons.length : 0)
+      .toBeGreaterThan(0);
+    const waiting = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+    expect(waiting.some(event => event.kind === 'mission.closed')).toBe(false);
+    expect(waiting.some(event => event.kind === 'lead-writer.requested')).toBe(false);
+    await expect(recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true }))
+      .rejects.toThrow('MISSION_WRITER_EVENT_INVALID: no controller writer request is pending');
+    expect((await inspectMission(root, missionId, { dependencies: {} })).stream.events)
+      .toEqual(waiting);
+  });
+
+  it('admits the ordinary writer and records its completion once', async () => {
+    const { root, missionId, ticketBody, plan, admission: correction } = await admittedWriterFixture();
     expect(correction).toMatchObject({ planHash: plan.planHash,
       action: { kind: 'run-lead-writer', writerId: 'writer:primary' }, nextWriterRound: 1 });
     expect(await readFile(join(root, 'DEV-500.md'), 'utf8')).toBe(ticketBody);
@@ -488,25 +605,10 @@ describe('parseMissionArgs', () => {
       dependencies: {},
     })).stream.events.filter((event) => event.kind === 'lead-writer.completed');
     expect(writerCompletions).toHaveLength(1);
-    await writeFile(join(root, 'package.json'), JSON.stringify({
-      packageManager: 'pnpm@10.34.5',
-      devDependencies: { typescript: '7.0.2', next: '99.0.0' },
-      scripts: { test: 'vitest run' },
-    }));
-    execFileSync('git', ['add', 'package.json'], { cwd: root });
-    execFileSync('git', [
-      '-c', 'user.name=Void Test',
-      '-c', 'user.email=void@example.test',
-      'commit', '--quiet', '-m', 'test: commit implementation fixture',
-    ], { cwd: root });
-    await writeFile(join(root, 'docs/preparation.md'),
-      'Preparation: review identity follows bytes across staging and commits.\n');
-    const post = await dispatchMissionSpecialists(
-      resolveProjectRoots(root),
-      input,
-      '2026-08-21T12:01:00.000Z',
-      capability,
-    );
+  });
+
+  it('binds post-implementation review to changed bytes while preserving staging identity', async () => {
+    const { root, plan, input, capability, post } = await postImplementationFixture();
     expect(post.planHash).toBe(plan.planHash);
     expect(post.action).toMatchObject({
       kind: 'invoke-specialists',
@@ -544,26 +646,10 @@ describe('parseMissionArgs', () => {
       resolveProjectRoots(root), input, '2026-08-21T12:01:20.000Z', capability,
     );
     expect.soft(subject(staged)).toEqual(subject(post));
-    for (const envelope of post.envelopes) {
-      const contextId = `ctx_post_${envelope.agentName}`;
-      await recordSpecialistLifecycle(root, missionId, { status: 'started', envelope, contextId });
-      await recordSpecialistLifecycle(root, missionId, {
-        status: 'completed', envelope, contextId,
-        completion: {
-          schemaVersion: 1, specialistId: envelope.specialistId,
-          contractVersion: envelope.contractVersion,
-          completionId: `cmp_post_${envelope.agentName}`, verdict: 'pass',
-          findings: [], evidenceRequests: [], limitations: [],
-        },
-      });
-    }
-    execFileSync('git', [
-      '-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
-      'commit', '--quiet', '-m', 'test: commit reviewed content',
-    ], { cwd: root });
-    const committed = await dispatchMissionSpecialists(
-      resolveProjectRoots(root), input, '2026-08-21T12:01:30.000Z', capability,
-    );
+  });
+
+  it('reuses committed review and requests correction after a later content change', async () => {
+    const { root, input, capability, committed } = await committedReviewFixture();
     expect(committed.action.kind).toBe('run-verification');
     expect(committed.envelopes).toEqual([]);
     await writeFile(join(root, 'package.json'), JSON.stringify({
@@ -575,7 +661,10 @@ describe('parseMissionArgs', () => {
     );
     expect(stale.action).toMatchObject({ kind: 'run-correction' });
     expect(stale.envelopes).toEqual([]);
+  });
 
+  it('refuses untracked, binary and changed-ticket review inputs without new requests', async () => {
+    const { root, missionId, input, capability } = await postImplementationFixture();
     // A file absent from Git's diff cannot silently receive a review proof.
     await writeFile(join(root, 'new-module.ts'), 'export const answer = 42;\n');
     const requestsBeforeUntracked = (await inspectMission(root, missionId, {
@@ -587,17 +676,6 @@ describe('parseMissionArgs', () => {
     expect((await inspectMission(root, missionId, { dependencies: {} })).stream.events
       .filter((event) => event.kind === 'specialist.requested')).toHaveLength(requestsBeforeUntracked);
     execFileSync('git', ['add', 'new-module.ts'], { cwd: root });
-
-    await writeFile(join(root, '.void', 'program.md'), 'authorized base: develop\n');
-    execFileSync('git', ['add', '.void/program.md'], { cwd: root });
-    await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
-    const policy = await dispatchMissionSpecialists(
-      resolveProjectRoots(root), input, '2026-08-21T12:01:45.000Z', capability,
-    );
-    expect(policy.action).toMatchObject({ kind: 'invoke-specialists', stage: 'post-implementation', reviewRound: 2 });
-    expect(policy.envelopes[0]?.inputHash).not.toBe(post.envelopes[0]?.inputHash);
-    expect.soft(policy.envelopes[0]?.contextPack.touchedPaths).toContain('.void/program.md');
-    expect.soft(policy.envelopes[0]?.contextPack.diff).toContain('authorized base: develop');
 
     await writeFile(join(root, 'new-module.ts'), Buffer.from([0, 1, 2, 3]));
     execFileSync('git', ['add', 'new-module.ts'], { cwd: root });
@@ -623,7 +701,33 @@ describe('parseMissionArgs', () => {
     const requestsAfterTicketChange = (await inspectMission(root, missionId, {
       dependencies: {},
     })).stream.events.filter((event) => event.kind === 'specialist.requested').length;
-    expect(requestsAfterTicketChange).toBe(requestsBeforeTicketChange);
+    expect(requestsAfterTicketChange).toBe(requestsBeforeTicketChange);  });
+
+  it('includes programme bytes in the second-round review subject', async () => {
+    const { root, missionId, input, capability, post } = await committedReviewFixture();
+    await writeFile(join(root, 'package.json'), JSON.stringify({
+      packageManager: 'pnpm@10.34.5',
+      devDependencies: { typescript: '7.0.2', next: '99.0.0' }, scripts: { test: 'vitest run --changed' },
+    }));
+    const stale = await dispatchMissionSpecialists(
+      resolveProjectRoots(root), input, '2026-08-21T12:01:35.000Z', capability,
+    );
+    expect(stale.action).toMatchObject({ kind: 'run-correction' });
+    expect(stale.envelopes).toEqual([]);
+
+    await writeFile(join(root, 'new-module.ts'), 'export const answer = 42;\n');
+    execFileSync('git', ['add', 'new-module.ts'], { cwd: root });
+    await writeFile(join(root, '.void', 'program.md'), 'authorized base: develop\n');
+    execFileSync('git', ['add', '.void/program.md'], { cwd: root });
+    await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
+    const policy = await dispatchMissionSpecialists(
+      resolveProjectRoots(root), input, '2026-08-21T12:01:45.000Z', capability,
+    );
+    expect(policy.action).toMatchObject({ kind: 'invoke-specialists', stage: 'post-implementation', reviewRound: 2 });
+    expect(policy.envelopes[0]?.inputHash).not.toBe(post.envelopes[0]?.inputHash);
+    expect.soft(policy.envelopes[0]?.contextPack.touchedPaths).toContain('.void/program.md');
+    expect.soft(policy.envelopes[0]?.contextPack.diff).toContain('authorized base: develop');
+
   });
 
   // Measured on 2026-09-02, run-2026-09-02-chain-b: the DEV-704 worker ran

@@ -120,3 +120,13 @@ Autopilot owns curation, slots, isolation, collisions, the merge path and stoppi
 owns everything that happens to one ticket, including the independent review the loop's reviewer
 performs. The overlap is deliberately zero: no pass of the quality cycle is restated here, so the
 two cannot drift into two standards.
+
+## One launch path (DEV-929, 2026-09-30)
+
+"Spawning" used to choose: a surface beside the orchestrator when the project had a cockpit
+presentation, a native subagent otherwise. A launch that depends on what the agent believes about
+its terminal is a launch nobody can predict, and the two paths gave a worker different
+permissions. Every worker is now one `void-machine agents dispatch --role work` run in its
+worktree, a hand-back is `agents send` to that same run, and the view is the kernel's business.
+Rejected: keeping the native subagent as a fallback when the dispatch is refused, which would
+hide the refusal the kernel exists to state.

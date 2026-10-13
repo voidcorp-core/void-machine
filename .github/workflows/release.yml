@@ -177,6 +177,9 @@ jobs:
     needs: [release-please, validate-release]
     if: ${{ always() && needs.validate-release.result == 'success' }}
     runs-on: ubuntu-latest
+    # At most 24m50s of registry HTTP waits and pauses, plus 5m10s for setup,
+    # artifact verification and publishing. This is a hard job ceiling, not an npm SLA.
+    timeout-minutes: 30
     outputs:
       publication_mode: ${{ steps.registry.outputs.state }}
     concurrency:
@@ -192,7 +195,10 @@ jobs:
       EXPECTED_PACKAGE: voidmachine
       MINIMUM_NPM_VERSION: 11.5.1
       MAX_CLASSIFICATION_ATTEMPTS: 3
-      MAX_PUBLICATION_ATTEMPTS: 12
+      # DEV-916: 4.0.0 took ~6 minutes to propagate. Twice that observation gives
+      # 72 ten-second pauses plus an immediate first observation (73 total).
+      # Budget and recovery: docs/plans/dev-916-registry-convergence.md.
+      MAX_PUBLICATION_ATTEMPTS: 73
       ARTIFACT_ID: ${{ needs.validate-release.outputs.artifact_id }}
       ARTIFACT_NAME: ${{ needs.validate-release.outputs.artifact_name }}
       ARTIFACT_DIGEST: ${{ needs.validate-release.outputs.artifact_digest }}
@@ -331,7 +337,8 @@ jobs:
 
           query_registry() {
             set +e
-            npm view "$EXPECTED_PACKAGE@$RELEASE_VERSION" dist --json > "$REGISTRY_RESPONSE" 2> "$REGISTRY_ERROR"
+            npm view "$EXPECTED_PACKAGE@$RELEASE_VERSION" dist --json \
+              --fetch-retries=0 --fetch-timeout=10000 > "$REGISTRY_RESPONSE" 2> "$REGISTRY_ERROR"
             npm_view_status=$?
             set -e
             NPM_VIEW_STATUS="$npm_view_status" node --input-type=module <<'NODE'
@@ -369,6 +376,8 @@ jobs:
             if (code === 'E404') process.stdout.write('absent\n');
             else if (
               ['EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH', 'ETIMEDOUT'].includes(code) ||
+              (code === 'FETCH_ERROR' && typeof error.summary === 'string' &&
+                error.summary.startsWith('network timeout at: ')) ||
               /^E5[0-9]{2}$/.test(code)
             ) process.stdout.write('retry\n');
             else fail(`fatal npm error ${String(code ?? 'unknown')}`);
@@ -416,7 +425,8 @@ jobs:
             if [[ "$attempt" -lt "$MAX_PUBLICATION_ATTEMPTS" ]]; then sleep 10; fi
           done
           if [[ "$state" != existing ]]; then
-            echo "Registry integrity and provenance did not converge" >&2
+            echo "Registry integrity and provenance did not converge for $EXPECTED_PACKAGE@$RELEASE_VERSION after $MAX_PUBLICATION_ATTEMPTS observations; last state: $state." >&2
+            echo "Rerun the failed publish job once npm has propagated the version and its provenance; an existing matching publication is verified without republishing." >&2
             exit 1
           fi
           echo "state=$publication_mode" >> "$GITHUB_OUTPUT"

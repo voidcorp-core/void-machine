@@ -94,11 +94,11 @@
     {
       "description": "Performs an independent diff review for correctness, maintainability, boundary compliance, and evidence-backed release blockers.",
       "id": "agent:independent-code-reviewer",
-      "lines": 61,
+      "lines": 62,
       "name": "independent-code-reviewer",
       "pack": null,
       "source": "packages/core/agents/independent-code-reviewer.md",
-      "staticTokens": 1361,
+      "staticTokens": 1365,
       "type": "agent"
     },
     {
@@ -1686,7 +1686,7 @@
       "type": "skill"
     },
     {
-      "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a bounded review gates the GitHub merge queue until drained or stopped.",
+      "description": "Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a local review verdict gates each merge until drained or stopped.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 358,
+      "lines": 394,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 6056,
+      "staticTokens": 6967,
       "type": "skill"
     },
     {
@@ -1733,7 +1733,7 @@
         }
       ],
       "id": "skill:void-brainstorm",
-      "lines": 271,
+      "lines": 278,
       "name": "void-brainstorm",
       "owner": "folpe",
       "pack": null,
@@ -1742,7 +1742,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-brainstorm/SKILL.md",
-      "staticTokens": 4143,
+      "staticTokens": 4226,
       "type": "skill"
     },
     {
@@ -1885,7 +1885,7 @@
         }
       ],
       "id": "skill:void-context",
-      "lines": 167,
+      "lines": 166,
       "name": "void-context",
       "owner": "folpe",
       "pack": null,
@@ -1894,7 +1894,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-context/SKILL.md",
-      "staticTokens": 2874,
+      "staticTokens": 2865,
       "type": "skill"
     },
     {
@@ -2195,7 +2195,7 @@
         }
       ],
       "id": "skill:void-implement",
-      "lines": 183,
+      "lines": 192,
       "name": "void-implement",
       "owner": "folpe",
       "pack": null,
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 5527,
+      "staticTokens": 5664,
       "type": "skill"
     },
     {
@@ -2398,6 +2398,36 @@
       "type": "skill"
     },
     {
+      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.",
+      "enforcement": {
+        "floor": "ci",
+        "inline": {
+          "claude": "pretooluse",
+          "codex": "pretooluse",
+          "hermes": "ci-only"
+        }
+      },
+      "evalTargets": [
+        {
+          "provider": "anthropic",
+          "runtime": "claude",
+          "tier": "opus"
+        }
+      ],
+      "id": "skill:void-orchestrate",
+      "lines": 311,
+      "name": "void-orchestrate",
+      "owner": "folpe",
+      "pack": null,
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "source": "packages/core/skills/void-orchestrate/SKILL.md",
+      "staticTokens": 4402,
+      "type": "skill"
+    },
+    {
       "description": "Turn an approved spec into vertical slices with dependencies, TDD mode, verification gates, checkpoints, and a tracker handoff. Use after brainstorm approves a spec.",
       "enforcement": {
         "floor": "ci",
@@ -2415,7 +2445,7 @@
         }
       ],
       "id": "skill:void-plan",
-      "lines": 239,
+      "lines": 246,
       "name": "void-plan",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2454,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-plan/SKILL.md",
-      "staticTokens": 2623,
+      "staticTokens": 2706,
       "type": "skill"
     },
     {
@@ -2584,7 +2614,7 @@
     },
     {
       "activation": "always",
-      "description": "Default-secure at trust boundaries. Zod at every input, secrets via env, SQL parameterized, Better-Auth, LLM I/O untrusted. Escalate to security-audit for deep audits. Use on trust-boundary code.",
+      "description": "Secure defaults at trust boundaries and scoped credential operations. Zod input, app secrets via env, confidential external provisioning, SQL parameterized, Better-Auth, untrusted LLM I/O. Deep audits use void-security-audit.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -2601,7 +2631,7 @@
         }
       ],
       "id": "skill:void-security-guidance",
-      "lines": 255,
+      "lines": 294,
       "name": "void-security-guidance",
       "owner": "folpe",
       "pack": null,
@@ -2610,7 +2640,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-security-guidance/SKILL.md",
-      "staticTokens": 2479,
+      "staticTokens": 3199,
       "type": "skill"
     },
     {
@@ -2730,7 +2760,7 @@
         }
       ],
       "id": "skill:void-ticket",
-      "lines": 239,
+      "lines": 238,
       "name": "void-ticket",
       "owner": "folpe",
       "pack": null,
@@ -2739,7 +2769,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-ticket/SKILL.md",
-      "staticTokens": 3276,
+      "staticTokens": 3317,
       "type": "skill"
     },
     {

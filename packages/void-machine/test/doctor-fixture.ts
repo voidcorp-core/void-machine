@@ -1,7 +1,9 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import {
+  mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { onTestFinished } from 'vitest';
@@ -21,12 +23,16 @@ export function doctorFixture() {
   const repository = join(root, 'repo');
   const home = join(root, 'home');
   mkdirSync(home);
+  // Hermetic, but not empty: a commit otherwise leaves a detached `git maintenance` writing in
+  // the repository while `rmSync` removes it, which fails the test after its assertions passed.
+  const gitConfig = join(home, '.gitconfig');
+  writeFileSync(gitConfig, '[maintenance]\n\tauto = false\n[gc]\n\tauto = 0\n');
   const env: NodeJS.ProcessEnv = {
     PATH: process.env['PATH'] ?? '',
     SystemRoot: process.env['SystemRoot'],
     HOME: home,
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: devNull,
+    GIT_CONFIG_GLOBAL: gitConfig,
     GIT_TERMINAL_PROMPT: '0',
     GIT_OPTIONAL_LOCKS: '0',
   };

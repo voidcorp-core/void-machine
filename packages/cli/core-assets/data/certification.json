@@ -1433,6 +1433,32 @@
       }
     },
     {
+      "id": "skill:void-orchestrate",
+      "owner": "folpe",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "enforcement": {
+        "floor": "ci",
+        "inline": {
+          "claude": "pretooluse",
+          "codex": "pretooluse",
+          "hermes": "ci-only"
+        }
+      },
+      "evalTargets": [
+        {
+          "provider": "anthropic",
+          "runtime": "claude",
+          "tier": "opus"
+        }
+      ],
+      "proof": {
+        "verified": true
+      }
+    },
+    {
       "id": "skill:void-plan",
       "owner": "folpe",
       "runtimes": [

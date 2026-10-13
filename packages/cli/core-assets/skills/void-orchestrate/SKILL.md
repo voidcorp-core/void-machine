@@ -1,6 +1,6 @@
 ---
 name: void-orchestrate
-description: Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Herdr is optional.
+description: Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.
 ---
 
 # Orchestrate
@@ -13,9 +13,20 @@ and `void-autopilot` its loop. Neither a pane nor a report grants merge permissi
 
 Read project instructions, the approved task and Git state; preserve other writers'
 changes. Before dispatch, inspect the actual native agent tools and their supported
-context, permissions, completion and resume capabilities. Herdr is optional: native
-agents work without it. Select its adapter below only when available and useful for
-a durable terminal worker; do not claim durability from a pane or unsupported API.
+context, permissions, completion and resume capabilities. Use the best supported
+capabilities for the task in the current session; an installed executable or an
+environment hint alone does not validate a host, identity or permission.
+
+Herdr is optional for consumers, not discretionary inside a validated Herdr session.
+When fresh discovery validates the coordinator in Herdr, use its adapter below for
+durable terminal workers and mission visibility. Short agents remain native; never
+duplicate an agent to give it a pane. Outside Herdr, use the current supported host
+(such as tmux) when its required capabilities and ownership can be verified. This
+policy adds no tmux transport and never relaunches through the legacy kernel.
+Without supported presentation, retain native delegation and report the limitation;
+do not claim durability from a pane or unsupported API. Failed or ambiguous host
+discovery blocks the affected host action: diagnose it, never silently switch hosts
+or act on an unrelated project. Native work independent of that action may continue.
 
 - Work directly for a tiny targeted change, a single tool call, mechanical processing,
   or tightly coupled work where delegation adds no useful separation.
@@ -83,7 +94,7 @@ Missing required native capability is reported with cause and next action.
 
 ## Herdr adapter: recovery
 
-The following Herdr sections apply only when this optional adapter is selected.
+The following Herdr sections apply when the session-host policy selects this adapter.
 Native delegation without it does not require these central files or pane discovery.
 
 Read project instructions, the approved task and the current Git status. Preserve

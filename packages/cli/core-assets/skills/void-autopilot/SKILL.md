@@ -171,7 +171,8 @@ send each back to the agent that produced it.
 **Spawning.** Every worker gets its worktree before it starts, at the durable location the
 doctrine's worktree rule names, reused when its branch already has one. A worker never chooses its
 own checkout and never works in the main one. Compose `void-orchestrate` to choose supported
-native delegation, including the optional Herdr adapter and its central files. Count writers,
+native delegation, including the session-host selection policy and the Herdr adapter
+with its central files when applicable. Count writers,
 researchers and reviewers against available dispatch capacity; the ticket cap is unchanged.
 An assigned worker executes the unit once, without recursively delegating the complete cycle.
 `liveWorkers` reflects reconciled actual sessions and current evidence, never stale pane hints.

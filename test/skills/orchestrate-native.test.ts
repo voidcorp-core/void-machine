@@ -27,6 +27,16 @@ describe('native orchestration executable contract', () => {
     expect(portable).toContain('do not invent specialist events');
     expect(portable).toContain('completion events');
     expect(portable).toContain('observed available runtime slots');
+    const selection = portable.replace(/\s+/g, ' ');
+    expect(selection).toContain('not discretionary inside a validated Herdr session');
+    expect(selection).toContain('use its adapter below for durable terminal workers and mission visibility');
+    expect(selection).toContain('Short agents remain native');
+    expect(selection).toContain('never duplicate an agent to give it a pane');
+    expect(selection).toContain('capabilities and ownership can be verified');
+    expect(selection).toContain('adds no tmux transport');
+    expect(selection).toContain('Without supported presentation, retain native delegation');
+    expect(selection).toContain('Failed or ambiguous host discovery blocks the affected host action');
+    expect(selection).not.toContain('only when available and useful');
   });
 
   it.each(['void-brainstorm', 'void-plan', 'void-implement', 'void-autopilot', 'void-context'])(

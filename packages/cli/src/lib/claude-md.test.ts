@@ -28,7 +28,8 @@ describe('harnessBlock', () => {
       expect(block).toContain('void-orchestrate');
       expect(block).toContain('native');
       expect(block).toContain('independent research and substantial implementation');
-      expect(block).toContain('Herdr is optional');
+      expect(block).toContain('Herdr when the current session is validated there');
+      expect(block).toContain('native delegation without it elsewhere');
       expect(block).toContain('already delegated writer');
       expect(block).toContain('independent review');
       expect(block).not.toContain('refuses the native call');

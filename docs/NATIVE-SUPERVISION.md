@@ -3,7 +3,7 @@
 `void-orchestrate` owns the portable delegation policy for research, planning,
 implementation and autopilot. The [adaptive contract](specs/2026-10-13-adaptive-delegation.md)
 keeps user intent and decisions in one coordinator. Native agents do not require
-Herdr; the optional [Herdr adapter](specs/2026-10-08-native-herdr-orchestration.md)
+Herdr; the [Herdr adapter](specs/2026-10-08-native-herdr-orchestration.md)
 uses the [central file contract](ORCHESTRA.md) for identity, projection and continuity.
 
 ## Portable procedure
@@ -25,9 +25,24 @@ saved work, live session, retained result and delivered result. Reconcile uncert
 before another launch; reuse corrections in the same session and confirm consumption.
 Missing native delegation permits explicit sequential work, never fabricated review.
 
-## Optional Herdr procedure
+## Session-host selection
 
-Apply the following procedure and projection boundary only when Herdr is selected.
+Portability makes Herdr optional for consumers, not discretionary when it hosts the
+validated current session. Use it for durable terminal workers and mission visibility;
+short agents retain native execution, with no duplicate agent merely for a pane.
+Choose the best supported capabilities for the task and current host. Executables,
+environment markers and pane IDs are discovery hints, not proof of current ownership.
+Outside Herdr, an existing host such as tmux may be used only through verified,
+supported capabilities. This change adds no tmux transport and does not reactivate
+the legacy kernel. Without supported presentation, retain native delegation and
+report the limitation. Ambiguous or failed host discovery blocks that host action;
+diagnose it instead of silently switching hosts or controlling another project.
+Independent native work can continue when it does not depend on the blocked action.
+
+## Herdr procedure
+
+Apply the following procedure and projection boundary when session-host selection
+requires the Herdr adapter.
 
 1. Resolve the named project, read rules and Git state, then recover its central
    mission. Keep the current ORCH coordinator. Preserve other writers' changes.

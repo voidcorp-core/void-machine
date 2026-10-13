@@ -25,7 +25,7 @@ If `.void/program.md` exists with `status: executing`, read it and its linked pl
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
-Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Herdr is optional. Preserve existing permissions, independent review and real invocation evidence.
+Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Use the supported session host per that policy: Herdr when the current session is validated there, native delegation without it elsewhere. Preserve existing permissions, independent review and real invocation evidence.
 
 Run `void-machine doctor` to verify the install.
 
@@ -73,7 +73,9 @@ automatic selection. Human gates and merges remain human.
 
 For delegated work, follow `void-orchestrate` and `docs/NATIVE-SUPERVISION.md`.
 The coordinator keeps intent and decisions; native research and workers use the
-available runtime capabilities. When the optional Herdr adapter is selected,
+available runtime capabilities. Use Herdr for durable workers and mission visibility
+when it hosts the validated current session; elsewhere use supported native tools.
+Before acting through the Herdr adapter,
 resolve its central mission and existing coordinator by label plus canonical
 worktree, re-reading pane identity before acting. Preserve reports, real review
 receipts, permissions and merge gates; no Agent capture or duplicate coordinator.

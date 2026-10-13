@@ -70,3 +70,12 @@ obtain reliable evidence for the requested workflow change. Initial failures and
 changed-case results are preserved in
 `docs/plans/2026-10-13-adaptive-delegation-verification.md`; the final independent
 review checks the assertion mapping as well as the delegation contract.
+
+## Host-selection clarification
+
+Folpe clarified that consumers need not install Herdr, while sessions validated
+inside it must use its supported worker and visibility capabilities. Refine the
+single policy, managed instructions and instruction-contract tests accordingly;
+short contexts remain native. Preserve identity refusal and do not imply a new
+tmux transport. Regenerate assets, check the affected contracts and collect a
+targeted independent review on the revised candidate before updating the PR.

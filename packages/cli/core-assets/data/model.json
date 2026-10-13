@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 392,
+      "lines": 393,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 6910,
+      "staticTokens": 6921,
       "type": "skill"
     },
     {
@@ -2398,7 +2398,7 @@
       "type": "skill"
     },
     {
-      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Herdr is optional.",
+      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 300,
+      "lines": 311,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 4194,
+      "staticTokens": 4402,
       "type": "skill"
     },
     {

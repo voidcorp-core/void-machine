@@ -135,7 +135,7 @@ describe('remote effects stay with the roles that own them', () => {
     const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
     expect(spawning).toMatch(/void-orchestrate/);
     expect(spawning).toMatch(/supported native delegation/);
-    expect(spawning).toMatch(/optional Herdr adapter/);
+    expect(spawning).toMatch(/session-host selection policy/);
     expect(spawning).toMatch(/ticket cap is unchanged/);
     expect(spawning).not.toMatch(/cockpit presentation|agents dispatch/i);
     // Identity checks belong to the selected adapter, not every native agent.
@@ -145,7 +145,7 @@ describe('remote effects stay with the roles that own them', () => {
     const recovery = flat(body(orchestration)).match(
       /## Herdr adapter: recovery.*?(?=## Herdr adapter: explicit coordinator context)/,
     )?.[0] ?? '';
-    expect(recovery).toMatch(/only when this optional adapter is selected/);
+    expect(recovery).toMatch(/when the session-host policy selects this adapter/);
     expect(recovery).toMatch(/label \+ worktree/);
     expect(recovery).toMatch(/Re-read `herdr pane list` before every identity decision/);
   });

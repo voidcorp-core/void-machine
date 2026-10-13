@@ -3,7 +3,7 @@
 This record distinguishes instruction contracts, distribution and observed native actions.
 The approved scope is in `docs/specs/2026-10-13-adaptive-delegation.md`.
 
-## Candidate
+## Initial candidate
 
 Base: `446691befd3cb2a376b7884c4c32ac772aa06c94`.
 Policy/workflow candidate: `757131cb4fcd24c231d1580ea658272a0c383448`.
@@ -91,3 +91,28 @@ owns inspection of the committed candidate and assertion mapping; its verdict is
 recorded in the PR, not predeclared here. Detailed original logs and native action
 summaries are local ignored evidence under `.void/machine/dev1019/` in the task
 worktree. There is no global consumer activation in this change.
+
+## Validated session-host refinement
+
+Folpe clarified that Herdr is optional for consumers but must be used for supported
+durable workers and mission visibility when it hosts the validated coordinator.
+The refinement updates the policy, both managed runtime instructions, their mirrors
+and documentation; native short agents and mandatory review/isolation remain intact.
+Other hosts require verified capabilities. No new tmux transport is supplied.
+
+The first focused run after this refinement passed all 65 tests in the three
+orchestration, Autopilot and managed-instruction contract files. Generation checks,
+references, doc parity, anti-bloat, ADR immutability, CLI typecheck and focused lint
+passed. Raw logs and exit codes are under `.void/machine/dev1019/host-*`. The policy
+remains 311 lines. These are instruction/distribution checks, not a live worker
+launch or a fresh execution of the earlier native probes. Earlier probe evidence
+remains scoped to its initial policy candidate.
+
+Read-only installed CLI observation found Herdr client/server 0.9.3 compatible,
+with no restart needed. The inherited current-pane hint pointed to another project;
+no pane was controlled. This observation illustrates why environment/pane hints
+cannot replace canonical project and worktree identity checks.
+
+This instruction-only refinement adds no UI, database, business telemetry or new
+authentication boundary; those checks are inapplicable. Exact-commit independent
+review and GitHub checks are reported on the PR, never predeclared here.

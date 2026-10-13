@@ -39,7 +39,11 @@ Choose direct work for tiny or mechanical tasks, native delegation for useful
 independent work, and one writer for substantive implementation. Do not recursively
 wrap an assigned writer. Read-only research needs no new worktree; concurrent
 writes remain isolated and acceptance covers integration, not merely child success.
-Herdr recipes and central discovery now apply only to that optional adapter.
+Herdr recipes and central discovery apply to that adapter. Consumer portability
+must not mean ignoring the validated session host: Herdr carries durable workers
+and visibility there; native short contexts remain native. Other hosts require
+verified supported capabilities. Mere tmux presence does not activate the old
+kernel, and ambiguous discovery never permits switching to another project.
 
 Reject silent fallback from requested isolation to concurrent shared writes,
 recursive multiplication of budgets, completion polling where events exist, and a

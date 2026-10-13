@@ -72,12 +72,21 @@ the task and preserve their own design, delivery and merge gates.
   a pane nor a report proves task completion or crash-resistant execution. Use the
   existing persistence path when selected, never invent a universal durable inbox.
 - Herdr-specific discovery, central files, metadata and launch recipes are scoped
-  to that optional adapter. No changes to other projects, servers or permissions.
+  to that adapter. Optional means consumers need not install Herdr; when fresh
+  discovery validates the current coordinator there, use it for durable workers
+  and mission visibility. Short agents remain native, without duplicate panes.
+  Elsewhere use the best supported current-host capabilities; tmux presence alone
+  does not prove a supported new transport. Missing presentation retains native
+  delegation with an explicit limitation. Failed or ambiguous host discovery
+  blocks that host action, never silently switches hosts. No changes to other
+  projects, servers or permissions.
 
 ## Acceptance and proof
 
 1. Both generated runtime instruction blocks request applicable delegation through
-   the same policy owner, without an unconditional Herdr requirement.
+   the same policy owner, without an unconditional Herdr requirement. They require
+   the Herdr adapter for validated Herdr sessions and supported host selection
+   elsewhere, preserving native short agents and explicit discovery failures.
 2. All five workflow callers resolve that owner. Skills remain below 400 lines.
 3. Tiny direct task; independent research; already-delegated writer; missing native
    capability; missing isolation; unchanged independent review are covered by

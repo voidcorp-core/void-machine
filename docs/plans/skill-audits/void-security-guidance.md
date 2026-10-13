@@ -68,3 +68,22 @@ Without `security-guidance`, security is "I'll think about it later" — except 
 
 - Semgrep integration as default CI pack? Lean opt-in via pack-monorepo.
 - LLM-specific security skill (prompt injection patterns) — keep here or split? Lean keep here, with a dedicated section
+
+## DEV-1020: scoped external credential operations (2026-10-13)
+
+Source read: [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html),
+sections 2.3, 2.4, 2.6 and 2.7. Keep least privilege, reduced human contact with values,
+appropriate expiration and lifecycle audit metadata. Rewrite these principles for an agent that
+must never receive plaintext values, rather than transplant provider examples or SDK snippets.
+
+The [approved spec](../../specs/2026-10-13-scoped-credential-operations.md) adds operation-specific
+consent, a chosen destination, confidential success/error paths, metadata-only verification,
+and reconciliation before retries after uncertain writes. These are harness adaptations, not
+claims that OWASP defines agent authorization. The existing standard remains the single owner;
+session context and autopilot refer to it. App env and tenant BYO-key rules retain their scopes.
+
+Rejected: provider allowlists (transport names cannot prove confidentiality), final-answer
+redaction (the value already reached the model), and a new broker/skill (unneeded maintenance
+and overlapping ownership). A human/provider action remains the fallback when safe transport
+cannot be established. Existing local guards and runtime restrictions are unchanged; policy
+scenario evidence cannot certify a live provider's transport.

@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:5db3a6ab337cfb7b71f3edb68b63f121c227c5e83ed7699eeb0c36add4cc3f8b"
+    "rootHash": "sha256:69ada8c7a668574252b442c0bb1cde65d4d878973c9c59cc86871a147393bba9"
   },
   "nodes": [
     {
@@ -3551,7 +3551,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 393,
+          "lines": 394,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 6921,
+          "staticTokens": 6967,
           "type": "skill"
         }
       },
@@ -5002,7 +5002,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "Default-secure at trust boundaries. Zod at every input, secrets via env, SQL parameterized, Better-Auth, LLM I/O untrusted. Escalate to security-audit for deep audits. Use on trust-boundary code.",
+          "description": "Secure defaults at trust boundaries and scoped credential operations. Zod input, app secrets via env, confidential external provisioning, SQL parameterized, Better-Auth, untrusted LLM I/O. Deep audits use void-security-audit.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -5019,7 +5019,7 @@
             }
           ],
           "id": "skill:void-security-guidance",
-          "lines": 255,
+          "lines": 294,
           "name": "void-security-guidance",
           "owner": "folpe",
           "pack": null,
@@ -5028,7 +5028,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-security-guidance/SKILL.md",
-          "staticTokens": 2479,
+          "staticTokens": 3199,
           "type": "skill"
         }
       },

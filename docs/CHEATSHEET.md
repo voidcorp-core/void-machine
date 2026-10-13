@@ -47,7 +47,7 @@ What happens where the system meets something it does not control.
 
 | | |
 |---|---|
-| `void-security-guidance` | Default-secure at trust boundaries. Zod at every input, secrets via env, SQL parameterized, Better-Auth, LLM I/O untrusted. |
+| `void-security-guidance` | Secure defaults at trust boundaries and scoped credential operations. |
 | `void-security-audit` | Periodic deep security audit — OWASP Top 10, STRIDE, secrets, supply chain, CI/CD, infra, LLM. |
 | `void-async-safety` | Idempotency by design. At-least-once with consumer dedup. Signature verify, replay window, idempotency keys, outbox, bounded retries, DLQ. |
 | `void-migrations` | Zero-downtime Postgres migrations. Two-phase changes, batched backfills, locking analysis, banned DDL patterns, CONCURRENTLY indexes, dev branch test, immutable after merge. |

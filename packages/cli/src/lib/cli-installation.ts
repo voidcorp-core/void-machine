@@ -42,7 +42,8 @@ async function declaredBin(entry: string, alias: string): Promise<boolean> {
 }
 
 /** Qualification produces a finite transaction plan; it never replaces a launcher itself. */
-export async function planLauncherBootstrap(binRoot: string, launcher: Uint8Array, previousLauncher?: Uint8Array) {
+export async function planLauncherBootstrap(binRoot: string, launcher: Uint8Array, previousLauncher?: Uint8Array, platform: string = process.platform) {
+  if (platform === 'win32') return planWindowsBootstrap(binRoot, launcher, previousLauncher);
   const mutations: FileWriteMutation[] = [];
   const conflicts: string[] = [];
   for (const alias of ['void-machine', 'voidmachine', 'vm']) {
@@ -70,6 +71,44 @@ export async function planLauncherBootstrap(binRoot: string, launcher: Uint8Arra
     if (mutation) mutations.push(mutation);
     else if (alias === 'void-machine') throw new Error(`Unowned launcher void-machine at ${path}; preserve it and choose a supported launcher location`);
     else conflicts.push(alias);
+  }
+  return { mutations, conflicts };
+}
+
+// npm 11 cmd-shim output for its canonical node_modules/voidmachine bin, qualified
+// against the package declaration below. Unknown wrapper revisions stay user-owned.
+const npmWindowsHashes: Readonly<Record<string, string>> = {
+  '': 'e9ff11472326366df74c397d89f59264d9da684b352b4ef98035198314940da3',
+  '.cmd': '010aaa2929865a75d3708a56d39755bc1ddbb996393661f086918b238af91292',
+  '.ps1': 'e110ea1df178778173a04a43b4531c3a4a64657919572e160ccdf2daf72994cd',
+};
+async function planWindowsBootstrap(binRoot: string, launcher: Uint8Array, previousLauncher?: Uint8Array) {
+  const command = Buffer.from('@echo off\r\nnode "%~dp0void-machine.mjs" %*\r\nexit /b %errorlevel%\r\n');
+  const powershell = Buffer.from('if ($MyInvocation.ExpectingInput) {\n  $input | & node "$PSScriptRoot/void-machine.mjs" @args\n} else {\n  & node "$PSScriptRoot/void-machine.mjs" @args\n}\nexit $LASTEXITCODE\n');
+  const mutations: FileWriteMutation[] = [];
+  const conflicts: string[] = [];
+  for (const alias of ['void-machine.mjs', 'void-machine', 'voidmachine', 'vm']) {
+    const variants = alias.endsWith('.mjs') ? [['', launcher] as const]
+      : [['', launcher], ['.cmd', command], ['.ps1', powershell]] as const;
+    const pending: FileWriteMutation[] = [];
+    let conflict = false;
+    let existing = false;
+    for (const [extension, content] of variants) {
+      const path = alias + extension;
+      const info = await optionalInfo(join(binRoot, path));
+      if (!info) { pending.push({ path, content, mode: 0o755, expected: { exists: false } }); continue; }
+      existing = true;
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) { conflict = true; continue; }
+      const bytes = await readFile(join(binRoot, path));
+      const known = bytes.equals(content) || (extension === '' && previousLauncher !== undefined && bytes.equals(previousLauncher))
+        || (!alias.endsWith('.mjs') && hash(bytes) === npmWindowsHashes[extension]
+          && await declaredBin(join(binRoot, 'node_modules/voidmachine/bin/void-machine.mjs'), alias));
+      if (!known) { conflict = true; continue; }
+      pending.push({ path, content, mode: 0o755, expected: { exists: true, sha256: hash(bytes), mode: info.mode & 0o777 } });
+    }
+    if (conflict && alias.startsWith('void-machine')) throw new Error(`Unowned Windows launcher ${alias} at ${binRoot}; preserve it before choosing a supported location`);
+    if (conflict) conflicts.push(alias);
+    else if (alias !== 'vm' || existing) mutations.push(...pending);
   }
   return { mutations, conflicts };
 }

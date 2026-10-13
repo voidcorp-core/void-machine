@@ -32,6 +32,7 @@ export async function verifyInstalledRelease(store, version) {
     throw new Error('Invalid stable CLI release seal');
   }
   const root = join(releaseRoot, 'node_modules', 'voidmachine');
+  if (await realpath(root) !== resolve(root)) throw new Error('Stable CLI package crosses a symbolic link');
   const expected = new Map();
   for (const file of seal.files) {
     if (!safePath(file.path) || expected.has(file.path) || !/^[a-f0-9]{64}$/.test(file.sha256)

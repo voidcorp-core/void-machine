@@ -17,7 +17,7 @@ export async function inspectInstallProjection(
   retained: readonly string[],
   adapters: readonly RuntimeAdapter[],
 ): Promise<void> {
-  const projection = await mkdtemp(join(tmpdir(), 'void-install-projection-'));
+  const projection = await mkdtemp(join(tmpdir(), 'harness-install-projection-'));
   try {
     await cp(stageRoot, projection, { recursive: true });
     for (const path of retained) {

@@ -81,8 +81,13 @@ public update behavior described in historical migration documents.
 ## Verification ownership
 
 The single packed behavior owner is `packages/cli/scripts/conformance-update.mjs`.
-`conformance-install.mjs` invokes it after its existing Claude/Codex/both init/hydrate
-and receipt-recovery proofs. All existing hooks, Autopilot and latency conformance remain.
+`conformance-install.mjs` invokes it after its Claude/Codex/both init and exact offline
+hydrate proofs, including manifest verification without a receipt. Complete receipt
+recovery belongs to `update`: its candidate preparation recovers missing claims from
+the prior manifest's matching hashes, keeps existing receipt evidence authoritative,
+and leaves later user edits unclaimed. Recovery is published by the same transaction,
+without a preliminary receipt write. Plain init and hydrate keep their own contract.
+All existing hooks, Autopilot and latency conformance remain.
 The exact-SHA `consumer-artifact` job runs `pnpm conformance:pack` once. Every
 `install-conformance` matrix job runs this unchanged command on that artifact:
 
@@ -95,12 +100,18 @@ pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/c
 | `install conformance (ubuntu-latest)` | npm-generated POSIX bins adopted; direct executable `void-machine` and `voidmachine`; offline version from unrelated cwd after bootstrap package disappears; real update, interruption and recovery through the new executable |
 | `install conformance (macos-latest)` | The same POSIX executable and recovery proof on macOS |
 | `install conformance (windows-latest)` | Actual npm-generated Windows bins adopted; `cmd.exe /d /s /c` executes both new `.cmd` aliases; `powershell.exe -NoLogo -NoProfile -NonInteractive -File` executes both `.ps1` aliases; actual update, interruption and recovery through the new `.cmd`, followed by the recovered `.ps1` |
-| `validate` | `test/cli/stable-update-packed.test.ts` is a focused adapter to the same six phases on the host OS; it does not certify other OSes |
+| `validate` | `test/cli/stable-update-packed.test.ts` is a focused adapter to the same seven phases on the host OS; it does not certify other OSes |
 
-The six shared phases prove complete-all preview without activation, manifest-only current
-project update with an unchanged unselected project, explicit all-project update, termination
+The seven shared phases prove complete-all preview without activation, manifest-only current
+project update with unchanged unselected projects, explicit all-project update, complete
+receipt recovery for Claude/Codex/both, termination
 after the launcher rename before active selection, rollback before deliberately failed network
-acquisition, and successful repeated invocation. A test-only Node preload instruments the
+acquisition, and successful repeated invocation. The ownership phase removes the Claude
+and dual-runtime receipts and amputates the Codex receipt, then invokes native `update --all`.
+It compares the complete receipts (source, runtimes, paths, hashes and modes) and checks
+authored configuration, doctrine and adjacent private skills. Every OS job runs this phase
+through its actual native launcher, including `.cmd` on Windows.
+A test-only Node preload instruments the
 actual filesystem rename and kills the child; it adds no production fault flag. Receipt,
 authored configuration/doctrine, managed before/after bytes, active selection and journal
 postconditions decide success. Installed sensitive-path/content probes still deny writes.

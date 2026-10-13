@@ -19,8 +19,13 @@ export async function prepareStableUpdate(temporary, tarball) {
   const bin = process.platform === 'win32' ? prefix : join(prefix, 'bin');
   const project = join(home, 'projects/current');
   const second = join(home, 'projects/second');
+  const third = join(home, 'projects/both');
+  const projects = [project, second, third];
   await mkdir(project, { recursive: true });
   await mkdir(second, { recursive: true });
+  await mkdir(join(second, '.void'), { recursive: true });
+  await writeFile(join(second, '.void/PROJECT-DOCTRINE.md'), 'Second project doctrine\n');
+  await mkdir(third, { recursive: true });
   await mkdir(join(home, 'tmp'));
   const env = conformanceFixtureEnvironment(home, { HOME: home, USERPROFILE: home,
     VOID_GLOBAL_DIR: join(home, '.void') });
@@ -36,7 +41,12 @@ export async function prepareStableUpdate(temporary, tarball) {
   delete env.Path;
   const direct = (args, cwd = project) => runConformanceStep(`stable update ${args.join(' ')}`, {
     command: process.execPath, args: [source, ...args], cwd, env });
-  for (const cwd of [project, second]) await direct(['init', '--runtime', 'codex', '--no-interactive'], cwd);
+  for (const [cwd, runtime] of [[project, 'claude'], [second, 'codex'], [third, 'both']]) {
+    await direct(['init', '--runtime', runtime, '--no-interactive'], cwd);
+    const privateSkill = join(cwd, runtime === 'codex' ? '.agents' : '.claude', 'skills/private/SKILL.md');
+    await mkdir(dirname(privateSkill), { recursive: true });
+    await writeFile(privateSkill, '# private user skill\n');
+  }
   await mkdir(join(home, '.void'), { recursive: true });
   await writeFile(join(home, '.void/discovery.json'), JSON.stringify({ roots: [join(home, 'projects')] }));
   await writeFile(join(project, '.void/PROJECT-DOCTRINE.md'), '# Authored doctrine\r\n');
@@ -46,6 +56,7 @@ export async function prepareStableUpdate(temporary, tarball) {
   await writeFile(configPath, JSON.stringify(config));
   await writeFile(join(project, '.npmrc'), 'registry=https://unreachable.invalid\nignore-scripts=false\n');
   const otherReceipt = await read(receipt(second));
+  const thirdReceipt = await read(receipt(third));
   const archive = await readFile(tarball);
   const transport = join(home, 'transport.mjs');
   const denied = join(home, 'offline.mjs');
@@ -96,8 +107,10 @@ export async function prepareStableUpdate(temporary, tarball) {
     async preview() {
       const result = await update(['--all', '--dry-run']);
       assert.ok(result.stdout.includes(second));
+      assert.ok(result.stdout.includes(third));
       assert.equal(existsSync(active), false);
       assert.equal(await read(receipt(second)), otherReceipt);
+      assert.equal(await read(receipt(third)), thirdReceipt);
     },
     async current() {
       await rm(receipt(project));
@@ -106,6 +119,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       assert.equal(JSON.parse(await read(configPath)).authoredSetting, 'preserve this');
       assert.equal(await read(join(project, '.void/PROJECT-DOCTRINE.md')), '# Authored doctrine\r\n');
       assert.equal(await read(receipt(second)), otherReceipt);
+      assert.equal(await read(receipt(third)), thirdReceipt);
       await rename(pkg, `${pkg}-unavailable`);
       for (const alias of ['void-machine', 'voidmachine']) {
         const result = requireConformanceExit(await invoke(['--version'], [denied], alias, false, root), 'offline native launcher');
@@ -128,10 +142,33 @@ export async function prepareStableUpdate(temporary, tarball) {
       }
     },
     async all() {
-      await writeFile(join(second, '.void/PROJECT-DOCTRINE.md'), 'Second project doctrine\n');
       await update(['--all']);
       assert.equal(await read(join(second, '.void/PROJECT-DOCTRINE.md')), 'Second project doctrine\n');
       assert.equal(JSON.parse(await read(receipt(second))).version, version);
+      assert.equal(JSON.parse(await read(receipt(third))).version, version);
+    },
+    async ownership() {
+      // Update, not offline hydrate, owns complete manifest/receipt recovery.
+      // All three runtime selections have a current baseline after explicit all.
+      const before = await Promise.all(projects.map(async cwd => JSON.parse(await read(receipt(cwd)))));
+      for (const [index, cwd] of projects.entries()) {
+        const required = ['.void/config.json', ...(cwd === second ? [] : ['CLAUDE.md', '.claude/settings.json']),
+          ...(cwd === project ? [] : ['AGENTS.md', '.codex/hooks.json'])];
+        for (const path of required) assert.ok(before[index].files.some(file => file.path === path),
+          `stable update baseline lost ${path} in ${cwd}`);
+        await rename(receipt(cwd), join(cwd, 'original-install-receipt.json'));
+        if (cwd === second) await writeFile(receipt(cwd), JSON.stringify({ ...before[index], files: [] }));
+      }
+      await update(['--all']);
+      for (const [index, cwd] of projects.entries()) {
+        assert.deepEqual(JSON.parse(await read(receipt(cwd))), before[index],
+          `stable update did not recover complete ownership for ${cwd}`);
+        const privateSkill = join(cwd, cwd === second ? '.agents' : '.claude', 'skills/private/SKILL.md');
+        assert.equal(await read(privateSkill), '# private user skill\n');
+      }
+      assert.equal(JSON.parse(await read(configPath)).authoredSetting, 'preserve this');
+      assert.equal(await read(join(project, '.void/PROJECT-DOCTRINE.md')), '# Authored doctrine\r\n');
+      assert.equal(await read(join(second, '.void/PROJECT-DOCTRINE.md')), 'Second project doctrine\n');
     },
     async interrupt() {
       selection = await read(active);
@@ -163,7 +200,7 @@ export async function prepareStableUpdate(temporary, tarball) {
 
 export async function exerciseStableUpdate(temporary, tarball) {
   const proof = await prepareStableUpdate(temporary, tarball);
-  for (const phase of ['preview', 'current', 'all', 'interrupt', 'recover', 'repeat']) {
+  for (const phase of ['preview', 'current', 'all', 'ownership', 'interrupt', 'recover', 'repeat']) {
     process.stdout.write(`stable update conformance (${process.platform}): ${phase}\n`);
     await proof[phase]();
   }

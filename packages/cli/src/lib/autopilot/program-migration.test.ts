@@ -11,7 +11,7 @@ spec: docs/spec.md
 progress:
   provider: linear
   scope: fixture
-  order: []
+  order: [DEV-1022]
   states:
     ready: [Todo]
     started: [Doing]

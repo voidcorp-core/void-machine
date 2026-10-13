@@ -237,7 +237,7 @@ export function configWriteVerdict(input: {
 export async function init(args: readonly string[]): Promise<void> {
   const opts = parseArgs(args);
   const projectRoot = process.cwd();
-  await assertProjectCompatibility(projectRoot);
+  await assertProjectCompatibility(projectRoot, { replaceUnparseableConfig: opts.force });
 
   banner('init');
   meta('project', projectRoot);

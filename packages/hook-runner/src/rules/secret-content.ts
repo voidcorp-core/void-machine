@@ -21,6 +21,10 @@ const GENERIC_ASSIGNMENT =
 const PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 const EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
 
+// Source tests admitted by the credential-name heuristic still need content checks.
+const CREDENTIAL_SOURCE_TEST =
+  /(?:secret|credential)[^/]*\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
+
 function lineHasSecret(line: string): boolean {
   if (line.includes('allow-secret-pattern:')) return false;
   if (HIGH_CONFIDENCE.some((pattern) => pattern.test(line))) return true;
@@ -36,7 +40,8 @@ function lineHasSecret(line: string): boolean {
 export function secretContent(edits: readonly NormalizedEdit[]): RuleVerdict {
   const evidence: string[] = [];
   for (const edit of edits) {
-    if (EXEMPT_PATH.test(edit.path.replaceAll('\\', '/'))) continue;
+    const path = edit.path.replaceAll('\\', '/');
+    if (EXEMPT_PATH.test(path) && !CREDENTIAL_SOURCE_TEST.test(path)) continue;
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
       if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
     });

@@ -356,9 +356,16 @@ The credential-name heuristic permits source filenames ending in `.test` or
 only to that heuristic: environment files, keys, credential stores, lockfiles,
 Git metadata and manifest-owned assets remain protected, including in mixed
 target operations. Test directories alone and trailing extensions such as
-`.test.json` or `.test.mjs.bak` do not qualify. Filename classification cannot
-attest to the contents: `secret-content` already exempts `.test`/`.spec` paths;
-this correction does not change that policy or authorize real credential edits.
+`.test.json` or `.test.mjs.bak` do not qualify. These newly permitted source tests
+receive the full `secret-content` policy, even inside fixture/generated directories
+and with uppercase names or Windows separators. High-confidence tokens and generic
+secret assignments are refused; unrelated test/fixture exemptions are unchanged.
+The existing `allow-secret-pattern:` marker exempts only the line containing it
+and should explain an intentional synthetic fixture. It is not proof that content
+is safe, nor authorization to edit real credentials. Detection inspects added
+text, not evaluated code: build synthetic token values from inert pieces instead
+of storing complete credentials. Placeholder and non-secret-value rules also
+retain their existing semantics.
 
 Checked-out CI evidence retains its existing exemption from pre-write ownership
 checks. Neither boundary proves human approval or enforces managed blocks;
@@ -668,7 +675,9 @@ Two content-aware hooks sit beside the filename/path guards:
   rule (a `*_KEY|_SECRET|_TOKEN` var assigned a long, mixed, non-placeholder
   literal — excluding UUIDs, git shas, and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
-  test/fixture paths are skipped.
+  test/fixture paths are skipped except credential-named source tests admitted by
+  the filename heuristic above, which receive the same content policy. The marker
+  applies only to its own line and does not exempt another line or file.
 - **`stop-typecheck.sh`** (Stop, **advisory**) — when a TS project has uncommitted
   `.ts` changes at end of turn, it runs a timeout-bounded `tsc --noEmit` scoped to
   the nearest tsconfig of the touched files and surfaces type errors on stderr, so

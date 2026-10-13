@@ -303,6 +303,15 @@ Rules:
   config pack set and prune only unchanged receipt-owned stale assets. Local `update` recompiles
   from the running CLI without a remote fetch. Legacy/explicit marketplace receipts retain their
   cache and remote-pin adapter.
+  `init` resolves one effective pack set before staging: the deduplicated union of retained
+  declarations and requested packs, or only the requested set under `--replace-packs`.
+  Configuration, runtime assets and the installation summary use that same set. Existing pins
+  and unrelated project settings stay intact; replacement uses the existing owned-asset pruning.
+  `hydrate` inherits this reconciliation through `init`, including a clone with no local assets.
+  A fresh noninteractive install without pack declarations or flags remains core-only. Unreadable
+  configuration refuses reconciliation unless the existing `--force` overwrite verdict applies;
+  malformed pack maps or pins and unknown retained names receive explicit diagnostics rather
+  than a successful core-only install. `--force` does not erase readable project configuration.
 - **The harness owns exactly the skills it ships; the project owns every other one.**
   `.claude/skills/` and its siblings are shared directories, and the manifest — not the path —
   answers which side a file is on. A skill the harness does not ship is never ignored and never

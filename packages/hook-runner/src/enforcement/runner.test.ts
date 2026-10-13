@@ -184,6 +184,43 @@ describe('co-owned enforcement across tool adapters', () => {
   }
 
   it.each(['Write', 'Edit', 'apply_patch'])(
+    'allows a synthetic credential-named test through %s', (tool) => {
+      const root = rootWithManifest([]);
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        const payload = edit(tool, join(root, 'client-secrets.test.mjs'), 'export const fixture = 1;');
+        expect(evaluateRule('protected-file', payload, { root, source, env: {} }))
+          .toMatchObject({ allow: true, code: 'ALLOW' });
+      }
+    },
+  );
+
+  it.each(['Bash', 'exec_command', 'apply_patch'])(
+    'preserves protected targets beside a synthetic test through %s', (tool) => {
+      const owned = 'managed/client-secrets.test.mjs';
+      const root = rootWithManifest([owned]);
+      const payload = (paths: readonly string[]) => tool === 'apply_patch'
+        ? { tool_name: tool, tool_input: { patch: ['*** Begin Patch', ...paths.flatMap((path) =>
+          [`*** Update File: ${path}`, '@@', '-old', '+synthetic']), '*** End Patch'].join('\n') } }
+        : { tool_name: tool, tool_input: {
+          [tool === 'Bash' ? 'command' : 'cmd']:
+            paths.map((path) => `printf synthetic > '${path}'`).join('; '),
+        } };
+      const allowed = join(root, 'client-secrets.test.mjs');
+      expect(evaluateRule('protected-file', payload([allowed]), { root, env: {} }).code).toBe('ALLOW');
+      for (const path of [owned, '.env.test.mjs', 'secrets.json', 'private.key',
+        '.aws/credentials', '.git/client-secrets.test.mjs', 'pnpm-lock.yaml',
+        'client-secrets.test.json', 'client-secrets.test.mjs.bak']) {
+        const denied = join(root, path);
+        for (const paths of [[allowed, denied], [denied, allowed]]) {
+          const verdict = evaluateRule('protected-file', payload(paths), { root, env: {} });
+          expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+          expect(verdict.evidence[0]?.startsWith(`${denied}:`)).toBe(true);
+        }
+      }
+    },
+  );
+
+  it.each(['Write', 'Edit', 'apply_patch'])(
     'permits project doctrine in tool-input and checked-out evidence through %s', (tool) => {
       const path = '.void/PROJECT-DOCTRINE.md';
       const root = rootWithManifest([path]);

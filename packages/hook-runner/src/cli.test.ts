@@ -68,6 +68,10 @@ describe('bundled co-owned enforcement', () => {
     }));
     const cases = [
       ['protected-file', 'AGENTS.md', 'approved prose', 'ALLOW'],
+      ['protected-file', 'client-secrets.test.mjs', 'export const fixture = 1;', 'ALLOW'],
+      ['protected-file', '.env.test.mjs', 'synthetic', 'PROTECTED_FILE'],
+      ['protected-file', '.git/client-secrets.test.mjs', 'synthetic', 'PROTECTED_FILE'],
+      ['protected-file', 'client-secrets.test.json', 'synthetic', 'PROTECTED_FILE'],
       ['protected-file', exclusive, 'changed', 'PROTECTED_FILE'],
       ['protected-file', '.env', 'changed', 'PROTECTED_FILE'],
       ['secret-content', 'AGENTS.md', `AKIA${'Z'.repeat(16)}`, 'SECRET_IN_CONTENT'],

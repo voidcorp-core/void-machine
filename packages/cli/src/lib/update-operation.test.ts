@@ -41,6 +41,20 @@ it('publishes selected projects serially and activates the CLI last', async () =
   expect(await readFile(join(fixtureState.store, 'active.json'), 'utf8')).toBe('new selection');
 });
 
+it('publishes the complete qualified Windows launcher set in the launcher participant', async () => {
+  const { withUpdateLock } = await import('./update-lock.js');
+  const { executeUpdateOperation } = await import('./update-operation.js');
+  const { planLauncherBootstrap } = await import('./cli-installation.js');
+  const state = await fixture();
+  const bootstrap = await planLauncherBootstrap(state.selection.binRoot, Buffer.from('fixture launcher'), undefined, 'win32');
+  const active = state.participants.at(-1);
+  if (!active) throw new Error('missing active fixture');
+  await withUpdateLock(state.store, lease => executeUpdateOperation(lease, { ...state,
+    operationId: 'windows', target: '5.1.0', participants: [...state.participants.slice(0, -1),
+      { kind: 'launcher', root: state.selection.binRoot, mutations: bootstrap.mutations }, active] }));
+  expect(await readFile(join(state.selection.binRoot, 'void-machine.ps1'), 'utf8')).toContain('$LASTEXITCODE');
+});
+
 it('restores all earlier participants when a later project fails', async () => {
   const { withUpdateLock } = await import('./update-lock.js');
   const { executeUpdateOperation } = await import('./update-operation.js');

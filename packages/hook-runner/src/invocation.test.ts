@@ -1,3 +1,4 @@
+import { serializeEvent } from '@voidcorp/mission-engine/events';
 import { readFileSync, utimesSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -433,22 +434,31 @@ describe('the cached verdict', () => {
     expect(cachedInvocationAlert(root)).toBeUndefined();
   });
 
-  it('keeps Claude silence in the cache beyond twenty newer Codex missions', async () => {
+  it('keeps Claude silence in the cache beyond twenty newer Codex missions', () => {
     const root = project();
+    const now = Date.now();
+    // This case owns journal selection and cached verdicts; ingestion tests own
+    // durable per-event writes. Seed the same 23 missions without 460 durable write cycles.
     for (let session = 0; session < 23; session += 1) {
       const runtime = session < 3 ? 'claude' : 'codex';
-      for (let call = 0; call < 20; call += 1) {
-        const recorded = await recordRuntimeEvent({
-          root, runtime, phase: 'activation',
-          rawInput: {
-            session_id: `${runtime}-${session}`, hook_event_name: 'PreToolUse', tool_name: 'Bash',
-            tool_input: { command: 'cat README.md' },
-          },
-        });
-        if (recorded === undefined) throw new Error('Expected a collected tool call');
-        const path = join(root, '.void', 'machine', 'runs', recorded.missionId, 'events.jsonl');
-        utimesSync(path, 1_000 + session, 1_000 + session);
-      }
+      const missionId = `mis_${runtime}_${String(session).padStart(2, '0')}`;
+      const lines = Array.from({ length: 20 }, (_, call) => serializeEvent({
+        schemaVersion: 1,
+        seq: call + 1,
+        eventId: `evt_${runtime}_${session}_${call}`,
+        missionId,
+        ts: new Date(now - (23 - session) * 1_000 + call).toISOString(),
+        source: `runtime:${runtime}`,
+        kind: 'runtime.tool.started',
+        subject: 'tool:Bash',
+        correlationId: missionId,
+        payload: { category: 'tool', tool: 'Bash', fileGlobs: [], extensions: [] },
+      }));
+      const directory = join(root, '.void', 'machine', 'runs', missionId);
+      mkdirSync(directory, { recursive: true });
+      const path = join(directory, 'events.jsonl');
+      writeFileSync(path, `${lines.join('\n')}\n`);
+      utimesSync(path, 1_000 + session, 1_000 + session);
     }
     expect(livenessVerdict(readMissionJournals(root)).ok).toBe(false);
     refreshInvocationVerdict(root);

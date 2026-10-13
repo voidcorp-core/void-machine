@@ -24,6 +24,16 @@ hardcoded Node executable. The checkout is on a personal branch. Installed consu
 hooks are 5.0.1, while this CLI reads its version and implementation from that branch.
 The observed command is therefore neither the stable release nor independent of Git.
 
+Qualification update, 2026-10-13: the coordinator subsequently observed
+`~/.local/bin/void-machine` as a symlink to
+`../lib/node_modules/voidmachine/bin/void-machine.mjs`, with package identity
+`voidmachine@5.0.1` and symlink mtime `2026-10-13T16:49:40Z`. The `voidmachine`
+alias also exists. This supersedes the earlier observation as the machine's current
+bootstrap state; it does not erase the historical checkout-wrapper problem.
+Bootstrap must handle verified npm-owned bins as well as an identified source
+wrapper. Verify the package/bin relationship before adoption; a path convention
+alone does not establish ownership. Worker qualification uses isolated homes only.
+
 At source commit 7c17790eb70d3ab489c9bab9138ad01e5fcc50f4:
 
 - `packages/cli/src/commands/update.ts:478` materializes the running CLI's bundled

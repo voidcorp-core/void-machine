@@ -104,6 +104,12 @@ PR/release and actual launcher/project migration. No recursive writer delegation
 - The known checkout-based launcher is backed up, hash-revalidated and replaced only
   after the candidate/project pass. Unknown executables, links, aliases or functions
   stay unchanged. Do not claim PATH selection from file existence alone.
+  The coordinator's later 2026-10-13 observation identifies the current launcher as
+  an npm-owned symlink to `voidmachine@5.0.1`, with a `voidmachine` alias. Include
+  verified npm-bin adoption in isolated bootstrap tests; validate package identity,
+  declared bin mapping and resolved target before any replacement. Preserve unknown
+  symlinks and recover the original verified link on failure. The coordinator alone
+  qualifies the actual home installation after publication.
 - Gate: targeted acquisition/activation/recovery tests, deterministic child-process
   interruption at publication boundaries, concurrent invocation and later user edit;
   actual launcher runs without original checkout and preserves arguments/exit/signals.

@@ -28,16 +28,18 @@ it.each(['operationId', 'version', 'root', 'protocol', 'traversal', 'global', 'g
   'rejects %s in candidate output before publication', async attack => {
     const { decodeCandidatePlan } = await import('./candidate-plan.js');
     const plan = response();
+    const mutation = plan.mutations[0];
+    if (!mutation) throw new Error('fixture mutation missing');
     if (attack === 'operationId') plan.operationId = 'foreign';
     if (attack === 'version') plan.version = '99.0.0';
     if (attack === 'root') plan.root = '/foreign';
     if (attack === 'protocol') Object.assign(plan, { protocol: 99 });
-    if (attack === 'traversal') plan.mutations[0]!.path = '../escape';
-    if (attack === 'global') plan.mutations[0]!.path = '.void/cli/active.json';
-    if (attack === 'git') plan.mutations[0]!.path = '.git/config';
-    if (attack === 'duplicate') plan.mutations.push(plan.mutations[0]!);
-    if (attack === 'base64') plan.mutations[0]!.content = 'invalid===';
-    if (attack === 'mode') plan.mutations[0]!.mode = 0o7777;
+    if (attack === 'traversal') mutation.path = '../escape';
+    if (attack === 'global') mutation.path = '.void/cli/active.json';
+    if (attack === 'git') mutation.path = '.git/config';
+    if (attack === 'duplicate') plan.mutations.push(mutation);
+    if (attack === 'base64') mutation.content = 'invalid===';
+    if (attack === 'mode') mutation.mode = 0o7777;
     if (attack === 'input-path') Object.assign(plan, { inputs: [{ path: '../escape', sha256: 'a'.repeat(64), mode: 0o600 }] });
     expect(() => decodeCandidatePlan(JSON.stringify(plan), request())).toThrow();
   },

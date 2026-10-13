@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
@@ -48,7 +49,7 @@ export async function captureCandidateInputs(root: string): Promise<CandidateInp
   async function visit(path: string, depth: number): Promise<void> {
     if (inputs.length >= 10_000 || depth > 32) throw new Error('Project input limit exceeded');
     const target = join(root, path);
-    let info;
+    let info: Stats;
     try { info = await lstat(target); }
     catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;

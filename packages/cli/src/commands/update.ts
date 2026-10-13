@@ -22,6 +22,7 @@ import { executeUpdateOperation, recoverPendingUpdate, type UpdateParticipant } 
 import { STABLE_VERSION, validateReleasePackage } from '../lib/update-release.js';
 import { selectUpdateProjects } from '../lib/update-selection.js';
 import { compareVersions } from '../lib/version.js';
+import { prepareFileTransaction } from '../lib/transaction.js';
 
 interface Options { readonly all: boolean; readonly dryRun: boolean; readonly version?: string }
 function parseArgs(args: readonly string[]): Options {
@@ -138,6 +139,11 @@ export async function update(args: readonly string[], ports: {
     if (options.dryRun) { line('Dry run passed; active CLI, launchers and projects are unchanged. Staging/cache retained.'); return; }
     await completeRelease(packageRoot, store, release);
     await ensureStoreDirectory(binRoot);
+    const bootstrapBackup = join(store, 'bootstrap');
+    if (!await present(bootstrapBackup)) {
+      await prepareFileTransaction(binRoot, bootstrap.mutations, bootstrapBackup, operationId);
+      line(`Original launcher backup: ${bootstrapBackup}`);
+    }
     const participants: UpdateParticipant[] = plans.map(plan => ({ kind: 'project', root: plan.root, mutations: plan.mutations }));
     participants.push({ kind: 'launcher', root: binRoot, mutations: bootstrap.mutations });
     participants.push({ kind: 'active', root: store, mutations: [{ path: 'active.json', mode: 0o600, expected: active.expected,

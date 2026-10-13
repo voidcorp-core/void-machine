@@ -229,7 +229,10 @@ async function readJournal(projectRoot: string, journalRoot: string): Promise<Jo
   for (const [index, entry] of journal.entries.entries()) {
     if (paths.has(entry.path)) throw new Error('duplicate transaction path in journal');
     paths.add(entry.path);
-    targetFor(root, entry.path);
+    const target = targetFor(root, entry.path);
+    if (target === resolve(journalRoot) || target.startsWith(`${resolve(journalRoot)}${sep}`)) {
+      throw new Error('transaction cannot mutate its journal');
+    }
     if (entry.after.exists && entry.after.linkTarget !== undefined) throw new Error('transaction cannot publish new symbolic links');
     await rejectSymlinkPath(root, entry.path, entry.before.exists && entry.before.linkTarget !== undefined);
     for (const side of ['before', 'after'] as const) {

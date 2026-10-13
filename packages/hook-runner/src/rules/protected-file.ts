@@ -6,6 +6,8 @@ import { allow, block } from './verdict.js';
 
 interface ProtectedFileOptions {
   readonly root?: string;
+  /** Targets extracted from an actual shell command, whose contents are unavailable. */
+  readonly shellWritePaths?: readonly string[];
 }
 
 function manifestOwnedPaths(root: string): ReadonlySet<string> {
@@ -32,7 +34,7 @@ function projectPath(root: string, path: string): string | undefined {
     : relativePath;
 }
 
-function protectedReason(path: string, root: string | undefined): string | undefined {
+function protectedReason(path: string, root: string | undefined, shellWrite: boolean): string | undefined {
   if (root !== undefined) {
     const relativePath = projectPath(root, path);
     if (
@@ -52,7 +54,12 @@ function protectedReason(path: string, root: string | undefined): string | undef
     return 'private key / certificate';
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return 'credential file';
-  if (!base.endsWith('.md') && /(?:secret|credential)/.test(base)) return 'credential file';
+  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith('.md') && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceTest && shellWrite
+      ? 'credential-named source test with unavailable shell content; use Write/Edit or apply_patch'
+      : 'credential file';
+  }
   if (new Set([
     'package-lock.json',
     'pnpm-lock.yaml',
@@ -71,7 +78,7 @@ function protectedReason(path: string, root: string | undefined): string | undef
 
 export function protectedFile(paths: readonly string[], options: ProtectedFileOptions = {}): RuleVerdict {
   for (const path of paths) {
-    const reason = protectedReason(path, options.root);
+    const reason = protectedReason(path, options.root, options.shellWritePaths?.includes(path) ?? false);
     if (reason !== undefined) {
       const learn = reason.includes('void-learn') ? ' Use void-learn to capture the missing harness capability.' : '';
       return block('PROTECTED_FILE', `refusing to edit ${path}.${learn}`, [`${path}: ${reason}`]);

@@ -58,6 +58,54 @@ describe('co-owned manifest paths', () => {
 });
 
 describe('protectedFile', () => {
+  it.each(['test', 'spec'])('refuses .%s credential source tests extracted from shell writes', (kind) => {
+    for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
+      const path = `fixtures/client-secrets.${kind}.${extension}`;
+      for (const target of [path, path.toUpperCase().replaceAll('/', '\\')]) {
+        expect(protectedFile([target], { shellWritePaths: [target] }))
+          .toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      }
+    }
+  });
+
+  it.each(['test', 'spec'])('allows credential-named .%s source files only', (kind) => {
+    for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
+      for (const name of ['client-secrets', 'credentials']) {
+        const path = `src/${name}.${kind}.${extension}`;
+        expect(protectedFile([path])).toMatchObject({ allow: true, code: 'ALLOW' });
+        expect(protectedFile([path.toUpperCase().replaceAll('/', '\\')]).allow).toBe(true);
+      }
+    }
+  });
+
+  it.each([
+    '.env.test.mjs', 'CONFIG\\.ENV.SPEC.TS',
+    ...['pem', 'key', 'p12', 'pfx', 'keystore', 'jks', 'asc']
+      .map((extension) => `client-secrets.test.${extension}`),
+    ...['rsa', 'ed25519', 'ecdsa', 'dsa'].map((kind) => `.ssh/id_${kind}`),
+    '.npmrc', '.netrc', '.pgpass', '.aws/credentials', 'secrets.json',
+    'src/Credentials.ts', '__tests__/secrets.json', 'tests/credentials.mjs',
+    'client-secrets.test.json', 'client-secrets.test.mjs.bak',
+    'client-secrets.testmjs', 'client-secrets.test.py', 'client-secrets.tests.ts',
+    '.git/client-secrets.test.mjs', '.GIT\\CLIENT-SECRETS.SPEC.TS',
+    'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb',
+    'cargo.lock', 'poetry.lock', 'composer.lock',
+  ])('retains protection beside a source test in either order: %s', (path) => {
+    for (const paths of [[path, 'client-secrets.test.mjs'], ['client-secrets.test.mjs', path]]) {
+      const verdict = protectedFile(paths);
+      expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      expect(verdict.evidence[0]?.startsWith(`${path}:`)).toBe(true);
+    }
+  });
+
+  it('keeps a manifest-owned source test protected', () => {
+    const path = 'src/client-secrets.test.mjs';
+    const root = manifestRoot([path]);
+    const verdict = protectedFile([path], { root });
+    expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+    expect(verdict.evidence[0]).toContain('delivered harness asset');
+  });
+
   it.each([
     'apps/web/.env',
     'CONFIG/.ENV.LOCAL',

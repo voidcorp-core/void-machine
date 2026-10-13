@@ -169,6 +169,53 @@ describe('complete TDD evidence and operation bounds', () => {
 });
 
 describe('co-owned enforcement across tool adapters', () => {
+  it.each(['Bash', 'shell'])('refuses uninspectable credential-named test writes through %s', (tool) => {
+    const root = mkdtempSync(join(tmpdir(), 'void-shell-content-'));
+    const target = 'fixtures/client-secrets.test.mjs';
+    const safe = 'ordinary.test.ts';
+    const windows = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
+    const commands = [
+      `printf synthetic > ${target}`, `printf synthetic >> '${target}'`,
+      `printf synthetic 2> "${target}"`, `printf synthetic &> ${target}`,
+      `printf synthetic | tee ${target}`, `printf synthetic | tee -a '${target}'`,
+      `printf synthetic > '${windows}'`,
+      `printf synthetic > ${safe}; printf synthetic > ${target}`,
+      `printf synthetic > ${target}; printf synthetic > ${safe}`,
+      `printf synthetic > ${target} # allow-secret-pattern: cannot inspect a shell write`,
+    ];
+    for (const command of commands) {
+      const payload = { tool_name: tool, tool_input: { command } };
+      const verdicts = (['protected-file', 'secret-content'] as const).map((rule) =>
+        evaluateRule(rule, payload, { root, env: {} }));
+      expect(verdicts[0]).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      expect(verdicts.some((verdict) => !verdict.allow)).toBe(true);
+    }
+  });
+
+  it.each(['Write', 'Edit', 'apply_patch'])('permits inspectable empty source tests through %s', (tool) => {
+    const root = mkdtempSync(join(tmpdir(), 'void-empty-content-'));
+    const path = 'client-secrets.test.mjs';
+    const payload = tool === 'apply_patch'
+      ? { tool_name: tool, tool_input: {
+        patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+\n*** End Patch`,
+      } }
+      : { tool_name: tool, tool_input: { file_path: path, content: '', new_string: '' } };
+    for (const rule of ['protected-file', 'secret-content'] as const) {
+      expect(evaluateRule(rule, payload, { root, env: {} }).code).toBe('ALLOW');
+    }
+  });
+
+  it('does not let inspectable patch content hide a shell write to the same target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-mixed-shell-content-'));
+    const target = 'client-secrets.test.mjs';
+    const patch = `*** Begin Patch\n*** Update File: ${target}\n@@\n-old\n+synthetic\n*** End Patch`;
+    const payload = { tool_name: 'shell', tool_input: {
+      command: `apply_patch '${patch}'; printf synthetic > ${target}`,
+    } };
+    expect(evaluateRule('protected-file', payload, { root, env: {} }))
+      .toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+  });
+
   function rootWithManifest(paths: readonly string[]): string {
     const root = mkdtempSync(join(tmpdir(), `${PRODUCT_IDENTITY.packageName}-co-owned-`));
     write(root, '.void/install-manifest.json', JSON.stringify({ files: paths.map((path) => ({ path })) }));
@@ -182,6 +229,59 @@ describe('co-owned enforcement across tool adapters', () => {
       } }
       : { tool_name: tool, tool_input: { file_path: path, content, new_string: content } };
   }
+
+  it.each(['Write', 'Edit', 'apply_patch'])(
+    'scans newly permitted source test content through %s', (tool) => {
+      const root = rootWithManifest([]);
+      const path = join(root, 'fixtures/client-secrets.test.mjs');
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        for (const content of [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`]) {
+          const payload = edit(tool, path, content);
+          expect(evaluateRule('protected-file', payload, { root, source, env: {} }).code).toBe('ALLOW');
+          const verdict = evaluateRule('secret-content', payload, { root, source, env: {} });
+          expect(verdict).toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+          expect(verdict.evidence).toEqual([`${path}:1`]);
+        }
+      }
+    },
+  );
+
+  it.each(['Write', 'Edit', 'apply_patch'])(
+    'allows a synthetic credential-named test through %s', (tool) => {
+      const root = rootWithManifest([]);
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        const payload = edit(tool, join(root, 'client-secrets.test.mjs'), 'export const fixture = 1;');
+        expect(evaluateRule('protected-file', payload, { root, source, env: {} }))
+          .toMatchObject({ allow: true, code: 'ALLOW' });
+        expect(evaluateRule('secret-content', payload, { root, source, env: {} }).code).toBe('ALLOW');
+      }
+    },
+  );
+
+  it.each(['Bash', 'shell', 'apply_patch'])(
+    'preserves protected targets beside a synthetic test through %s', (tool) => {
+      const owned = 'managed/client-secrets.test.mjs';
+      const root = rootWithManifest([owned]);
+      const payload = (paths: readonly string[]) => tool === 'apply_patch'
+        ? { tool_name: tool, tool_input: { patch: ['*** Begin Patch', ...paths.flatMap((path) =>
+          [`*** Update File: ${path}`, '@@', '-old', '+synthetic']), '*** End Patch'].join('\n') } }
+        : { tool_name: tool, tool_input: {
+          command: paths.map((path) => `printf synthetic > '${path}'`).join('; '),
+        } };
+      const allowed = join(root, tool === 'apply_patch' ? 'client-secrets.test.mjs' : 'ordinary.test.ts');
+      expect(evaluateRule('protected-file', payload([allowed]), { root, env: {} }).code).toBe('ALLOW');
+      for (const path of [owned, '.env.test.mjs', 'secrets.json', 'private.key',
+        '.aws/credentials', '.git/client-secrets.test.mjs', 'pnpm-lock.yaml',
+        'client-secrets.test.json', 'client-secrets.test.mjs.bak']) {
+        const denied = join(root, path);
+        for (const paths of [[allowed, denied], [denied, allowed]]) {
+          const verdict = evaluateRule('protected-file', payload(paths), { root, env: {} });
+          expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+          expect(verdict.evidence[0]?.startsWith(`${denied}:`)).toBe(true);
+        }
+      }
+    },
+  );
 
   it.each(['Write', 'Edit', 'apply_patch'])(
     'permits project doctrine in tool-input and checked-out evidence through %s', (tool) => {

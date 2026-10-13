@@ -7914,7 +7914,7 @@ function projectPath(root, path2) {
   const relativePath = relative(resolve2(root), absolute).replaceAll("\\", "/");
   return relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath) ? void 0 : relativePath;
 }
-function protectedReason(path2, root) {
+function protectedReason(path2, root, shellWrite) {
   if (root !== void 0) {
     const relativePath = projectPath(root, path2);
     if (relativePath !== void 0 && !isCoOwned(relativePath) && manifestOwnedPaths(root).has(relativePath)) {
@@ -7930,7 +7930,10 @@ function protectedReason(path2, root) {
     return "private key / certificate";
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return "credential file";
-  if (!base.endsWith(".md") && /(?:secret|credential)/.test(base)) return "credential file";
+  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith(".md") && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceTest && shellWrite ? "credential-named source test with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
+  }
   if ((/* @__PURE__ */ new Set([
     "package-lock.json",
     "pnpm-lock.yaml",
@@ -7948,7 +7951,7 @@ function protectedReason(path2, root) {
 }
 function protectedFile(paths, options = {}) {
   for (const path2 of paths) {
-    const reason = protectedReason(path2, options.root);
+    const reason = protectedReason(path2, options.root, options.shellWritePaths?.includes(path2) ?? false);
     if (reason !== void 0) {
       const learn = reason.includes("void-learn") ? " Use void-learn to capture the missing harness capability." : "";
       return block("PROTECTED_FILE", `refusing to edit ${path2}.${learn}`, [`${path2}: ${reason}`]);
@@ -7972,6 +7975,7 @@ var HIGH_CONFIDENCE = [
 var GENERIC_ASSIGNMENT = /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/i;
 var PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 var EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
+var CREDENTIAL_SOURCE_TEST = /(?:secret|credential)[^/]*\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
 function lineHasSecret(line) {
   if (line.includes("allow-secret-pattern:")) return false;
   if (HIGH_CONFIDENCE.some((pattern2) => pattern2.test(line))) return true;
@@ -7986,7 +7990,8 @@ function lineHasSecret(line) {
 function secretContent(edits) {
   const evidence = [];
   for (const edit of edits) {
-    if (EXEMPT_PATH.test(edit.path.replaceAll("\\", "/"))) continue;
+    const path2 = edit.path.replaceAll("\\", "/");
+    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_TEST.test(path2)) continue;
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
       if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
     });
@@ -8876,7 +8881,8 @@ function evaluateRule(rule, rawInput, options) {
   if (rule === "protected-file") {
     if (productSetting(env, "ALLOW_SECRET_EDIT") === "1") return allow("OVERRIDE", "one-shot override");
     const ownership = options.source === "checked-out" ? {} : { root: options.root };
-    return protectedFile(call.edits.map((edit) => edit.path), ownership);
+    const shellWritePaths = call.tool === "Bash" || call.tool === "shell" ? shellWriteTargets(call.command) : [];
+    return protectedFile(call.edits.map((edit) => edit.path), { ...ownership, shellWritePaths });
   }
   if (rule === "secret-content") return secretContent(call.edits);
   if (rule === "control-character") return controlCharacter(call.edits);

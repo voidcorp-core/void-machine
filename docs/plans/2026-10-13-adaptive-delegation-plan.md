@@ -59,3 +59,14 @@ One standalone issue, not an autonomous expansion of the executing programme.
 Linear DEV-1019 owns mutable progress. Source and generated assets ship together.
 The existing .void/program.md is preserved. Final report distinguishes source/PR
 readiness from active installation and measured behavior from promised speedups.
+
+## Verification scope adjustment
+
+The first required suite exposed oversized and misclassified existing test proofs.
+Five test files were corrected in separate commits without changing runtime code,
+assertion deadlines or acceptance responsibilities: invocation, presentation, test
+catalogue, native review and mission dispatch. This bounded work is necessary to
+obtain reliable evidence for the requested workflow change. Initial failures and
+changed-case results are preserved in
+`docs/plans/2026-10-13-adaptive-delegation-verification.md`; the final independent
+review checks the assertion mapping as well as the delegation contract.

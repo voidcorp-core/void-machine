@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { init } from '../commands/init.js';
 import { INSTALL_RECEIPT_PATH } from './receipts.js';
 import { assertProjectCompatibility } from './update-compatibility.js';
+import { main, requiresProjectCompatibility } from '../main.js';
 
 const roots: string[] = [];
 const initialCwd = process.cwd();
@@ -80,4 +81,36 @@ it('refuses a retired selected pack instead of dropping it', async () => {
   await mkdir(join(root, '.void'), { recursive: true });
   await writeFile(join(root, '.void/config.json'), '{"packs":{"retired":"^4.0.0"}}');
   await expect(assertProjectCompatibility(root)).rejects.toThrow(/pack.*retired/i);
+});
+
+it('guards runtime mutation routing before wiring a newer installation', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'void-runtime-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void/machine/receipts'), { recursive: true });
+  await writeFile(join(root, INSTALL_RECEIPT_PATH), JSON.stringify({ schemaVersion: 1,
+    version: '99.0.0', source: 'local', runtimes: ['claude'], files: [] }));
+  await writeFile(join(root, '.void/config.json'), '{"packs":{}}');
+  process.chdir(root);
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  vi.spyOn(process, 'exit').mockImplementation(code => {
+    throw new Error(`process.exit(${String(code)})`);
+  });
+  await expect(main(['runtime', 'add', 'codex'])).rejects.toThrow(/newer/i);
+  expect(await readdir(root)).toEqual(['.void']);
+});
+
+it.each([
+  ['init', [], true], ['add', ['react'], true], ['remove', ['react'], true],
+  ['runtime', ['add', 'codex'], true], ['runtime', ['list'], false],
+  ['doctor', ['--fix'], true], ['doctor', ['--no-remote'], false],
+  ['hydrate', [], true], ['update', [], false], ['help', [], false], ['version', [], false],
+  ['mission', ['start'], true], ['mission', ['status'], false],
+  ['agents', ['dispatch'], true], ['agents', ['status'], false],
+  ['autopilot', ['merge'], true], ['autopilot', ['fingerprint'], false],
+  ['graph', ['project-build'], true], ['graph', ['explain'], false],
+  ['adoption', ['apply'], true], ['security', ['grant'], true],
+  ['decisions', ['new'], true], ['decisions', ['check'], false],
+])('classifies %s %j before dispatch', (command, args, expected) => {
+  expect(requiresProjectCompatibility(String(command), Array.isArray(args) ? args : []))
+    .toBe(expected);
 });

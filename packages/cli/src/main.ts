@@ -1,4 +1,5 @@
 import { cheatsheet } from './commands/cheatsheet.js';
+export { writeCandidatePlan } from './lib/candidate-process.js';
 import { commandName, type CommandName } from './lib/command-catalog.js';
 // CLI entry — dispatches to init / add / remove / list / doctor / help.
 

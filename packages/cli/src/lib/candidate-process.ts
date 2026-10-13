@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { type CandidateRequest, candidateRequestSchema, decodeCandidatePlan } from './candidate-plan.js';
+import { type CandidateRequest, candidateRequestSchema, decodeCandidatePlan, prepareCandidatePlan } from './candidate-plan.js';
 import { validateReleasePackage } from './update-release.js';
 
 async function boundedFile(path: string, limit: number): Promise<string> {
@@ -11,6 +11,12 @@ async function boundedFile(path: string, limit: number): Promise<string> {
   const bytes = await readFile(path);
   if (bytes.length > limit) throw new Error('Candidate protocol file exceeded limit');
   return bytes.toString('utf8');
+}
+
+export async function writeCandidatePlan(requestPath: string, responsePath: string): Promise<void> {
+  const request = candidateRequestSchema.parse(JSON.parse(await boundedFile(requestPath, 8192)));
+  const plan = await prepareCandidatePlan(request);
+  await writeFile(responsePath, JSON.stringify(plan), { flag: 'wx', mode: 0o600 });
 }
 
 export async function prepareWithCandidate(packageRoot: string, request: CandidateRequest, workspace: string) {

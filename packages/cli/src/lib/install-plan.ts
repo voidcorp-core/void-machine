@@ -7,6 +7,7 @@ import type { RuntimeAdapter } from './runtime-adapters.js';
 /** Internal compiler seam; never exposed as an install command-line flag. */
 export interface InstallPreparation {
   readonly projectRoot: string;
+  readonly recoverManifestOwnership?: boolean;
   readonly onPrepared: (plan: PreparedInstall) => void;
 }
 

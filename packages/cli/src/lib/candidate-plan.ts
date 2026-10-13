@@ -142,7 +142,8 @@ export async function prepareCandidatePlan(value: unknown) {
   if (runtimes.length === 0) throw new Error('Installed runtime selection is unknown; restore the installation receipt');
   let prepared: PreparedInstall | undefined;
   await init(['--no-interactive', '--runtime', runtimes.join(','), '--preserve-doctrine'], {
-    projectRoot: request.root, onPrepared: plan => { prepared = plan; },
+    projectRoot: request.root, recoverManifestOwnership: true,
+    onPrepared: plan => { prepared = plan; },
   });
   if (!prepared) throw new Error('Candidate compiler did not produce a plan');
   await assertCandidateInputs(request.root, inputs);

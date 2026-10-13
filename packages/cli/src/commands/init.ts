@@ -396,6 +396,7 @@ export async function init(
       source: opts.source,
       runtimes,
       force: opts.force,
+      recoverManifestOwnership: preparation?.recoverManifestOwnership === true,
     });
     if (opts.source === 'local') {
       await inspectInstallProjection(

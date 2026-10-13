@@ -15,7 +15,7 @@ const operationSchema = z.strictObject({ schemaVersion: z.literal(1), operationI
   participants: z.array(z.strictObject({ kind: kindSchema, root: z.string().max(4096) })).min(1).max(128),
 });
 type Operation = z.infer<typeof operationSchema>;
-const launcherPaths = new Set(['void-machine', 'voidmachine', 'vm', 'void-machine.cmd', 'voidmachine.cmd', 'vm.cmd', 'void-machine.mjs']);
+const launcherPaths = new Set(['void-machine', 'voidmachine', 'vm', 'void-machine.cmd', 'voidmachine.cmd', 'vm.cmd', 'void-machine.mjs', 'void-machine.ps1', 'voidmachine.ps1', 'vm.ps1']);
 function allowedPath(kind: Kind, path: string): boolean {
   return kind === 'project' ? isUpdateProjectPath(path) : kind === 'active' ? path === 'active.json' : launcherPaths.has(path);
 }

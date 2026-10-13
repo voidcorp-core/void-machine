@@ -29,6 +29,8 @@ import { selfHost } from './commands/self-host.js';
 import { printHelp } from './commands/help.js';
 import { version } from '../package.json';
 import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
+import { resolveProjectRoots } from './lib/project-roots.js';
+import { assertProjectCompatibility } from './lib/update-compatibility.js';
 
 /**
  * Commands that print their own, more specific help.
@@ -63,6 +65,22 @@ export async function run(invokedAs: string, argv: readonly string[]): Promise<v
   await main(argv);
 }
 
+/** Read-only diagnostics stay usable when mutation contracts cannot be understood. */
+export function requiresProjectCompatibility(command: string, args: readonly string[]): boolean {
+  const sub = args[0] ?? '';
+  if (['init', 'add', 'remove', 'hydrate', 'install'].includes(command)) return true;
+  if (command === 'runtime') return sub === 'add';
+  if (command === 'doctor') return args.includes('--fix');
+  if (command === 'graph') return ['build', 'project-build', 'knowledge-build'].includes(sub);
+  if (command === 'decisions') return sub === 'new';
+  if (command === 'mission') return !['', 'help', 'status', 'inspect', 'dispatch'].includes(sub);
+  if (command === 'agents') return !['', 'help', 'status', 'attach'].includes(sub);
+  if (command === 'autopilot') return !['', 'help', 'fingerprint', 'judgment'].includes(sub);
+  if (command === 'adoption') return sub === 'apply';
+  if (command === 'security') return !['', 'help', 'adapters', 'status'].includes(sub);
+  return false;
+}
+
 export async function main(argv: readonly string[]): Promise<void> {
   const [cmd, ...rest] = argv;
 
@@ -82,6 +100,11 @@ export async function main(argv: readonly string[]): Promise<void> {
     printHelp();
     process.exitCode = 2;
     return;
+  }
+  if (requiresProjectCompatibility(name, rest)) {
+    await assertProjectCompatibility(resolveProjectRoots().installRoot, {
+      replaceUnparseableConfig: name === 'init' && rest.includes('--force'),
+    });
   }
   await HANDLERS[name](rest);
 }

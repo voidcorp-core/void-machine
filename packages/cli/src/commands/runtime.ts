@@ -8,6 +8,7 @@
 
 import * as p from '@clack/prompts';
 import { existsSync } from 'node:fs';
+import { assertProjectCompatibility } from '../lib/update-compatibility.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,6 +48,7 @@ function runtimeList(): void {
 
 async function runtimeAdd(rest: readonly string[]): Promise<void> {
   const projectRoot = process.cwd();
+  await assertProjectCompatibility(projectRoot);
 
   // Parse the requested runtimes; a typo must fail loudly, never silently no-op.
   const requested: Runtime[] = [];

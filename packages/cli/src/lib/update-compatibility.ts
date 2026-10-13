@@ -61,8 +61,7 @@ export async function assertProjectCompatibility(
   }
   const configBody = await optionalRecord(projectRoot, '.void/config.json');
   if (configBody === undefined) return;
-  let raw: unknown;
-  try { raw = JSON.parse(configBody); }
+  try { JSON.parse(configBody); }
   catch {
     if (options.replaceUnparseableConfig) return;
     throw new Error('.void/config.json: unreadable configuration; repair invalid JSON');

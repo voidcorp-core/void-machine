@@ -25,7 +25,7 @@ If `.void/program.md` exists with `status: executing`, read it and its linked pl
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
-Use `void-orchestrate` for native short agents and durable Herdr workers. Preserve real invocation receipts, central mission files and existing role permissions; native Agent calls are not intercepted.
+Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Herdr is optional. Preserve existing permissions, independent review and real invocation evidence.
 
 Run `void-machine doctor` to verify the install.
 
@@ -71,12 +71,12 @@ automatic selection. Human gates and merges remain human.
 
 ## Visible mission workspace
 
-For a request to code on a named project, follow `docs/NATIVE-SUPERVISION.md` and
-`void-orchestrate`: resolve the central mission and the existing coordinator by
-label plus canonical worktree. Short specialists use native fresh contexts;
-durable workers use their own Herdr sessions and worktrees. Re-read the pane list
-before every identity decision. Preserve central reports, real review receipts,
-permissions and merge gates; no Agent capture or duplicate coordinator.
+For delegated work, follow `void-orchestrate` and `docs/NATIVE-SUPERVISION.md`.
+The coordinator keeps intent and decisions; native research and workers use the
+available runtime capabilities. When the optional Herdr adapter is selected,
+resolve its central mission and existing coordinator by label plus canonical
+worktree, re-reading pane identity before acting. Preserve reports, real review
+receipts, permissions and merge gates; no Agent capture or duplicate coordinator.
 
 ## Anti-bloat discipline
 

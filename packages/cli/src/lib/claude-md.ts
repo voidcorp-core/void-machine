@@ -65,7 +65,7 @@ export function harnessBlock(input: ClaudeMdBlockInputs, runtime: Runtime = 'cla
   const invocationLine = isClaude
     ? `Every skill is invoked by its name: \`${prefixed ? '/harness:void-implement' : '/void-implement'}\`, \`${prefixed ? '/harness:void-tdd' : '/void-tdd'}\`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.`
     : `Every skill is invoked by its name: \`$void-implement\`, \`$void-tdd\`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.`;
-  const delegationLine = 'Use `void-orchestrate` for native short agents and durable Herdr workers. Preserve real invocation receipts, central mission files and existing role permissions; native Agent calls are not intercepted.';
+  const delegationLine = 'Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Herdr is optional. Preserve existing permissions, independent review and real invocation evidence.';
   return [
     MARKERS.current.begin,
     '',

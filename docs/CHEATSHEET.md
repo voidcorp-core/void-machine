@@ -79,7 +79,7 @@ From a validated plan to a merged pull request.
 | `void-implement` | Use when taking a single ticket from ready through shipped at expert-team quality. |
 | `void-merge` | Vider la file des PR ouvertes sans casser le dépôt. |
 | `void-autopilot` | Use to run the continuous delivery loop, where a curator ranks the backlog, up to four workers each run void-implement to a PR, and a local review verdict gates each merge until d… |
-| `void-orchestrate` | Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions. |
+| `void-orchestrate` | Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. |
 | `void-retrospective` | Periodic engineering retro over a window: read git log / PRs / . |
 | `void-make-pdf` | Turn a markdown file into a publication-quality PDF — marked + puppeteer-core on the system Chrome, with page-number footers. |
 

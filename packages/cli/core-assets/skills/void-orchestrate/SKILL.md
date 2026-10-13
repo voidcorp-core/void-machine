@@ -1,16 +1,90 @@
 ---
 name: void-orchestrate
-description: Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.
+description: Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Herdr is optional.
 ---
 
 # Orchestrate
 
-One coordinator, one mission, one writer per worktree. Use native runtime agents for
-short analysis or review. Use Herdr for a worker that needs a durable terminal session.
-This skill owns transport and continuity; `void-implement` owns delivery quality and
-`void-autopilot` owns its loop. Neither a pane nor a report grants merge permission.
+The user-facing coordinator keeps intent, decisions and synthesis. This skill owns
+adaptive delegation, transport and continuity; `void-implement` owns delivery quality
+and `void-autopilot` its loop. Neither a pane nor a report grants merge permission.
 
-## Recover before launching
+## Choose work and capabilities
+
+Read project instructions, the approved task and Git state; preserve other writers'
+changes. Before dispatch, inspect the actual native agent tools and their supported
+context, permissions, completion and resume capabilities. Herdr is optional: native
+agents work without it. Select its adapter below only when available and useful for
+a durable terminal worker; do not claim durability from a pane or unsupported API.
+
+- Work directly for a tiny targeted change, a single tool call, mechanical processing,
+  or tightly coupled work where delegation adds no useful separation.
+- Delegate bounded independent research and exploration during brainstorm and plan.
+  Keep the user conversation, evaluation of sources and decisions in the coordinator.
+- Delegate substantial implementation to one writer when supported. A writer
+  already assigned the unit executes it; never delegate the same complete workflow
+  recursively. Retain that writer for corrections. Before parallel feature slices,
+  define disjoint ownership, dependencies and acceptance of the integrated result.
+- No native agent capability: execute sequentially and state the limitation. A
+  mandatory independent review or required isolation remains a blocker; do not
+  replace it with self-review or silently weaken its requirement.
+
+## Brief and bound the delegation
+
+Use a fresh context by default. Choose a supported fork only when the task needs
+conversation history. Give objective, relevant context/source revision, owned paths,
+permissions, acceptance, result format and bounds. Tell writers they are not alone
+and must preserve others' changes. Ask researchers for conclusions, source references,
+uncertainty and remaining questions, not all intermediate logs. Ordinary research
+uses this lightweight brief: do not invent specialist events or review receipts.
+Formal specialist envelopes and evidence follow the independent contract below.
+
+Count writer, research and review children together against observed available runtime slots
+and the coordinator's bounded dispatch; queue work when full. Preserve tighter caller
+limits, including Autopilot's ticket cap and the central schema's four-worker limit.
+This is no machine-wide quota. Do not create recursive child coordinators or redispatch
+the same complete workflow. Required formal specialists remain dispatched by their
+designated owner within the shared available capacity. Do not duplicate a child's work
+in the coordinator. Run independent work concurrently only when it helps the critical
+path; use ordinary tools for mechanical operations. Respect permissions throughout.
+
+Read-only research needs no new worktree. Reviews use an immutable exact subject.
+Concurrent authors need isolated assigned worktrees and disjoint ownership; if
+isolation fails, serialize rather than share concurrent writes. Required isolation
+that cannot be met stays blocked. A sole writer may reuse its assigned checkout;
+Autopilot retains its per-ticket worktree requirement. Follow the universal durable
+worktree invariant and existing shared Git restrictions, irrespective of display.
+
+## Collect and resume honestly
+
+Prefer native completion events; otherwise wait in bounded slices. A wait timeout
+is not failure. Reconcile an uncertain launch or side effect before retrying. Use
+partial results when useful, distinguish failure from missing output, and verify
+acceptance before claiming success. Reuse the same session for corrections; confirm
+that a new instruction was consumed or reflected in the result before calling it applied.
+
+Distinguish saved work, live session, retained result and delivered result. A finished
+turn or report alone proves no accepted outcome or crash recovery. Use the selected
+runtime's actual persistence/recovery path; expose a lost session or unknown effects.
+Never invent a durable inbox. Preserve formal receipts separately from working notes.
+
+## Short native specialists
+
+Pass the returned specialist envelope unchanged: runtime, agentName, missionId,
+contextPack and, when present, reviewSubject and reviewScope. Invoke the runtime's
+native fresh-context primitive; native Agent calls are not intercepted. Keep the
+real opaque context ID exactly as returned, including slash-prefixed names; it is
+data, never a filesystem path. Record actual starts/completions with
+`mission specialist-event`; never invent IDs or convert a failed call into a review.
+Before another invocation, reconcile any existing invocation for the same envelope.
+Preserve the complete result; incomplete results go back to the same agent.
+With `panel.provider: orchestrator`, only ORCH launches and collects this panel.
+Missing required native capability is reported with cause and next action.
+
+## Herdr adapter: recovery
+
+The following Herdr sections apply only when this optional adapter is selected.
+Native delegation without it does not require these central files or pane discovery.
 
 Read project instructions, the approved task and the current Git status. Preserve
 other writers' changes. Resolve the canonical Git common directory, SHA-256 its
@@ -30,7 +104,7 @@ in its assigned worktree. Do not affect any other project, workspace or pane.
 An uncertain launch or prompt acknowledgement requires reconciliation of that same
 worker before retrying. A timeout proves neither launch failure nor prompt loss.
 
-## Explicit coordinator context
+## Herdr adapter: explicit coordinator context
 
 If unique discovery refuses multiple compatible missions, ORCH reads the target
 mission and reports, then atomically replaces its local, unversioned
@@ -51,7 +125,7 @@ Separate worker worktrees retain their own mission, attempt and report discovery
 A selected terminal mission retains the guarded cleanup below: never clear tokens
 belonging to another mission. No binding belongs in the programme descriptor.
 
-## Central files and ownership
+## Herdr adapter: central files and ownership
 
 Use schema: 1 YAML frontmatter, strict string keys and one document, followed by
 Markdown. Reject duplicate keys, tags, anchors, aliases and unknown fields. Bound
@@ -80,7 +154,7 @@ event. An absent report falls back to the manifest. Malformed, foreign, partial 
 unrecognized stale reports refuse usage; never turn a parse failure into absence.
 The files carry coordination state, not independent review proof.
 
-## Copyable starting files
+## Herdr adapter: copyable starting files
 
 Replace the example project hash with SHA-256 of the canonical common Git path.
 Replace every path, branch, ticket and timestamp from actual observations. These
@@ -151,21 +225,7 @@ Completed: <actual changes>. Verification: <commands, results and proof paths>.
 Remaining: <work and exact next action>. Risks/questions: <observed limitations>.
 ```
 
-## Short native agents
-
-Pass the returned specialist envelope unchanged: runtime, agentName, missionId,
-contextPack and, when present, reviewSubject and reviewScope. Invoke the runtime's
-native fresh-context primitive; Native short-agent calls are not intercepted. Keep the
-real opaque context ID exactly as returned, including slash-prefixed names; it is
-data, never a filesystem path. Record actual starts/completions with
-`mission specialist-event`; never invent IDs or convert a failed call into a review.
-Before another invocation, reconcile any existing invocation for the same envelope.
-Wait in bounded slices. A timed-out wait never makes an agent failed. Preserve the
-actual complete result; incomplete results go back to the same agent for completion.
-With `panel.provider: orchestrator`, only ORCH launches and collects this panel.
-Missing required native capability is reported with cause and next action.
-
-## Durable Herdr workers
+## Herdr adapter: durable workers
 
 Read installed `herdr --help`, `herdr agent --help` and the live schema before
 issuing commands. Use structured argv, exact acknowledged identities and bounded
@@ -201,7 +261,7 @@ in the same worktree. Missing session: retain the mission and expose the loss.
 only after the installed schema proves support. Otherwise retain the complete resume
 recipe in the brief. Never claim restart restoration was tested without doing it.
 
-## Projection and closure
+## Herdr adapter: projection and closure
 
 The hook publishes source void-machine on SessionStart startup/resume/clear/compact
 and Stop after re-reading central state and fresh Herdr identities. Pane tokens:

@@ -27,6 +27,10 @@ describe('harnessBlock', () => {
       const block = harnessBlock(input, runtime);
       expect(block).toContain('void-orchestrate');
       expect(block).toContain('native');
+      expect(block).toContain('independent research and substantial implementation');
+      expect(block).toContain('Herdr is optional');
+      expect(block).toContain('already delegated writer');
+      expect(block).toContain('independent review');
       expect(block).not.toContain('refuses the native call');
       expect(block).not.toContain('agents dispatch');
     }

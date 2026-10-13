@@ -6,7 +6,7 @@ runtime recipes were checked before the approved DEV-1016 plan.
 
 ## Adaptations
 
-Native short contexts keep the runtime's real IDs. Durable workers use Herdr and
+Native short contexts keep the runtime's real IDs. When selected, Herdr workers use
 central files owned by ORCH/worker, with atomic replacement. Label plus canonical
 worktree replaces a remembered pane ID. Bounded strict YAML and explicit failure
 states make interruption and stale reports visible. Existing canonical review
@@ -25,3 +25,25 @@ policy remain their existing owners' responsibility.
 Skill contract tests cover recipes, bounded size, continuity and provenance. Source
 assets are derived through the registry. Real restart/Cortex conformance was outside
 the authorized test scope; ORCH owns controlled real projection and final review.
+
+## Adaptive delegation (DEV-1019)
+
+The 2026-10-13 source additions inform one portable policy, not a new engine. Adapt
+OpenAI's context separation and Anthropic's bounded research briefs; keep intent,
+source assessment and decisions with the coordinator. Adapt OpenClaw's context
+choice, completion-driven collection and precise specialist responsibility. Adapt
+Hermes' compact result handoff and distinction between persisted results and live
+execution. Ordinary research has lightweight briefs, never fake formal evidence.
+
+Choose direct work for tiny or mechanical tasks, native delegation for useful
+independent work, and one writer for substantive implementation. Do not recursively
+wrap an assigned writer. Read-only research needs no new worktree; concurrent
+writes remain isolated and acceptance covers integration, not merely child success.
+Herdr recipes and central discovery now apply only to that optional adapter.
+
+Reject silent fallback from requested isolation to concurrent shared writes,
+recursive multiplication of budgets, completion polling where events exist, and a
+completed turn as proof of task acceptance. Retain mandatory review/security
+isolation as blockers. This slice has no global scheduler, durable inbox or claimed
+speedup. Contract tests verify instructions and distribution; actual native probes
+are separately reported and do not establish universal execution or crash recovery.

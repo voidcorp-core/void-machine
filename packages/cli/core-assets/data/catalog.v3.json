@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:61c37a194000c4e01722c9977ddd6f0d7bf28e02b7791c1fb17cd16c4f5487cb"
+    "rootHash": "sha256:70bee39ee2e04112a70fcda458516e5421edf63d5a83bd73377362d4610f0c69"
   },
   "nodes": [
     {
@@ -3551,7 +3551,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 391,
+          "lines": 392,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 6886,
+          "staticTokens": 6910,
           "type": "skill"
         }
       },
@@ -3599,7 +3599,7 @@
             }
           ],
           "id": "skill:void-brainstorm",
-          "lines": 271,
+          "lines": 278,
           "name": "void-brainstorm",
           "owner": "folpe",
           "pack": null,
@@ -3608,7 +3608,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-brainstorm/SKILL.md",
-          "staticTokens": 4143,
+          "staticTokens": 4226,
           "type": "skill"
         }
       },
@@ -3841,7 +3841,7 @@
             }
           ],
           "id": "skill:void-context",
-          "lines": 167,
+          "lines": 166,
           "name": "void-context",
           "owner": "folpe",
           "pack": null,
@@ -3850,7 +3850,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-context/SKILL.md",
-          "staticTokens": 2874,
+          "staticTokens": 2865,
           "type": "skill"
         }
       },
@@ -4331,7 +4331,7 @@
             }
           ],
           "id": "skill:void-implement",
-          "lines": 183,
+          "lines": 192,
           "name": "void-implement",
           "owner": "folpe",
           "pack": null,
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 5536,
+          "staticTokens": 5664,
           "type": "skill"
         }
       },
@@ -4660,7 +4660,7 @@
       "label": "void-orchestrate",
       "data": {
         "legacy": {
-          "description": "Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.",
+          "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Herdr is optional.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4677,7 +4677,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 240,
+          "lines": 300,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4686,7 +4686,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 3190,
+          "staticTokens": 4194,
           "type": "skill"
         }
       },
@@ -4725,7 +4725,7 @@
             }
           ],
           "id": "skill:void-plan",
-          "lines": 239,
+          "lines": 246,
           "name": "void-plan",
           "owner": "folpe",
           "pack": null,
@@ -4734,7 +4734,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan/SKILL.md",
-          "staticTokens": 2623,
+          "staticTokens": 2706,
           "type": "skill"
         }
       },

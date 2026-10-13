@@ -11,6 +11,13 @@ The spec answers "what should we build." This skill answers "in what order, with
 
 ---
 
+## Delegated investigation
+
+Invoke `void-orchestrate` for independent dependency, codebase or verification
+investigations that inform the plan. The coordinator integrates the results into
+one dependency graph and retains scope, sequencing and approval decisions; agents
+do not independently approve plans or start implementation.
+
 ## When to invoke
 
 Invoke immediately after `void-brainstorm` approves a spec. The plan is the next deliverable before any code.

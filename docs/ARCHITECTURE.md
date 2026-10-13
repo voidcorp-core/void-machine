@@ -312,6 +312,11 @@ Rules:
   configuration refuses reconciliation unless the existing `--force` overwrite verdict applies;
   malformed pack maps or pins and unknown retained names receive explicit diagnostics rather
   than a successful core-only install. `--force` does not erase readable project configuration.
+  Local `add` also refuses an unreadable `.void/config.json`: it cannot reconstruct the retained
+  selection safely, so it leaves the configuration, installed packs and receipt untouched and
+  reports no successful addition. Restore valid JSON with the complete retained pack map and
+  pins, then rerun `void-machine add <pack-name>`. The legacy marketplace settings-only fallback
+  remains separate; it is not a recovery path for a local installation.
 - **The harness owns exactly the skills it ships; the project owns every other one.**
   `.claude/skills/` and its siblings are shared directories, and the manifest — not the path —
   answers which side a file is on. A skill the harness does not ship is never ignored and never

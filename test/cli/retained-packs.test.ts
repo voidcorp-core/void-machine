@@ -4,10 +4,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { add } from '../../packages/cli/src/commands/add.js';
 import { init } from '../../packages/cli/src/commands/init.js';
 import { hydrate } from '../../packages/cli/src/commands/hydrate.js';
 import { PACKS, packDirForName } from '../../packages/cli/src/lib/packs.js';
 import { cliVersion } from '../../packages/cli/src/lib/paths.js';
+import { INSTALL_RECEIPT_PATH, readInstallReceipt } from '../../packages/cli/src/lib/receipts.js';
 
 const PACK_ROOT = resolve(import.meta.dirname, '../../packages/packs');
 const ARGS = ['--runtime', 'both', '--no-interactive'];
@@ -160,6 +162,31 @@ describe('retained pack reconciliation', () => {
     await expect(init(ARGS)).rejects.toThrow(/\.void\/config\.json/);
     expect(readFileSync('.void/config.json', 'utf8')).toBe(body);
     expect(existsSync('.void/install-manifest.json')).toBe(false);
+  });
+
+  it('refuses public local add with unreadable config without pruning retained packs', async () => {
+    await init([...ARGS, '--pack', 'react']);
+    expectAssets(['harness-react']);
+    const receipt = await readInstallReceipt(root);
+    if (receipt?.source !== 'local') throw new Error('Expected a real local installation');
+    const receiptBytes = readFileSync(INSTALL_RECEIPT_PATH);
+    const installedSkills = receipt.files
+      .filter(file => /^(?:\.claude|\.agents)\/skills\//.test(file.path))
+      .map(file => ({ path: file.path, content: readFileSync(file.path) }));
+    expect(installedSkills.length).toBeGreaterThan(0);
+    const corruptConfig = '{ "packs": { "@voidcorp/harness-react": "^3.1.0"\n';
+    writeFileSync('.void/config.json', corruptConfig);
+    output = '';
+
+    await expect(add(['nextjs'])).rejects.toThrow(/\.void\/config\.json: unreadable/);
+
+    expect(readFileSync('.void/config.json')).toEqual(Buffer.from(corruptConfig));
+    expect(readFileSync(INSTALL_RECEIPT_PATH)).toEqual(receiptBytes);
+    expectAssets(['harness-react']);
+    for (const file of installedSkills) {
+      expect(readFileSync(file.path), file.path).toEqual(file.content);
+    }
+    expect(output).not.toMatch(/Added(?: locally)?:/);
   });
 
   it('allows force to replace unparseable config through the existing config verdict', async () => {

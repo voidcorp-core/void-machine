@@ -58,6 +58,16 @@ describe('co-owned manifest paths', () => {
 });
 
 describe('protectedFile', () => {
+  it.each(['test', 'spec'])('refuses .%s credential source tests extracted from shell writes', (kind) => {
+    for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
+      const path = `fixtures/client-secrets.${kind}.${extension}`;
+      for (const target of [path, path.toUpperCase().replaceAll('/', '\\')]) {
+        expect(protectedFile([target], { shellWritePaths: [target] }))
+          .toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      }
+    }
+  });
+
   it.each(['test', 'spec'])('allows credential-named .%s source files only', (kind) => {
     for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
       for (const name of ['client-secrets', 'credentials']) {

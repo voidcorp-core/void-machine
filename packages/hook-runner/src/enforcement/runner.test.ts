@@ -169,6 +169,53 @@ describe('complete TDD evidence and operation bounds', () => {
 });
 
 describe('co-owned enforcement across tool adapters', () => {
+  it.each(['Bash', 'shell'])('refuses uninspectable credential-named test writes through %s', (tool) => {
+    const root = mkdtempSync(join(tmpdir(), 'void-shell-content-'));
+    const target = 'fixtures/client-secrets.test.mjs';
+    const safe = 'ordinary.test.ts';
+    const windows = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
+    const commands = [
+      `printf synthetic > ${target}`, `printf synthetic >> '${target}'`,
+      `printf synthetic 2> "${target}"`, `printf synthetic &> ${target}`,
+      `printf synthetic | tee ${target}`, `printf synthetic | tee -a '${target}'`,
+      `printf synthetic > '${windows}'`,
+      `printf synthetic > ${safe}; printf synthetic > ${target}`,
+      `printf synthetic > ${target}; printf synthetic > ${safe}`,
+      `printf synthetic > ${target} # allow-secret-pattern: cannot inspect a shell write`,
+    ];
+    for (const command of commands) {
+      const payload = { tool_name: tool, tool_input: { command } };
+      const verdicts = ['protected-file', 'secret-content'].map((rule) =>
+        evaluateRule(rule, payload, { root, env: {} }));
+      expect(verdicts[0]).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+      expect(verdicts.some((verdict) => !verdict.allow)).toBe(true);
+    }
+  });
+
+  it.each(['Write', 'Edit', 'apply_patch'])('permits inspectable empty source tests through %s', (tool) => {
+    const root = mkdtempSync(join(tmpdir(), 'void-empty-content-'));
+    const path = 'client-secrets.test.mjs';
+    const payload = tool === 'apply_patch'
+      ? { tool_name: tool, tool_input: {
+        patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+\n*** End Patch`,
+      } }
+      : { tool_name: tool, tool_input: { file_path: path, content: '', new_string: '' } };
+    for (const rule of ['protected-file', 'secret-content']) {
+      expect(evaluateRule(rule, payload, { root, env: {} }).code).toBe('ALLOW');
+    }
+  });
+
+  it('does not let inspectable patch content hide a shell write to the same target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'void-mixed-shell-content-'));
+    const target = 'client-secrets.test.mjs';
+    const patch = `*** Begin Patch\n*** Update File: ${target}\n@@\n-old\n+synthetic\n*** End Patch`;
+    const payload = { tool_name: 'shell', tool_input: {
+      command: `apply_patch '${patch}'; printf synthetic > ${target}`,
+    } };
+    expect(evaluateRule('protected-file', payload, { root, env: {} }))
+      .toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
+  });
+
   function rootWithManifest(paths: readonly string[]): string {
     const root = mkdtempSync(join(tmpdir(), `${PRODUCT_IDENTITY.packageName}-co-owned-`));
     write(root, '.void/install-manifest.json', JSON.stringify({ files: paths.map((path) => ({ path })) }));

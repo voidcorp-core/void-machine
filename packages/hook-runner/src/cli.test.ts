@@ -58,6 +58,39 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
 }
 
 describe('bundled credential source test content enforcement', () => {
+  it.each([['claude', 'Bash'], ['codex', 'shell']])(
+    'refuses uninspectable redirected source tests for %s through %s', (runtime, tool) => {
+      const target = join(workspace, 'fixtures/client-secrets.test.mjs');
+      const safe = join(workspace, 'ordinary.test.ts');
+      const token = `AKIA${'A1'.repeat(8)}`;
+      const commands = [
+        `printf '${token}' > '${target}'`, `printf synthetic >> '${target}'`,
+        `printf synthetic | tee -a '${target}'`,
+        `printf synthetic > '${safe}'; printf synthetic > '${target}'`,
+        `printf synthetic > '${target}'; printf synthetic > '${safe}'`,
+      ];
+      for (const command of commands) {
+        const result = spawnSync(process.execPath, [hook, 'enforce', 'protected-file', runtime], {
+          input: JSON.stringify({ tool_name: tool, tool_input: { command } }),
+          encoding: 'utf8', cwd: workspace,
+          env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+        });
+        expect(result.error).toBeUndefined();
+        expect(result.signal).toBeNull();
+        expect(result.status).toBe(runtime === 'claude' ? 2 : 0);
+        if (runtime === 'codex') expect(result.stdout).not.toBe('');
+        const reason = runtime === 'codex'
+          ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason : result.stderr;
+        if (runtime === 'codex') {
+          expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+        }
+        expect(reason).toContain('PROTECTED_FILE');
+        expect(reason).toContain(target);
+        expect(reason).not.toContain(token);
+      }
+    },
+  );
+
   it.each(['claude', 'codex'])('refuses secret-bearing mixed edits in either order for %s', (runtime) => {
     const safe = join(workspace, 'ordinary.test.ts');
     const denied = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
@@ -96,6 +129,7 @@ describe('bundled credential source test content enforcement', () => {
   it.each(['claude', 'codex'])('combines filename and content protection for %s', (runtime) => {
     const path = join(workspace, 'fixtures/client-secrets.test.mjs');
     const cases = [
+      ['', false],
       ['export const fixture = 1;', false],
       [`AKIA${'A1'.repeat(8)}`, true],
       [`SERVICE_TOKEN="${'Az19'.repeat(8)}"`, true],

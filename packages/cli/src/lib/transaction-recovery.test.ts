@@ -1,11 +1,26 @@
 import { chmod, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
 import { applyFileTransaction, prepareFileTransaction, recoverFileTransaction } from './transaction.js';
 
+const nativeModes = vi.hoisted(() => ({ windows: false }));
+vi.mock('node:fs/promises', async original => {
+  const actual = await original<typeof import('node:fs/promises')>();
+  return { ...actual, open: async (...args: Parameters<typeof actual.open>) => {
+    const handle = await actual.open(...args);
+    if (nativeModes.windows) {
+      const chmodHandle = handle.chmod.bind(handle);
+      handle.chmod = mode => chmodHandle((Number(mode) & 0o200) ? 0o666 : 0o444);
+    }
+    return handle;
+  } };
+});
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
+  nativeModes.windows = false;
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 async function fixture() {
@@ -17,6 +32,17 @@ async function fixture() {
 }
 const mutations = [{ path: 'owned', content: Buffer.from('after'), mode: 0o755 },
   { path: 'nested/new', content: Buffer.from('created') }];
+
+it('recovers using the mode the filesystem actually supports instead of a POSIX request', async () => {
+  const { root, journal } = await fixture();
+  await chmod(join(root, 'owned'), 0o666);
+  nativeModes.windows = true;
+  await prepareFileTransaction(root, mutations, journal, 'native-modes');
+  await applyFileTransaction(root, journal);
+  await expect(recoverFileTransaction(root, journal)).resolves.toBeUndefined();
+  expect(await readFile(join(root, 'owned'), 'utf8')).toBe('before');
+  expect((await fs.stat(join(root, 'owned'))).mode & 0o777).toBe(0o666);
+});
 
 it('persists preparation without publishing and restores bytes and modes after publication', async () => {
   const { root, journal } = await fixture();

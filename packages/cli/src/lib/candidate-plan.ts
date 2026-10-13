@@ -4,6 +4,7 @@ import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { init } from '../commands/init.js';
+import { planProgramMigration } from './autopilot/program-migration.js';
 import { CO_OWNED_FILES } from './co-owned.js';
 import { INSTALL_MANIFEST_PATH, readInstallManifest } from './install-manifest.js';
 import type { PreparedInstall } from './local-install.js';
@@ -104,14 +105,17 @@ export function decodeCandidatePlan(body: string, expected: CandidateRequest) {
     if (new Set(entries.map(entry => entry.path)).size !== entries.length) throw new Error('Duplicate candidate path');
   }
   let total = 0;
+  const inputs = new Map(plan.inputs.map(input => [input.path, input]));
   const mutations: FileMutation[] = plan.mutations.map(mutation => {
-    if ('remove' in mutation) return mutation;
+    const input = inputs.get(mutation.path);
+    const expected = input ? { exists: true as const, sha256: input.sha256, mode: input.mode } : { exists: false as const };
+    if ('remove' in mutation) return { ...mutation, expected };
     const bytes = Buffer.from(mutation.content, 'base64');
     total += bytes.length;
     if (bytes.toString('base64') !== mutation.content || bytes.length > 32 * 1024 * 1024 || total > 128 * 1024 * 1024) {
       throw new Error('Invalid candidate content or byte limit exceeded');
     }
-    return { path: mutation.path, content: bytes, mode: mutation.mode };
+    return { path: mutation.path, content: bytes, mode: mutation.mode, expected };
   });
   return { ...plan, mutations };
 }
@@ -123,6 +127,13 @@ export async function prepareCandidatePlan(value: unknown) {
   if (await realpath(request.root) !== request.root) throw new Error('Candidate project root must be canonical');
   const inputs = await captureCandidateInputs(request.root);
   await assertProjectCompatibility(request.root);
+  const programInput = inputs.find(input => input.path === '.void/program.md');
+  const holdInput = inputs.find(input => input.path === '.void/machine/autopilot/merge-hold.json');
+  const migration = programInput ? planProgramMigration(
+    await readFile(join(request.root, programInput.path), 'utf8'),
+    holdInput ? await readFile(join(request.root, holdInput.path), 'utf8') : undefined,
+    new Date().toISOString(),
+  ).map(mutation => ({ ...mutation, mode: mutation.mode ?? programInput.mode })) : [];
   const receipt = await readInstallReceipt(request.root);
   const manifest = readInstallManifest(request.root);
   if (!receipt && !manifest) throw new Error('Update requires an installed project; use init to install');
@@ -136,7 +147,7 @@ export async function prepareCandidatePlan(value: unknown) {
   if (!prepared) throw new Error('Candidate compiler did not produce a plan');
   await assertCandidateInputs(request.root, inputs);
   const plan = { ...request, inputs, runtimes, restored: prepared.restored, preserved: prepared.preserved,
-    mutations: prepared.mutations.map(mutation => 'remove' in mutation ? mutation
+    mutations: [...migration, ...prepared.mutations].map(mutation => 'remove' in mutation ? mutation
       : { path: mutation.path, content: Buffer.from(mutation.content).toString('base64'), mode: mutation.mode ?? 0o644 }),
   };
   decodeCandidatePlan(JSON.stringify(plan), request);

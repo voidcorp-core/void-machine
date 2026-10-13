@@ -38,7 +38,7 @@ it('binds every write and removal to the original candidate input state', async 
   }), input);
   expect(plan.mutations[0]?.expected).toEqual({ exists: true, sha256: 'a'.repeat(64), mode: 0o600 });
   expect(plan.mutations[1]?.expected).toEqual({ exists: false });
-  await expect(prepareFileTransaction(root, plan.mutations, join(root, 'journal'), 'cas')).rejects.toThrow(/changed/i);
+  await expect(prepareFileTransaction(root, plan.mutations, join(root, 'journal'), 'cas')).rejects.toThrow(/planning conflict.*config/);
   expect(await readFile(join(root, '.void/config.json'), 'utf8')).toBe('later user edit');
 });
 
@@ -54,7 +54,7 @@ it.each(['human', 'union-reviewed'])('prepares equivalent %s programme policy be
   await chmod(join(root, '.void/program.md'), 0o600);
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   if (gate === 'union-reviewed') {
-    await expect(prepareCandidatePlan(request(root))).rejects.toThrow(/no proven equivalent/);
+    await expect(prepareCandidatePlan(request(root)).then(() => undefined)).rejects.toThrow(/no proven equivalent/);
   } else {
     const plan = decodeCandidatePlan(JSON.stringify(await prepareCandidatePlan(request(root))), request(root));
     expect(plan.mutations.slice(0, 2).map(mutation => mutation.path)).toEqual(['.void/machine/autopilot/merge-hold.json', '.void/program.md']);

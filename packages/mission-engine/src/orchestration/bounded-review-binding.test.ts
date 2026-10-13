@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { replayEventLog, serializeEvent } from '../events/index.js';
+import { parseEvent, replayEventLog, serializeEvent } from '../events/index.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
 import { event } from '../test/events.js';
 import { evidenceDraft, DIFF_A } from '../test/evidence.js';
@@ -51,8 +51,10 @@ function decide(events: readonly CanonicalEvent[], status: 'available' | 'unavai
 }
 function commandProof(seq = 6): CanonicalEvent {
   const proof = sealEvidence(evidenceDraft());
-  return event({ seq, eventId: 'evt_proof_12345678', kind: 'evidence.recorded',
-    subject: proof.evidenceId, payload: { evidence: proof } });
+  const parsed = parseEvent({ ...event({ seq, eventId: 'evt_proof_12345678',
+    kind: 'evidence.recorded', subject: proof.evidenceId }), payload: { evidence: proof } });
+  if (!parsed.ok) throw new Error('Expected valid command evidence event');
+  return parsed.value;
 }
 describe('bounded receipt subject and invocation', () => {
   it.each([
@@ -89,9 +91,11 @@ describe('bounded receipt subject and invocation', () => {
   it('refuses missing receipt and changed committed subject', () => {
     const missing = history().map(item => {
       if (item.kind !== 'specialist.completed' || typeof item.payload !== 'object'
-        || item.payload === null || Array.isArray(item.payload)) return item;
+        || item.payload === null || Array.isArray(item.payload)
+        || !('completion' in item.payload)) return item;
       const value = item.payload.completion;
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected result');
+      if (typeof value !== 'object' || value === null || Array.isArray(value)
+        || !('review' in value)) throw new Error('Expected result with review');
       const { review: ignored, ...completion } = value;
       return { ...item, payload: { ...item.payload, completion } };
     });

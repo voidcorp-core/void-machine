@@ -73,7 +73,7 @@ async function classifyProject(root: string): Promise<string> {
   const legacy = pendingMigrations(root);
   for (const path of ['.void/active.md', 'plans/ACTIVE.md']) if (await present(join(root, path))) legacy.push(path);
   if (legacy.length > 0) throw new Error(`Legacy layout at ${root}: ${legacy.join(', ')}. Restore or explicitly migrate this layout before stable update; no repairs were applied.`);
-  await assertProjectCompatibility(root);
+  await assertProjectCompatibility(root, { acquiringCandidate: true });
   const receipt = await readInstallReceipt(root);
   if (receipt?.source === 'marketplace') throw new Error(`Marketplace installation at ${root} is unsupported by stable local update; retain its marketplace updater.`);
   return receipt?.version ?? readInstallManifest(root)?.version ?? 'unknown';
@@ -98,16 +98,15 @@ export async function update(args: readonly string[], ports: {
   const projectRoots = selectUpdateProjects({ cwd: process.cwd(), globalDir, all: options.all });
   const binRoot = await launcherDirectory();
   const selection = { key: JSON.stringify({ all: options.all, roots: projectRoots, binRoot }), projectRoots, binRoot };
-  // Classification is read-only. Recovery below runs before acquisition or any new publication.
-  const versions = new Map<string, string>();
-  for (const root of projectRoots) versions.set(root, await classifyProject(root));
-  line(`Executing CLI: ${cliVersion()}`);
-  if (projectRoots.length === 0) line('No project selected; CLI-only update.');
-  else for (const root of projectRoots) line(`Selected project: ${root} (installed ${versions.get(root)})`);
   const store = join(globalDir, 'cli');
   await withUpdateLock(store, async lease => {
     if (options.dryRun && await present(join(store, 'operation'))) throw new Error('Pending update requires recovery; repeat its original update command without --dry-run');
     await recoverPendingUpdate(lease, selection);
+    const versions = new Map<string, string>();
+    for (const root of projectRoots) versions.set(root, await classifyProject(root));
+    line(`Executing CLI: ${cliVersion()}`);
+    if (projectRoots.length === 0) line('No project selected; CLI-only update.');
+    else for (const root of projectRoots) line(`Selected project: ${root} (installed ${versions.get(root)})`);
     const active = await activeSelection(store);
     line(`Active default CLI: ${active.version ?? 'not managed'}`);
     const current = active.version && compareVersions(active.version, cliVersion()) > 0 ? active.version : cliVersion();

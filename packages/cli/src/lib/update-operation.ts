@@ -33,6 +33,10 @@ async function validateScope(lease: UpdateLease, selection: UpdateSelection, ope
     phase = next;
   }
   if (operation.participants.at(-1)?.kind !== 'active') throw new Error('CLI activation must be the last participant');
+  const projects = operation.participants.filter(participant => participant.kind === 'project').map(participant => participant.root);
+  if (projects.length !== selection.projectRoots.length || selection.projectRoots.some(root => !projects.includes(root))) {
+    throw new Error('Update participant set omits a selected project');
+  }
 }
 async function boundedJson(path: string, limit = 65536): Promise<unknown> {
   const info = await lstat(path);
@@ -86,7 +90,7 @@ export async function recoverPendingUpdate(lease: UpdateLease, selection: Update
       await recoverFileTransaction(participant.root, join(directory, String(index)));
     } catch (error) { failures.push(error); }
   }
-  if (failures.length > 0) throw new AggregateError(failures, `Update recovery conflict; evidence retained in ${directory}`);
+  if (failures.length > 0) throw new AggregateError(failures, `Update recovery conflict: ${failures.map(error => error instanceof Error ? error.message : 'unknown failure').join('; ')}; evidence retained in ${directory}`);
   await rm(directory, { recursive: true });
 }
 
@@ -121,7 +125,7 @@ export async function executeUpdateOperation(lease: UpdateLease, input: {
     await rm(directory, { recursive: true });
   } catch (error) {
     try { await recoverPendingUpdate(lease, input.selection); }
-    catch (recovery) { throw new AggregateError([error, recovery], `Update recovery conflict; evidence retained in ${directory}`); }
+    catch (recovery) { throw new AggregateError([error, recovery], `Update recovery conflict: ${recovery instanceof Error ? recovery.message : 'unknown failure'}; evidence retained in ${directory}`); }
     throw error;
   }
 }

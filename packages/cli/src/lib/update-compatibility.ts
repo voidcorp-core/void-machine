@@ -38,7 +38,7 @@ function validateRecord(body: string, label: string): unknown {
 /** Shared before-effect guard for materialization and project mutations. */
 export async function assertProjectCompatibility(
   projectRoot: string,
-  options: { readonly replaceUnparseableConfig?: boolean } = {},
+  options: { readonly replaceUnparseableConfig?: boolean; readonly acquiringCandidate?: boolean } = {},
 ): Promise<void> {
   const receiptBody = await optionalRecord(projectRoot, INSTALL_RECEIPT_PATH);
   if (receiptBody !== undefined) validateRecord(receiptBody, 'receipt');
@@ -55,7 +55,7 @@ export async function assertProjectCompatibility(
   if (version !== undefined && !exactVersion.safeParse(version).success) {
     throw new Error('installation version is invalid');
   }
-  if (version !== undefined && compareVersions(version, cliVersion()) > 0) {
+  if (!options.acquiringCandidate && version !== undefined && compareVersions(version, cliVersion()) > 0) {
     throw new Error(`Installed harness ${version} is newer than CLI ${cliVersion()}; `
       + 'run void-machine update before changing this project.');
   }

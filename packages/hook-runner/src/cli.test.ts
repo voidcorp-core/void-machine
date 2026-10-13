@@ -57,6 +57,83 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
   return { code: result.status ?? 0, stderr: result.stderr ?? '' };
 }
 
+describe('bundled credential source test content enforcement', () => {
+  it.each(['claude', 'codex'])('refuses secret-bearing mixed edits in either order for %s', (runtime) => {
+    const safe = join(workspace, 'ordinary.test.ts');
+    const denied = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
+    for (const content of [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`]) {
+      for (const paths of [[safe, denied], [denied, safe]]) {
+        const payload = { tool_name: 'apply_patch', tool_input: { patch: ['*** Begin Patch',
+          ...paths.flatMap((path) => [`*** Update File: ${path}`, '@@', '-old',
+            `+${path === denied ? content : 'synthetic'}`]), '*** End Patch'].join('\n') } };
+        for (const rule of ['protected-file', 'secret-content']) {
+          const result = spawnSync(process.execPath, [hook, 'enforce', rule, runtime], {
+            input: JSON.stringify(payload), encoding: 'utf8', cwd: workspace,
+            env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+          });
+          expect(result.error).toBeUndefined();
+          expect(result.signal).toBeNull();
+          expect(result.status).toBe(rule === 'secret-content' && runtime === 'claude' ? 2 : 0);
+          if (rule === 'protected-file') {
+            expect(result.stdout).toBe('');
+            expect(result.stderr).toBe('');
+          } else {
+            const reason = runtime === 'codex'
+              ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason : result.stderr;
+            if (runtime === 'codex') {
+              expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+            }
+            expect(reason).toContain('SECRET_IN_CONTENT');
+            expect(reason).toContain(`${denied}:1`);
+            expect(reason).not.toContain(`${safe}:`);
+            expect(reason).not.toContain(content);
+          }
+        }
+      }
+    }
+  });
+
+  it.each(['claude', 'codex'])('combines filename and content protection for %s', (runtime) => {
+    const path = join(workspace, 'fixtures/client-secrets.test.mjs');
+    const cases = [
+      ['export const fixture = 1;', false],
+      [`AKIA${'A1'.repeat(8)}`, true],
+      [`SERVICE_TOKEN="${'Az19'.repeat(8)}"`, true],
+      [`AKIA${'A1'.repeat(8)} // allow-secret-pattern: intentional synthetic fixture`, false],
+    ] as const;
+    for (const [content, blocked] of cases) {
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Write', tool_input: { file_path: path, content } }
+        : { tool_name: 'apply_patch', tool_input: {
+          patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${content}\n*** End Patch`,
+        } };
+      for (const rule of ['protected-file', 'secret-content']) {
+        const deny = rule === 'secret-content' && blocked;
+        const result = spawnSync(process.execPath, [hook, 'enforce', rule, runtime], {
+          input: JSON.stringify(payload), encoding: 'utf8', cwd: workspace,
+          env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+        });
+        expect(result.error).toBeUndefined();
+        expect(result.signal).toBeNull();
+        expect(result.status).toBe(deny && runtime === 'claude' ? 2 : 0);
+        if (!deny) {
+          expect(result.stdout).toBe('');
+          expect(result.stderr).toBe('');
+        } else {
+          const reason = runtime === 'codex'
+            ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason : result.stderr;
+          if (runtime === 'codex') {
+            expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+          }
+          expect(reason).toContain('SECRET_IN_CONTENT');
+          expect(reason).toContain(`${path}:1`);
+          expect(reason).not.toContain(content);
+        }
+      }
+    }
+  });
+});
+
 describe('bundled co-owned enforcement', () => {
   it.each(['claude', 'codex'])('refuses mixed test and protected targets in both orders for %s', (runtime) => {
     const allowed = join(workspace, 'client-secrets.test.mjs');

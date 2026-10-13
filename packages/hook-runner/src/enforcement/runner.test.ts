@@ -184,12 +184,29 @@ describe('co-owned enforcement across tool adapters', () => {
   }
 
   it.each(['Write', 'Edit', 'apply_patch'])(
+    'scans newly permitted source test content through %s', (tool) => {
+      const root = rootWithManifest([]);
+      const path = join(root, 'fixtures/client-secrets.test.mjs');
+      for (const source of ['tool-input', 'checked-out'] as const) {
+        for (const content of [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`]) {
+          const payload = edit(tool, path, content);
+          expect(evaluateRule('protected-file', payload, { root, source, env: {} }).code).toBe('ALLOW');
+          const verdict = evaluateRule('secret-content', payload, { root, source, env: {} });
+          expect(verdict).toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+          expect(verdict.evidence).toEqual([`${path}:1`]);
+        }
+      }
+    },
+  );
+
+  it.each(['Write', 'Edit', 'apply_patch'])(
     'allows a synthetic credential-named test through %s', (tool) => {
       const root = rootWithManifest([]);
       for (const source of ['tool-input', 'checked-out'] as const) {
         const payload = edit(tool, join(root, 'client-secrets.test.mjs'), 'export const fixture = 1;');
         expect(evaluateRule('protected-file', payload, { root, source, env: {} }))
           .toMatchObject({ allow: true, code: 'ALLOW' });
+        expect(evaluateRule('secret-content', payload, { root, source, env: {} }).code).toBe('ALLOW');
       }
     },
   );

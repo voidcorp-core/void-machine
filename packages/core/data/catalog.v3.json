@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:a7566df73ce56e6309d7f42a034ac33c0191b3a3c7c165e562cb4fe5efefc621"
+    "rootHash": "sha256:5db3a6ab337cfb7b71f3edb68b63f121c227c5e83ed7699eeb0c36add4cc3f8b"
   },
   "nodes": [
     {
@@ -268,11 +268,11 @@
         "legacy": {
           "description": "Performs an independent diff review for correctness, maintainability, boundary compliance, and evidence-backed release blockers.",
           "id": "agent:independent-code-reviewer",
-          "lines": 61,
+          "lines": 62,
           "name": "independent-code-reviewer",
           "pack": null,
           "source": "packages/core/agents/independent-code-reviewer.md",
-          "staticTokens": 1361,
+          "staticTokens": 1365,
           "type": "agent"
         }
       },

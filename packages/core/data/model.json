@@ -94,11 +94,11 @@
     {
       "description": "Performs an independent diff review for correctness, maintainability, boundary compliance, and evidence-backed release blockers.",
       "id": "agent:independent-code-reviewer",
-      "lines": 61,
+      "lines": 62,
       "name": "independent-code-reviewer",
       "pack": null,
       "source": "packages/core/agents/independent-code-reviewer.md",
-      "staticTokens": 1361,
+      "staticTokens": 1365,
       "type": "agent"
     },
     {

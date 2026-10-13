@@ -656,6 +656,16 @@ export function orchestrateMissionTeam(
   if (!Array.isArray(input.plan.specialists)) {
     return stopped('degraded', preReview, baseVerdict, ['specialist routing is missing from the plan']);
   }
+  if (start.boundedReview && firstImplementationSeq !== undefined
+    && !input.plan.specialists.some(specialist =>
+      specialist.specialistId === 'core:independent-code-reviewer'
+      && specialist.state === 'applicable' && specialist.stages?.includes('post-implementation'))) {
+    return stopped('degraded', preReview, baseVerdict, [
+      'Mandatory independent review is absent, not applicable, or lacks post-implementation '
+        + 'in the frozen plan.',
+    ], 'Start a new mission with an applicable post-implementation independent reviewer; '
+      + 'preserve this mission history unchanged.');
+  }
   const invalidStages = input.plan.specialists.filter((specialist) =>
     !Array.isArray(specialist.stages)
     || specialist.stages.length === 0

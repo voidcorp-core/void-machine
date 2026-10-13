@@ -1621,3 +1621,14 @@ Advisories, incomplete responses and transport retries never consume correction 
 Native context identity is provenance metadata; absent identity alone is not a delivery
 refusal when actual independent execution and the review subject remain evidenced.
 Unresolved concrete blockers, invalid evidence and missing required isolation still refuse.
+
+Every implementation under `bounded-corrections-v1` requires the canonical
+`core:independent-code-reviewer`, including text, documentation and configuration changes.
+The existing `profile-base` routing signal includes it even when the initial diff is empty;
+these changes need not be classified as code changes. Preparation advice and passing command
+proofs never replace its post-implementation receipt. After implementation, a frozen plan
+without an applicable post-implementation reviewer produces `stop`: CLI dispatch closes that
+episode as `controller-stop`, never `completed`, with a diagnostic directing a new mission
+from a compatible plan. Historical plans and journals stay unchanged. Missions without the
+bounded policy retain their review semantics, and exploratory missions without an implementation
+controller acquire no implementation stage.

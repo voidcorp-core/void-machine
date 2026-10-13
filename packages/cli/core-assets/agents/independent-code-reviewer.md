@@ -25,6 +25,7 @@ Own the one independent general review of the exact committed HEAD, base, and ac
 
 Run when any condition matches:
 - code-change
+- profile-base
 
 ## Invocation stages
 

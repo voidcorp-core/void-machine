@@ -1,12 +1,13 @@
 // @test-resource subprocess
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, readlink, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, expect, it } from 'vitest';
+import npmWindowsBins from './fixtures/npm11-windows-bins.json';
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -94,4 +95,42 @@ it('refuses modified release bytes and does not execute them', async () => {
   await expect(promisify(execFile)(process.execPath, [launcher], {
     cwd: root, env: { PATH: process.env.PATH, VOID_GLOBAL_DIR: join(root, '.void') }, timeout: 10_000,
   })).rejects.toMatchObject({ stdout: '', stderr: expect.stringContaining('integrity') });
+});
+
+it('prepares Windows command and PowerShell adapters from verified npm wrappers', async () => {
+  const { planLauncherBootstrap } = await import('./cli-installation.js');
+  const { root, pkg } = await fixture();
+  const bin = join(root, 'bin');
+  await mkdir(join(bin, 'node_modules'));
+  await cp(pkg, join(bin, 'node_modules/voidmachine'), { recursive: true });
+  for (const alias of ['void-machine', 'voidmachine']) {
+    for (const [extension, bytes] of Object.entries(npmWindowsBins)) await writeFile(join(bin, alias + extension), bytes);
+  }
+  const plan = await planLauncherBootstrap(bin, Buffer.from('stable launcher'), undefined, 'win32');
+  expect(plan.mutations.map(mutation => mutation.path)).toEqual(expect.arrayContaining(['void-machine.mjs', 'void-machine.cmd', 'void-machine.ps1', 'voidmachine.cmd', 'voidmachine.ps1']));
+  const command = plan.mutations.find(mutation => mutation.path === 'void-machine.cmd');
+  expect(Buffer.from(command?.content ?? []).toString()).toContain('%*');
+  expect(Buffer.from(command?.content ?? []).toString()).toContain('void-machine.mjs');
+  expect(plan.conflicts).toEqual([]);
+  // The input is qualification evidence, never overwritten during planning.
+  expect(await readFile(join(bin, 'void-machine.cmd'), 'utf8')).toBe(npmWindowsBins['.cmd']);
+});
+
+it('refuses a custom Windows shim even beside a valid package identity', async () => {
+  const { planLauncherBootstrap } = await import('./cli-installation.js');
+  const { root } = await fixture();
+  await writeFile(join(root, 'bin/void-machine.ps1'), 'user-owned shell command');
+  await expect(planLauncherBootstrap(join(root, 'bin'), Buffer.from('launcher'), undefined, 'win32')).rejects.toThrow(/unowned/i);
+  expect(await readFile(join(root, 'bin/void-machine.ps1'), 'utf8')).toBe('user-owned shell command');
+});
+
+it('refuses a release whose node_modules ancestor has been redirected after sealing', async () => {
+  const { completeRelease } = await import('./cli-installation.js');
+  const { verifyInstalledRelease } = await import('../../bin/stable-launcher.mjs');
+  const { root, pkg, store } = await fixture();
+  await completeRelease(pkg, store, release);
+  const modules = join(store, 'releases', release.version, 'node_modules');
+  await rename(modules, join(root, 'redirected'));
+  await symlink(join(root, 'redirected'), modules);
+  await expect(verifyInstalledRelease(store, release.version)).rejects.toThrow(/symbolic|physical|canonical/i);
 });

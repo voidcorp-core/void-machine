@@ -194,7 +194,7 @@ describe('co-owned enforcement across tool adapters', () => {
     },
   );
 
-  it.each(['Bash', 'exec_command', 'apply_patch'])(
+  it.each(['Bash', 'shell', 'apply_patch'])(
     'preserves protected targets beside a synthetic test through %s', (tool) => {
       const owned = 'managed/client-secrets.test.mjs';
       const root = rootWithManifest([owned]);
@@ -202,8 +202,7 @@ describe('co-owned enforcement across tool adapters', () => {
         ? { tool_name: tool, tool_input: { patch: ['*** Begin Patch', ...paths.flatMap((path) =>
           [`*** Update File: ${path}`, '@@', '-old', '+synthetic']), '*** End Patch'].join('\n') } }
         : { tool_name: tool, tool_input: {
-          [tool === 'Bash' ? 'command' : 'cmd']:
-            paths.map((path) => `printf synthetic > '${path}'`).join('; '),
+          command: paths.map((path) => `printf synthetic > '${path}'`).join('; '),
         } };
       const allowed = join(root, 'client-secrets.test.mjs');
       expect(evaluateRule('protected-file', payload([allowed]), { root, env: {} }).code).toBe('ALLOW');

@@ -52,7 +52,10 @@ function protectedReason(path: string, root: string | undefined): string | undef
     return 'private key / certificate';
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return 'credential file';
-  if (!base.endsWith('.md') && /(?:secret|credential)/.test(base)) return 'credential file';
+  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith('.md') && !sourceTest && /(?:secret|credential)/.test(base)) {
+    return 'credential file';
+  }
   if (new Set([
     'package-lock.json',
     'pnpm-lock.yaml',

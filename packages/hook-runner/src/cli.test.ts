@@ -58,6 +58,35 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
 }
 
 describe('bundled co-owned enforcement', () => {
+  it.each(['claude', 'codex'])('refuses mixed test and protected targets in both orders for %s', (runtime) => {
+    const allowed = join(workspace, 'client-secrets.test.mjs');
+    const denied = join(workspace, 'secrets.json');
+    for (const paths of [[allowed, denied], [denied, allowed]]) {
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Bash', tool_input: {
+          command: paths.map((path) => `printf synthetic > '${path}'`).join('; '),
+        } }
+        : { tool_name: 'apply_patch', tool_input: { patch: ['*** Begin Patch',
+          ...paths.flatMap((path) => [`*** Update File: ${path}`, '@@', '-old', '+synthetic']),
+          '*** End Patch'].join('\n') } };
+      const result = spawnSync(process.execPath, [hook, 'enforce', 'protected-file', runtime], {
+        input: JSON.stringify(payload), encoding: 'utf8', cwd: workspace,
+        env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(runtime === 'codex' ? 0 : 2);
+      const reason = runtime === 'codex'
+        ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason : result.stderr;
+      if (runtime === 'codex') {
+        expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+      }
+      expect(reason).toContain('PROTECTED_FILE');
+      expect(reason).toContain(denied);
+      expect(reason).not.toContain(allowed);
+    }
+  });
+
   it.each(['claude', 'codex'])('preserves allow and denial protocols for %s', (runtime) => {
     const root = join(workspace, `${PRODUCT_IDENTITY.packageName}-${runtime}-ownership`);
     mkdirSync(join(root, '.void'), { recursive: true });

@@ -350,6 +350,16 @@ co-owned path skips only that ownership refusal; nested namesakes and prefixes
 do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
 remain active, as do independent content scans. Claude and Codex share this rule.
 
+The credential-name heuristic permits source filenames ending in `.test` or
+`.spec` followed by `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts` or `.cts`
+(case-insensitive), such as `client-secrets.test.mjs`. This exception applies
+only to that heuristic: environment files, keys, credential stores, lockfiles,
+Git metadata and manifest-owned assets remain protected, including in mixed
+target operations. Test directories alone and trailing extensions such as
+`.test.json` or `.test.mjs.bak` do not qualify. Filename classification cannot
+attest to the contents: `secret-content` already exempts `.test`/`.spec` paths;
+this correction does not change that policy or authorize real credential edits.
+
 Checked-out CI evidence retains its existing exemption from pre-write ownership
 checks. Neither boundary proves human approval or enforces managed blocks;
 doctrine changes still require the explicit approval owned by `void-learn`.

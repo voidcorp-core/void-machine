@@ -122,7 +122,7 @@ describe('the ignore block never outlives a transaction that failed', () => {
     expect(absent).toEqual([]);
   });
 
-  it('explains that prior layout repair remains after update fails', async () => {
+  it('refuses legacy layout before update can leave an unrecoverable repair', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
     const legacy = join(dir, '.void/state.json');
     const migrated = join(dir, '.void/machine/status.json');
@@ -137,16 +137,11 @@ describe('the ignore block never outlives a transaction that failed', () => {
       return true;
     });
 
-    await expect(update([])).rejects.toThrow(/process\.exit\(1\)/);
+    await expect(update([])).rejects.toThrow(/legacy/i);
 
-    expect(existsSync(legacy)).toBe(false);
-    expect(readFileSync(migrated)).toEqual(bytes);
-    const output = printed.join('');
-    expect(output).toContain('PHILOSOPHY.md');
-    expect(output).toContain('unowned');
-    expect(output).toContain('Prior layout repairs remain applied');
-    expect(output).toContain('outside the install transaction');
-    expect(output).not.toContain('rolled back byte-for-byte');
+    expect(readFileSync(legacy)).toEqual(bytes);
+    expect(existsSync(migrated)).toBe(false);
+    expect(printed.join('')).not.toContain('Prior layout repairs remain applied');
   });
 
   // The reason the block was written before the transaction in the first place.

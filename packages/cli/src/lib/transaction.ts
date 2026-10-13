@@ -254,6 +254,11 @@ async function readJournal(projectRoot: string, journalRoot: string): Promise<Jo
   return journal;
 }
 
+/** Validate durable snapshots before an operation authorizes their participant paths. */
+export async function inspectFileTransaction(projectRoot: string, journalRoot: string): Promise<Journal> {
+  return readJournal(projectRoot, journalRoot);
+}
+
 /** Forward writes require prepared bytes AND mode, never a timestamp. */
 export async function applyFileTransaction(
   projectRoot: string, journalRoot: string,

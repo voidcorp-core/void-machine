@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it } from 'vitest';
 
 const roots: string[] = [];
@@ -102,7 +103,7 @@ it('recovers a killed updater before the same selection can proceed again', asyn
     }, { afterParticipant: () => process.kill(process.pid, 'SIGKILL') }));
   `;
   await expect(promisify(execFile)(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source, input], {
-    timeout: 10_000, maxBuffer: 1024 * 1024,
+    cwd: fileURLToPath(new URL('../../', import.meta.url)), timeout: 10_000, maxBuffer: 1024 * 1024,
   })).rejects.toMatchObject({ signal: 'SIGKILL' });
   expect(await readFile(join(state.projects[0] ?? '', '.void/config.json'), 'utf8')).toBe('after');
   await withUpdateLock(state.store, lease => recoverPendingUpdate(lease, state.selection));

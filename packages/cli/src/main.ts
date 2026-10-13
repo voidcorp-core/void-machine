@@ -74,8 +74,8 @@ export function requiresProjectCompatibility(command: string, args: readonly str
   if (command === 'doctor') return args.includes('--fix');
   if (command === 'graph') return ['build', 'project-build', 'knowledge-build'].includes(sub);
   if (command === 'decisions') return sub === 'new';
-  if (command === 'mission') return !['', 'help', 'status', 'inspect', 'dispatch'].includes(sub);
-  if (command === 'agents') return !['', 'help', 'status', 'attach'].includes(sub);
+  if (command === 'mission') return !['', 'help', 'status', 'inspect'].includes(sub);
+  if (command === 'agents') return !['', 'help', 'status'].includes(sub);
   if (command === 'autopilot') return !['', 'help', 'fingerprint', 'judgment'].includes(sub);
   if (command === 'adoption') return sub === 'apply';
   if (command === 'security') return !['', 'help', 'adapters', 'status'].includes(sub);

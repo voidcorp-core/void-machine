@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // tdd-cover: e2e packages/cli/src/lib/cli-installation.test.ts
 import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';

@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.0.1](https://github.com/voidcorp-core/void-machine/compare/v5.0.0...v5.0.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **hooks:** distinguish source tests from credential filenames ([f6fdf6a](https://github.com/voidcorp-core/void-machine/commit/f6fdf6a0ec89eb9861bad6dd6a584756307a48be))
+* **hooks:** distinguish source tests from credential filenames ([2bceecc](https://github.com/voidcorp-core/void-machine/commit/2bceecc0df659384030dee9a13da7be131c92e30))
+* **hooks:** refuse credential test shell writes without content ([bddebce](https://github.com/voidcorp-core/void-machine/commit/bddebce03bd92a94ecb29cf4d68900e3fe94f1fa))
+* **hooks:** retain content checks for credential-named source tests ([a9fbef2](https://github.com/voidcorp-core/void-machine/commit/a9fbef25685d7466522f3fb98a1d531a96c0ce3f))
+
 ## [5.0.0](https://github.com/voidcorp-core/void-machine/compare/v4.0.0...v5.0.0) (2026-10-13)
 
 

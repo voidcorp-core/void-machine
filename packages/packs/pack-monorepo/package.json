@@ -1,6 +1,6 @@
 {
   "name": "@voidcorp/pack-monorepo",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Turborepo monorepo conventions for Void Machine — shared tsconfig.strict, @repo/core helpers (Result, Option, pipe), package boundary discipline.",
   "license": "MIT",
   "type": "module",

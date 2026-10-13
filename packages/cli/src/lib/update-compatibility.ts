@@ -7,6 +7,8 @@ import { configSchema } from './config-schema.js';
 import { findPack } from './packs.js';
 import { cliVersion } from './paths.js';
 import { compareVersions } from './version.js';
+import { parseProgramDescriptor } from './autopilot/program.js';
+import { MERGE_HOLD_PATH, parseMergeHold } from './autopilot/merge-hold.js';
 
 const recordSchema = z.object({ schemaVersion: z.literal(1).optional() }).passthrough();
 const exactVersion = z.string().regex(/^\d+\.\d+\.\d+$/);
@@ -14,6 +16,11 @@ const exactVersion = z.string().regex(/^\d+\.\d+\.\d+$/);
 async function optionalRecord(root: string, path: string): Promise<string | undefined> {
   const target = join(root, path);
   try {
+    const segments = path.split('/');
+    for (let index = 1; index < segments.length; index++) {
+      const parent = await lstat(join(root, ...segments.slice(0, index)));
+      if (!parent.isDirectory() || parent.isSymbolicLink()) throw new Error(`${path}: record parent is not a physical directory`);
+    }
     const info = await lstat(target);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 4_194_304) {
       throw new Error(`${path}: expected a bounded regular file`);
@@ -44,6 +51,9 @@ export async function assertProjectCompatibility(
   if (receiptBody !== undefined) validateRecord(receiptBody, 'receipt');
   const receipt = receiptBody === undefined ? undefined : parseReceipt(receiptBody);
   if (receiptBody !== undefined && receipt === undefined) throw new Error('receipt: invalid record');
+  if (receipt && (receipt.runtimes.length === 0 || new Set(receipt.runtimes).size !== receipt.runtimes.length)) {
+    throw new Error('receipt: invalid or missing runtime selection');
+  }
   const manifestBody = await optionalRecord(projectRoot, INSTALL_MANIFEST_PATH);
   if (manifestBody !== undefined) validateRecord(manifestBody, 'manifest');
   const manifest = manifestBody === undefined ? undefined : parseInstallManifest(manifestBody);
@@ -58,6 +68,16 @@ export async function assertProjectCompatibility(
   if (!options.acquiringCandidate && version !== undefined && compareVersions(version, cliVersion()) > 0) {
     throw new Error(`Installed harness ${version} is newer than CLI ${cliVersion()}; `
       + 'run void-machine update before changing this project.');
+  }
+  const program = await optionalRecord(projectRoot, '.void/program.md');
+  if (program !== undefined) {
+    try { parseProgramDescriptor(program); }
+    catch (error) { throw new Error(`.void/program.md: ${error instanceof Error ? error.message : 'invalid programme'}`); }
+  }
+  const hold = await optionalRecord(projectRoot, MERGE_HOLD_PATH);
+  if (hold !== undefined) {
+    const parsed = parseMergeHold({ kind: 'text', text: hold });
+    if (!parsed.held || parsed.detail.includes('unreadable')) throw new Error(`${MERGE_HOLD_PATH}: damaged human hold; restore it before mutation`);
   }
   const configBody = await optionalRecord(projectRoot, '.void/config.json');
   if (configBody === undefined) return;

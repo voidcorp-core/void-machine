@@ -21,6 +21,7 @@ import {
   VOID_MACHINE_DIR,
 } from '@voidcorp/hook-runner';
 import { autopilotPreflight } from '../lib/autopilot/preflight.js';
+import { assertProjectCompatibility } from '../lib/update-compatibility.js';
 import { LEGACY_PROGRAM_PATHS, PROGRAM_PATH, programPath, readProgramDescriptor } from '../lib/autopilot/program.js';
 import { packsCoherenceIssues, validateConfig } from '../lib/config-schema.js';
 import { applyRepair, conformanceRules, inspectConformance } from '../lib/conformance/run.js';
@@ -111,6 +112,14 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // the root by itself is not part of the test -- that exception is what left
   // `doctor --fix` with two answers (DEV-768).
   const where = remedyPrefix(roots);
+
+  try { await assertProjectCompatibility(root); }
+  catch (error) {
+    banner('doctor');
+    line(`Installation compatibility: ${error instanceof Error ? error.message : 'unknown failure'}`);
+    footer(c.red('1 check failed, this project\'s structure was not judged'));
+    process.exit(1);
+  }
 
   // The source repository is judged where it stands: self-host compares the
   // current sources with what they last compiled into, and those sources are

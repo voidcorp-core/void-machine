@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { init } from '../commands/init.js';
 import { INSTALL_RECEIPT_PATH } from './receipts.js';
+import { assertProjectCompatibility } from './update-compatibility.js';
 
 const roots: string[] = [];
 const initialCwd = process.cwd();
@@ -31,4 +32,52 @@ it('refuses a newer installation before init changes its files', async () => {
     .rejects.toThrow(/newer.*99\.0\.0|99\.0\.0.*newer/i);
   expect(await readFile(join(root, INSTALL_RECEIPT_PATH), 'utf8')).toBe(receipt);
   expect(await readdir(root)).toEqual(['.void']);
+});
+
+it.each([
+  { body: '{', reason: /receipt.*invalid/i },
+  { body: JSON.stringify({ schemaVersion: 9 }), reason: /receipt.*schema/i },
+  { body: JSON.stringify({ schemaVersion: 1, version: '5.0.1', source: 'local',
+    runtimes: ['future-runtime'], files: [] }), reason: /receipt.*runtime|receipt.*invalid/i },
+  { body: JSON.stringify({ schemaVersion: 1, version: 'garbage', source: 'local',
+    runtimes: ['codex'], files: [] }), reason: /version/i },
+])('distinguishes invalid installed evidence from absence: $body', async ({ body, reason }) => {
+  const root = await mkdtemp(join(tmpdir(), 'void-invalid-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void/machine/receipts'), { recursive: true });
+  await writeFile(join(root, INSTALL_RECEIPT_PATH), body);
+  await expect(assertProjectCompatibility(root)).rejects.toThrow(reason);
+  expect(await readFile(join(root, INSTALL_RECEIPT_PATH), 'utf8')).toBe(body);
+});
+
+it('refuses contradictory receipt and manifest versions without repairing either', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'void-contradictory-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void/machine/receipts'), { recursive: true });
+  await writeFile(join(root, INSTALL_RECEIPT_PATH), JSON.stringify({ schemaVersion: 1,
+    version: '5.0.1', source: 'local', runtimes: ['codex'], files: [] }));
+  await writeFile(join(root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1,
+    version: '4.0.0', files: [] }));
+  await expect(assertProjectCompatibility(root)).rejects.toThrow(/disagree|contradict/i);
+});
+
+it('refuses future manifest and config schemas even without a receipt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'void-future-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void'), { recursive: true });
+  await writeFile(join(root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 9,
+    version: '5.0.1', files: [] }));
+  await expect(assertProjectCompatibility(root)).rejects.toThrow(/manifest.*schema/i);
+  await writeFile(join(root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1,
+    version: '5.0.1', files: [] }));
+  await writeFile(join(root, '.void/config.json'), '{"schemaVersion":99}');
+  await expect(assertProjectCompatibility(root)).rejects.toThrow(/config.*schema/i);
+});
+
+it('refuses a retired selected pack instead of dropping it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'void-pack-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void'), { recursive: true });
+  await writeFile(join(root, '.void/config.json'), '{"packs":{"retired":"^4.0.0"}}');
+  await expect(assertProjectCompatibility(root)).rejects.toThrow(/pack.*retired/i);
 });

@@ -1,9 +1,9 @@
 ---
 title: Scoped secret operations without exposing values to the agent
 date: 2026-10-13
-status: in-design
+status: approved
 author: Folpe + Codex
-ticket:
+ticket: DEV-1020
 related: [docs/ARCHITECTURE.md]
 ---
 

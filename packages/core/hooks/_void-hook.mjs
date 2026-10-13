@@ -9650,7 +9650,7 @@ function auditCheckpoint(input) {
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 function sessionStartOutput(version2, notice, invocationAlert2, resumeContext) {
   const installed = version2.trim() === "" ? "unknown" : version2.trim();
-  const base = `${PRODUCT_COMMAND} ${installed} is active. Non-negotiable floor: never edit secrets or keys; never hand-edit lockfiles; regenerate them via the package manager for requested dependency changes; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`${PRODUCT_COMMAND} doctor\` if runtime health is uncertain.`;
+  const base = `${PRODUCT_COMMAND} ${installed} is active. Non-negotiable floor: external credential operations require explicit bounded user authorization and verified opaque or direct external transfer under void-security-guidance; never expose secret values to the model; local file/content guards and runtime restrictions remain binding; never hand-edit lockfiles; regenerate them via the package manager for requested dependency changes; never run destructive shell commands; tests and fresh evidence gate "done". Capture durable project rules explicitly. Run \`${PRODUCT_COMMAND} doctor\` if runtime health is uncertain.`;
   const suffix = notice === void 0 || notice.trim() === "" ? "" : ` ${notice.trim()}`;
   const alert = invocationAlert2 === void 0 || invocationAlert2.trim() === "" ? "" : `
 ${invocationAlert2.trim()}`;

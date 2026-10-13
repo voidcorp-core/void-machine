@@ -1,6 +1,6 @@
 ---
 name: void-security-guidance
-description: Default-secure at trust boundaries. Zod at every input, secrets via env, SQL parameterized, Better-Auth, LLM I/O untrusted. Escalate to security-audit for deep audits. Use on trust-boundary code.
+description: Secure defaults at trust boundaries and scoped credential operations. Zod input, app secrets via env, confidential external provisioning, SQL parameterized, Better-Auth, untrusted LLM I/O. Deep audits use void-security-audit.
 ---
 
 # security-guidance — voidcorp craftsman edition
@@ -54,7 +54,7 @@ The validated output is a typed value (often a branded type). No `as` cast requi
 
 ---
 
-## Secrets — env vars only, validated, never logged
+## Application secrets — env vars, validated, never logged
 
 ### Allowed
 
@@ -97,6 +97,43 @@ Companion hooks (in `pack-monorepo`):
 
 - `gitleaks-precommit` — already in void-starter
 - `no-process-env-grep` — fails if `process.env.` appears outside `env.mjs`
+
+---
+
+## Agent-orchestrated external credential operations
+
+This governs creation, storage and rotation through an external secret manager. It is separate
+from application runtime configuration and customer BYO-key storage above.
+
+1. **Establish scope before acting.** Require explicit user authorization naming the operation,
+   affected service/account/project/environment, credential names or bounded set, and approved
+   destination manager. Reuse existing precise consent for that operation only. A broad request
+   to deploy, fix a project or run autopilot is not consent. Revocation or deletion needs its own
+   explicitly requested scope. New credentials get only required privileges and an appropriate
+   bounded lifetime; unclear permissions or lifetime require clarification, never administrator
+   privileges or an unrestricted credential by assumption.
+2. **Keep values outside model context.** Prefer provider-side generation and storage, opaque
+   references, or verified direct process-to-manager transfer. Before invocation, establish from
+   documented capabilities that both success and error paths keep values confidential. CLI, API
+   and MCP are transports, not exemptions. A tool that returns plaintext to the model is
+   unsuitable; redacting the final response after receiving it is too late.
+3. **Keep plaintext out of intermediate surfaces.** Never put values in prompts, model-visible
+   tool arguments, command argv/history, source, repository files, temporary plaintext files,
+   logs, traces, screenshots, reports or review evidence. Never request a secret through chat.
+   Authenticate through the provider's established secure flow or existing permitted credentials,
+   without printing them.
+4. **Verify by non-sensitive metadata.** Check destination, resource identifier, version and
+   status. Never read the secret back to prove storage. After an uncertain mutation, reconcile
+   metadata before retrying; never blindly regenerate or rotate.
+5. **Stop when the conditions cannot be established.** An unavailable destination, ambiguous
+   scope or unverified safe transfer stops that operation. Preserve existing credentials and
+   request the missing scope or a secure user/provider action.
+
+Runtime permissions, sandboxing, hook refusals, role restrictions (including read-only reviewers)
+and higher-priority instructions remain binding. Never bypass them or change policy during an
+operation to unblock it. Local protected-file and secret-content guards remain active. These
+instructions do not mechanically certify an external transfer: provider/runtime access controls
+and the verified tool own execution; the agent owns checking scope and selecting a suitable tool.
 
 ---
 
@@ -247,7 +284,9 @@ The `doctrine-critic` agent (in void-machine) flags trust-boundary code in a dif
 ## Final rule
 
 ```
-Trust boundary → Zod validation. Secrets → env. SQL → parameterized. Auth → Better-Auth.
+Trust boundary → Zod validation. App secrets → env; BYO keys → encrypted tenant data.
+External credential operations → scoped consent, confidential transfer, metadata verification.
+SQL → parameterized. Auth → Better-Auth.
 LLM I/O → untrusted. Logs → no PII no secrets.
 Otherwise → it is not voidcorp security-guidance.
 ```

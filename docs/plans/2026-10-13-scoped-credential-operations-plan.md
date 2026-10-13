@@ -57,5 +57,9 @@ Existing protected paths and main promotion authority remain unchanged.
 
 ## Resume point
 
-Writer implementation has not started. Next: create the ADR and RED regression in the assigned
-worktree after receiving the brief. Coordinator retains scenario evaluations and publication.
+Writer implementation and normal asset derivation are complete. RED is recorded in `7ea702f5`;
+the context and unchanged protection suites pass (110 tests), as do targeted skill regressions
+(112 tests), hook-runner typecheck and targeted lint. The accepted decision is
+`adr:a8bc006f-7264-4788-b804-62ae23e2214a`. Coordinator retains synthetic scenario evaluations,
+independent review of the committed candidate, remote CI and publication. The worker's central
+report carries the exact candidate and command evidence; no live provider has been qualified.

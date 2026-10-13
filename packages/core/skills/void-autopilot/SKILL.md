@@ -45,8 +45,9 @@ runtime configuration installed here, which a reviewer running in a worktree of 
 counts by its source and its destination. The programme adds paths through
 `autopilot.protectedPaths`; nothing removes from that floor.
 
-It never closes, cancels or deletes a ticket, and it never touches `main`, the secrets or the
-repository settings.
+It never closes, cancels or deletes a ticket, and it never touches `main` or repository settings.
+Autopilot consent alone never authorizes credential operations: these require separate explicit
+scope under `void-security-guidance`. Role restrictions, including read-only reviewers, remain binding.
 
 ---
 

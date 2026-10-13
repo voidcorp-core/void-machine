@@ -3,6 +3,7 @@ Sources for `void-security-guidance` skill (see `docs/plans/skill-audits/void-se
 - security-audit — the deep-audit ceiling; full audits delegated there (was gstack /cso, vendored in DEV-387).
 - citypaul/.dotfiles security stance — daily defaults.
 - OWASP cheat sheets — https://cheatsheetseries.owasp.org — Input Validation, Auth, Session Mgmt, LLM cheat sheets referenced.
+- OWASP Secrets Management Cheat Sheet — https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html — least privilege, automation, bounded lifetime and metadata auditing; adapted for model-invisible external operations (DEV-1020).
 - OWASP Top 10 for LLMs — https://owasp.org/www-project-top-10-for-large-language-model-applications/ — prompt injection, data leakage.
 - semgrep rule packs — https://semgrep.dev — opt-in CI tool.
 - Better-Auth docs — https://www.better-auth.com/ — default auth provider in void-starter.

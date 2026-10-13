@@ -341,6 +341,23 @@ checks. Neither boundary proves human approval or enforces managed blocks;
 doctrine changes still require the explicit approval owned by `void-learn`.
 See the [co-owned protection decision](decisions-log/2026-10-11-co-owned-tool-write-protection--6d3bbad2-35d7-4bfe-884a-70e95cff0239.md).
 
+### Scoped external credential operations
+
+`packages/hook-runner/src/lifecycle/context.ts` emits the short session-start condition;
+`void-security-guidance` owns the detailed operational policy. Explicit consent may authorize
+external creation, storage or rotation for named resources and an approved destination, with
+least privilege and a bounded lifetime. Values stay outside model context through verified
+confidential tools; success is checked with non-sensitive metadata. Broad delivery or autopilot
+consent is insufficient, and an uncertain mutation is reconciled before a retry.
+
+This instruction boundary adds no broker, provider integration or local guard exception.
+Protected-file and secret-content rules still refuse local writes, and runtime permissions,
+sandboxing, role restrictions and higher-priority instructions remain binding. Shell inspection
+and MCP hooks do not prove external transfer confidentiality; the selected provider/runtime tool
+owns execution. Synthetic policy scenarios qualify instructions, not a live provider integration.
+See the [approved contract](specs/2026-10-13-scoped-credential-operations.md) and
+[decision](decisions-log/2026-10-13-scoped-external-credential-operations--a8bc006f-7264-4788-b804-62ae23e2214a.md).
+
 ### Capability, not lowest common denominator
 
 Parity settles *what* is installed. It does not settle *how* a pass runs when the

@@ -130,6 +130,7 @@ it.each([
   ['doctor', ['--fix'], true], ['doctor', ['--no-remote'], false],
   ['hydrate', [], true], ['update', [], false], ['help', [], false], ['version', [], false],
   ['mission', ['start'], true], ['mission', ['status'], false],
+  ['mission', ['dispatch'], true], ['agents', ['attach', 'fixture'], true],
   ['agents', ['dispatch'], true], ['agents', ['status'], false],
   ['autopilot', ['merge'], true], ['autopilot', ['fingerprint'], false],
   ['graph', ['project-build'], true], ['graph', ['explain'], false],

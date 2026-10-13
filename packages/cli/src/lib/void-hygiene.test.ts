@@ -158,7 +158,8 @@ describe('judgeLayout', () => {
     expect(check?.status).toBe('advisory');
     expect(check?.ok).toBe(true);
     expect(check?.message).toContain('126');
-    expect(check?.fix).toContain('--untrack-derived');
+    expect(check?.fix).toContain('git rm --cached');
+    expect(check?.fix).not.toContain('--untrack-derived');
   });
 
   it('stays silent when no regenerated content is tracked', () => {

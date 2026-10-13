@@ -51,6 +51,16 @@ it.each(['foreign', 'failure'] as const)('refuses candidate %s without publishin
   await expect(readFile(join(request.root, '.void/config.json'))).rejects.toThrow();
 });
 
+it('refuses a runtime the acquired package contract does not support', async () => {
+  const { prepareWithCandidate } = await import('./candidate-process.js');
+  const { root, pkg, request } = await fixture('valid');
+  const metadataPath = join(pkg, 'package.json');
+  const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+  metadata.voidUpdate.runtimeAdapters = ['claude'];
+  await writeFile(metadataPath, JSON.stringify(metadata));
+  await expect(prepareWithCandidate(pkg, request, join(root, 'workspace'))).rejects.toThrow(/runtime.*codex|codex.*runtime/i);
+});
+
 it('ships a fixed candidate entrypoint that rejects malformed requests with a protocol diagnostic', async () => {
   const { root } = await fixture('valid');
   const requestPath = join(root, 'invalid.json');

@@ -34,6 +34,7 @@ import { allow } from '../rules/verdict.js';
 import { normalizeToolCall } from './normalize.js';
 import { readOriginalSource } from './original-source.js';
 import { proposedSource } from './proposed-source.js';
+import { shellWriteTargets } from './shell-writes.js';
 import { SYNTAX_OPERATION_BUDGET_MS } from './syntax-contract.js';
 import { inspectSourceSyntax, unavailableSyntax } from './syntax-inspection.js';
 import type {
@@ -396,7 +397,9 @@ export function evaluateRule(
     // Exclusive manifest ownership prohibits tool writes, not reviewed installer commits.
     // Committed diffs still receive lexical protected-path and content checks.
     const ownership = options.source === 'checked-out' ? {} : { root: options.root };
-    return protectedFile(call.edits.map((edit) => edit.path), ownership);
+    const shellWritePaths = call.tool === 'Bash' || call.tool === 'shell'
+      ? shellWriteTargets(call.command) : [];
+    return protectedFile(call.edits.map((edit) => edit.path), { ...ownership, shellWritePaths });
   }
   if (rule === 'secret-content') return secretContent(call.edits);
   // Judged on the raw edits, like secrets and protected files: a NUL byte is

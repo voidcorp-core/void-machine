@@ -1,4 +1,5 @@
 // @test-resource subprocess
+import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +18,43 @@ function response() {
   return { ...request(), mutations: [{ path: '.void/config.json', content: Buffer.from('{}').toString('base64'), mode: 0o600 }],
     inputs: [], restored: [], preserved: [], runtimes: ['codex'] };
 }
+
+it.each(['absent', 'partial', 'authoritative'])('recovers manifest ownership with a %s receipt only in the prepared update', async state => {
+  const { prepareCandidatePlan, decodeCandidatePlan, assertCandidateInputs } = await import('./candidate-plan.js');
+  const { INSTALL_RECEIPT_PATH, parseReceipt } = await import('./receipts.js');
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'candidate-ownership-')));
+  roots.push(root);
+  await mkdir(join(root, '.void/machine/receipts'), { recursive: true });
+  await mkdir(join(root, '.codex'));
+  const files = [
+    { path: 'AGENTS.md', content: '# Authored guidance\n' },
+    { path: '.void/config.json', content: '{"packs":{},"preference":"keep"}\n' },
+    { path: '.void/PROJECT-DOCTRINE.md', content: '# Original doctrine\n' },
+  ];
+  const attested = files.map(file => ({ path: file.path,
+    sha256: createHash('sha256').update(file.content).digest('hex') }));
+  for (const file of files) await writeFile(join(root, file.path), file.content);
+  await writeFile(join(root, '.void/install-manifest.json'), JSON.stringify({
+    schemaVersion: 1, version: cliVersion(), files: attested,
+  }));
+  // A manifest must not reclaim a later edit, even though init preserves it.
+  await writeFile(join(root, '.void/PROJECT-DOCTRINE.md'), '# Later user edit\n');
+  const prior = JSON.stringify({ schemaVersion: 1, version: cliVersion(), source: 'local',
+    runtimes: ['codex'], files: state === 'authoritative'
+      ? [{ path: 'AGENTS.md', sha256: 'a'.repeat(64), mode: 0o644 }] : [] });
+  if (state !== 'absent') await writeFile(join(root, INSTALL_RECEIPT_PATH), prior);
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  const plan = decodeCandidatePlan(JSON.stringify(await prepareCandidatePlan(request(root))), request(root));
+  const mutation = plan.mutations.find(file => file.path === INSTALL_RECEIPT_PATH);
+  if (!mutation || !('content' in mutation)) throw new Error('Missing prepared receipt');
+  const receipt = parseReceipt(Buffer.from(mutation.content).toString());
+  expect(receipt?.files.map(file => file.path)).toContain('.void/config.json');
+  expect(receipt?.files.some(file => file.path === 'AGENTS.md')).toBe(state !== 'authoritative');
+  expect(receipt?.files.map(file => file.path)).not.toContain('.void/PROJECT-DOCTRINE.md');
+  await expect(assertCandidateInputs(root, plan.inputs)).resolves.toBeUndefined();
+  if (state === 'absent') await expect(readFile(join(root, INSTALL_RECEIPT_PATH))).rejects.toMatchObject({ code: 'ENOENT' });
+  else expect(await readFile(join(root, INSTALL_RECEIPT_PATH), 'utf8')).toBe(prior);
+});
 
 it('decodes a bounded candidate plan bound to its requested operation, version and root', async () => {
   const { decodeCandidatePlan } = await import('./candidate-plan.js');

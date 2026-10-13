@@ -1,9 +1,9 @@
 ---
 title: Stable versioned CLI and unified project update
 date: 2026-10-13
-status: in-design
+status: approved
 author: Folpe + Codex
-ticket:
+ticket: DEV-1022
 related:
   - 2026-07-21-void-harness-public-multiruntime-os.md
   - 2026-09-10-consumer-version-compatibility.md
@@ -216,4 +216,4 @@ and explicit engine validation. Implementation must verify its exact selected fl
 
 Self-review: current behavior and sources verified; current-project default confirmed
 by Folpe; recovery limitations explicit; no placeholder design choice or automatic
-permission widening. Written contract awaits approval before implementation planning.
+permission widening. Written contract approved by Folpe on 2026-10-13; proceed to planning and implementation.

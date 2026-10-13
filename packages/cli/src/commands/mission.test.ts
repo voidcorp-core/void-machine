@@ -38,7 +38,7 @@ const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '
 
 // Each helper runs inside its test's timed body, through real Git, planning and
 // journal transitions. None injects a successful controller state.
-async function dispatchFixture() {
+async function dispatchFixture(implementationPath = 'runtime.ts', boundedReview = false) {
   const root = await mkdtemp(join(tmpdir(), 'void-mission-dispatch-'));
   const missionId = 'mis_0123456789abcdef0123456789abcdef';
   await writeFile(join(root, 'package.json'), JSON.stringify({
@@ -56,8 +56,11 @@ async function dispatchFixture() {
     '-c', 'user.email=void@example.test',
     'commit', '--quiet', '-m', 'test: seed mission fixture',
   ], { cwd: root });
-  await writeFile(join(root, 'runtime.ts'), 'export const ready = true;\n');
-  execFileSync('git', ['add', 'runtime.ts'], { cwd: root });
+  if (implementationPath !== '') {
+    await writeFile(join(root, implementationPath), implementationPath === 'runtime.ts'
+      ? 'export const ready = true;\n' : 'Ready.\n');
+    execFileSync('git', ['add', implementationPath], { cwd: root });
+  }
   const plan = await planMission(root, 'DEV-500.md', '2026-08-21T12:00:00.000Z');
   const baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: root, encoding: 'utf8',
@@ -86,6 +89,7 @@ async function dispatchFixture() {
       routingHash: missionControllerRoutingHash(controllerPlan, ticketBinding, baseCommit),
       leadWriterId: 'writer:primary',
       runtime: 'codex',
+      ...(boundedReview ? { reviewPolicy: 'bounded-corrections-v1' as const } : {}),
     },
   });
   await writeMissionControllerPlan(root, missionId, controllerPlan, ticketBinding, baseCommit);
@@ -459,6 +463,42 @@ describe('parseMissionArgs', () => {
     ]));
     expect(first.specialists.every((item) => item.proof.inputHash === first.inputHash)).toBe(true);
   });
+
+  it.each(['proof-1.txt', 'docs/guide.md', 'settings.yaml', ''])(
+    'requires independent review for a bounded implementation planned with "%s"', async path => {
+      const fixture = await dispatchFixture(path, true);
+      const { root, missionId, plan, input, capability } = fixture;
+      const reviewer = plan.specialists.find(item => item.specialistId === 'core:independent-code-reviewer');
+      expect(reviewer).toMatchObject({ state: 'applicable', stages: ['post-implementation'] });
+      expect(reviewer?.proof.inputs).toContain('profile-base');
+      expect(reviewer?.proof.inputs).not.toContain('code-change');
+      const preparation = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
+      );
+      await completeDispatchedSpecialists(fixture, preparation);
+      const admission = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:01.000Z', capability,
+      );
+      expect(admission.action.kind).toBe('run-lead-writer');
+      if (path === '') await writeFile(join(root, 'proof-1.txt'), 'Ready.\n');
+      execFileSync('git', ['add', 'package.json', path || 'proof-1.txt'], { cwd: root });
+      execFileSync('git', ['-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
+        'commit', '--quiet', '-m', 'test: commit text implementation'], { cwd: root });
+      await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
+      const post = await dispatchMissionSpecialists(
+        resolveProjectRoots(root), input, '2026-08-21T12:00:02.000Z', capability,
+      );
+      expect(post.action).toMatchObject({ kind: 'invoke-specialists',
+        specialistIds: ['core:independent-code-reviewer'], stage: 'post-implementation',
+        reviewScope: { kind: 'general' } });
+      expect(post.envelopes).toHaveLength(1);
+      expect(post.envelopes[0]?.reviewSubject?.reviewedCommit).toBe(
+        execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+      );
+      const inspected = await inspectMission(root, missionId, { dependencies: {} });
+      expect(inspected.stream.events.some(item => item.kind === 'mission.closed')).toBe(false);
+    },
+  );
 
   it('refreshes the plan and dispatches every preparation lens idempotently', async () => {
     const { root, missionId, plan, input, capability } = await dispatchFixture();

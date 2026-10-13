@@ -138,6 +138,35 @@ it('reports CLI-only explicitly outside any installed project', async () => {
   expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
 });
 
+it('lets an older executing CLI acquire the compatible target before judging newer project assets', async () => {
+  const f = await fixture();
+  const selected = await f.project('selected');
+  await writeFile(join(selected, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version: '5.1.0', files: [] }));
+  process.chdir(selected);
+  await update([], f.ports);
+  expect(await version(selected)).toBe('5.1.0');
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
+});
+
+it('reconciles interrupted records before compatibility classification on repeated invocation', async () => {
+  const { prepareFileTransaction, applyFileTransaction } = await import('../lib/transaction.js');
+  const f = await fixture();
+  const selected = await f.project('selected');
+  process.chdir(selected);
+  const store = join(f.globalDir, 'cli');
+  const operation = join(store, 'operation');
+  await mkdir(operation, { recursive: true });
+  await prepareFileTransaction(selected, [{ path: '.void/config.json', content: Buffer.from('{') }], join(operation, '0'), 'interrupted');
+  await prepareFileTransaction(store, [{ path: 'active.json', content: Buffer.from('{}') }], join(operation, '1'), 'interrupted');
+  await writeFile(join(operation, 'operation.json'), JSON.stringify({ schemaVersion: 1, operationId: 'interrupted', target: '5.1.0',
+    selectionKey: JSON.stringify({ all: false, roots: [selected], binRoot: f.bin }),
+    participants: [{ kind: 'project', root: selected }, { kind: 'active', root: store }] }));
+  await applyFileTransaction(selected, join(operation, '0'));
+  await update([], f.ports);
+  expect(await version(selected)).toBe('5.1.0');
+  expect(JSON.parse(await readFile(join(selected, '.void/config.json'), 'utf8')).authored).toBe('selected');
+});
+
 it.each(['marketplace', 'legacy'])('classifies %s before acquisition and preserves its records', async kind => {
   const f = await fixture();
   const project = await f.project('selected');

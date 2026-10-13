@@ -63,12 +63,12 @@ it('preserves later user edits and evidence when rollback conflicts', async () =
     operationId: 'op-1', target: '5.1.0' }, { afterParticipant: async () => {
     await writeFile(join(project, '.void/config.json'), 'user edit');
     throw new Error('failure');
-  } }))).rejects.toThrow(/recovery.*conflict/i);
+  } }))).rejects.toThrow(/recovery.*conflict.*\.void\/config.json/i);
   expect(await readFile(join(project, '.void/config.json'), 'utf8')).toBe('user edit');
   expect(await readFile(join(state.store, 'operation/operation.json'), 'utf8')).toContain('op-1');
 });
 
-it.each(['foreign-root', 'foreign-path', 'activation-order'])(
+it.each(['foreign-root', 'foreign-path', 'activation-order', 'missing-selected-project'])(
   'refuses %s before publication', async attack => {
     const { withUpdateLock } = await import('./update-lock.js');
     const { executeUpdateOperation } = await import('./update-operation.js');
@@ -78,6 +78,7 @@ it.each(['foreign-root', 'foreign-path', 'activation-order'])(
     if (attack === 'foreign-root') first.root = state.root;
     if (attack === 'foreign-path') first.mutations[0] = { path: '.git/config', content: Buffer.from('bad') };
     if (attack === 'activation-order') state.participants.reverse();
+    if (attack === 'missing-selected-project') state.participants.splice(1, 1);
     await expect(withUpdateLock(state.store, lease => executeUpdateOperation(lease, { ...state,
       operationId: 'op-1', target: '5.1.0' }))).rejects.toThrow();
     expect(await readFile(join(state.store, 'active.json'), 'utf8')).toBe('old selection');

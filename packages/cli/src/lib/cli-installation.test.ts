@@ -79,7 +79,7 @@ it('runs the sealed installed release offline without its source directory and p
   await writeFile(launcher, await readFile(fileURLToPath(new URL('../../bin/stable-launcher.mjs', import.meta.url))));
   await chmod(launcher, 0o755);
   await expect(readFile(join(pkg, 'package.json'))).rejects.toThrow();
-  await expect(promisify(execFile)(process.execPath, [launcher, 'one', 'space value'], {
+  await expect(promisify(execFile)(launcher, ['one', 'space value'], {
     cwd: root, env: { PATH: process.env.PATH, VOID_GLOBAL_DIR: join(root, '.void') }, timeout: 10_000,
   })).rejects.toMatchObject({ code: 23, stdout: JSON.stringify({ name: 'void-machine', args: ['one', 'space value'], cwd: root }) });
 });

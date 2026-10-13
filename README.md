@@ -20,8 +20,8 @@ npx voidmachine init
 
 Free, no account, no API key, no network fetch on the default path.
 
-Already on 3.x? The product was renamed in 4.0; `update` takes over every block
-the old name wrote, and the old command and settings keep working. See
+Already on 3.x? The product was renamed in 4.0. Reconcile legacy layouts with
+the historical migration guidance before using stable update. See
 [docs/MIGRATING-4.0.md](docs/MIGRATING-4.0.md). Coming from 2.x, read
 [docs/MIGRATING-3.0.md](docs/MIGRATING-3.0.md) first.
 
@@ -36,8 +36,9 @@ runtime's native files:
 | Codex | `AGENTS.md` | `.agents/skills` | `.codex/agents` | portable Node runner |
 
 Alongside them, a receipt at `.void/machine/receipts/install-v1.json` records exactly
-which files the harness owns. `update` and `remove` only ever touch those; a
-file you edited is preserved, and a rollback restores the previous bytes.
+which files the harness owns. Authored settings and doctrine are preserved;
+managed assets may be restored from the release and are named in the output.
+Recovery restores prior bytes and modes without overwriting later user edits.
 
 What the doctrine covers: test-first discipline, hexagonal and DDD boundaries,
 TypeScript strictness, security review, migration safety, frontend craft. Hooks
@@ -97,8 +98,15 @@ npx voidmachine status            # what is installed, active, and actually used
 npx voidmachine doctor            # health-check the wiring
 npx voidmachine add <pack>        # activate a stack pack
 npx voidmachine runtime add codex # wire a second runtime
-npx voidmachine update            # recompile owned assets from a newer CLI
+npx voidmachine update            # install one stable CLI + current project release
+void-machine update --all         # explicitly select all discovered installations
+void-machine update --dry-run     # plan without publication; staging may be populated
 ```
+
+The stable launcher runs offline from a versioned store outside source checkouts.
+Outside an installed project, update changes only the CLI. `hydrate` remains exact
+and offline. See [Updating](docs/UPDATING.md) for bootstrap, preservation, supported
+migrations and interruption recovery.
 
 ## Context continuity, within the limits the runtimes expose
 

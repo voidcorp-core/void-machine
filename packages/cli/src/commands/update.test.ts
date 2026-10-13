@@ -1,7 +1,7 @@
 // @test-resource subprocess
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { NpmInvocation } from '../lib/release-acquisition.js';
@@ -28,7 +28,7 @@ async function fixture() {
   vi.stubEnv('HOME', join(root, 'home'));
   vi.stubEnv('USERPROFILE', join(root, 'home'));
   vi.stubEnv('VOID_GLOBAL_DIR', globalDir);
-  vi.stubEnv('PATH', bin + ':' + process.env.PATH);
+  vi.stubEnv('PATH', [bin, dirname(process.execPath)].join(delimiter));
   process.chdir(root);
   const printed: string[] = [];
   vi.spyOn(process.stdout, 'write').mockImplementation(chunk => { printed.push(String(chunk)); return true; });

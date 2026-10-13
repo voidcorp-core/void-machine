@@ -1,5 +1,5 @@
 // @test-resource subprocess
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -136,6 +136,17 @@ it('reports CLI-only explicitly outside any installed project', async () => {
   await update([], f.ports);
   expect(f.printed.join('')).toMatch(/no project selected/i);
   expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
+});
+
+it('retains the qualified original launcher backup after successful bootstrap', async () => {
+  const f = await fixture();
+  const original = join(f.root, 'original-prefix');
+  await f.ports.runNpm({ cwd: original, args: [], env: {} });
+  const target = join(original, 'node_modules/voidmachine/bin/void-machine.mjs');
+  await symlink(target, join(f.bin, 'void-machine'));
+  await update([], f.ports);
+  expect(await readFile(join(f.globalDir, 'cli/bootstrap/0.before'), 'utf8')).toBe(target);
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/bootstrap/journal.json'), 'utf8')).root).toBe(f.bin);
 });
 
 it('lets an older executing CLI acquire the compatible target before judging newer project assets', async () => {

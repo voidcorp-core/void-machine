@@ -63,7 +63,7 @@ it('refuses a forward write when the prepared snapshot has changed', async () =>
   expect(await readFile(join(root, 'owned'), 'utf8')).toBe('user edit');
 });
 
-it.each(['traversal', 'duplicate', 'foreign-root', 'backup', 'schema']) (
+it.each(['traversal', 'duplicate', 'foreign-root', 'backup', 'schema', 'own-journal']) (
   'rejects %s journal tampering before changing files', async attack => {
     const { root, journal } = await fixture();
     await prepareFileTransaction(root, mutations, journal, 'operation-1');
@@ -74,6 +74,7 @@ it.each(['traversal', 'duplicate', 'foreign-root', 'backup', 'schema']) (
       if (attack === 'duplicate') record.entries.push(record.entries[0]);
       if (attack === 'foreign-root') record.root = tmpdir();
       if (attack === 'schema') record.schemaVersion = 99;
+      if (attack === 'own-journal') record.entries[0].path = '.journal/0.before';
       await writeFile(join(journal, 'journal.json'), JSON.stringify(record));
     }
     await expect(applyFileTransaction(root, journal)).rejects.toThrow();

@@ -31,6 +31,7 @@ import {
   withholdProjectOwned,
 } from '../lib/local-install.js';
 import { type PackConfig, resolveEffectivePin } from '../lib/pack-config.js';
+import { configSchema } from '../lib/config-schema.js';
 import {
   CORE_PLUGIN_NAME,
   findPack,
@@ -324,7 +325,7 @@ export async function init(args: readonly string[]): Promise<void> {
   }
 
   // Choose packs (runtime-agnostic) — selection only, no writes yet.
-  const packs = await choosePacks(projectRoot, opts);
+  const packs = await effectivePacks(projectRoot, opts);
   const enabledPlugins = [CORE_PLUGIN_NAME, ...packs.map((pk) => pk.name)];
 
   // COMPILE IN ISOLATION. Only the finite mutation set is published after each
@@ -467,6 +468,48 @@ export async function init(args: readonly string[]): Promise<void> {
     : `skills appear as ${c.bold('/harness:<name>')}, ${c.bold('/harness-<stack>:<name>')}`);
 }
 
+async function readPackConfig(configPath: string): Promise<PackConfig | undefined> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(configPath, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || !parsed || Array.isArray(parsed)) return undefined;
+  const packs = configSchema.shape.packs.safeParse('packs' in parsed ? parsed.packs : undefined);
+  if (!packs.success) {
+    const issues = packs.error.issues.map(issue =>
+      `${['packs', ...issue.path].join('.')}: ${issue.message}`).join('; ');
+    throw new Error(`Cannot reconcile .void/config.json: ${issues}. Repair the pack declarations.`);
+  }
+  // Validate only the pack boundary; preserve every co-owned project field.
+  return packs.data === undefined ? { ...parsed } : { ...parsed, packs: packs.data };
+}
+
+async function effectivePacks(
+  projectRoot: string, opts: InitOptions,
+): Promise<readonly PackDescriptor[]> {
+  const configPath = join(projectRoot, '.void', 'config.json');
+  const config = await readPackConfig(configPath);
+  const verdict = configWriteVerdict({
+    exists: existsSync(configPath), readable: config !== undefined, force: opts.force,
+  });
+  if (verdict === 'keep-unreadable') {
+    throw new Error('Cannot reconcile .void/config.json: unreadable configuration, left untouched. '
+      + 'Restore a JSON object or use --force to overwrite it.');
+  }
+  const retained = opts.replacePacks ? [] : Object.keys(config?.packs ?? {}).map(key => {
+    const pack = findPack(key.replace(/^@voidcorp\//, ''));
+    if (pack === undefined) {
+      throw new Error(`Cannot reconcile .void/config.json: unknown retained pack '${key}'. `
+        + 'Repair the declaration or use --replace-packs to select the exact supported set.');
+    }
+    return pack;
+  });
+  const selected = await choosePacks(projectRoot, opts);
+  return [...new Map([...retained, ...selected].map(pack => [pack.name, pack])).values()];
+}
+
 async function choosePacks(projectRoot: string, opts: InitOptions): Promise<readonly PackDescriptor[]> {
   if (opts.allPacks) return PACKS;
 
@@ -539,14 +582,7 @@ async function writeConfig(
   // Read before deciding: whether the config can be merged into is the fact the
   // verdict turns on, and it is only knowable after parsing it.
   const exists = existsSync(configPath);
-  let parsed: PackConfig | undefined;
-  if (exists) {
-    try {
-      parsed = JSON.parse(await readFile(configPath, 'utf8'));
-    } catch {
-      parsed = undefined;
-    }
-  }
+  const parsed = await readPackConfig(configPath);
   const verdict = configWriteVerdict({ exists, readable: parsed !== undefined, force: opts.force });
 
   if (verdict === 'keep-unreadable') {

@@ -1,5 +1,5 @@
 // @test-resource subprocess
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import { init } from '../commands/init.js';
 import { INSTALL_RECEIPT_PATH } from './receipts.js';
 import { assertProjectCompatibility } from './update-compatibility.js';
 import { main, requiresProjectCompatibility } from '../main.js';
+import { doctor } from '../commands/doctor.js';
 
 const roots: string[] = [];
 const initialCwd = process.cwd();
@@ -42,6 +43,10 @@ it.each([
     runtimes: ['future-runtime'], files: [] }), reason: /receipt.*runtime|receipt.*invalid/i },
   { body: JSON.stringify({ schemaVersion: 1, version: 'garbage', source: 'local',
     runtimes: ['codex'], files: [] }), reason: /version/i },
+  { body: JSON.stringify({ schemaVersion: 1, version: '5.0.1', source: 'local',
+    runtimes: [], files: [] }), reason: /runtime/i },
+  { body: JSON.stringify({ schemaVersion: 1, version: '5.0.1', source: 'local',
+    runtimes: ['codex', 'codex'], files: [] }), reason: /runtime/i },
 ])('distinguishes invalid installed evidence from absence: $body', async ({ body, reason }) => {
   const root = await mkdtemp(join(tmpdir(), 'void-invalid-compatibility-'));
   roots.push(root);
@@ -81,6 +86,26 @@ it('refuses a retired selected pack instead of dropping it', async () => {
   await mkdir(join(root, '.void'), { recursive: true });
   await writeFile(join(root, '.void/config.json'), '{"packs":{"retired":"^4.0.0"}}');
   await expect(assertProjectCompatibility(root)).rejects.toThrow(/pack.*retired/i);
+});
+
+it.each(['future-programme', 'damaged-hold', 'linked-record-parent'])('refuses %s before mutations and reports the same cause in doctor', async kind => {
+  const root = await mkdtemp(join(tmpdir(), 'void-programme-compatibility-'));
+  roots.push(root);
+  await mkdir(join(root, '.void/machine/autopilot'), { recursive: true });
+  if (kind === 'future-programme') await writeFile(join(root, '.void/program.md'), '---\nschemaVersion: 99\n---\n');
+  if (kind === 'damaged-hold') await writeFile(join(root, '.void/machine/autopilot/merge-hold.json'), '{}');
+  if (kind === 'linked-record-parent') {
+    await mkdir(join(root, 'foreign'));
+    await symlink(join(root, 'foreign'), join(root, '.void/machine/receipts'));
+  }
+  const verdict = await assertProjectCompatibility(root).then(() => 'accepted', error => error instanceof Error ? error.message : 'unknown');
+  expect(verdict).not.toBe('accepted');
+  process.chdir(root);
+  const output: string[] = [];
+  vi.spyOn(process.stdout, 'write').mockImplementation(chunk => { output.push(String(chunk)); return true; });
+  vi.spyOn(process, 'exit').mockImplementation(code => { throw new Error(`process.exit(${String(code)})`); });
+  await expect(doctor(['--no-remote'])).rejects.toThrow();
+  expect(output.join('')).toContain(verdict);
 });
 
 it('guards runtime mutation routing before wiring a newer installation', async () => {

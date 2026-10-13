@@ -134,9 +134,20 @@ describe('remote effects stay with the roles that own them', () => {
   it('launches durable workers through the shared native orchestration contract', () => {
     const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
     expect(spawning).toMatch(/void-orchestrate/);
-    expect(spawning).toMatch(/label \+ worktree/);
-    // The sentence this replaced let the agent choose between two launch paths.
-    expect(spawning).not.toMatch(/native subagents|cockpit presentation|\bwhen the project uses\b/i);
+    expect(spawning).toMatch(/supported native delegation/);
+    expect(spawning).toMatch(/session-host selection policy/);
+    expect(spawning).toMatch(/ticket cap is unchanged/);
+    expect(spawning).not.toMatch(/cockpit presentation|agents dispatch/i);
+    // Identity checks belong to the selected adapter, not every native agent.
+    const orchestration = readFileSync(
+      new URL('../../packages/core/skills/void-orchestrate/SKILL.md', import.meta.url), 'utf8',
+    );
+    const recovery = flat(body(orchestration)).match(
+      /## Herdr adapter: recovery.*?(?=## Herdr adapter: explicit coordinator context)/,
+    )?.[0] ?? '';
+    expect(recovery).toMatch(/when the session-host policy selects this adapter/);
+    expect(recovery).toMatch(/label \+ worktree/);
+    expect(recovery).toMatch(/Re-read `herdr pane list` before every identity decision/);
   });
 
   it('hands a ticket back to the run that holds it, and never seats a second one', () => {

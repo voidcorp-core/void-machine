@@ -1,3 +1,4 @@
+// @test-resource subprocess -- the multiplexer fixture executes through runCommand.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

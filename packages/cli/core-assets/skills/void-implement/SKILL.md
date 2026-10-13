@@ -13,6 +13,15 @@ One ticket, taken from ready to shipped, with the coverage a senior expert team 
 
 ---
 
+## Assign the writer once
+
+The interactive coordinator invokes `void-orchestrate` to delegate substantial
+implementation to one writer before starting this cycle. An agent already assigned the unit
+executes it: never delegate this complete workflow again. Tiny direct work and
+capability fallbacks follow that policy without skipping triggered quality gates.
+Preserve one `leadWriterId` through corrections; the coordinator retains user intent
+and decisions. Pass any orchestrator-owned panel contract unchanged.
+
 ## Canonical team orchestration
 
 When the caller supplies `panel.provider: orchestrator`, the orchestrator owns specialist

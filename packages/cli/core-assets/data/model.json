@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 391,
+      "lines": 393,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 6886,
+      "staticTokens": 6921,
       "type": "skill"
     },
     {
@@ -1733,7 +1733,7 @@
         }
       ],
       "id": "skill:void-brainstorm",
-      "lines": 271,
+      "lines": 278,
       "name": "void-brainstorm",
       "owner": "folpe",
       "pack": null,
@@ -1742,7 +1742,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-brainstorm/SKILL.md",
-      "staticTokens": 4143,
+      "staticTokens": 4226,
       "type": "skill"
     },
     {
@@ -1885,7 +1885,7 @@
         }
       ],
       "id": "skill:void-context",
-      "lines": 167,
+      "lines": 166,
       "name": "void-context",
       "owner": "folpe",
       "pack": null,
@@ -1894,7 +1894,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-context/SKILL.md",
-      "staticTokens": 2874,
+      "staticTokens": 2865,
       "type": "skill"
     },
     {
@@ -2195,7 +2195,7 @@
         }
       ],
       "id": "skill:void-implement",
-      "lines": 183,
+      "lines": 192,
       "name": "void-implement",
       "owner": "folpe",
       "pack": null,
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 5536,
+      "staticTokens": 5664,
       "type": "skill"
     },
     {
@@ -2398,7 +2398,7 @@
       "type": "skill"
     },
     {
-      "description": "Coordinate native short agents and durable Herdr workers, preserving mission files, identity, permissions and independent review evidence across interruptions.",
+      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 240,
+      "lines": 311,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 3190,
+      "staticTokens": 4402,
       "type": "skill"
     },
     {
@@ -2445,7 +2445,7 @@
         }
       ],
       "id": "skill:void-plan",
-      "lines": 239,
+      "lines": 246,
       "name": "void-plan",
       "owner": "folpe",
       "pack": null,
@@ -2454,7 +2454,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-plan/SKILL.md",
-      "staticTokens": 2623,
+      "staticTokens": 2706,
       "type": "skill"
     },
     {

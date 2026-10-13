@@ -234,15 +234,20 @@ describe('native review routing', () => {
     await writeMissionControllerPlan(repo.root, mission, plan, ticket, repo.base);
     const args = [...argv(repo.head), '--mission', mission];
     expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
-    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
     expect(recorded(repo).attempts).toHaveLength(1);
-    const wrong = await nativeReviewCommand([...argv(repo.head, 'DEV-2'), '--mission', mission], nativeRunners);
-    expect(wrong.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('ticket binding') });
-    writeFileSync(join(repo.root, ticket.path), `${ticketBody}Changed criteria.\n`);
-    expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({
-      outcome: 'failed', cause: expect.stringContaining('ticket binding'),
-    });
-    writeFileSync(join(repo.root, ticket.path), ticketBody);
+    // Before history diverges, these binding/idempotence checks have identical
+    // inputs in all four modes. Prove them once; every mode still collects its own receipt.
+    if (mode === 'clean') {
+      expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
+      expect(recorded(repo).attempts).toHaveLength(1);
+      const wrong = await nativeReviewCommand([...argv(repo.head, 'DEV-2'), '--mission', mission], nativeRunners);
+      expect(wrong.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('ticket binding') });
+      writeFileSync(join(repo.root, ticket.path), `${ticketBody}Changed criteria.\n`);
+      expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({
+        outcome: 'failed', cause: expect.stringContaining('ticket binding'),
+      });
+      writeFileSync(join(repo.root, ticket.path), ticketBody);
+    }
     const subject = { taskId: mission, reviewedCommit: repo.head, baseCommit: repo.base, acceptanceCriteriaHash: hash };
     const envelope = { schemaVersion: 1, missionId: mission, runtime: 'codex',
       specialistId: 'core:independent-code-reviewer', agentName: 'independent-code-reviewer', contractVersion: 1,

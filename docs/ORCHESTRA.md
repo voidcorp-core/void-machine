@@ -1,5 +1,12 @@
 # Central native mission files
 
+This is the optional Herdr adapter's persistence and projection contract, not a
+prerequisite for native delegation. `void-orchestrate` owns portable research/writer
+dispatch. Ordinary read-only research uses a focused brief without new central files
+or fabricated specialist receipts. Formal review proof remains its existing owner's
+responsibility. The schema and its four-worker bound are unchanged by adaptive
+delegation; these files are neither a global quota nor a durable result inbox.
+
 DEV-1016 uses `~/.local/state/orchestra/<project>/<mission>/`. The project key is
 SHA-256 of the UTF-8 canonical Git common-directory absolute path. Resolve it with
 `git rev-parse --path-format=absolute --git-common-dir`, then `realpath`. Repository

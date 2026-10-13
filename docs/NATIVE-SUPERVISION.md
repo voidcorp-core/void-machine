@@ -1,10 +1,48 @@
 # Native mission supervision
 
-`void-orchestrate` is the shared procedure for coordinators, implement specialists
-and autopilot workers. The approved [native design](specs/2026-10-08-native-herdr-orchestration.md)
-and [central file contract](ORCHESTRA.md) define identity, projection and continuity.
+`void-orchestrate` owns the portable delegation policy for research, planning,
+implementation and autopilot. The [adaptive contract](specs/2026-10-13-adaptive-delegation.md)
+keeps user intent and decisions in one coordinator. Native agents do not require
+Herdr; the [Herdr adapter](specs/2026-10-08-native-herdr-orchestration.md)
+uses the [central file contract](ORCHESTRA.md) for identity, projection and continuity.
 
-## Procedure
+## Portable procedure
+
+Use native capabilities actually available. Delegate independent substantial research
+with focused briefs and source references; ordinary research does not produce formal
+specialist events. Delegate substantial implementation once to a responsible writer.
+An already assigned writer executes its unit, including corrections. Formal panels
+and exact-subject independent review retain their existing authority and receipts.
+
+Read-only research needs no additional worktree. Concurrent authors use isolated
+assigned worktrees and disjoint ownership; serialize when concurrency isolation fails.
+Mandatory security or review isolation cannot be waived. Autopilot keeps per-ticket
+worktrees and its ticket cap; account for researchers/reviewers in dispatch capacity
+without claiming a global scheduler. Follow the universal durable-path invariant.
+
+Collect by completion events where supported, otherwise bounded waits. Distinguish
+saved work, live session, retained result and delivered result. Reconcile uncertainty
+before another launch; reuse corrections in the same session and confirm consumption.
+Missing native delegation permits explicit sequential work, never fabricated review.
+
+## Session-host selection
+
+Portability makes Herdr optional for consumers, not discretionary when it hosts the
+validated current session. Use it for durable terminal workers and mission visibility;
+short agents retain native execution, with no duplicate agent merely for a pane.
+Choose the best supported capabilities for the task and current host. Executables,
+environment markers and pane IDs are discovery hints, not proof of current ownership.
+Outside Herdr, an existing host such as tmux may be used only through verified,
+supported capabilities. This change adds no tmux transport and does not reactivate
+the legacy kernel. Without supported presentation, retain native delegation and
+report the limitation. Ambiguous or failed host discovery blocks that host action;
+diagnose it instead of silently switching hosts or controlling another project.
+Independent native work can continue when it does not depend on the blocked action.
+
+## Herdr procedure
+
+Apply the following procedure and projection boundary when session-host selection
+requires the Herdr adapter.
 
 1. Resolve the named project, read rules and Git state, then recover its central
    mission. Keep the current ORCH coordinator. Preserve other writers' changes.
@@ -25,7 +63,7 @@ and [central file contract](ORCHESTRA.md) define identity, projection and contin
 7. Collect and accept before closing owned worker panes. Keep worktrees, branches
    and proofs on their separate lifecycle. Do not close ORCH or unrelated panes.
 
-## Projection boundary
+## Herdr projection boundary
 
 The project hook runs on SessionStart startup/resume/clear/compact, Stop and
 SessionEnd. It reads central state only; no durable home writes. Source void-machine

@@ -7914,7 +7914,7 @@ function projectPath(root, path2) {
   const relativePath = relative(resolve2(root), absolute).replaceAll("\\", "/");
   return relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath) ? void 0 : relativePath;
 }
-function protectedReason(path2, root) {
+function protectedReason(path2, root, shellWrite) {
   if (root !== void 0) {
     const relativePath = projectPath(root, path2);
     if (relativePath !== void 0 && !isCoOwned(relativePath) && manifestOwnedPaths(root).has(relativePath)) {
@@ -7931,8 +7931,8 @@ function protectedReason(path2, root) {
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return "credential file";
   const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
-  if (!base.endsWith(".md") && !sourceTest && /(?:secret|credential)/.test(base)) {
-    return "credential file";
+  if (!base.endsWith(".md") && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceTest && shellWrite ? "credential-named source test with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
   }
   if ((/* @__PURE__ */ new Set([
     "package-lock.json",
@@ -7951,7 +7951,7 @@ function protectedReason(path2, root) {
 }
 function protectedFile(paths, options = {}) {
   for (const path2 of paths) {
-    const reason = protectedReason(path2, options.root);
+    const reason = protectedReason(path2, options.root, options.shellWritePaths?.includes(path2) ?? false);
     if (reason !== void 0) {
       const learn = reason.includes("void-learn") ? " Use void-learn to capture the missing harness capability." : "";
       return block("PROTECTED_FILE", `refusing to edit ${path2}.${learn}`, [`${path2}: ${reason}`]);
@@ -8881,7 +8881,8 @@ function evaluateRule(rule, rawInput, options) {
   if (rule === "protected-file") {
     if (productSetting(env, "ALLOW_SECRET_EDIT") === "1") return allow("OVERRIDE", "one-shot override");
     const ownership = options.source === "checked-out" ? {} : { root: options.root };
-    return protectedFile(call.edits.map((edit) => edit.path), ownership);
+    const shellWritePaths = call.tool === "Bash" || call.tool === "shell" ? shellWriteTargets(call.command) : [];
+    return protectedFile(call.edits.map((edit) => edit.path), { ...ownership, shellWritePaths });
   }
   if (rule === "secret-content") return secretContent(call.edits);
   if (rule === "control-character") return controlCharacter(call.edits);

@@ -185,7 +185,7 @@ describe('co-owned enforcement across tool adapters', () => {
     ];
     for (const command of commands) {
       const payload = { tool_name: tool, tool_input: { command } };
-      const verdicts = ['protected-file', 'secret-content'].map((rule) =>
+      const verdicts = (['protected-file', 'secret-content'] as const).map((rule) =>
         evaluateRule(rule, payload, { root, env: {} }));
       expect(verdicts[0]).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
       expect(verdicts.some((verdict) => !verdict.allow)).toBe(true);
@@ -200,7 +200,7 @@ describe('co-owned enforcement across tool adapters', () => {
         patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+\n*** End Patch`,
       } }
       : { tool_name: tool, tool_input: { file_path: path, content: '', new_string: '' } };
-    for (const rule of ['protected-file', 'secret-content']) {
+    for (const rule of ['protected-file', 'secret-content'] as const) {
       expect(evaluateRule(rule, payload, { root, env: {} }).code).toBe('ALLOW');
     }
   });
@@ -268,7 +268,7 @@ describe('co-owned enforcement across tool adapters', () => {
         : { tool_name: tool, tool_input: {
           command: paths.map((path) => `printf synthetic > '${path}'`).join('; '),
         } };
-      const allowed = join(root, 'client-secrets.test.mjs');
+      const allowed = join(root, tool === 'apply_patch' ? 'client-secrets.test.mjs' : 'ordinary.test.ts');
       expect(evaluateRule('protected-file', payload([allowed]), { root, env: {} }).code).toBe('ALLOW');
       for (const path of [owned, '.env.test.mjs', 'secrets.json', 'private.key',
         '.aws/credentials', '.git/client-secrets.test.mjs', 'pnpm-lock.yaml',

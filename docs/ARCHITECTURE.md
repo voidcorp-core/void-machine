@@ -360,12 +360,20 @@ target operations. Test directories alone and trailing extensions such as
 receive the full `secret-content` policy, even inside fixture/generated directories
 and with uppercase names or Windows separators. High-confidence tokens and generic
 secret assignments are refused; unrelated test/fixture exemptions are unchanged.
+For Bash/shell, the existing redirection/`tee` extractor supplies targets but no
+inspectable content. The registered `protected-file` hook therefore refuses
+credential-named source-test targets from those operations; use Write, Edit or
+apply_patch with explicit content instead. An explicitly empty edit is valid
+content and remains allowed. A patch and a shell redirection to the same target
+still refuse. This does not expand the shell extractor into an evaluator: paths
+computed by programs or unsupported shell syntax remain outside its coverage.
 The existing `allow-secret-pattern:` marker exempts only the line containing it
 and should explain an intentional synthetic fixture. It is not proof that content
 is safe, nor authorization to edit real credentials. Detection inspects added
 text, not evaluated code: build synthetic token values from inert pieces instead
 of storing complete credentials. Placeholder and non-secret-value rules also
 retain their existing semantics.
+The marker cannot authorize an uninspectable shell write.
 
 Checked-out CI evidence retains its existing exemption from pre-write ownership
 checks. Neither boundary proves human approval or enforces managed blocks;

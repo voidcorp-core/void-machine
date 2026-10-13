@@ -170,7 +170,7 @@ describe('bundled credential source test content enforcement', () => {
 
 describe('bundled co-owned enforcement', () => {
   it.each(['claude', 'codex'])('refuses mixed test and protected targets in both orders for %s', (runtime) => {
-    const allowed = join(workspace, 'client-secrets.test.mjs');
+    const allowed = join(workspace, runtime === 'claude' ? 'ordinary.test.ts' : 'client-secrets.test.mjs');
     const denied = join(workspace, 'secrets.json');
     for (const paths of [[allowed, denied], [denied, allowed]]) {
       const payload = runtime === 'claude'

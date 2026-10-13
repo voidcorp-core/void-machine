@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -96,4 +96,44 @@ it('rejects nonregular targets rather than treating unreadable state as absent',
   await expect(prepareFileTransaction(root,
     [{ path: 'directory', content: Buffer.from('bad') }], journal, 'operation-1'))
     .rejects.toThrow(/regular file/i);
+});
+
+it('adopts only an explicitly verified leaf link and restores the original link on recovery', async () => {
+  const { root, journal } = await fixture();
+  await symlink('owned', join(root, 'launcher'));
+  await prepareFileTransaction(root, [{ path: 'launcher', content: Buffer.from('stable launcher'),
+    mode: 0o755, replaceLink: 'owned' }], journal, 'operation-1');
+  await applyFileTransaction(root, journal);
+  expect(await readFile(join(root, 'launcher'), 'utf8')).toBe('stable launcher');
+  expect(await readFile(join(root, 'owned'), 'utf8')).toBe('before');
+  await recoverFileTransaction(root, journal);
+  expect(await readlink(join(root, 'launcher'))).toBe('owned');
+  await recoverFileTransaction(root, journal);
+});
+
+it('preserves an unknown replacement link rather than following it during recovery', async () => {
+  const { root, journal } = await fixture();
+  await symlink('owned', join(root, 'launcher'));
+  await prepareFileTransaction(root, [{ path: 'launcher', content: Buffer.from('stable launcher'),
+    replaceLink: 'owned' }], journal, 'operation-1');
+  await applyFileTransaction(root, journal);
+  await rm(join(root, 'launcher'));
+  await symlink('user-chosen', join(root, 'launcher'));
+  await expect(recoverFileTransaction(root, journal)).rejects.toThrow(/conflict.*launcher/i);
+  expect(await readlink(join(root, 'launcher'))).toBe('user-chosen');
+});
+
+it('refuses a launcher link that changed after ownership qualification', async () => {
+  const { root, journal } = await fixture();
+  await symlink('owned', join(root, 'launcher'));
+  await expect(prepareFileTransaction(root, [{ path: 'launcher', content: Buffer.from('stable launcher'),
+    replaceLink: 'different-link' }], journal, 'operation-1')).rejects.toThrow(/link.*changed/i);
+  expect(await readlink(join(root, 'launcher'))).toBe('owned');
+});
+
+it('refuses a changed planning snapshot instead of adopting it as the publication baseline', async () => {
+  const { root, journal } = await fixture();
+  await expect(prepareFileTransaction(root, [{ path: 'owned', content: Buffer.from('new'),
+    expected: { exists: false } }], journal, 'operation-1')).rejects.toThrow(/conflict.*owned/i);
+  expect(await readFile(join(root, 'owned'), 'utf8')).toBe('before');
 });

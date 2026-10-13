@@ -6,10 +6,12 @@ import {
   mkdtemp,
   open,
   readFile,
+  readlink,
   realpath,
   rename,
   rm,
   rmdir,
+  symlink,
 } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
@@ -19,11 +21,15 @@ export interface FileWriteMutation {
   readonly path: string;
   readonly content: Uint8Array;
   readonly mode?: number;
+  /** Supplied only after bootstrap proves ownership of this exact leaf link. */
+  readonly replaceLink?: string;
+  readonly expected?: FileState;
 }
 
 export interface FileRemoveMutation {
   readonly path: string;
   readonly remove: true;
+  readonly expected?: FileState;
 }
 
 export type FileMutation = FileWriteMutation | FileRemoveMutation;
@@ -47,12 +53,15 @@ async function infoOrUndefined(path: string): Promise<Stats | undefined> {
   }
 }
 
-async function rejectSymlinkPath(projectRoot: string, relativePath: string): Promise<void> {
+async function rejectSymlinkPath(projectRoot: string, relativePath: string, allowLeaf = false): Promise<void> {
   let cursor = resolve(projectRoot);
-  for (const segment of relativePath.split('/')) {
+  const segments = relativePath.split('/');
+  for (const [index, segment] of segments.entries()) {
     cursor = join(cursor, segment);
     const info = await infoOrUndefined(cursor);
-    if (info?.isSymbolicLink()) throw new Error(`transaction target crosses a symbolic link: ${relativePath}`);
+    if (info?.isSymbolicLink() && !(allowLeaf && index === segments.length - 1)) {
+      throw new Error(`transaction target crosses a symbolic link: ${relativePath}`);
+    }
   }
 }
 
@@ -102,7 +111,8 @@ const relativePath = z.string().max(1024).refine(isSafeRelativePath);
 const fileState = z.discriminatedUnion('exists', [
   z.strictObject({ exists: z.literal(false) }),
   z.strictObject({ exists: z.literal(true), sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    mode: z.number().int().min(0).max(0o777) }),
+    mode: z.number().int().min(0).max(0o777), linkTarget: z.string().min(1).max(4096)
+      .refine(value => !value.includes(String.fromCharCode(0))).optional() }),
 ]);
 const journalSchema = z.strictObject({
   schemaVersion: z.literal(1), operationId: z.string().regex(/^[a-zA-Z0-9-]{1,80}$/),
@@ -136,16 +146,21 @@ async function boundedRead(path: string, limit = MAX_FILE_BYTES): Promise<Buffer
   return bytes;
 }
 
-async function observe(path: string): Promise<{ state: FileState; bytes?: Buffer }> {
+async function observe(path: string, allowLink = false): Promise<{ state: FileState; bytes?: Buffer }> {
   const info = await infoOrUndefined(path);
   if (info === undefined) return { state: { exists: false } };
+  if (allowLink && info.isSymbolicLink()) {
+    const linkTarget = await readlink(path);
+    const bytes = Buffer.from(linkTarget);
+    return { state: { exists: true, sha256: hash(bytes), mode: info.mode & 0o777, linkTarget }, bytes };
+  }
   const bytes = await boundedRead(path);
   return { state: { exists: true, sha256: hash(bytes), mode: info.mode & 0o777 }, bytes };
 }
 
 function equalState(a: FileState, b: FileState): boolean {
   return a.exists === b.exists && (!a.exists || (b.exists
-    && a.sha256 === b.sha256 && a.mode === b.mode));
+    && a.sha256 === b.sha256 && a.mode === b.mode && a.linkTarget === b.linkTarget));
 }
 
 /** Persist every snapshot before publishing; caller owns the exclusive operation lock. */
@@ -167,8 +182,15 @@ export async function prepareFileTransaction(
       throw new Error('transaction cannot mutate its journal');
     }
     seen.add(target);
-    await rejectSymlinkPath(root, mutation.path);
-    const before = await observe(target);
+    const verifiedLink = 'replaceLink' in mutation ? mutation.replaceLink : undefined;
+    await rejectSymlinkPath(root, mutation.path, verifiedLink !== undefined);
+    const before = await observe(target, verifiedLink !== undefined);
+    if (verifiedLink !== undefined && (!before.state.exists || before.state.linkTarget !== verifiedLink)) {
+      throw new Error(`transaction launcher link changed at ${mutation.path}`);
+    }
+    if (mutation.expected !== undefined && !equalState(before.state, fileState.parse(mutation.expected))) {
+      throw new Error(`transaction planning conflict at ${mutation.path}`);
+    }
     const content = 'remove' in mutation ? undefined : mutation.content;
     bytes += (before.bytes?.length ?? 0) + (content?.length ?? 0);
     if ((content?.length ?? 0) > MAX_FILE_BYTES || bytes > MAX_TOTAL_BYTES) {
@@ -208,7 +230,8 @@ async function readJournal(projectRoot: string, journalRoot: string): Promise<Jo
     if (paths.has(entry.path)) throw new Error('duplicate transaction path in journal');
     paths.add(entry.path);
     targetFor(root, entry.path);
-    await rejectSymlinkPath(root, entry.path);
+    if (entry.after.exists && entry.after.linkTarget !== undefined) throw new Error('transaction cannot publish new symbolic links');
+    await rejectSymlinkPath(root, entry.path, entry.before.exists && entry.before.linkTarget !== undefined);
     for (const side of ['before', 'after'] as const) {
       const state = entry[side];
       if (!state.exists) continue;
@@ -216,6 +239,9 @@ async function readJournal(projectRoot: string, journalRoot: string): Promise<Jo
       total += backup.length;
       if (hash(backup) !== state.sha256 || total > MAX_TOTAL_BYTES) {
         throw new Error(`transaction snapshot integrity failure: ${entry.path}`);
+      }
+      if (state.linkTarget !== undefined && !backup.equals(Buffer.from(state.linkTarget))) {
+        throw new Error(`transaction link snapshot differs from its target: ${entry.path}`);
       }
     }
   }
@@ -235,9 +261,10 @@ export async function applyFileTransaction(
 ): Promise<void> {
   const journal = await readJournal(projectRoot, journalRoot);
   for (const [index, entry] of journal.entries.entries()) {
-    await rejectSymlinkPath(journal.root, entry.path);
+    const allowLink = entry.before.exists && entry.before.linkTarget !== undefined;
+    await rejectSymlinkPath(journal.root, entry.path, allowLink);
     const target = targetFor(journal.root, entry.path);
-    if (!equalState((await observe(target)).state, entry.before)) {
+    if (!equalState((await observe(target, allowLink)).state, entry.before)) {
       throw new Error(`transaction forward conflict at ${entry.path}; snapshots retained in ${journalRoot}`);
     }
     if (entry.after.exists) {
@@ -259,15 +286,23 @@ export async function recoverFileTransaction(projectRoot: string, journalRoot: s
   for (let index = journal.entries.length - 1; index >= 0; index -= 1) {
     const entry = journal.entries[index];
     if (entry === undefined) continue;
-    await rejectSymlinkPath(journal.root, entry.path);
+    const allowLink = entry.before.exists && entry.before.linkTarget !== undefined;
+    await rejectSymlinkPath(journal.root, entry.path, allowLink);
     const target = targetFor(journal.root, entry.path);
-    const actual = (await observe(target)).state;
+    const actual = (await observe(target, allowLink)).state;
     if (equalState(actual, entry.before)) continue;
     if (!equalState(actual, entry.after)) { conflicts.push(entry.path); continue; }
     if (entry.before.exists) {
       const bytes = await boundedRead(join(journalRoot, `${index}.before`));
       if (hash(bytes) !== entry.before.sha256) throw new Error('transaction backup changed');
-      await atomicWrite(target, bytes, entry.before.mode);
+      if (entry.before.linkTarget === undefined) await atomicWrite(target, bytes, entry.before.mode);
+      else {
+        const temporary = join(dirname(target), `.${basename(target)}.void-tx-${randomUUID()}`);
+        try {
+          await symlink(entry.before.linkTarget, temporary);
+          await rename(temporary, target);
+        } finally { await rm(temporary, { force: true }); }
+      }
     } else await rm(target, { force: true });
   }
   await removeEmptyCreatedDirectories(journal.root,

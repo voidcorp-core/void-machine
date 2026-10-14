@@ -7,7 +7,7 @@ describe('secretContent', () => {
     for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
       for (const directory of ['src', '__tests__', '__fixtures__', 'fixtures', '__generated__']) {
         for (const name of ['client-secrets', 'credentials']) {
-          const path = `${directory}/${name}${kind}.${extension}`;
+          const path = `/repo/${directory}/${name}${kind}.${extension}`;
           for (const target of [path, path.toUpperCase().replaceAll('/', '\\')]) {
             for (const addedContent of contents) {
               const verdict = secretContent([{ path: target, addedContent }]);

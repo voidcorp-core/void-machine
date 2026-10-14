@@ -17,31 +17,38 @@ const HIGH_CONFIDENCE = [
 ];
 
 const GENERIC_ASSIGNMENT =
-  /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/i;
+  /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/gi;
+// Keep camelCase suffixes case-sensitive: an unrelated word like monkey is not a key.
+const CAMEL_ASSIGNMENT =
+  /\b[a-z][A-Za-z0-9_$]*(?:Key|Secret|Token|Password|Passwd)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/g;
 const PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 const EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
 
-// Source tests admitted by the credential-name heuristic still need content checks.
-const CREDENTIAL_SOURCE_TEST =
-  /(?:secret|credential)[^/]*\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
+// Source modules admitted by the credential-name heuristic still need content checks.
+const CREDENTIAL_SOURCE_MODULE =
+  /(?:secret|credential)[^/]*\.(?:[cm]?[jt]s|[jt]sx)$/i;
 
 function lineHasSecret(line: string): boolean {
   if (line.includes('allow-secret-pattern:')) return false;
   if (HIGH_CONFIDENCE.some((pattern) => pattern.test(line))) return true;
-  const assignment = line.match(GENERIC_ASSIGNMENT);
-  if (assignment === null || PLACEHOLDER.test(line)) return false;
-  const value = assignment[1] ?? '';
-  if (/^[0-9a-f]+$/i.test(value) || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {
-    return false;
+  for (const pattern of [GENERIC_ASSIGNMENT, CAMEL_ASSIGNMENT]) {
+    for (const assignment of line.matchAll(pattern)) {
+      const value = assignment[1] ?? '';
+      if (PLACEHOLDER.test(value)) continue;
+      if (/^[0-9a-f]+$/i.test(value) || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {
+        continue;
+      }
+      if (/[A-Za-z]/.test(value) && /[0-9]/.test(value)) return true;
+    }
   }
-  return /[A-Za-z]/.test(value) && /[0-9]/.test(value);
+  return false;
 }
 
 export function secretContent(edits: readonly NormalizedEdit[]): RuleVerdict {
   const evidence: string[] = [];
   for (const edit of edits) {
     const path = edit.path.replaceAll('\\', '/');
-    if (EXEMPT_PATH.test(path) && !CREDENTIAL_SOURCE_TEST.test(path)) continue;
+    if (EXEMPT_PATH.test(path) && !CREDENTIAL_SOURCE_MODULE.test(path)) continue;
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
       if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
     });

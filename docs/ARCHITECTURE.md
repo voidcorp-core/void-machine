@@ -350,19 +350,23 @@ co-owned path skips only that ownership refusal; nested namesakes and prefixes
 do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
 remain active, as do independent content scans. Claude and Codex share this rule.
 
-The credential-name heuristic permits source filenames ending in `.test` or
-`.spec` followed by `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts` or `.cts`
-(case-insensitive), such as `client-secrets.test.mjs`. This exception applies
-only to that heuristic: environment files, keys, credential stores, lockfiles,
+The credential-name heuristic permits source filenames ending in `.js`, `.jsx`,
+`.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts` or `.cts` (case-insensitive), such as
+`client-secrets.mjs` and `client-secrets.test.mjs`. A source module need not be a
+test: the filename describes code that handles credentials, not their values.
+This exception applies only to that heuristic: environment files, keys, credential stores, lockfiles,
 Git metadata and manifest-owned assets remain protected, including in mixed
 target operations. Test directories alone and trailing extensions such as
-`.test.json` or `.test.mjs.bak` do not qualify. These newly permitted source tests
+`.test.json` or `.test.mjs.bak` do not qualify. These source modules
 receive the full `secret-content` policy, even inside fixture/generated directories
 and with uppercase names or Windows separators. High-confidence tokens and generic
-secret assignments are refused; unrelated test/fixture exemptions are unchanged.
+secret assignments (including camelCase names such as `clientSecret` or `apiKey`)
+are refused. Every assignment is checked independently: an exempt placeholder,
+hexadecimal value or UUID cannot mask another sensitive value on the same line.
+The explicit synthetic line marker and unrelated test/fixture exemptions are unchanged.
 For Bash/shell, the existing redirection/`tee` extractor supplies targets but no
 inspectable content. The registered `protected-file` hook therefore refuses
-credential-named source-test targets from those operations; use Write, Edit or
+credential-named source-module targets from those operations; use Write, Edit or
 apply_patch with explicit content instead. An explicitly empty edit is valid
 content and remains allowed. A patch and a shell redirection to the same target
 still refuse. This does not expand the shell extractor into an evaluator: paths
@@ -373,7 +377,11 @@ is safe, nor authorization to edit real credentials. Detection inspects added
 text, not evaluated code: build synthetic token values from inert pieces instead
 of storing complete credentials. Placeholder and non-secret-value rules also
 retain their existing semantics.
-The marker cannot authorize an uninspectable shell write.
+The marker cannot authorize an uninspectable shell write. Allowing source authoring
+does not authorize running it: external credential operations still require precise
+user consent, verified opaque/direct transfer outside model context and metadata-only
+verification under `void-security-guidance`. Installed instructions in an active
+session do not change retroactively when a project updates its harness.
 
 Checked-out CI evidence retains its existing exemption from pre-write ownership
 checks. Neither boundary proves human approval or enforces managed blocks;
@@ -680,10 +688,11 @@ Two content-aware hooks sit beside the filename/path guards:
   `protect-sensitive-files.sh` (which only guards known secret *filenames*). It
   scans the edit's new content for high-confidence vendor tokens (AWS/GitHub/
   Stripe/OpenAI/Anthropic/Slack/Google keys, PEM headers) and one guarded generic
-  rule (a `*_KEY|_SECRET|_TOKEN` var assigned a long, mixed, non-placeholder
-  literal — excluding UUIDs, git shas, and env indirection). Bounded to the edit
+  rule (a `*_KEY|_SECRET|_TOKEN` var or camelCase `Key|Secret|Token|Password|Passwd`
+  suffix assigned a long, mixed, non-placeholder literal — excluding UUIDs, git shas,
+  and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
-  test/fixture paths are skipped except credential-named source tests admitted by
+  test/fixture paths are skipped except credential-named source modules admitted by
   the filename heuristic above, which receive the same content policy. The marker
   applies only to its own line and does not exempt another line or file.
 - **`stop-typecheck.sh`** (Stop, **advisory**) — when a TS project has uncommitted

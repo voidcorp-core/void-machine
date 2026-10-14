@@ -63,6 +63,19 @@ describe('secretContent', () => {
     },
   );
 
+  it.each(['HASH_KEY', 'hashKey'])(
+    'does not let an exempt %s assignment hide a sensitive value on the same line', (safeName) => {
+      const safe = `${safeName} = "${'ab12'.repeat(8)}"`;
+      const secret = `clientSecret = "${'Az19'.repeat(8)}"`;
+      for (const assignments of [[safe, secret], [secret, safe]]) {
+        const path = 'deploy/infisical/client-secrets.mjs';
+        const verdict = secretContent([{ path, addedContent: `const ${assignments.join(', ')};` }]);
+        expect(verdict).toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+        expect(verdict.evidence).toEqual([`${path}:1`]);
+      }
+    },
+  );
+
   it('allows camelCase credential references and unrelated suffix words', () => {
     const path = 'deploy/infisical/client-secrets.mjs';
     for (const addedContent of [

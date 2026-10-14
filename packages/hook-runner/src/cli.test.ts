@@ -135,6 +135,8 @@ describe('bundled credential source content enforcement', () => {
       [`AKIA${'A1'.repeat(8)}`, true],
       [`SERVICE_TOKEN="${'Az19'.repeat(8)}"`, true],
       [`export const clientSecret = "${'Az19'.repeat(8)}";`, true],
+      [`const HASH_KEY = "${'ab12'.repeat(8)}", clientSecret = "${'Az19'.repeat(8)}";`, true],
+      [`const clientSecret = "${'Az19'.repeat(8)}", HASH_KEY = "${'ab12'.repeat(8)}";`, true],
       [`AKIA${'A1'.repeat(8)} // allow-secret-pattern: intentional synthetic fixture`, false],
     ] as const;
     for (const [content, blocked] of cases) {

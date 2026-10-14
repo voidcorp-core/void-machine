@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { secretContent } from './secret-content.js';
 
 describe('secretContent', () => {
-  it.each(['test', 'spec'])('scans credential-named .%s source tests even in exempt directories', (kind) => {
-    const contents = [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`];
+  it.each(['', '.test', '.spec'])('scans credential-named %s source modules even in exempt directories', (kind) => {
+    const contents = ['-----BEGIN PRIVATE KEY-----', `AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`];
     for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
       for (const directory of ['src', '__tests__', '__fixtures__', 'fixtures', '__generated__']) {
         for (const name of ['client-secrets', 'credentials']) {
-          const path = `${directory}/${name}.${kind}.${extension}`;
+          const path = `${directory}/${name}${kind}.${extension}`;
           for (const target of [path, path.toUpperCase().replaceAll('/', '\\')]) {
             for (const addedContent of contents) {
               const verdict = secretContent([{ path: target, addedContent }]);

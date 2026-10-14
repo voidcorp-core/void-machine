@@ -169,11 +169,11 @@ describe('complete TDD evidence and operation bounds', () => {
 });
 
 describe('co-owned enforcement across tool adapters', () => {
-  it.each(['Bash', 'shell'])('refuses uninspectable credential-named test writes through %s', (tool) => {
+  it.each(['Bash', 'shell'])('refuses uninspectable credential-named source writes through %s', (tool) => {
     const root = mkdtempSync(join(tmpdir(), 'void-shell-content-'));
-    const target = 'fixtures/client-secrets.test.mjs';
+    const target = 'fixtures/client-secrets.mjs';
     const safe = 'ordinary.test.ts';
-    const windows = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
+    const windows = 'C:\\project\\__fixtures__\\CREDENTIALS.CTS';
     const commands = [
       `printf synthetic > ${target}`, `printf synthetic >> '${target}'`,
       `printf synthetic 2> "${target}"`, `printf synthetic &> ${target}`,
@@ -192,9 +192,9 @@ describe('co-owned enforcement across tool adapters', () => {
     }
   });
 
-  it.each(['Write', 'Edit', 'apply_patch'])('permits inspectable empty source tests through %s', (tool) => {
+  it.each(['Write', 'Edit', 'apply_patch'])('permits inspectable empty source modules through %s', (tool) => {
     const root = mkdtempSync(join(tmpdir(), 'void-empty-content-'));
-    const path = 'client-secrets.test.mjs';
+    const path = 'client-secrets.mjs';
     const payload = tool === 'apply_patch'
       ? { tool_name: tool, tool_input: {
         patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+\n*** End Patch`,
@@ -207,7 +207,7 @@ describe('co-owned enforcement across tool adapters', () => {
 
   it('does not let inspectable patch content hide a shell write to the same target', () => {
     const root = mkdtempSync(join(tmpdir(), 'void-mixed-shell-content-'));
-    const target = 'client-secrets.test.mjs';
+    const target = 'client-secrets.mjs';
     const patch = `*** Begin Patch\n*** Update File: ${target}\n@@\n-old\n+synthetic\n*** End Patch`;
     const payload = { tool_name: 'shell', tool_input: {
       command: `apply_patch '${patch}'; printf synthetic > ${target}`,
@@ -231,9 +231,9 @@ describe('co-owned enforcement across tool adapters', () => {
   }
 
   it.each(['Write', 'Edit', 'apply_patch'])(
-    'scans newly permitted source test content through %s', (tool) => {
+    'scans newly permitted source content through %s', (tool) => {
       const root = rootWithManifest([]);
-      const path = join(root, 'fixtures/client-secrets.test.mjs');
+      const path = join(root, 'fixtures/client-secrets.mjs');
       for (const source of ['tool-input', 'checked-out'] as const) {
         for (const content of [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`]) {
           const payload = edit(tool, path, content);
@@ -247,10 +247,11 @@ describe('co-owned enforcement across tool adapters', () => {
   );
 
   it.each(['Write', 'Edit', 'apply_patch'])(
-    'allows a synthetic credential-named test through %s', (tool) => {
+    'allows credential automation source through %s', (tool) => {
       const root = rootWithManifest([]);
       for (const source of ['tool-input', 'checked-out'] as const) {
-        const payload = edit(tool, join(root, 'client-secrets.test.mjs'), 'export const fixture = 1;');
+        const payload = edit(tool, join(root, 'deploy/infisical/client-secrets.mjs'),
+          'export async function provision(generate, store) { await store(await generate()); }');
         expect(evaluateRule('protected-file', payload, { root, source, env: {} }))
           .toMatchObject({ allow: true, code: 'ALLOW' });
         expect(evaluateRule('secret-content', payload, { root, source, env: {} }).code).toBe('ALLOW');

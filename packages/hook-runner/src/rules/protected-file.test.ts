@@ -58,9 +58,9 @@ describe('co-owned manifest paths', () => {
 });
 
 describe('protectedFile', () => {
-  it.each(['test', 'spec'])('refuses .%s credential source tests extracted from shell writes', (kind) => {
+  it.each(['', '.test', '.spec'])('refuses %s credential source modules extracted from shell writes', (kind) => {
     for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
-      const path = `fixtures/client-secrets.${kind}.${extension}`;
+      const path = `fixtures/client-secrets${kind}.${extension}`;
       for (const target of [path, path.toUpperCase().replaceAll('/', '\\')]) {
         expect(protectedFile([target], { shellWritePaths: [target] }))
           .toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
@@ -68,10 +68,10 @@ describe('protectedFile', () => {
     }
   });
 
-  it.each(['test', 'spec'])('allows credential-named .%s source files only', (kind) => {
+  it.each(['', '.test', '.spec'])('allows credential-named %s source modules', (kind) => {
     for (const extension of ['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts']) {
       for (const name of ['client-secrets', 'credentials']) {
-        const path = `src/${name}.${kind}.${extension}`;
+        const path = `src/${name}${kind}.${extension}`;
         expect(protectedFile([path])).toMatchObject({ allow: true, code: 'ALLOW' });
         expect(protectedFile([path.toUpperCase().replaceAll('/', '\\')]).allow).toBe(true);
       }
@@ -84,9 +84,9 @@ describe('protectedFile', () => {
       .map((extension) => `client-secrets.test.${extension}`),
     ...['rsa', 'ed25519', 'ecdsa', 'dsa'].map((kind) => `.ssh/id_${kind}`),
     '.npmrc', '.netrc', '.pgpass', '.aws/credentials', 'secrets.json',
-    'src/Credentials.ts', '__tests__/secrets.json', 'tests/credentials.mjs',
+    '__tests__/secrets.json', 'credentials.yaml', 'secrets.toml',
     'client-secrets.test.json', 'client-secrets.test.mjs.bak',
-    'client-secrets.testmjs', 'client-secrets.test.py', 'client-secrets.tests.ts',
+    'client-secrets.testmjs', 'client-secrets.test.py', 'client-secrets.mjs.bak',
     '.git/client-secrets.test.mjs', '.GIT\\CLIENT-SECRETS.SPEC.TS',
     'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb',
     'cargo.lock', 'poetry.lock', 'composer.lock',
@@ -98,8 +98,8 @@ describe('protectedFile', () => {
     }
   });
 
-  it('keeps a manifest-owned source test protected', () => {
-    const path = 'src/client-secrets.test.mjs';
+  it('keeps a manifest-owned source module protected', () => {
+    const path = 'src/client-secrets.mjs';
     const root = manifestRoot([path]);
     const verdict = protectedFile([path], { root });
     expect(verdict).toMatchObject({ allow: false, code: 'PROTECTED_FILE' });
@@ -116,14 +116,14 @@ describe('protectedFile', () => {
     'apps/web/BUN.LOCK',
     'bun.lockb',
     '.git/config',
-    'src/Credentials.ts',
   ])('blocks %s', (path) => {
     expect(protectedFile([path]).allow).toBe(false);
   });
 
   it.each([
     '.env.example',
-    'src/feature.ts',
+    'src/feature.ts', 'src/Credentials.ts', 'tests/credentials.mjs',
+    'deploy/infisical/client-secrets.mjs', 'client-secrets.tests.ts',
     'docs/byo-credentials.md',
   ])('allows %s', (path) => {
     expect(protectedFile([path]).allow).toBe(true);

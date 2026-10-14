@@ -57,10 +57,10 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
   return { code: result.status ?? 0, stderr: result.stderr ?? '' };
 }
 
-describe('bundled credential source test content enforcement', () => {
+describe('bundled credential source content enforcement', () => {
   it.each([['claude', 'Bash'], ['codex', 'shell']])(
-    'refuses uninspectable redirected source tests for %s through %s', (runtime, tool) => {
-      const target = join(workspace, 'fixtures/client-secrets.test.mjs');
+    'refuses uninspectable redirected source modules for %s through %s', (runtime, tool) => {
+      const target = join(workspace, 'deploy/infisical/client-secrets.mjs');
       const safe = join(workspace, 'ordinary.test.ts');
       const token = `AKIA${'A1'.repeat(8)}`;
       const commands = [
@@ -93,7 +93,7 @@ describe('bundled credential source test content enforcement', () => {
 
   it.each(['claude', 'codex'])('refuses secret-bearing mixed edits in either order for %s', (runtime) => {
     const safe = join(workspace, 'ordinary.test.ts');
-    const denied = 'C:\\project\\__fixtures__\\CREDENTIALS.SPEC.CTS';
+    const denied = 'C:\\project\\__fixtures__\\CREDENTIALS.CTS';
     for (const content of [`AKIA${'A1'.repeat(8)}`, `SERVICE_TOKEN="${'Az19'.repeat(8)}"`]) {
       for (const paths of [[safe, denied], [denied, safe]]) {
         const payload = { tool_name: 'apply_patch', tool_input: { patch: ['*** Begin Patch',
@@ -127,12 +127,16 @@ describe('bundled credential source test content enforcement', () => {
   });
 
   it.each(['claude', 'codex'])('combines filename and content protection for %s', (runtime) => {
-    const path = join(workspace, 'fixtures/client-secrets.test.mjs');
+    const path = join(workspace, 'deploy/infisical/client-secrets.mjs');
     const cases = [
       ['', false],
-      ['export const fixture = 1;', false],
+      ['export async function provision(generate, store) { await store(await generate()); }', false],
+      ['-----BEGIN PRIVATE KEY-----', true],
       [`AKIA${'A1'.repeat(8)}`, true],
       [`SERVICE_TOKEN="${'Az19'.repeat(8)}"`, true],
+      [`export const clientSecret = "${'Az19'.repeat(8)}";`, true],
+      [`const HASH_KEY = "${'ab12'.repeat(8)}", clientSecret = "${'Az19'.repeat(8)}";`, true],
+      [`const clientSecret = "${'Az19'.repeat(8)}", HASH_KEY = "${'ab12'.repeat(8)}";`, true],
       [`AKIA${'A1'.repeat(8)} // allow-secret-pattern: intentional synthetic fixture`, false],
     ] as const;
     for (const [content, blocked] of cases) {

@@ -361,7 +361,9 @@ target operations. Test directories alone and trailing extensions such as
 receive the full `secret-content` policy, even inside fixture/generated directories
 and with uppercase names or Windows separators. High-confidence tokens and generic
 secret assignments (including camelCase names such as `clientSecret` or `apiKey`)
-are refused; unrelated test/fixture exemptions are unchanged.
+are refused. Every assignment is checked independently: an exempt placeholder,
+hexadecimal value or UUID cannot mask another sensitive value on the same line.
+The explicit synthetic line marker and unrelated test/fixture exemptions are unchanged.
 For Bash/shell, the existing redirection/`tee` extractor supplies targets but no
 inspectable content. The registered `protected-file` hook therefore refuses
 credential-named source-module targets from those operations; use Write, Edit or

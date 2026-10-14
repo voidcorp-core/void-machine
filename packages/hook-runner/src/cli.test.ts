@@ -134,6 +134,7 @@ describe('bundled credential source content enforcement', () => {
       ['-----BEGIN PRIVATE KEY-----', true],
       [`AKIA${'A1'.repeat(8)}`, true],
       [`SERVICE_TOKEN="${'Az19'.repeat(8)}"`, true],
+      [`export const clientSecret = "${'Az19'.repeat(8)}";`, true],
       [`AKIA${'A1'.repeat(8)} // allow-secret-pattern: intentional synthetic fixture`, false],
     ] as const;
     for (const [content, blocked] of cases) {

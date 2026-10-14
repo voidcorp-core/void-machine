@@ -47,6 +47,31 @@ describe('secretContent', () => {
     expect(secretContent([{ path, addedContent: `AKIA${'A1'.repeat(8)}` }]).allow).toBe(true);
   });
 
+  it.each(['apiKey', 'clientSecret', 'authToken', 'privateKey', 'accessToken', 'dbPassword'])(
+    'blocks a camelCase credential assignment to %s without echoing its value', (name) => {
+      const value = 'Az19'.repeat(8);
+      for (const path of ['deploy/infisical/client-secrets.mjs', '/repo/fixtures/credentials.ts']) {
+        for (const addedContent of [
+          `export const ${name} = "${value}";`, `const config = { "${name}": "${value}" };`,
+        ]) {
+          const verdict = secretContent([{ path, addedContent }]);
+          expect(verdict).toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+          expect(verdict.evidence).toEqual([`${path}:1`]);
+          expect(JSON.stringify(verdict)).not.toContain(value);
+        }
+      }
+    },
+  );
+
+  it('allows camelCase credential references and unrelated suffix words', () => {
+    const path = 'deploy/infisical/client-secrets.mjs';
+    for (const addedContent of [
+      'const clientSecret = generate();', 'const apiKey = config.apiKey;',
+      'const authToken = "your_token_placeholder";',
+      `const monkey = "${'Az19'.repeat(8)}";`,
+    ]) expect(secretContent([{ path, addedContent }]).allow).toBe(true);
+  });
+
   it('blocks high-confidence tokens without committing a real-looking fixture', () => {
     const token = `AKIA${'A1'.repeat(8)}`;
     const verdict = secretContent([{ path: 'src/config.ts', addedContent: `export const key = '${token}';` }]);

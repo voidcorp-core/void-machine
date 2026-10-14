@@ -18,6 +18,9 @@ const HIGH_CONFIDENCE = [
 
 const GENERIC_ASSIGNMENT =
   /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/i;
+// Keep camelCase suffixes case-sensitive: an unrelated word like monkey is not a key.
+const CAMEL_ASSIGNMENT =
+  /\b[a-z][A-Za-z0-9_$]*(?:Key|Secret|Token|Password|Passwd)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/;
 const PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 const EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
 
@@ -28,7 +31,7 @@ const CREDENTIAL_SOURCE_MODULE =
 function lineHasSecret(line: string): boolean {
   if (line.includes('allow-secret-pattern:')) return false;
   if (HIGH_CONFIDENCE.some((pattern) => pattern.test(line))) return true;
-  const assignment = line.match(GENERIC_ASSIGNMENT);
+  const assignment = line.match(GENERIC_ASSIGNMENT) ?? line.match(CAMEL_ASSIGNMENT);
   if (assignment === null || PLACEHOLDER.test(line)) return false;
   const value = assignment[1] ?? '';
   if (/^[0-9a-f]+$/i.test(value) || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {

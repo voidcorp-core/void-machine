@@ -360,7 +360,8 @@ target operations. Test directories alone and trailing extensions such as
 `.test.json` or `.test.mjs.bak` do not qualify. These source modules
 receive the full `secret-content` policy, even inside fixture/generated directories
 and with uppercase names or Windows separators. High-confidence tokens and generic
-secret assignments are refused; unrelated test/fixture exemptions are unchanged.
+secret assignments (including camelCase names such as `clientSecret` or `apiKey`)
+are refused; unrelated test/fixture exemptions are unchanged.
 For Bash/shell, the existing redirection/`tee` extractor supplies targets but no
 inspectable content. The registered `protected-file` hook therefore refuses
 credential-named source-module targets from those operations; use Write, Edit or
@@ -685,8 +686,9 @@ Two content-aware hooks sit beside the filename/path guards:
   `protect-sensitive-files.sh` (which only guards known secret *filenames*). It
   scans the edit's new content for high-confidence vendor tokens (AWS/GitHub/
   Stripe/OpenAI/Anthropic/Slack/Google keys, PEM headers) and one guarded generic
-  rule (a `*_KEY|_SECRET|_TOKEN` var assigned a long, mixed, non-placeholder
-  literal — excluding UUIDs, git shas, and env indirection). Bounded to the edit
+  rule (a `*_KEY|_SECRET|_TOKEN` var or camelCase `Key|Secret|Token|Password|Passwd`
+  suffix assigned a long, mixed, non-placeholder literal — excluding UUIDs, git shas,
+  and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
   test/fixture paths are skipped except credential-named source modules admitted by
   the filename heuristic above, which receive the same content policy. The marker

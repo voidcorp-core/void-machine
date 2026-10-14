@@ -7930,9 +7930,9 @@ function protectedReason(path2, root, shellWrite) {
     return "private key / certificate";
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return "credential file";
-  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
-  if (!base.endsWith(".md") && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
-    return sourceTest && shellWrite ? "credential-named source test with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
+  const sourceModule = /\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith(".md") && (!sourceModule || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceModule && shellWrite ? "credential-named source module with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
   }
   if ((/* @__PURE__ */ new Set([
     "package-lock.json",
@@ -7975,7 +7975,7 @@ var HIGH_CONFIDENCE = [
 var GENERIC_ASSIGNMENT = /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/i;
 var PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 var EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
-var CREDENTIAL_SOURCE_TEST = /(?:secret|credential)[^/]*\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
+var CREDENTIAL_SOURCE_MODULE = /(?:secret|credential)[^/]*\.(?:[cm]?[jt]s|[jt]sx)$/i;
 function lineHasSecret(line) {
   if (line.includes("allow-secret-pattern:")) return false;
   if (HIGH_CONFIDENCE.some((pattern2) => pattern2.test(line))) return true;
@@ -7991,7 +7991,7 @@ function secretContent(edits) {
   const evidence = [];
   for (const edit of edits) {
     const path2 = edit.path.replaceAll("\\", "/");
-    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_TEST.test(path2)) continue;
+    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_MODULE.test(path2)) continue;
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
       if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
     });

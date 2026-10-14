@@ -76,6 +76,16 @@ describe('secretContent', () => {
     },
   );
 
+  it('does not let a placeholder assignment hide a sensitive value on the same line', () => {
+    const safe = 'apiKey = "your_token_placeholder"';
+    const secret = `clientSecret = "${'Az19'.repeat(8)}"`;
+    for (const assignments of [[safe, secret], [secret, safe]]) {
+      const path = 'deploy/infisical/client-secrets.mjs';
+      expect(secretContent([{ path, addedContent: `const ${assignments.join(', ')};` }]))
+        .toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+    }
+  });
+
   it('allows camelCase credential references and unrelated suffix words', () => {
     const path = 'deploy/infisical/client-secrets.mjs';
     for (const addedContent of [

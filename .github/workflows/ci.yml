@@ -133,6 +133,12 @@ jobs:
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/void-consumer-artifact
+      - name: Install locked tooling for the Windows capture regression
+        if: ${{ runner.os == 'Windows' }}
+        run: pnpm install --frozen-lockfile
+      - name: Exercise native Windows observer input before capture
+        if: ${{ runner.os == 'Windows' }}
+        run: pnpm exec vitest run packages/cli/scripts/conformance-native-capture.test.ts --maxWorkers=1
       - name: Check installed Windows capture capability
         if: ${{ runner.os == 'Windows' }}
         run: node packages/cli/scripts/conformance-native-capture.mjs --preflight "${{ runner.temp }}/native-capture"

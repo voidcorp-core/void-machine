@@ -44,7 +44,7 @@ describe('bounded native capture correlation', () => {
   });
 
   it('bounds the metadata queue, stops admitting records on overflow and exports no unrelated record', async () => {
-    const { captureQueue } = await load();
+    const { captureQueue, correlateCapture } = await load();
     const queue = captureQueue();
     for (let index = 0; index < 300; index++) queue.add({ ...events[1], pid: index + 1000 });
     expect(queue.snapshot().events).toHaveLength(256);
@@ -136,4 +136,32 @@ describe('capture coordination is independent of the target outcome', () => {
       expect(JSON.stringify(result)).not.toContain('secret');
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
+});
+
+it('persists a bounded active snapshot before target completion so an outer timeout retains evidence', async () => {
+  const { captureJournal } = await load();
+  const directory = mkdtempSync(join(tmpdir(), 'native-journal-'));
+  try {
+    const journal = captureJournal(directory);
+    await journal.write({ phase: 'active', status: 'correlated', events, snapshots: [] });
+    expect(JSON.parse(readFileSync(join(directory, 'capture.json'), 'utf8')))
+      .toMatchObject({ phase: 'active', status: 'correlated', events });
+    await expect(journal.write({ text: 'x'.repeat(3 * 1024 * 1024) })).rejects.toThrow(/bound/);
+    expect(JSON.parse(readFileSync(join(directory, 'capture.json'), 'utf8')).phase).toBe('active');
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+it('receives actual spawn identity before stderr without affecting stdin or the original exit', async () => {
+  const { runConformanceProcess } = await import('./conformance-process.mjs');
+  const observations: Array<{ kind: string; pid?: number; beforeUtcMs?: number; afterUtcMs?: number }> = [];
+  const result = await runConformanceProcess({ command: process.execPath, cwd: process.cwd(),
+    args: ['-e', "process.stderr.write('observed');process.stdin.resume();process.stdin.on('end',()=>{process.exitCode=37})"],
+    observeProcess: event => { observations.push(event); if (event.kind === 'stderr') throw new Error('observer only'); },
+    report: () => {},
+  });
+  expect(observations[0]).toMatchObject({ kind: 'spawn', parentPid: process.pid });
+  expect(observations[0]?.pid).toBeGreaterThan(0);
+  expect(observations[0]?.afterUtcMs).toBeGreaterThanOrEqual(observations[0]?.beforeUtcMs ?? 0);
+  expect(observations[1]).toMatchObject({ kind: 'stderr', text: 'observed' });
+  expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stderr: 'observed' });
 });

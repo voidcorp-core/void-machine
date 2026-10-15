@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanceExit,
@@ -35,7 +35,7 @@ async function proveReplacedCommandExit(home, command, replacement, env) {
       process.stdout.write(JSON.stringify(process.argv.slice(2)));
       process.exitCode = ${code};
     `);
-    const result = await runConformanceProcess({ command: env.ComSpec ?? 'cmd.exe',
+    const result = await runConformanceProcess({ label: `replacement command exit ${code}`, command: env.ComSpec ?? 'cmd.exe',
       args: ['/d', '/s', '/c', `""${target}" update "space value""`],
       windowsVerbatimArguments: true, cwd: root, env });
     const diagnostic = safeConformanceDiagnostic(JSON.stringify(result), 4096);
@@ -127,10 +127,11 @@ export async function prepareStableUpdate(temporary, tarball) {
   const managed = join(project, '.void/installed/PHILOSOPHY.md');
   const invoke = (args, imports = [], alias = 'void-machine', powershell = false, cwd = project) => {
     const childEnv = { ...env, NODE_OPTIONS: imports.map(path => `--import=${pathToFileURL(path).href}`).join(' ') };
-    if (process.platform !== 'win32') return runConformanceProcess({ command: join(bin, alias), args, cwd, env: childEnv });
-    if (powershell) return runConformanceProcess({ command: 'powershell.exe',
+    const label = `native ${alias} ${args.join(' ')} (${powershell ? 'PowerShell' : 'default'}; ${imports.map(path => basename(path)).join(',')})`;
+    if (process.platform !== 'win32') return runConformanceProcess({ label, command: join(bin, alias), args, cwd, env: childEnv });
+    if (powershell) return runConformanceProcess({ label, command: 'powershell.exe',
       args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(bin, `${alias}.ps1`), ...args], cwd, env: childEnv });
-    return runConformanceProcess({ command: env.ComSpec ?? 'cmd.exe',
+    return runConformanceProcess({ label, command: env.ComSpec ?? 'cmd.exe',
       args: ['/d', '/s', '/c', `""${join(bin, `${alias}.cmd`)}" ${args.join(' ')}"`],
       windowsVerbatimArguments: true, cwd, env: childEnv });
   };
@@ -217,7 +218,7 @@ export async function prepareStableUpdate(temporary, tarball) {
         ['protected-file', '.env', 'synthetic fixture'],
         ['secret-content', 'example.ts', `AKIA${'Z'.repeat(16)}`],
       ]) {
-        const result = await runConformanceProcess({ command: process.execPath,
+        const result = await runConformanceProcess({ label: `installed hook ${rule}`, command: process.execPath,
           args: [join(project, '.void/hooks/_void-hook.mjs'), 'enforce', rule, 'claude'], cwd: project,
           env: { ...env, CLAUDE_PROJECT_DIR: project }, input: JSON.stringify({ hook_event_name: 'PreToolUse',
             tool_name: 'Write', tool_input: { file_path: join(project, path), content } }) });
@@ -285,8 +286,11 @@ export async function prepareStableUpdate(temporary, tarball) {
 export async function exerciseStableUpdate(temporary, tarball) {
   const proof = await prepareStableUpdate(temporary, tarball);
   for (const phase of ['preview', 'bootstrapInterrupt', 'bootstrapRecover', 'current', 'all', 'ownership', 'interrupt', 'recover', 'repeat']) {
-    process.stdout.write(`stable update conformance (${process.platform}): ${phase}\n`);
+    const startedMs = performance.now();
+    process.stdout.write(`${JSON.stringify({ phase: 'started', label: phase, startedMs })}\n`);
     await proof[phase]();
+    process.stdout.write(`${JSON.stringify({ phase: 'finished', label: phase, startedMs,
+      durationMs: Math.round(performance.now() - startedMs) })}\n`);
   }
 }
 
@@ -294,7 +298,7 @@ export async function exerciseStableUpdate(temporary, tarball) {
 // budget. Importers share the same phases without starting another qualification.
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   const { manifest, tarball } = await conformanceArtifactFromEnvironment();
-  const temporary = await mkdtemp(join(tmpdir(), 'void-update-conformance-'));
+  const temporary = await mkdtemp(join(tmpdir(), 'harness-update-conformance-'));
   try {
     await exerciseStableUpdate(temporary, tarball);
     process.stdout.write(`stable update conformance passed (${process.platform}) for ${manifest.sourceSha}\n`);

@@ -100,6 +100,9 @@ function processOutcome(state, code, signal) {
 }
 
 export function runConformanceProcess(options) {
+  const startedMs = performance.now();
+  const report = options.report ?? reportConformanceStep;
+  if (options.label !== undefined) report({ phase: 'started', label: options.label, startedMs });
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const captureStderr = options.captureStderr ?? true;
@@ -124,6 +127,9 @@ export function runConformanceProcess(options) {
       finished = true;
       clearTimeout(timeoutTimer);
       clearTimeout(terminationTimer);
+      if (options.label !== undefined) report({ phase: 'finished', label: options.label,
+        startedMs, durationMs: Math.round(performance.now() - startedMs),
+        outcome: outcome.kind, code: outcome.code });
       resolveRun({
         outcome,
         stderr: Buffer.concat(stderr).toString('utf8'),

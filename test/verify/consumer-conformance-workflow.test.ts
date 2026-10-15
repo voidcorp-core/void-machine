@@ -98,3 +98,15 @@ describe('packed consumer CI topology', () => {
     }
   });
 });
+
+
+it('keeps Windows capture preflight and upload separate from the unchanged consumer gate', () => {
+  const consumers = job('install-conformance');
+  expect(consumers).toContain('conformance-native-capture.mjs --preflight');
+  expect(consumers).toContain("runner.os == 'Windows'");
+  expect(consumers).toContain("!cancelled() && runner.os == 'Windows'");
+  expect(consumers).toContain('native-capture-${{ env.GATE_SHA }}');
+  expect(consumers).toContain('retention-days: 14');
+  expect(consumers).toContain('run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"');
+  expect(consumers).not.toMatch(/continue-on-error|timeout-minutes|permissions:|retry/);
+});

@@ -121,6 +121,7 @@ export function runConformanceProcess(options) {
     const state = { forcedKind: undefined, outputBytes: 0, spawnError: undefined };
     let finished = false;
     let terminationTimer;
+    let diagnosticBytes = 0;
 
     const finish = (outcome) => {
       if (finished) return;
@@ -153,6 +154,12 @@ export function runConformanceProcess(options) {
     if (captureStderr) {
       child.stderr.on('data', (chunk) => {
         captureBounded(state, stderr, chunk, maxOutputBytes, stop);
+        if (options.diagnosticStderr && options.label !== undefined && diagnosticBytes < 4096) {
+          const detail = safeConformanceDiagnostic(chunk.toString('utf8'), 4096 - diagnosticBytes);
+          diagnosticBytes += Buffer.byteLength(detail);
+          report({ phase: 'stderr', label: options.label,
+            elapsedMs: Math.round(performance.now() - startedMs), detail });
+        }
       });
     }
     child.once('error', (error) => {

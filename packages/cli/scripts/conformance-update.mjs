@@ -14,6 +14,28 @@ import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanc
 
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
+
+// Diagnostic only: keep the real shim bytes, arguments, environment and exit code.
+// PowerShell 5.1 about_Scripts: call operator gives the script its own scope;
+// its exit sets LASTEXITCODE, which the outer command must explicitly return.
+export async function measurePowerShellShim(options, execute = runConformanceProcess) {
+  const { shim, args, cwd, env, label, control } = options;
+  const flags = ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command'];
+  const processOptions = { command: 'powershell.exe', cwd, env };
+  if (control) {
+    const result = requireConformanceExit(await execute({ ...processOptions,
+      label: 'PowerShell output-only control', args: [...flags, "[Console]::Out.Write('ready')"] }),
+    'PowerShell output-only control');
+    assert.equal(result.stdout, 'ready');
+  }
+  const quote = value => `'${value.replaceAll("'", "''")}'`;
+  const command = "$ErrorActionPreference = 'Stop'; $watch = [Diagnostics.Stopwatch]::StartNew(); "
+    + "[Console]::Error.WriteLine('powershell-entered: before real shim'); "
+    + `& ${[shim, ...args].map(quote).join(' ')}; $code = $LASTEXITCODE; `
+    + "[Console]::Error.WriteLine(('powershell-returned: shimMs={0}; exit={1}' -f $watch.ElapsedMilliseconds, $code)); exit $code";
+  return execute({ ...processOptions, label, diagnosticStderr: true, args: [...flags, command] });
+}
+
 async function launcherState(path) {
   const info = await lstat(path);
   return { mode: info.mode & 0o777, link: info.isSymbolicLink(),
@@ -125,12 +147,17 @@ export async function prepareStableUpdate(temporary, tarball) {
   `);
   const active = join(home, '.void/cli/active.json');
   const managed = join(project, '.void/installed/PHILOSOPHY.md');
+  let powerShellControl = true;
   const invoke = (args, imports = [], alias = 'void-machine', powershell = false, cwd = project) => {
     const childEnv = { ...env, NODE_OPTIONS: imports.map(path => `--import=${pathToFileURL(path).href}`).join(' ') };
     const label = `native ${alias} ${args.join(' ')} (${powershell ? 'PowerShell' : 'default'}; ${imports.map(path => basename(path)).join(',')})`;
     if (process.platform !== 'win32') return runConformanceProcess({ label, command: join(bin, alias), args, cwd, env: childEnv });
-    if (powershell) return runConformanceProcess({ label, command: 'powershell.exe',
-      args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(bin, `${alias}.ps1`), ...args], cwd, env: childEnv });
+    if (powershell) {
+      const control = powerShellControl;
+      powerShellControl = false;
+      return measurePowerShellShim({ label, shim: join(bin, `${alias}.ps1`), args,
+        cwd, env: childEnv, control });
+    }
     return runConformanceProcess({ label, command: env.ComSpec ?? 'cmd.exe',
       args: ['/d', '/s', '/c', `""${join(bin, `${alias}.cmd`)}" ${args.join(' ')}"`],
       windowsVerbatimArguments: true, cwd, env: childEnv });

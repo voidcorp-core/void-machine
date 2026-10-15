@@ -10,6 +10,23 @@ import {
 } from './conformance-process.mjs';
 
 describe('contained conformance process', () => {
+  it('reports bounded diagnostic stderr while a named child is still running', async () => {
+    const events: Array<{ phase: string; detail?: string; elapsedMs?: number }> = [];
+    const result = await runConformanceProcess({
+      command: process.execPath,
+      args: ['-e', "process.stderr.write('x'.repeat(8192)); setTimeout(() => process.exit(37), 10)"],
+      cwd: process.cwd(), label: 'measured shell', diagnosticStderr: true,
+      report: event => events.push(event),
+    });
+    expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+    expect(result.stderr).toHaveLength(8192);
+    const diagnostics = events.filter(event => event.phase === 'stderr');
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.reduce((size, event) => size + Buffer.byteLength(event.detail ?? ''), 0)).toBe(4096);
+    expect(diagnostics[0]?.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(events.at(-1)?.phase).toBe('finished');
+  });
+
   it('records a monotonic start before awaiting a raw child and preserves its nonzero outcome', async () => {
     const events: Array<{ phase: string; label: string; startedMs: number; durationMs?: number }> = [];
     const before = performance.now();

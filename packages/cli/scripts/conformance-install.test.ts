@@ -178,6 +178,35 @@ it('completes Codex installation proofs independently of the latency campaign', 
 
 const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
 
+it('measures an output-only PowerShell control then the real shim without changing environment or deadlines', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const env = { HOME: '/isolated', NODE_OPTIONS: '--import=file:///offline.mjs' };
+  const calls: Array<{ args: string[]; env: typeof env; timeoutMs?: number; diagnosticStderr?: boolean }> = [];
+  const result = await measurePowerShellShim({ shim: "C:/fixture's bin/launcher.ps1", args: ['--version', "space '$value"],
+    cwd: '/isolated', env, control: true, label: 'native shim' }, async options => {
+    calls.push(options);
+    return { outcome: { kind: 'exited', code: calls.length === 1 ? 0 : 37 },
+      stdout: calls.length === 1 ? 'ready' : 'original output', stderr: '' };
+  });
+  expect(calls).toHaveLength(2);
+  expect(calls.every(call => call.env === env && call.timeoutMs === undefined)).toBe(true);
+  expect(calls[0]?.args).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "[Console]::Out.Write('ready')"]);
+  expect(calls[1]?.args.at(-1)).toContain("& 'C:/fixture''s bin/launcher.ps1' '--version' 'space ''$value'");
+  expect(calls[1]?.diagnosticStderr).toBe(true);
+  expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stdout: 'original output' });
+});
+
+it('does not repeat a PowerShell control or proceed after a failed control', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const options = { shim: '/fixture/shim.ps1', args: ['--version'], cwd: '/fixture', env: {}, label: 'shim' };
+  const execute = vi.fn(async () => ({ outcome: { kind: 'exited', code: 3 }, stdout: '', stderr: '' }));
+  await expect(measurePowerShellShim({ ...options, control: true }, execute)).rejects.toThrow('PowerShell output-only control');
+  expect(execute).toHaveBeenCalledTimes(1);
+  execute.mockClear();
+  expect((await measurePowerShellShim({ ...options, control: false }, execute)).outcome.code).toBe(3);
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
 it('runs install and stable update as mandatory serial processes on the same artifact with default bounds', async () => {
   const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
   const root = mkdtempSync(join(tmpdir(), 'consumer-suite-boundaries-'));

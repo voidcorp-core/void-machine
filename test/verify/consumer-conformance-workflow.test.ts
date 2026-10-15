@@ -27,7 +27,17 @@ describe('packed consumer CI topology', () => {
     expect(producer).toContain('actions/upload-artifact@');
     expect(consumers).toContain('actions/download-artifact@');
     expect(consumers).toContain('conformance:consumer');
-    expect(consumers).not.toContain('pnpm install');
+    const installSteps = consumers.split('      - ').filter(step => step.includes('run: pnpm install'));
+    expect(installSteps).toHaveLength(1);
+    expect(installSteps[0]).toContain("if: ${{ runner.os == 'Windows' }}");
+    expect(installSteps[0]).toContain('run: pnpm install --frozen-lockfile');
+    const regression = 'run: pnpm exec vitest run packages/cli/scripts/conformance-native-capture.test.ts --maxWorkers=1';
+    const regressionSteps = consumers.split('      - ').filter(step => step.includes(regression));
+    expect(regressionSteps).toHaveLength(1);
+    expect(regressionSteps[0]).toContain("if: ${{ runner.os == 'Windows' }}");
+    expect(consumers.indexOf('run: pnpm install --frozen-lockfile')).toBeLessThan(consumers.indexOf(regression));
+    expect(consumers.indexOf(regression)).toBeLessThan(consumers.indexOf('conformance-native-capture.mjs --preflight'));
+    expect(consumers).toContain('os: [ubuntu-latest, macos-latest, windows-latest]');
     expect(consumers).not.toContain('pnpm pack');
   });
 

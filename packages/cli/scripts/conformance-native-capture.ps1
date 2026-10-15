@@ -36,6 +36,23 @@ using System.Diagnostics;
 using System.Management;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+public static class CaptureInput {
+    // Console.In is synchronized: even ReadLineAsync blocks its caller.
+    // One pending observer-owned read; never run it on the event-draining thread.
+    public static Task<string> Read() {
+        return Task.Factory.StartNew(() => {
+            var line = new StringBuilder();
+            for (;;) {
+                int value = Console.In.Read();
+                if (value < 0) return line.Length == 0 ? null : line.ToString();
+                if (value == '\n') return line.ToString();
+                if (line.Length >= 65536) throw new System.IO.IOException("capture-input-bound");
+                line.Append((char)value);
+            }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+}
 public sealed class CaptureEvents : IDisposable {
     readonly object gate = new object();
     readonly Queue<Dictionary<string,object>> queue = new Queue<Dictionary<string,object>>();
@@ -137,7 +154,7 @@ $clock = [Diagnostics.Stopwatch]::StartNew()
 try {
     $watch.Arm()
     Emit @{ kind='ready'; utcMs=UtcMs }
-    $inputTask = [Console]::In.ReadLineAsync()
+    $inputTask = [CaptureInput]::Read()
     $rounds=0
     while ($clock.ElapsedMilliseconds -lt 120000) {
         if ($watch.Overflow) { Emit @{ kind='overflow' }; break }
@@ -152,7 +169,7 @@ try {
             $request=$line | ConvertFrom-Json
             if ($request.kind -eq 'stop') { break }
             if ($request.kind -eq 'sample' -and $rounds -lt 2) { $rounds++; Inspect $request }
-            $inputTask = [Console]::In.ReadLineAsync()
+            $inputTask = [CaptureInput]::Read()
         }
         [Threading.Thread]::Sleep(20)
     }

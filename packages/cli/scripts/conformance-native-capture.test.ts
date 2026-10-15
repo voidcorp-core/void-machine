@@ -27,9 +27,11 @@ it('keeps both idle input waits off the event-draining thread with one bounded p
 
 // The real Console.In/WMI regression needs Windows; source contracts are not its substitute.
 it.skipIf(process.platform !== 'win32')('drains real events with stdin open before and between requests', async () => {
+  const { conformanceEnvironment } = await import('./conformance-process.mjs');
+  const env = conformanceEnvironment({ TEMP: process.env.TEMP, TMP: process.env.TMP });
   const script = fileURLToPath(new URL('./conformance-native-capture.ps1', import.meta.url));
   const observer = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'Capture'],
-    { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const children: ReturnType<typeof spawn>[] = [];
   try {
     await new Promise<void>((resolve, reject) => {
@@ -41,7 +43,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
       const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}`)), 8000);
       const fail = (error: Error) => { clearTimeout(deadline); reject(error); };
       const produceEvent = () => {
-        const child = spawn(process.execPath, ['-e', 'process.exitCode=37'], { stdio: 'ignore', windowsHide: true });
+        const child = spawn(process.execPath, ['-e', 'process.exitCode=37'], { env, stdio: 'ignore', windowsHide: true });
         children.push(child); expectedPid = child.pid; started = false;
         child.once('error', fail);
       };

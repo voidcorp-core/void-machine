@@ -10,6 +10,35 @@ import {
 } from './conformance-process.mjs';
 
 describe('contained conformance process', () => {
+  it('records a monotonic start before awaiting a raw child and preserves its nonzero outcome', async () => {
+    const events: Array<{ phase: string; label: string; startedMs: number; durationMs?: number }> = [];
+    const before = performance.now();
+    const pending = runConformanceProcess({
+      command: process.execPath, args: ['-e', 'process.exit(37)'], cwd: process.cwd(),
+      label: 'native recovery child', report: (event) => events.push(event),
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ phase: 'started', label: 'native recovery child' });
+    expect(events[0]?.startedMs).toBeGreaterThanOrEqual(before);
+    const result = await pending;
+    expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+    expect(events[1]).toMatchObject({ phase: 'finished', label: 'native recovery child',
+      startedMs: events[0]?.startedMs, outcome: 'exited', code: 37 });
+    expect(events[1]?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('retains the named active child and its timeout without turning it into an exit', async () => {
+    const events: Array<{ phase: string; outcome?: string }> = [];
+    const result = await runConformanceProcess({
+      command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'],
+      cwd: process.cwd(), timeoutMs: 50, label: 'stalled native child',
+      report: (event) => events.push(event),
+    });
+    expect(result.outcome).toEqual({ kind: 'timed-out' });
+    expect(events.map(event => event.phase)).toEqual(['started', 'finished']);
+    expect(events[1]?.outcome).toBe('timed-out');
+  });
+
   it('reports the active installation step before completion and retains its failed outcome', async () => {
     const events: Array<{ phase: string; label: string; outcome?: string }> = [];
     const pending = runConformanceStep('codex update', {

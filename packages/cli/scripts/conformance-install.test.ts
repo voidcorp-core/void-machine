@@ -308,8 +308,18 @@ it('probes native dispatch with the generated shim logic and a bounded real Node
       const result = await runConformanceProcess({ command: process.execPath,
         args: [join(dirname(options.args[4]), 'void-machine.mjs'), '--version'], cwd: root, env });
       expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
-      expect(result.stderr).toContain('node-entered');
-      expect(result.stderr).toContain('node-exiting-37');
+      const observations = result.stderr.split('\n').filter(line => line.startsWith('{'))
+        .map(line => JSON.parse(line)).filter(event => typeof event.phase === 'string');
+      expect(observations.map(event => event.phase)).toEqual([
+        'node-entered', 'node-before-stdout', 'node-after-stdout', 'node-before-exit', 'node-exit',
+      ]);
+      for (const [index, event] of observations.entries()) {
+        expect(Number.isFinite(event.elapsedMs)).toBe(true);
+        expect(event.elapsedMs).toBeGreaterThanOrEqual(observations[index - 1]?.elapsedMs ?? 0);
+        expect(Object.keys(event).sort()).toEqual(index < 3 ? ['elapsedMs', 'phase'] : ['code', 'elapsedMs', 'phase']);
+      }
+      expect(observations.slice(-2).map(event => event.code)).toEqual([37, 37]);
+      expect(result.stderr).not.toContain('node-exiting-37');
       expect(Buffer.byteLength(result.stderr + result.stdout)).toBeLessThan(4096);
       expect(JSON.parse(result.stdout)).toMatchObject({ execPath: process.execPath, argv: ['--version'],
         executableMatches: true, cwdMatches: true, environmentMatches: true, offlineImport: true });

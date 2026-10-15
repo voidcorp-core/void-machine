@@ -83,25 +83,31 @@ async function main() {
   if (!oracle.ok) fail(`legacy oracle: ${oracle.reason}`);
   const options = parseArguments(process.argv.slice(2));
   const temporary = await mkdtemp(join(tmpdir(), 'harness-consumer-conformance-'));
+  const failures = [];
+  let completion;
   try {
     const artifact = options.tarball === undefined
       ? await packConformanceArtifact(join(temporary, 'artifact'))
       : await verifyConformanceArtifactForCheckout(options.tarball);
     const selected = await exerciseConsumerSuites(options.suite, artifact.tarball, temporary);
-    process.stdout.write(
-      `consumer conformance passed for ${artifact.manifest.sourceSha}: ${selected.join(', ')}\n`,
-    );
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
+    completion = `consumer conformance passed for ${artifact.manifest.sourceSha}: ${selected.join(', ')}\n`;
+  } catch (error) {
+    failures.push(error);
   }
+  try { await rm(temporary, { recursive: true, force: true }); }
+  catch (error) { failures.push(error); }
+  if (failures.length > 0) throw new AggregateError(failures, 'Consumer conformance or cleanup failed');
+  process.stdout.write(completion);
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   try {
     await main();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${safeConformanceDiagnostic(message)}\n`);
+    for (const failure of error instanceof AggregateError ? error.errors : [error]) {
+      const message = failure instanceof Error ? failure.message : String(failure);
+      process.stderr.write(`${safeConformanceDiagnostic(message)}\n`);
+    }
     process.exitCode = 1;
   }
 }

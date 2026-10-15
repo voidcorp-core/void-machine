@@ -10,6 +10,21 @@ import {
 } from './conformance-process.mjs';
 
 describe('contained conformance process', () => {
+  it.each([undefined, '', 'supplied input\n'])('observes stdin completion without changing EOF, bytes or status for %s', async input => {
+    const events: Array<{ phase: string; elapsedMs?: number }> = [];
+    const result = await runConformanceProcess({ command: process.execPath,
+      args: ['--input-type=module', '-e', "const chunks=[]; for await (const chunk of process.stdin) chunks.push(chunk); process.stdout.write(Buffer.concat(chunks)); process.exitCode=37;"],
+      cwd: process.cwd(), input, label: 'stdin mechanism', diagnosticStdin: true,
+      report: event => events.push(event) });
+    expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stdout: input ?? '' });
+    for (const phase of ['stdin-finish', 'stdin-close']) {
+      const observed = events.filter(event => event.phase === phase);
+      expect(observed).toHaveLength(1);
+      expect(observed[0]?.elapsedMs).toBeGreaterThanOrEqual(0);
+    }
+    expect(events.filter(event => event.phase === 'stdin-error')).toHaveLength(0);
+  });
+
   it('reports bounded diagnostic stderr while a named child is still running', async () => {
     const events: Array<{ phase: string; detail?: string; elapsedMs?: number }> = [];
     const result = await runConformanceProcess({

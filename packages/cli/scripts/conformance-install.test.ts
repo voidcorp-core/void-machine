@@ -1,6 +1,6 @@
 // @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -177,6 +177,51 @@ it('completes Codex installation proofs independently of the latency campaign', 
 });
 
 const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
+
+it('isolates original File input consumption before expensive update work with unchanged bounds', async () => {
+  const { probePowerShellInput } = await import('./conformance-update.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-input-'));
+  const env = { HOME: root };
+  const calls: Array<{ command: string; args: string[]; input?: string; env: typeof env;
+    timeoutMs?: number; diagnosticStderr?: boolean; diagnosticStdin?: boolean }> = [];
+  try {
+    await probePowerShellInput(root, env, async options => {
+      calls.push(options);
+      return { outcome: { kind: 'exited', code: 0 }, stdout: calls.length === 1 ? 'ready' : options.input?.trim() ?? '', stderr: '' };
+    });
+    expect(calls).toHaveLength(3);
+    expect(calls.every(call => call.command === 'powershell.exe' && call.env === env
+      && call.timeoutMs === undefined && call.diagnosticStderr && call.diagnosticStdin)).toBe(true);
+    expect(calls.map(call => call.args.slice(0, 4))).toEqual(Array(3).fill(['-NoLogo', '-NoProfile', '-NonInteractive', '-File']));
+    expect(calls.map(call => call.input)).toEqual([undefined, undefined, 'fixture input\n']);
+    expect(calls[1]?.args[4]).toBe(calls[2]?.args[4]);
+    const plain = readFileSync(calls[0]?.args[4] ?? '', 'utf8');
+    const consuming = readFileSync(calls[1]?.args[4] ?? '', 'utf8');
+    expect(plain).not.toContain('$input');
+    expect(plain).toContain('plain-entered');
+    expect(consuming).toContain('input-before-read');
+    expect(consuming).toContain('@($input)');
+    expect(consuming).toContain('input-after-read');
+    const owner = readFileSync(fileURLToPath(new URL('./conformance-update.mjs', import.meta.url)), 'utf8');
+    const invocation = owner.indexOf("if (process.platform === 'win32') await probePowerShellInput(home, env)");
+    expect(invocation).toBeGreaterThan(0);
+    expect(invocation).toBeLessThan(owner.indexOf("runConformanceStep('stable update npm-owned bootstrap'"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['timed-out', 'nonzero', 'wrong output'])('preserves a failed stdin mechanism probe: %s', async failure => {
+  const { probePowerShellInput } = await import('./conformance-update.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-input-failure-'));
+  let calls = 0;
+  try {
+    await expect(probePowerShellInput(root, {}, async () => {
+      calls++;
+      return { outcome: failure === 'timed-out' ? { kind: 'timed-out' } : { kind: 'exited', code: failure === 'nonzero' ? 37 : 0 },
+        stdout: 'wrong', stderr: 'native diagnostic' };
+    })).rejects.toThrow();
+    expect(calls).toBe(1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 it('qualifies the original PowerShell File invocation and preserves its failure without a comparison', async () => {
   const { measurePowerShellShim } = await import('./conformance-update.mjs');

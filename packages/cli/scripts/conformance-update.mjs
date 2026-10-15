@@ -34,6 +34,46 @@ export async function probePowerShellInput(home, env, execute = runConformancePr
   }
 }
 
+// Diagnostic twin only: tests compare its non-marker lines with the generated shim.
+export async function probePowerShellNative({ home, cwd, env }, execute = runConformanceProcess) {
+  const directory = join(home, 'native-child');
+  await mkdir(directory);
+  const shim = join(directory, 'void-machine.ps1');
+  await writeFile(shim, [
+    "[Console]::Error.WriteLine('native-entered')",
+    'if ($MyInvocation.ExpectingInput) {',
+    "  [Console]::Error.WriteLine('native-pipeline')",
+    '  $input | & node "$PSScriptRoot/void-machine.mjs" @args',
+    '} else {',
+    "  [Console]::Error.WriteLine('native-direct')",
+    '  & node "$PSScriptRoot/void-machine.mjs" @args',
+    '}',
+    "[Console]::Error.WriteLine(('native-returned: exit={0}' -f $LASTEXITCODE))",
+    'exit $LASTEXITCODE', '',
+  ].join('\n'), { flag: 'wx' });
+  const expectedEnv = Object.fromEntries(['PATH', 'NODE_OPTIONS', 'VOID_GLOBAL_DIR', 'HOME', 'USERPROFILE']
+    .map(key => [key, env[key]]));
+  await writeFile(join(directory, 'void-machine.mjs'), `
+    import {realpath} from 'node:fs/promises';
+    process.stderr.write('node-entered\\n');
+    const expected = ${JSON.stringify(expectedEnv)};
+    const record = {execPath:process.execPath.slice(0,1024), argv:process.argv.slice(2,6).map(value=>value.slice(0,512)),
+      executableMatches:process.execPath === ${JSON.stringify(process.execPath)},
+      cwdMatches:await realpath(process.cwd()) === await realpath(${JSON.stringify(cwd)}),
+      environmentMatches:Object.entries(expected).every(([key,value])=>process.env[key] === value),
+      offlineImport:String(globalThis.fetch).includes('CONFORMANCE_OFFLINE')};
+    process.stderr.write(JSON.stringify(record) + '\\nnode-exiting-37\\n');
+    process.stdout.write(JSON.stringify(record));
+    process.exitCode = 37;
+  `, { flag: 'wx' });
+  const result = requireConformanceExit(await execute({ command: 'powershell.exe',
+    args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', shim, '--version'], cwd, env,
+    label: 'PowerShell native-child probe', diagnosticStderr: true, diagnosticStdin: true }),
+  'PowerShell native-child probe', [37]);
+  assert.deepEqual(JSON.parse(result.stdout), { execPath: process.execPath, argv: ['--version'],
+    executableMatches: true, cwdMatches: true, environmentMatches: true, offlineImport: true });
+}
+
 // Qualify original -File first; compare -Command only once, inside the same suite budget.
 // PowerShell 5.1 about_Scripts: call operator gives the script its own scope;
 // its exit sets LASTEXITCODE, which the outer command must explicitly return.
@@ -173,7 +213,14 @@ export async function prepareStableUpdate(temporary, tarball) {
   await mkdir(join(home, 'tmp'));
   const env = conformanceFixtureEnvironment(home, { HOME: home, USERPROFILE: home,
     VOID_GLOBAL_DIR: join(home, '.void') });
+  // The qualified fixture launcher is first. No real-home launcher can be selected.
+  env.PATH = [bin, dirname(process.execPath), env.PATH ?? env.Path ?? ''].join(delimiter);
+  delete env.Path;
+  const denied = join(home, 'offline.mjs');
+  await writeFile(denied, "globalThis.fetch = async () => { throw new Error('CONFORMANCE_OFFLINE'); };\n");
   if (process.platform === 'win32') await probePowerShellInput(home, env);
+  if (process.platform === 'win32') await probePowerShellNative({ home, cwd: root, env:
+    { ...env, NODE_OPTIONS: `--import=${pathToFileURL(denied).href}` } });
   const npm = packageManagerCommand('npm');
   await runConformanceStep('stable update npm-owned bootstrap', { command: npm.executable,
     args: [...npm.prefixArguments, 'install', '--global', '--prefix', prefix, '--offline',
@@ -181,9 +228,6 @@ export async function prepareStableUpdate(temporary, tarball) {
   const pkg = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), `node_modules/${PRODUCT_IDENTITY.packageName}`);
   const source = join(pkg, 'bin/void-machine.mjs');
   const version = JSON.parse(await read(join(pkg, 'package.json'))).version;
-  // The qualified fixture launcher is first. No real-home launcher can be selected.
-  env.PATH = [bin, dirname(process.execPath), env.PATH ?? env.Path ?? ''].join(delimiter);
-  delete env.Path;
   const direct = (args, cwd = project) => runConformanceStep(`stable update ${args.join(' ')}`, {
     command: process.execPath, args: [source, ...args], cwd, env });
   for (const [cwd, runtime] of [[project, 'claude'], [second, 'codex'], [third, 'both']]) {
@@ -204,13 +248,11 @@ export async function prepareStableUpdate(temporary, tarball) {
   const thirdReceipt = await read(receipt(third));
   const archive = await readFile(tarball);
   const transport = join(home, 'transport.mjs');
-  const denied = join(home, 'offline.mjs');
   const interrupt = join(home, 'interrupt.mjs');
   const marker = join(home, 'interrupted');
   const target = join(bin, process.platform === 'win32' ? 'void-machine.cmd' : 'void-machine');
   await writeFile(transport, stableUpdateTransportSource({ tarball, target, version,
     integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}` }));
-  await writeFile(denied, "globalThis.fetch = async () => { throw new Error('CONFORMANCE_OFFLINE'); };\n");
   await writeFile(interrupt, `
     import fs from 'node:fs/promises';
     import {syncBuiltinESMExports} from 'node:module';

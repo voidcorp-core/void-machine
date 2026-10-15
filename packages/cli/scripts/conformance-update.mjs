@@ -15,7 +15,7 @@ import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanc
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
 
-// Diagnostic only: keep the real shim bytes, arguments, environment and exit code.
+// Qualify original -File first; compare -Command only once, inside the same suite budget.
 // PowerShell 5.1 about_Scripts: call operator gives the script its own scope;
 // its exit sets LASTEXITCODE, which the outer command must explicitly return.
 export async function measurePowerShellShim(options, execute = runConformanceProcess) {
@@ -28,12 +28,82 @@ export async function measurePowerShellShim(options, execute = runConformancePro
     'PowerShell output-only control');
     assert.equal(result.stdout, 'ready');
   }
+  const qualified = await execute({ ...processOptions, label: `${label} -File`,
+    args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', shim, ...args] });
+  if (!control || qualified.outcome.kind !== 'exited' || qualified.outcome.code !== 0) return qualified;
   const quote = value => `'${value.replaceAll("'", "''")}'`;
   const command = "$ErrorActionPreference = 'Stop'; $watch = [Diagnostics.Stopwatch]::StartNew(); "
     + "[Console]::Error.WriteLine('powershell-entered: before real shim'); "
     + `& ${[shim, ...args].map(quote).join(' ')}; $code = $LASTEXITCODE; `
     + "[Console]::Error.WriteLine(('powershell-returned: shimMs={0}; exit={1}' -f $watch.ElapsedMilliseconds, $code)); exit $code";
-  return execute({ ...processOptions, label, diagnosticStderr: true, args: [...flags, command] });
+  const compared = requireConformanceExit(await execute({ ...processOptions,
+    label: `${label} -Command comparison`, diagnosticStderr: true, args: [...flags, command] }),
+  'PowerShell diagnostic comparison');
+  assert.equal(compared.stdout, qualified.stdout);
+  return qualified;
+}
+
+// This source is written only into the disposable fixture import, never the product.
+// Node 24 documents the promisified execFile result's .child and raw error outputs.
+export function stableUpdateTransportSource({ tarball, target, version, integrity }) {
+  return `
+    import fs from 'node:fs/promises';
+    import cp from 'node:child_process';
+    import {promisify} from 'node:util';
+    import {basename} from 'node:path';
+    import {syncBuiltinESMExports} from 'node:module';
+    let bytes = 0;
+    let sequence = 0;
+    const emit = event => {
+      const line = JSON.stringify(event) + '\\n';
+      if (bytes + Buffer.byteLength(line) > 4096) return;
+      bytes += Buffer.byteLength(line);
+      process.stderr.write(line);
+    };
+    const begin = label => {
+      const startedMs = performance.now();
+      const id = ++sequence;
+      emit({phase:'started', label, id, startedMs});
+      return extra => emit({phase:'finished', label, id,
+        durationMs:Math.round(performance.now() - startedMs), ...extra});
+    };
+    const execFile = cp.execFile;
+    const custom = execFile[promisify.custom];
+    const measure = (invoke, args) => {
+      const name = basename(args[1]?.[0] ?? args[0]);
+      const finish = begin(['npm-cli.js','void-machine.mjs','prepare-update.mjs'].includes(name) ? name : 'other child');
+      let result;
+      try { result = invoke(...args); }
+      catch (error) { finish({code:error.code ?? 'thrown'}); throw error; }
+      const child = result.child ?? result;
+      child.once('close', (code, signal) => finish({code, ...(signal ? {signal} : {})}));
+      return result;
+    };
+    cp.execFile = (...args) => measure((...values) => execFile(...values), args);
+    Object.defineProperty(cp.execFile, promisify.custom, {
+      value: (...args) => measure((...values) => custom(...values), args),
+    });
+    const rename = fs.rename;
+    fs.rename = async (from, to) => {
+      if (to !== ${JSON.stringify(target)}) return rename(from, to);
+      const finish = begin('launcher publication');
+      try { const result = await rename(from, to); finish({}); return result; }
+      catch (error) { finish({code:error.code ?? 'thrown'}); throw error; }
+    };
+    syncBuiltinESMExports();
+    const archive = await fs.readFile(${JSON.stringify(tarball)});
+    const version = ${JSON.stringify(version)};
+    const packageName = ${JSON.stringify(PRODUCT_IDENTITY.packageName)};
+    const tarball = 'https://registry.npmjs.org/' + packageName + '/-/' + packageName + '-' + version + '.tgz';
+    globalThis.fetch = async url => {
+      const finish = begin(url === tarball ? 'archive' : 'metadata');
+      try {
+        if (url === tarball) return new Response(archive);
+        if (url !== 'https://registry.npmjs.org/' + packageName + '/latest') throw new Error('Unexpected registry request');
+        return new Response(JSON.stringify({name:packageName,version,dist:{tarball,integrity:${JSON.stringify(integrity)}}}));
+      } finally { finish({}); }
+    };
+  `;
 }
 
 async function launcherState(path) {
@@ -118,19 +188,8 @@ export async function prepareStableUpdate(temporary, tarball) {
   const interrupt = join(home, 'interrupt.mjs');
   const marker = join(home, 'interrupted');
   const target = join(bin, process.platform === 'win32' ? 'void-machine.cmd' : 'void-machine');
-  await writeFile(transport, `
-    import {readFile} from 'node:fs/promises';
-    const archive = await readFile(${JSON.stringify(tarball)});
-    const version = ${JSON.stringify(version)};
-    const packageName = ${JSON.stringify(PRODUCT_IDENTITY.packageName)};
-    const tarball = 'https://registry.npmjs.org/' + packageName + '/-/' + packageName + '-' + version + '.tgz';
-    globalThis.fetch = async url => {
-      if (url === tarball) return new Response(archive);
-      if (url !== 'https://registry.npmjs.org/' + packageName + '/latest') throw new Error('Unexpected registry request');
-      return new Response(JSON.stringify({name:packageName,version,dist:{tarball,
-        integrity:${JSON.stringify(`sha512-${createHash('sha512').update(archive).digest('base64')}`)}}}));
-    };
-  `);
+  await writeFile(transport, stableUpdateTransportSource({ tarball, target, version,
+    integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}` }));
   await writeFile(denied, "globalThis.fetch = async () => { throw new Error('CONFORMANCE_OFFLINE'); };\n");
   await writeFile(interrupt, `
     import fs from 'node:fs/promises';
@@ -151,14 +210,15 @@ export async function prepareStableUpdate(temporary, tarball) {
   const invoke = (args, imports = [], alias = 'void-machine', powershell = false, cwd = project) => {
     const childEnv = { ...env, NODE_OPTIONS: imports.map(path => `--import=${pathToFileURL(path).href}`).join(' ') };
     const label = `native ${alias} ${args.join(' ')} (${powershell ? 'PowerShell' : 'default'}; ${imports.map(path => basename(path)).join(',')})`;
-    if (process.platform !== 'win32') return runConformanceProcess({ label, command: join(bin, alias), args, cwd, env: childEnv });
+    if (process.platform !== 'win32') return runConformanceProcess({ label, diagnosticStderr: true,
+      command: join(bin, alias), args, cwd, env: childEnv });
     if (powershell) {
       const control = powerShellControl;
       powerShellControl = false;
       return measurePowerShellShim({ label, shim: join(bin, `${alias}.ps1`), args,
         cwd, env: childEnv, control });
     }
-    return runConformanceProcess({ label, command: env.ComSpec ?? 'cmd.exe',
+    return runConformanceProcess({ label, diagnosticStderr: true, command: env.ComSpec ?? 'cmd.exe',
       args: ['/d', '/s', '/c', `""${join(bin, `${alias}.cmd`)}" ${args.join(' ')}"`],
       windowsVerbatimArguments: true, cwd, env: childEnv });
   };

@@ -214,6 +214,18 @@ it('compares Command only after successful original File qualification in the sa
   expect(result).toBe(qualified);
 });
 
+it.each(['failure', 'different output'])('does not hide a PowerShell comparison %s behind successful File qualification', async kind => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  let invocation = 0;
+  await expect(measurePowerShellShim({ shim: '/fixture/shim.ps1', args: ['--version'],
+    cwd: '/fixture', env: {}, control: true, label: 'shim' }, async () => {
+    invocation++;
+    return { outcome: { kind: 'exited', code: invocation === 3 && kind === 'failure' ? 37 : 0 },
+      stdout: invocation === 1 ? 'ready' : invocation === 2 ? 'version' : 'different', stderr: '' };
+  })).rejects.toThrow();
+  expect(invocation).toBe(3);
+});
+
 it('measures real fixture children, transport and publication without changing results or errors', async () => {
   const { stableUpdateTransportSource } = await import('./conformance-update.mjs');
   const { PRODUCT_IDENTITY } = await import('../../../scripts/product-identity.mjs');
@@ -252,6 +264,11 @@ it('measures real fixture children, transport and publication without changing r
       await assert.rejects(rename(join(root,'missing'), ${JSON.stringify(target)}), {code:'ENOENT'});
       await writeFile(join(root,'replacement'), 'launcher bytes');
       await rename(join(root,'replacement'), ${JSON.stringify(target)});
+      // Exhaust the diagnostic budget; transport and publication must still work.
+      for (let index = 0; index < 100; index++) {
+        assert.equal(await (await fetch(metadata.dist.tarball)).text(), 'archive bytes');
+      }
+      await assert.rejects(rename(join(root,'missing'), ${JSON.stringify(target)}), {code:'ENOENT'});
       process.stdout.write('unchanged-result');
     `);
     const events: Array<{ phase: string; detail?: string }> = [];

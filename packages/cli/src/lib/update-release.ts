@@ -1,13 +1,14 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { lstat, readFile, readdir } from 'node:fs/promises';
+import { lstat, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { z } from 'zod';
 import { compareVersions } from './version.js';
 
 export const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const stableVersion = z.string().max(64).regex(STABLE_VERSION);
 const metadataSchema = z.object({
-  name: z.literal('voidmachine'), version: stableVersion,
+  name: z.literal(PRODUCT_IDENTITY.packageName), version: stableVersion,
   dist: z.object({ tarball: z.string().max(2048), integrity: z.string().regex(/^sha512-[A-Za-z0-9+/]{86}==$/) }),
 });
 export interface PinnedRelease {
@@ -23,7 +24,7 @@ export function pinRelease(input: unknown, currentVersion: string, exactVersion?
     throw new Error('Registry returned a different exact release version');
   }
   if (compareVersions(record.version, currentVersion) < 0) throw new Error('Release downgrade refused');
-  const expected = `https://registry.npmjs.org/voidmachine/-/voidmachine-${record.version}.tgz`;
+  const expected = `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-${record.version}.tgz`;
   if (record.dist.tarball !== expected) throw new Error('Release tarball is not the pinned npm registry artifact');
   const digest = record.dist.integrity.slice('sha512-'.length);
   if (Buffer.from(digest, 'base64').toString('base64') !== digest) throw new Error('Invalid release integrity');
@@ -50,10 +51,10 @@ export const releaseContractSchema = z.object({
 const emptyDependencies = z.record(z.string(), z.string()).refine(value => Object.keys(value).length === 0,
   'Update protocol 1 requires a self-contained package without external dependencies');
 const packageSchema = z.object({
-  name: z.literal('voidmachine'), version: stableVersion,
+  name: z.literal(PRODUCT_IDENTITY.packageName), version: stableVersion,
   engines: z.object({ node: z.string().regex(/^>=(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,
     'Unsupported Node engine range; update protocol 1 requires an explicit minimum') }),
-  bin: z.object({ 'void-machine': z.literal('./bin/void-machine.mjs'), voidmachine: z.literal('./bin/void-machine.mjs') }),
+  bin: z.object({ 'void-machine': z.literal('./bin/void-machine.mjs'), [PRODUCT_IDENTITY.packageName]: z.literal('./bin/void-machine.mjs') }),
   voidUpdate: releaseContractSchema,
   dependencies: emptyDependencies.optional(), optionalDependencies: emptyDependencies.optional(),
 });

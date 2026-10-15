@@ -1,11 +1,13 @@
 // @test-resource subprocess
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { afterEach, expect, it, vi } from 'vitest';
+import { bundledLauncher } from '../lib/fixtures/stable-launcher.js';
 import type { NpmInvocation } from '../lib/release-acquisition.js';
-import { createHash } from 'node:crypto';
 import { update } from './update.js';
 
 const roots: string[] = [];
@@ -38,19 +40,19 @@ async function fixture() {
   const fetcher: typeof fetch = async input => {
     const url = String(input);
     fetched.push(url);
-    return new Response(url.endsWith('.tgz') ? archive : JSON.stringify({ name: 'voidmachine', version: '5.1.0',
-      dist: { tarball: 'https://registry.npmjs.org/voidmachine/-/voidmachine-5.1.0.tgz', integrity } }));
+    return new Response(url.endsWith('.tgz') ? archive : JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '5.1.0',
+      dist: { tarball: `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`, integrity } }));
   };
   const runNpm = async ({ cwd }: NpmInvocation) => {
-    const pkg = join(cwd, 'node_modules/voidmachine');
+    const pkg = join(cwd, `node_modules/${PRODUCT_IDENTITY.packageName}`);
     await mkdir(join(pkg, 'bin'), { recursive: true });
     await mkdir(join(pkg, 'dist'));
-    await writeFile(join(pkg, 'package.json'), JSON.stringify({ name: 'voidmachine', version: '5.1.0', type: 'module',
-      engines: { node: '>=24.15.0' }, bin: { 'void-machine': './bin/void-machine.mjs', voidmachine: './bin/void-machine.mjs' },
+    await writeFile(join(pkg, 'package.json'), JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '5.1.0', type: 'module',
+      engines: { node: '>=24.15.0' }, bin: { 'void-machine': './bin/void-machine.mjs', [PRODUCT_IDENTITY.packageName]: './bin/void-machine.mjs' },
       voidUpdate: { protocol: 1, configSchemas: [1], receiptSchemas: [1], manifestSchemas: [1], programSchemas: [1], runtimeAdapters: ['codex', 'claude'] } }));
     await writeFile(join(pkg, 'dist/main.js'), "export async function run() { process.stdout.write('5.1.0\\n'); }");
     await writeFile(join(pkg, 'bin/void-machine.mjs'), "import {run} from '../dist/main.js'; await run();");
-    await cp(fileURLToPath(new URL('../../bin/stable-launcher.mjs', import.meta.url)), join(pkg, 'bin/stable-launcher.mjs'));
+    await writeFile(join(pkg, 'dist/stable-launcher.js'), await bundledLauncher());
     await writeFile(join(pkg, 'bin/prepare-update.mjs'), `
       import { readFile, writeFile, lstat } from 'node:fs/promises';
       import { join } from 'node:path';
@@ -99,7 +101,7 @@ it('updates only the current project and activates the same exact offline releas
   expect(await version(other)).toBe('5.0.1');
   expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
   expect(await readFile(join(f.bin, 'void-machine'), 'utf8')).toContain('verifyInstalledRelease');
-  expect(f.fetched).toEqual(['https://registry.npmjs.org/voidmachine/latest', 'https://registry.npmjs.org/voidmachine/-/voidmachine-5.1.0.tgz']);
+  expect(f.fetched).toEqual([`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/latest`, `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`]);
   expect(f.printed.join('')).toContain(selected);
   expect(f.printed.join('')).toContain('5.0.1');
 });
@@ -117,7 +119,7 @@ it.each([false, true])('plans all selected projects, with dry run %s leaving tar
     await expect(readFile(join(f.bin, 'void-machine'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(f.printed.join('')).toMatch(/cache|staging/i);
   }
-  expect(f.fetched[0]).toBe('https://registry.npmjs.org/voidmachine/5.1.0');
+  expect(f.fetched[0]).toBe(`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/5.1.0`);
 });
 
 it('a later incompatible project prevents every publication', async () => {
@@ -142,7 +144,7 @@ it('retains the qualified original launcher backup after successful bootstrap', 
   const f = await fixture();
   const original = join(f.root, 'original-prefix');
   await f.ports.runNpm({ cwd: original, args: [], env: {} });
-  const target = join(original, 'node_modules/voidmachine/bin/void-machine.mjs');
+  const target = join(original, `node_modules/${PRODUCT_IDENTITY.packageName}/bin/void-machine.mjs`);
   await symlink(target, join(f.bin, 'void-machine'));
   await update([], f.ports);
   expect(await readFile(join(f.globalDir, 'cli/bootstrap/0.before'), 'utf8')).toBe(target);

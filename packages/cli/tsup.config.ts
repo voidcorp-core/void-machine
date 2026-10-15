@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/main.ts'],
+  // Embed canonical identity in both artifacts; copied bins remain standalone.
+  entry: { main: 'src/main.ts', 'stable-launcher': 'src/lib/stable-launcher.mjs' },
   format: ['esm'],
   target: 'node24',
   outDir: 'dist',

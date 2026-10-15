@@ -1,10 +1,12 @@
 // @test-resource subprocess
+
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { afterEach, expect, it } from 'vitest';
 import { cliVersion } from './paths.js';
 
@@ -19,8 +21,8 @@ async function fixture(behavior: 'valid' | 'foreign' | 'failure') {
   await mkdir(join(root, 'workspace'));
   await mkdir(join(root, 'project'));
   await writeFile(join(pkg, 'package.json'), JSON.stringify({
-    name: 'voidmachine', version: '5.1.0', engines: { node: '>=24.15.0' },
-    bin: { 'void-machine': './bin/void-machine.mjs', voidmachine: './bin/void-machine.mjs' },
+    name: PRODUCT_IDENTITY.packageName, version: '5.1.0', engines: { node: '>=24.15.0' },
+    bin: { 'void-machine': './bin/void-machine.mjs', [PRODUCT_IDENTITY.packageName]: './bin/void-machine.mjs' },
     voidUpdate: { protocol: 1, configSchemas: [1], receiptSchemas: [1], manifestSchemas: [1], programSchemas: [1], runtimeAdapters: ['codex', 'claude'] },
   }));
   await writeFile(join(pkg, 'bin/void-machine.mjs'), '');

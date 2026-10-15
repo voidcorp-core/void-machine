@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // tdd-cover: e2e packages/cli/src/lib/cli-installation.test.ts
+import { PRODUCT_IDENTITY } from '../../../hook-runner/src/identity.ts';
 import { createHash } from 'node:crypto';
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -31,7 +32,7 @@ export async function verifyInstalledRelease(store, version) {
     || typeof seal.integrity !== 'string' || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(seal.integrity)) {
     throw new Error('Invalid stable CLI release seal');
   }
-  const root = join(releaseRoot, 'node_modules', 'voidmachine');
+  const root = join(releaseRoot, 'node_modules', PRODUCT_IDENTITY.packageName);
   if (await realpath(root) !== resolve(root)) throw new Error('Stable CLI package crosses a symbolic link');
   const expected = new Map();
   for (const file of seal.files) {
@@ -61,7 +62,7 @@ export async function verifyInstalledRelease(store, version) {
   await visit('', 0);
   if (expected.size !== 0) throw new Error('Stable CLI integrity: missing release files');
   const pkg = JSON.parse((await regularBytes(join(root, 'package.json'), 1024 * 1024)).toString('utf8'));
-  if (pkg.name !== 'voidmachine' || pkg.version !== version || pkg.voidUpdate?.protocol !== 1) throw new Error('Stable CLI package identity mismatch');
+  if (pkg.name !== PRODUCT_IDENTITY.packageName || pkg.version !== version || pkg.voidUpdate?.protocol !== 1) throw new Error('Stable CLI package identity mismatch');
   const minimum = /^>=(\d+)\.(\d+)\.(\d+)$/.exec(pkg.engines?.node ?? '');
   if (!minimum) throw new Error('Unsupported stable CLI Node engine');
   const current = process.versions.node.split('.').map(Number);

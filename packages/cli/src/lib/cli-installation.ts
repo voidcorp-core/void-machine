@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { Stats } from 'node:fs';
-import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, parse, resolve, sep } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { z } from 'zod';
-import { verifyInstalledRelease } from '../../bin/stable-launcher.mjs';
+import { verifyInstalledRelease } from './stable-launcher.mjs';
 import type { FileWriteMutation } from './transaction.js';
 import { type PinnedRelease, STABLE_VERSION, validateReleasePackage } from './update-release.js';
 
@@ -34,7 +35,7 @@ async function declaredBin(entry: string, alias: string): Promise<boolean> {
     const metadata = join(root, 'package.json');
     const info = await lstat(metadata);
     if (!info.isFile() || info.isSymbolicLink() || info.size > 1024 * 1024) return false;
-    const pkg = z.object({ name: z.literal('voidmachine'), version: z.string().regex(STABLE_VERSION),
+    const pkg = z.object({ name: z.literal(PRODUCT_IDENTITY.packageName), version: z.string().regex(STABLE_VERSION),
       bin: z.record(z.string(), z.string()) }).parse(JSON.parse(await readFile(metadata, 'utf8')));
     const target = pkg.bin[alias];
     return target !== undefined && target === './bin/void-machine.mjs' && resolve(root, target) === entry;
@@ -46,7 +47,7 @@ export async function planLauncherBootstrap(binRoot: string, launcher: Uint8Arra
   if (platform === 'win32') return planWindowsBootstrap(binRoot, launcher, previousLauncher);
   const mutations: FileWriteMutation[] = [];
   const conflicts: string[] = [];
-  for (const alias of ['void-machine', 'voidmachine', 'vm']) {
+  for (const alias of ['void-machine', PRODUCT_IDENTITY.packageName, 'vm']) {
     const path = join(binRoot, alias);
     const info = await optionalInfo(path);
     if (!info) {
@@ -75,7 +76,7 @@ export async function planLauncherBootstrap(binRoot: string, launcher: Uint8Arra
   return { mutations, conflicts };
 }
 
-// npm 11 cmd-shim output for its canonical node_modules/voidmachine bin, qualified
+// npm 11 cmd-shim output for its canonical package bin, qualified
 // against the package declaration below. Unknown wrapper revisions stay user-owned.
 const npmWindowsHashes: Readonly<Record<string, string>> = {
   '': 'e9ff11472326366df74c397d89f59264d9da684b352b4ef98035198314940da3',
@@ -83,11 +84,14 @@ const npmWindowsHashes: Readonly<Record<string, string>> = {
   '.ps1': 'e110ea1df178778173a04a43b4531c3a4a64657919572e160ccdf2daf72994cd',
 };
 async function planWindowsBootstrap(binRoot: string, launcher: Uint8Array, previousLauncher?: Uint8Array) {
-  const command = Buffer.from('@echo off\r\nnode "%~dp0void-machine.mjs" %*\r\nexit /b %errorlevel%\r\n');
+  // End the batch context before Node can restore this running file, using
+  // npm/cmd-shim's terminal dispatch idiom. Node supplies the process status;
+  // cmd must never resume reading replacement bytes or expand an old errorlevel.
+  const command = Buffer.from('@echo off\r\ngoto #_undefined_# 2>NUL || title %COMSPEC% & node "%~dp0void-machine.mjs" %*\r\n');
   const powershell = Buffer.from('if ($MyInvocation.ExpectingInput) {\n  $input | & node "$PSScriptRoot/void-machine.mjs" @args\n} else {\n  & node "$PSScriptRoot/void-machine.mjs" @args\n}\nexit $LASTEXITCODE\n');
   const mutations: FileWriteMutation[] = [];
   const conflicts: string[] = [];
-  for (const alias of ['void-machine.mjs', 'void-machine', 'voidmachine', 'vm']) {
+  for (const alias of ['void-machine.mjs', 'void-machine', PRODUCT_IDENTITY.packageName, 'vm']) {
     const variants = alias.endsWith('.mjs') ? [['', launcher] as const]
       : [['', launcher], ['.cmd', command], ['.ps1', powershell]] as const;
     const pending: FileWriteMutation[] = [];
@@ -102,7 +106,7 @@ async function planWindowsBootstrap(binRoot: string, launcher: Uint8Array, previ
       const bytes = await readFile(join(binRoot, path));
       const known = bytes.equals(content) || (extension === '' && previousLauncher !== undefined && bytes.equals(previousLauncher))
         || (!alias.endsWith('.mjs') && hash(bytes) === npmWindowsHashes[extension]
-          && await declaredBin(join(binRoot, 'node_modules/voidmachine/bin/void-machine.mjs'), alias));
+          && await declaredBin(join(binRoot, `node_modules/${PRODUCT_IDENTITY.packageName}/bin/void-machine.mjs`), alias));
       if (!known) { conflict = true; continue; }
       pending.push({ path, content, mode: 0o755, expected: { exists: true, sha256: hash(bytes), mode: info.mode & 0o777 } });
     }
@@ -127,7 +131,7 @@ export async function completeRelease(packageRoot: string, store: string, releas
   const stage = await mkdtemp(join(store, 'releases', '.release-'));
   try {
     await mkdir(join(stage, 'node_modules'));
-    const installed = join(stage, 'node_modules', 'voidmachine');
+    const installed = join(stage, 'node_modules', PRODUCT_IDENTITY.packageName);
     await rename(packageRoot, installed);
     const files: { path: string; sha256: string; mode: number }[] = [];
     async function sealFiles(relative: string): Promise<void> {

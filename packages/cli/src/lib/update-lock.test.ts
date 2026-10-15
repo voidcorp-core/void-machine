@@ -1,5 +1,6 @@
 // @test-resource subprocess
-import { execFile } from 'node:child_process';
+import { execFile, fork } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -93,3 +94,67 @@ it.each(['claim', 'publication'] as const)('recovers after SIGKILL at %s without
   expect(Number(await readFile(join(root, 'interrupted'), 'utf8'))).toBeGreaterThan(0);
   await expect(withUpdateLock(root, async () => 'recovered')).resolves.toBe('recovered');
 });
+
+it('excludes a real contender across stale-owner re-read, publication and callback', async () => {
+  const { withUpdateLock } = await import('./update-lock.js');
+  const root = await fixture();
+  const old = JSON.stringify({ schemaVersion: 1, pid: 2147483647, token: 'old-token' });
+  await writeFile(join(root, 'update.lock'), old);
+  const script = join(root, 'contender.mjs');
+  await writeFile(script, `
+    import fs from 'node:fs/promises';
+    import {basename} from 'node:path';
+    import {once} from 'node:events';
+    import {syncBuiltinESMExports} from 'node:module';
+    const pause = async phase => {
+      const resume = once(process, 'message', {signal:AbortSignal.timeout(10000)});
+      process.send(phase);
+      await resume;
+    };
+    const rename = fs.rename;
+    fs.rename = async (from, to) => {
+      if (basename(String(to)) === 'update.lock') await pause('publishing');
+      return rename(from, to);
+    };
+    syncBuiltinESMExports();
+    const {withUpdateLock} = await import(${JSON.stringify(new URL('./update-lock.ts', import.meta.url).href)});
+    await withUpdateLock(${JSON.stringify(root)}, async () => { await pause('entered'); });
+    process.disconnect();
+  `);
+  const child = fork(script, [], { silent: true,
+    execArgv: ['--import', fileURLToPath(import.meta.resolve('tsx'))] });
+  const next = () => once(child, 'message', { signal: AbortSignal.timeout(10_000) });
+  try {
+    expect(await next()).toEqual(['publishing', undefined]);
+    expect(await readFile(join(root, 'update.lock'), 'utf8')).toBe(old);
+    await expect(withUpdateLock(root, async () => 'wrong')).rejects.toThrow(/another updater/i);
+    const entered = next();
+    child.send('continue');
+    expect(await entered).toEqual(['entered', undefined]);
+    await expect(withUpdateLock(root, async () => 'wrong')).rejects.toThrow(/another updater/i);
+    const exit = once(child, 'exit', { signal: AbortSignal.timeout(10_000) });
+    child.send('finish');
+    expect((await exit)[0]).toBe(0);
+    await expect(withUpdateLock(root, async () => 'next')).resolves.toBe('next');
+  } finally { child.kill('SIGKILL'); }
+});
+
+it.each(['empty-primary', 'unknown-claim', 'foreign-content', 'scan-limit'] as const)(
+  'preserves %s ownership state instead of guessing or scanning without a bound', async kind => {
+    const { withUpdateLock } = await import('./update-lock.js');
+    const root = await fixture();
+    if (kind === 'empty-primary') await writeFile(join(root, 'update.lock'), '');
+    if (kind === 'unknown-claim') await mkdir(join(root, 'update.claim-unknown'));
+    const foreign = join(root, 'update.claim-2147483647-dead');
+    if (kind === 'foreign-content') {
+      await mkdir(foreign);
+      await writeFile(join(foreign, 'user-file'), 'preserve');
+    }
+    if (kind === 'scan-limit') {
+      for (let index = 0; index < 256; index++) await writeFile(join(root, `unrelated-${index}`), '');
+    }
+    await expect(withUpdateLock(root, async () => 'wrong')).rejects.toThrow();
+    if (kind === 'empty-primary') expect(await readFile(join(root, 'update.lock'), 'utf8')).toBe('');
+    if (kind === 'foreign-content') expect(await readFile(join(foreign, 'user-file'), 'utf8')).toBe('preserve');
+  },
+);

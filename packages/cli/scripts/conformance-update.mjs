@@ -1,5 +1,6 @@
 // Actual packed-product qualification, shared by the focused probe and the OS
 // install-conformance owner. Transport/interruption instrumentation lives only here.
+import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -63,7 +64,7 @@ export async function prepareStableUpdate(temporary, tarball) {
   await runConformanceStep('stable update npm-owned bootstrap', { command: npm.executable,
     args: [...npm.prefixArguments, 'install', '--global', '--prefix', prefix, '--offline',
       '--ignore-scripts', '--no-audit', '--no-fund', tarball], cwd: home, env });
-  const pkg = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules/voidmachine');
+  const pkg = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), `node_modules/${PRODUCT_IDENTITY.packageName}`);
   const source = join(pkg, 'bin/void-machine.mjs');
   const version = JSON.parse(await read(join(pkg, 'package.json'))).version;
   // The qualified fixture launcher is first. No real-home launcher can be selected.
@@ -97,11 +98,12 @@ export async function prepareStableUpdate(temporary, tarball) {
     import {readFile} from 'node:fs/promises';
     const archive = await readFile(${JSON.stringify(tarball)});
     const version = ${JSON.stringify(version)};
-    const tarball = 'https://registry.npmjs.org/voidmachine/-/voidmachine-' + version + '.tgz';
+    const packageName = ${JSON.stringify(PRODUCT_IDENTITY.packageName)};
+    const tarball = 'https://registry.npmjs.org/' + packageName + '/-/' + packageName + '-' + version + '.tgz';
     globalThis.fetch = async url => {
       if (url === tarball) return new Response(archive);
-      if (url !== 'https://registry.npmjs.org/voidmachine/latest') throw new Error('Unexpected registry request');
-      return new Response(JSON.stringify({name:'voidmachine',version,dist:{tarball,
+      if (url !== 'https://registry.npmjs.org/' + packageName + '/latest') throw new Error('Unexpected registry request');
+      return new Response(JSON.stringify({name:packageName,version,dist:{tarball,
         integrity:${JSON.stringify(`sha512-${createHash('sha512').update(archive).digest('base64')}`)}}}));
     };
   `);
@@ -201,7 +203,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       assert.equal(await read(receipt(second)), otherReceipt);
       assert.equal(await read(receipt(third)), thirdReceipt);
       await rename(pkg, `${pkg}-unavailable`);
-      for (const alias of ['void-machine', 'voidmachine']) {
+      for (const alias of ['void-machine', PRODUCT_IDENTITY.packageName]) {
         const result = requireConformanceExit(await invoke(['--version'], [denied], alias, false, root), 'offline native launcher');
         assert.equal(result.stdout.trim(), version);
         if (process.platform === 'win32') {

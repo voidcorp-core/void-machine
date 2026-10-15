@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { packageManagerCommand } from './package-manager.js';
 import { type PinnedRelease, pinRelease, STABLE_VERSION, validateReleasePackage, verifyReleaseArchive } from './update-release.js';
 
@@ -28,7 +29,7 @@ async function download(url: string, limit: number, fetcher: typeof fetch): Prom
 
 export async function resolveRelease(currentVersion: string, exactVersion?: string, fetcher: typeof fetch = fetch): Promise<PinnedRelease> {
   if (exactVersion !== undefined && !STABLE_VERSION.test(exactVersion)) throw new Error('An exact stable release version is required');
-  const bytes = await download(`https://registry.npmjs.org/voidmachine/${exactVersion ?? 'latest'}`, 1024 * 1024, fetcher);
+  const bytes = await download(`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/${exactVersion ?? 'latest'}`, 1024 * 1024, fetcher);
   return pinRelease(JSON.parse(bytes.toString('utf8')), currentVersion, exactVersion);
 }
 
@@ -84,7 +85,7 @@ export async function acquireRelease(release: PinnedRelease, stagingRoot: string
       '--audit=false', '--fund=false', '--engine-strict', '--bin-links=false', '--workspaces=false',
       '--registry=https://registry.npmjs.org',
     ] });
-    const packageRoot = join(stage, 'node_modules', 'voidmachine');
+    const packageRoot = join(stage, 'node_modules', PRODUCT_IDENTITY.packageName);
     await validateReleasePackage(packageRoot, release.version);
     return packageRoot;
   } catch (error) {

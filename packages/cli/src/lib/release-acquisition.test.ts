@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { afterEach, expect, it } from 'vitest';
 
 const roots: string[] = [];
@@ -13,7 +14,7 @@ async function fixture() {
 }
 const archive = Buffer.from('published archive');
 const release = Object.freeze({ version: '5.1.0',
-  tarball: 'https://registry.npmjs.org/voidmachine/-/voidmachine-5.1.0.tgz',
+  tarball: `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`,
   integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}` });
 
 it('resolves stable once using fixed registry metadata and refuses redirects', async () => {
@@ -23,10 +24,10 @@ it('resolves stable once using fixed registry metadata and refuses redirects', a
     requests.push(String(url));
     expect(options?.redirect).toBe('error');
     expect(options?.signal).toBeInstanceOf(AbortSignal);
-    return new Response(JSON.stringify({ name: 'voidmachine', version: '5.1.0', dist: release }));
+    return new Response(JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '5.1.0', dist: release }));
   };
   expect(await resolveRelease('5.0.1', undefined, fetcher)).toEqual(release);
-  expect(requests).toEqual(['https://registry.npmjs.org/voidmachine/latest']);
+  expect(requests).toEqual([`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/latest`]);
 });
 
 it.each(['404', 'oversized', 'network'])('refuses %s registry failure', async failure => {
@@ -59,15 +60,15 @@ it('installs only verified local bytes with isolated npm configuration', async (
       expect(invocation.env.npm_config_userconfig).toBe(join(invocation.cwd, 'user.npmrc'));
       expect(invocation.env.npm_config_globalconfig).toBe(join(invocation.cwd, 'global.npmrc'));
       expect(await readFile(invocation.env.npm_config_userconfig ?? '', 'utf8')).toBe('');
-      const pkgRoot = join(invocation.cwd, 'node_modules/voidmachine');
+      const pkgRoot = join(invocation.cwd, `node_modules/${PRODUCT_IDENTITY.packageName}`);
       await mkdir(join(pkgRoot, 'bin'), { recursive: true });
       await mkdir(join(pkgRoot, 'dist'));
       for (const path of ['bin/void-machine.mjs', 'bin/prepare-update.mjs', 'dist/main.js']) {
         await writeFile(join(pkgRoot, path), 'throw new Error("must not execute");');
       }
       await writeFile(join(pkgRoot, 'package.json'), JSON.stringify({
-        name: 'voidmachine', version: release.version, engines: { node: '>=24.15.0' },
-        bin: { 'void-machine': './bin/void-machine.mjs', voidmachine: './bin/void-machine.mjs' },
+        name: PRODUCT_IDENTITY.packageName, version: release.version, engines: { node: '>=24.15.0' },
+        bin: { 'void-machine': './bin/void-machine.mjs', [PRODUCT_IDENTITY.packageName]: './bin/void-machine.mjs' },
         voidUpdate: { protocol: 1, configSchemas: [1], receiptSchemas: [1], manifestSchemas: [1], programSchemas: [1], runtimeAdapters: ['codex', 'claude'] },
       }));
     },

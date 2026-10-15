@@ -6,7 +6,6 @@ import { delimiter, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { pendingMigrations } from '@voidcorp/hook-runner';
 import { z } from 'zod';
-import { verifyInstalledRelease } from '../../bin/stable-launcher.mjs';
 import { assertCandidateInputs } from '../lib/candidate-plan.js';
 import { prepareWithCandidate } from '../lib/candidate-process.js';
 import { completeRelease, ensureStoreDirectory, planLauncherBootstrap } from '../lib/cli-installation.js';
@@ -16,13 +15,14 @@ import { voidGlobalDir } from '../lib/projects/catalog.js';
 import { readInstallReceipt } from '../lib/receipts.js';
 import { acquireRelease, type NpmInvocation, resolveRelease } from '../lib/release-acquisition.js';
 import { line } from '../lib/render.js';
+import { verifyInstalledRelease } from '../lib/stable-launcher.mjs';
+import { prepareFileTransaction } from '../lib/transaction.js';
 import { assertProjectCompatibility } from '../lib/update-compatibility.js';
 import { withUpdateLock } from '../lib/update-lock.js';
 import { executeUpdateOperation, recoverPendingUpdate, type UpdateParticipant } from '../lib/update-operation.js';
 import { STABLE_VERSION, validateReleasePackage } from '../lib/update-release.js';
 import { selectUpdateProjects } from '../lib/update-selection.js';
 import { compareVersions } from '../lib/version.js';
-import { prepareFileTransaction } from '../lib/transaction.js';
 
 interface Options { readonly all: boolean; readonly dryRun: boolean; readonly version?: string }
 function parseArgs(args: readonly string[]): Options {
@@ -125,8 +125,8 @@ export async function update(args: readonly string[], ports: {
       plans.push(await prepareWithCandidate(packageRoot, { protocol: 1, operationId, version: release.version, root }, workspace));
     }
     const previousPackage = active.version ? await verifyInstalledRelease(store, active.version) : undefined;
-    const previousLauncher = previousPackage ? await readFile(join(previousPackage, 'bin/stable-launcher.mjs')) : undefined;
-    const bootstrap = await planLauncherBootstrap(binRoot, await readFile(join(packageRoot, 'bin/stable-launcher.mjs')), previousLauncher);
+    const previousLauncher = previousPackage ? await readFile(join(previousPackage, 'dist/stable-launcher.js')) : undefined;
+    const bootstrap = await planLauncherBootstrap(binRoot, await readFile(join(packageRoot, 'dist/stable-launcher.js')), previousLauncher);
     for (const alias of bootstrap.conflicts) line(`Preserved unowned alias: ${join(binRoot, alias)}`);
     for (const plan of plans) {
       await assertCandidateInputs(plan.root, plan.inputs);

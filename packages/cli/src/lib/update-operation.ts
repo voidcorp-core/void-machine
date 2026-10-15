@@ -1,5 +1,6 @@
 import { lstat, mkdir, open, readFile, realpath, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { z } from 'zod';
 import { isUpdateProjectPath } from './candidate-plan.js';
 import { applyFileTransaction, type FileMutation, inspectFileTransaction, prepareFileTransaction, recoverFileTransaction } from './transaction.js';
@@ -15,7 +16,7 @@ const operationSchema = z.strictObject({ schemaVersion: z.literal(1), operationI
   participants: z.array(z.strictObject({ kind: kindSchema, root: z.string().max(4096) })).min(1).max(128),
 });
 type Operation = z.infer<typeof operationSchema>;
-const launcherPaths = new Set(['void-machine', 'voidmachine', 'vm', 'void-machine.cmd', 'voidmachine.cmd', 'vm.cmd', 'void-machine.mjs', 'void-machine.ps1', 'voidmachine.ps1', 'vm.ps1']);
+const launcherPaths = new Set(['void-machine', PRODUCT_IDENTITY.packageName, 'vm', 'void-machine.cmd', `${PRODUCT_IDENTITY.packageName}.cmd`, 'vm.cmd', 'void-machine.mjs', 'void-machine.ps1', `${PRODUCT_IDENTITY.packageName}.ps1`, 'vm.ps1']);
 function allowedPath(kind: Kind, path: string): boolean {
   return kind === 'project' ? isUpdateProjectPath(path) : kind === 'active' ? path === 'active.json' : launcherPaths.has(path);
 }

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { afterEach, expect, it } from 'vitest';
 
 const roots: string[] = [];
@@ -11,8 +12,8 @@ afterEach(async () => {
 const bytes = Buffer.from('pinned published archive');
 const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
 function metadata() {
-  return { name: 'voidmachine', version: '5.1.0', dist: {
-    tarball: 'https://registry.npmjs.org/voidmachine/-/voidmachine-5.1.0.tgz', integrity,
+  return { name: PRODUCT_IDENTITY.packageName, version: '5.1.0', dist: {
+    tarball: `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`, integrity,
   } };
 }
 
@@ -60,8 +61,8 @@ async function packageFixture() {
   await writeFile(join(root, 'bin/prepare-update.mjs'), 'throw new Error("must not execute during validation");');
   await writeFile(join(root, 'dist/main.js'), 'export const unused = true;');
   await writeFile(join(root, 'package.json'), JSON.stringify({
-    name: 'voidmachine', version: '5.1.0', engines: { node: '>=24.15.0' },
-    bin: { 'void-machine': './bin/void-machine.mjs', voidmachine: './bin/void-machine.mjs' },
+    name: PRODUCT_IDENTITY.packageName, version: '5.1.0', engines: { node: '>=24.15.0' },
+    bin: { 'void-machine': './bin/void-machine.mjs', [PRODUCT_IDENTITY.packageName]: './bin/void-machine.mjs' },
     voidUpdate: { protocol: 1, configSchemas: [1], receiptSchemas: [1], manifestSchemas: [1], programSchemas: [1], runtimeAdapters: ['claude', 'codex'] },
   }));
   return root;

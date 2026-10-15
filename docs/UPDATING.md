@@ -47,6 +47,12 @@ then launchers, then active selection. This is recoverable publication, not a fi
 atomic transaction. A handled failure restores operation-owned states. After interruption,
 repeat the same selection to recover before beginning another update. A live updater
 blocks another updater; an old timestamp alone never permits lock takeover.
+Atomic claim directories encode PID and a unique token before ownership work starts.
+The claim covers the stale-owner check, publication of a fully written primary lock
+by rename, and the callback. A killed process can leave an empty claim or partial
+staging record, which is recoverable only after proving that PID dead. The scan is
+bounded to 256 store entries. Unknown claims, malformed primary locks and legacy
+anonymous reclamation guards are preserved and refused; elapsed time is no authority.
 
 First adoption can stop after replacing the invoking npm launcher but before creating
 `active.json`. Repeating that same native `update` command remains supported: only when
@@ -56,6 +62,14 @@ recovery writes; the update engine still acquires the lock and validates the com
 journal and selected participants before rollback or acquisition. Other commands, an
 invalid active selection, malformed pending records and unverified releases refuse.
 The recovery path neither publishes a temporary active selection nor uses a checkout.
+The Windows adapter ends its batch context before dispatching Node, following the
+[npm command-shim terminal dispatch](https://github.com/npm/cmd-shim/blob/main/lib/index.js).
+Recovery may replace that very adapter; no later batch line may consume the restored
+file or lose the child's exit status. This uses [Windows command parsing](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd)
+and [goto termination](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/goto).
+The source launcher imports canonical product identity; the existing CLI build embeds
+it into `dist/stable-launcher.js`. Only that standalone bundle is copied into the bin
+location, so identity validation requires neither a checkout nor an adjacent source file.
 
 The journal measures the filesystem's representation of a requested mode before publishing;
 it does not pretend Windows implements POSIX execute/owner bits ([native mode semantics](https://github.com/libuv/libuv/blob/v1.51.0/src/win/fs.c#L1712-L1762)). Recovery covers process
@@ -128,7 +142,12 @@ postconditions decide success. Installed sensitive-path/content probes still den
 The first-adoption acquisition probe asserts restored project bytes, receipt, original
 npm launcher bytes/link and mode, absent active selection and cleared operation before
 refusing acquisition. The next successful update uses that same native command. Windows
-runs these first-adoption phases through its actual `.cmd` launcher too.
+runs these first-adoption phases through its actual `.cmd` launcher too. Before recovery,
+it also runs that generated adapter while its child atomically restores the original
+npm bytes, checking exact exit codes 37 and 0 and arguments containing spaces. Failure
+diagnostics retain bounded, redacted child output. The lock suite separately kills real
+processes at claim creation and before ownership-record writing, and holds a real
+contender across primary publication and callback to prove mutual exclusion.
 Registry transport supplies the same pinned verified tarball; npm extraction and all child
 execution are real and isolated. Existing finite process deadlines remain unchanged.
 

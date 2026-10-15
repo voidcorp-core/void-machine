@@ -1,6 +1,6 @@
 // @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -178,7 +178,7 @@ it('completes Codex installation proofs independently of the latency campaign', 
 
 const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
 
-it('measures an output-only PowerShell control then the real shim without changing environment or deadlines', async () => {
+it('qualifies the original PowerShell File invocation and preserves its failure without a comparison', async () => {
   const { measurePowerShellShim } = await import('./conformance-update.mjs');
   const env = { HOME: '/isolated', NODE_OPTIONS: '--import=file:///offline.mjs' };
   const calls: Array<{ args: string[]; env: typeof env; timeoutMs?: number; diagnosticStderr?: boolean }> = [];
@@ -191,9 +191,85 @@ it('measures an output-only PowerShell control then the real shim without changi
   expect(calls).toHaveLength(2);
   expect(calls.every(call => call.env === env && call.timeoutMs === undefined)).toBe(true);
   expect(calls[0]?.args).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "[Console]::Out.Write('ready')"]);
-  expect(calls[1]?.args.at(-1)).toContain("& 'C:/fixture''s bin/launcher.ps1' '--version' 'space ''$value'");
-  expect(calls[1]?.diagnosticStderr).toBe(true);
+  expect(calls[1]?.args).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-File',
+    "C:/fixture's bin/launcher.ps1", '--version', "space '$value"]);
   expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stdout: 'original output' });
+});
+
+it('compares Command only after successful original File qualification in the same environment', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const env = { HOME: '/isolated' };
+  const calls: Array<{ args: string[]; env: typeof env; timeoutMs?: number; diagnosticStderr?: boolean }> = [];
+  const qualified = { outcome: { kind: 'exited', code: 0 }, stdout: '5.0.2\n', stderr: '' };
+  const result = await measurePowerShellShim({ shim: "C:/fixture's bin/launcher.ps1", args: ['--version'],
+    cwd: '/isolated', env, control: true, label: 'native shim' }, async options => {
+    calls.push(options);
+    return calls.length === 1 ? { ...qualified, stdout: 'ready' } : qualified;
+  });
+  expect(calls).toHaveLength(3);
+  expect(calls.every(call => call.env === env && call.timeoutMs === undefined)).toBe(true);
+  expect(calls[1]?.args[3]).toBe('-File');
+  expect(calls[2]?.args.at(-1)).toContain("& 'C:/fixture''s bin/launcher.ps1' '--version'");
+  expect(calls[2]?.diagnosticStderr).toBe(true);
+  expect(result).toBe(qualified);
+});
+
+it('measures real fixture children, transport and publication without changing results or errors', async () => {
+  const { stableUpdateTransportSource } = await import('./conformance-update.mjs');
+  const { PRODUCT_IDENTITY } = await import('../../../scripts/product-identity.mjs');
+  const { runConformanceProcess } = await import('./conformance-process.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'update-boundary-'));
+  try {
+    const archive = join(root, 'archive.tgz');
+    const target = join(root, 'launcher.cmd');
+    const fixture = join(root, 'transport.mjs');
+    writeFileSync(archive, 'archive bytes');
+    writeFileSync(fixture, stableUpdateTransportSource({ tarball: archive, target, version: '5.0.2', integrity: 'fixture-integrity' }));
+    for (const name of ['npm-cli.js', 'void-machine.mjs', 'prepare-update.mjs']) {
+      writeFileSync(join(root, name), "process.stdout.write('child-output'); process.stderr.write('child-error'); process.exitCode = Number(process.argv[2]);");
+    }
+    const probe = join(root, 'probe.mjs');
+    writeFileSync(probe, `
+      import assert from 'node:assert/strict';
+      import {execFile} from 'node:child_process';
+      import {promisify} from 'node:util';
+      import {rename, writeFile} from 'node:fs/promises';
+      import {join} from 'node:path';
+      const root = ${JSON.stringify(root)};
+      const metadata = await (await fetch('https://registry.npmjs.org/' + ${JSON.stringify(PRODUCT_IDENTITY.packageName)} + '/latest')).json();
+      assert.equal(await (await fetch(metadata.dist.tarball)).text(), 'archive bytes');
+      await assert.rejects(fetch('https://unreachable.invalid'), /Unexpected registry request/);
+      for (const [name, code] of [['npm-cli.js',0], ['void-machine.mjs',0], ['prepare-update.mjs',37]]) {
+        const promise = promisify(execFile)(process.execPath, [join(root,name), String(code)], {timeout:2000});
+        assert.ok(promise.child.pid);
+        if (code) await assert.rejects(promise, error => error.code === 37 && error.stdout === 'child-output' && error.stderr === 'child-error');
+        else assert.deepEqual(await promise, {stdout:'child-output',stderr:'child-error'});
+      }
+      await new Promise((resolve,reject) => execFile(process.execPath, [join(root,'npm-cli.js'),'0'], {timeout:2000}, (error,stdout,stderr) => {
+        if (error) return reject(error);
+        assert.equal(stdout,'child-output'); assert.equal(stderr,'child-error'); resolve();
+      }));
+      await assert.rejects(rename(join(root,'missing'), ${JSON.stringify(target)}), {code:'ENOENT'});
+      await writeFile(join(root,'replacement'), 'launcher bytes');
+      await rename(join(root,'replacement'), ${JSON.stringify(target)});
+      process.stdout.write('unchanged-result');
+    `);
+    const events: Array<{ phase: string; detail?: string }> = [];
+    const result = await runConformanceProcess({ command: process.execPath,
+      args: ['--import', fixture, probe], cwd: root, env: {}, label: 'fixture boundaries', diagnosticStderr: true,
+      report: event => events.push(event) });
+    expect(result.outcome).toEqual({ kind: 'exited', code: 0 });
+    expect(result.stdout).toBe('unchanged-result');
+    const measured = result.stderr.trim().split('\n').map(line => JSON.parse(line));
+    for (const label of ['npm-cli.js', 'void-machine.mjs', 'prepare-update.mjs', 'metadata', 'archive', 'launcher publication']) {
+      expect(measured.some(event => event.label === label && event.phase === 'started')).toBe(true);
+      expect(measured.some(event => event.label === label && event.phase === 'finished' && event.durationMs >= 0)).toBe(true);
+    }
+    expect(measured.some(event => event.label === 'prepare-update.mjs' && event.code === 37)).toBe(true);
+    expect(measured.some(event => event.label === 'launcher publication' && event.code === 'ENOENT')).toBe(true);
+    expect(events.some(event => event.phase === 'stderr')).toBe(true);
+    expect(Buffer.byteLength(result.stderr)).toBeLessThanOrEqual(4096);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 it('does not repeat a PowerShell control or proceed after a failed control', async () => {

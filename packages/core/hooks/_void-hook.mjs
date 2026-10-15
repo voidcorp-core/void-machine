@@ -7930,9 +7930,9 @@ function protectedReason(path2, root, shellWrite) {
     return "private key / certificate";
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return "credential file";
-  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
-  if (!base.endsWith(".md") && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
-    return sourceTest && shellWrite ? "credential-named source test with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
+  const sourceModule = /\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith(".md") && (!sourceModule || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceModule && shellWrite ? "credential-named source module with unavailable shell content; use Write/Edit or apply_patch" : "credential file";
   }
   if ((/* @__PURE__ */ new Set([
     "package-lock.json",
@@ -7972,26 +7972,31 @@ var HIGH_CONFIDENCE = [
   /\bAIza[0-9A-Za-z_-]{35}\b/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/
 ];
-var GENERIC_ASSIGNMENT = /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/i;
+var GENERIC_ASSIGNMENT = /(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_PASSWD|_APIKEY)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/gi;
+var CAMEL_ASSIGNMENT = /\b[a-z][A-Za-z0-9_$]*(?:Key|Secret|Token|Password|Passwd)["' ]*[:=]\s*["']([A-Za-z0-9+/=_-]{24,})["']/g;
 var PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 var EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
-var CREDENTIAL_SOURCE_TEST = /(?:secret|credential)[^/]*\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
+var CREDENTIAL_SOURCE_MODULE = /(?:secret|credential)[^/]*\.(?:[cm]?[jt]s|[jt]sx)$/i;
 function lineHasSecret(line) {
   if (line.includes("allow-secret-pattern:")) return false;
   if (HIGH_CONFIDENCE.some((pattern2) => pattern2.test(line))) return true;
-  const assignment = line.match(GENERIC_ASSIGNMENT);
-  if (assignment === null || PLACEHOLDER.test(line)) return false;
-  const value = assignment[1] ?? "";
-  if (/^[0-9a-f]+$/i.test(value) || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {
-    return false;
+  for (const pattern2 of [GENERIC_ASSIGNMENT, CAMEL_ASSIGNMENT]) {
+    for (const assignment of line.matchAll(pattern2)) {
+      const value = assignment[1] ?? "";
+      if (PLACEHOLDER.test(value)) continue;
+      if (/^[0-9a-f]+$/i.test(value) || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {
+        continue;
+      }
+      if (/[A-Za-z]/.test(value) && /[0-9]/.test(value)) return true;
+    }
   }
-  return /[A-Za-z]/.test(value) && /[0-9]/.test(value);
+  return false;
 }
 function secretContent(edits) {
   const evidence = [];
   for (const edit of edits) {
     const path2 = edit.path.replaceAll("\\", "/");
-    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_TEST.test(path2)) continue;
+    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_MODULE.test(path2)) continue;
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
       if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
     });

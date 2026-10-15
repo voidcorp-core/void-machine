@@ -54,10 +54,10 @@ function protectedReason(path: string, root: string | undefined, shellWrite: boo
     return 'private key / certificate';
   }
   if (/(?:\.npmrc|\.netrc|\.pgpass)$/.test(base)) return 'credential file';
-  const sourceTest = /\.(?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
-  if (!base.endsWith('.md') && (!sourceTest || shellWrite) && /(?:secret|credential)/.test(base)) {
-    return sourceTest && shellWrite
-      ? 'credential-named source test with unavailable shell content; use Write/Edit or apply_patch'
+  const sourceModule = /\.(?:[cm]?[jt]s|[jt]sx)$/.test(base);
+  if (!base.endsWith('.md') && (!sourceModule || shellWrite) && /(?:secret|credential)/.test(base)) {
+    return sourceModule && shellWrite
+      ? 'credential-named source module with unavailable shell content; use Write/Edit or apply_patch'
       : 'credential file';
   }
   if (new Set([

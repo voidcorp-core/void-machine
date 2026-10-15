@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.0.2](https://github.com/voidcorp-core/void-machine/compare/v5.0.1...v5.0.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **hooks:** detect camelCase credential assignments in source ([c965b2a](https://github.com/voidcorp-core/void-machine/commit/c965b2ae5b052676787c871e225a70826019631e))
+* **hooks:** distinguish credential source modules from value files ([950d369](https://github.com/voidcorp-core/void-machine/commit/950d369197a61f0eee1d01946e38693fbeb724a2))
+* **hooks:** distinguish credential source modules from value files ([cff0b26](https://github.com/voidcorp-core/void-machine/commit/cff0b2628bdd8174c2787b6749ac3cab15eda286))
+* **hooks:** evaluate credential literals independently ([e32a016](https://github.com/voidcorp-core/void-machine/commit/e32a0166051ca4f55336809254130e1973daefb1))
+
 ## [5.0.1](https://github.com/voidcorp-core/void-machine/compare/v5.0.0...v5.0.1) (2026-10-13)
 
 

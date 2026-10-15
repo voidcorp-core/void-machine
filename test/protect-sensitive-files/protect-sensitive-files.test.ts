@@ -109,7 +109,7 @@ describe('protect-sensitive-files.sh', () => {
   it('BLOCKS an uppercase .ENV file (exit 2)', () => {
     expect(runHook({ tool: 'Write', file: 'config/.ENV' }).code).toBe(2);
   });
-  it('BLOCKS a Credentials.ts file regardless of case (exit 2)', () => {
-    expect(runHook({ tool: 'Write', file: 'src/Credentials.ts' }).code).toBe(2);
+  it('allows a credential-named source module regardless of case (exit 0)', () => {
+    expect(runHook({ tool: 'Write', file: 'src/Credentials.ts' }).code).toBe(0);
   });
 });

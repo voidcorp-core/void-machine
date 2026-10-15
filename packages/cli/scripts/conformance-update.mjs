@@ -12,6 +12,8 @@ import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanceExit,
   runConformanceProcess, runConformanceStep, safeConformanceDiagnostic } from './conformance-process.mjs';
 
+import { armNativeCapture, withNativeCapture } from './conformance-native-capture.mjs';
+
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
 
@@ -74,9 +76,13 @@ export async function probePowerShellNative({ home, cwd, env }, execute = runCon
     observe('node-after-stdout');
     process.exitCode = 37;
   `, { flag: 'wx' });
-  const result = requireConformanceExit(await execute({ command: 'powershell.exe',
+  const options = { command: 'powershell.exe',
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', shim, '--version'], cwd, env,
-    label: 'PowerShell native-child probe', diagnosticStderr: true, diagnosticStdin: true }),
+    label: 'PowerShell native-child probe', diagnosticStderr: true, diagnosticStdin: true };
+  const captureDirectory = process.env.VOID_CONFORMANCE_NATIVE_CAPTURE;
+  const result = requireConformanceExit(await (captureDirectory
+    ? withNativeCapture(options, execute, () => armNativeCapture(captureDirectory))
+    : execute(options)),
   'PowerShell native-child probe', [37]);
   assert.deepEqual(JSON.parse(result.stdout), { execPath: process.execPath, argv: ['--version'],
     executableMatches: true, cwdMatches: true, environmentMatches: true, offlineImport: true });

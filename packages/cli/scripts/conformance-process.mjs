@@ -107,6 +107,7 @@ export function runConformanceProcess(options) {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const captureStderr = options.captureStderr ?? true;
   return new Promise((resolveRun) => {
+    const beforeUtcMs = Date.now();
     const child = spawn(options.command, options.args, {
       cwd: options.cwd,
       detached: process.platform !== 'win32',
@@ -116,6 +117,11 @@ export function runConformanceProcess(options) {
       windowsHide: true,
       windowsVerbatimArguments: options.windowsVerbatimArguments === true,
     });
+    const observe = event => {
+      try { options.observeProcess?.(event); }
+      catch { report({ phase: 'diagnostic-error', label: options.label }); }
+    };
+    observe({ kind: 'spawn', pid: child.pid, parentPid: process.pid, beforeUtcMs, afterUtcMs: Date.now() });
     const stdout = [];
     const stderr = [];
     const state = { forcedKind: undefined, outputBytes: 0, spawnError: undefined };
@@ -154,6 +160,7 @@ export function runConformanceProcess(options) {
     if (captureStderr) {
       child.stderr.on('data', (chunk) => {
         captureBounded(state, stderr, chunk, maxOutputBytes, stop);
+        observe({ kind: 'stderr', text: chunk.toString('utf8') });
         if (options.diagnosticStderr && options.label !== undefined && diagnosticBytes < 4096) {
           const detail = safeConformanceDiagnostic(chunk.toString('utf8'), 4096 - diagnosticBytes);
           diagnosticBytes += Buffer.byteLength(detail);

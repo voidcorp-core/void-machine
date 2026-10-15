@@ -55,6 +55,8 @@ async function runSuite(name, script, tarball, temporary, execute) {
     cwd: REPO_ROOT,
     env: conformanceFixtureEnvironment(processRoot, {
       VOID_CONFORMANCE_TARBALL: tarball,
+      ...(name === 'update' && process.platform === 'win32'
+        ? { VOID_CONFORMANCE_NATIVE_CAPTURE: process.env.VOID_CONFORMANCE_NATIVE_CAPTURE } : {}),
     }),
   });
   if (result.outcome.kind === 'exited' && result.outcome.code === 0) {

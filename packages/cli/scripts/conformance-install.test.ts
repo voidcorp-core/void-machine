@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -176,20 +176,52 @@ it('completes Codex installation proofs independently of the latency campaign', 
   await expect(exerciseRuntime(root, bin, 'codex')).resolves.toBeGreaterThan(0);
 });
 
-it('runs latency in its own bounded process on the same artifact by default', async () => {
+const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
+
+it('runs install and stable update as mandatory serial processes on the same artifact with default bounds', async () => {
   const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
   const root = mkdtempSync(join(tmpdir(), 'consumer-suite-boundaries-'));
   const calls: Array<{ args: string[]; env: Record<string, string>; timeoutMs?: number }> = [];
+  let active = 0;
   const names = await exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async (options) => {
+    expect(active).toBe(0);
+    active++;
     calls.push(options);
+    await Promise.resolve();
+    active--;
     return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
   });
-  expect(names).toEqual(['install', 'hooks', 'autopilot', 'latency']);
-  expect(calls).toHaveLength(4);
-  expect(new Set(calls.map((call) => call.args[0])).size).toBe(4);
+  expect(names).toEqual(consumerSuites);
+  expect(calls.map((call) => basename(call.args[0] ?? '')))
+    .toEqual(consumerSuites.map((name) => `conformance-${name}.mjs`));
   expect(calls.every((call) => call.env.VOID_CONFORMANCE_TARBALL === '/artifact/consumer.tgz')).toBe(true);
   expect(calls.every((call) => call.timeoutMs === undefined)).toBe(true);
   await expect(exerciseConsumerSuites('latency', '/artifact/consumer.tgz', root, async () => ({
     outcome: { kind: 'timed-out' }, stdout: '', stderr: '',
   }))).rejects.toThrow('latency: timed-out');
+});
+
+it.each(consumerSuites)('selects only the requested %s suite through the same owner', async suite => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-selection-'));
+  const calls: string[] = [];
+  expect(await exerciseConsumerSuites(suite, '/artifact/consumer.tgz', root, async options => {
+    calls.push(basename(options.args[0]));
+    expect(options.env.VOID_CONFORMANCE_TARBALL).toBe('/artifact/consumer.tgz');
+    expect(options.timeoutMs).toBeUndefined();
+    return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
+  })).toEqual([suite]);
+  expect(calls).toEqual([`conformance-${suite}.mjs`]);
+});
+
+it.each(consumerSuites)('stops the mandatory chain on %s failure without launching any later proof', async suite => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-failure-'));
+  const calls: string[] = [];
+  await expect(exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async options => {
+    const name = basename(options.args[0], '.mjs').replace('conformance-', '');
+    calls.push(name);
+    return { outcome: { kind: 'exited', code: name === suite ? 1 : 0 }, stdout: '', stderr: 'proof failed' };
+  })).rejects.toThrow(`${suite}: exited`);
+  expect(calls).toEqual(consumerSuites.slice(0, consumerSuites.indexOf(suite) + 1));
 });

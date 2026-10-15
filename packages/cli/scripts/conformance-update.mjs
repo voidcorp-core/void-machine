@@ -15,6 +15,25 @@ import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanc
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
 
+// Reduced host mechanism only, not qualification of the real launcher.
+export async function probePowerShellInput(home, env, execute = runConformanceProcess) {
+  const plain = join(home, 'input-none.ps1');
+  const consuming = join(home, 'input-read.ps1');
+  await writeFile(plain, "[Console]::Error.WriteLine('plain-entered')\n[Console]::Out.Write('ready')\n[Console]::Error.WriteLine('plain-finished')\nexit 0\n", { flag: 'wx' });
+  await writeFile(consuming, "[Console]::Error.WriteLine('input-before-read')\n$lines = @($input)\n[Console]::Error.WriteLine('input-after-read')\n[Console]::Out.Write(($lines -join '|'))\nexit 0\n", { flag: 'wx' });
+  for (const [label, script, input, expected] of [
+    ['no read, empty pipe', plain, undefined, 'ready'],
+    ['read, empty pipe', consuming, undefined, ''],
+    ['read, supplied line', consuming, 'fixture input\n', 'fixture input'],
+  ]) {
+    const result = requireConformanceExit(await execute({ command: 'powershell.exe',
+      args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script], cwd: home, env, input,
+      label: `PowerShell stdin probe: ${label}`, diagnosticStderr: true, diagnosticStdin: true }),
+    `PowerShell stdin probe: ${label}`);
+    assert.equal(result.stdout, expected);
+  }
+}
+
 // Qualify original -File first; compare -Command only once, inside the same suite budget.
 // PowerShell 5.1 about_Scripts: call operator gives the script its own scope;
 // its exit sets LASTEXITCODE, which the outer command must explicitly return.
@@ -154,6 +173,7 @@ export async function prepareStableUpdate(temporary, tarball) {
   await mkdir(join(home, 'tmp'));
   const env = conformanceFixtureEnvironment(home, { HOME: home, USERPROFILE: home,
     VOID_GLOBAL_DIR: join(home, '.void') });
+  if (process.platform === 'win32') await probePowerShellInput(home, env);
   const npm = packageManagerCommand('npm');
   await runConformanceStep('stable update npm-owned bootstrap', { command: npm.executable,
     args: [...npm.prefixArguments, 'install', '--global', '--prefix', prefix, '--offline',

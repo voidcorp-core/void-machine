@@ -172,6 +172,12 @@ export function runConformanceProcess(options) {
     child.stdin.on('error', () => {
       // The exit outcome and caller-owned postconditions remain authoritative.
     });
+    if (options.diagnosticStdin && options.label !== undefined) {
+      for (const event of ['finish', 'close', 'error']) child.stdin.once(event, () => {
+        report({ phase: `stdin-${event}`, label: options.label,
+          elapsedMs: Math.round(performance.now() - startedMs) });
+      });
+    }
     child.stdin.end(options.input);
   });
 }

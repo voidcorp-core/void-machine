@@ -2,7 +2,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const load = () => import('./conformance-native-capture.mjs');
 const target = { pid: 100, parentPid: 80, beforeUtcMs: 200, afterUtcMs: 210 };
@@ -184,4 +184,17 @@ it('correlates precise OS ticks within the millisecond spawn interval without ac
   expect(correlateCapture(precise, target, 190, false)).toMatchObject({ status: 'correlated' });
   expect(correlateCapture(events, { ...target, beforeUtcMs: Number.NaN }, 190, false))
     .toMatchObject({ status: 'unknown', events: [] });
+});
+
+
+it('passes only the SDK location needed by the observer, without inherited credentials', async () => {
+  const { captureTool } = await load();
+  vi.stubEnv('ProgramFiles(x86)', 'C:/synthetic-sdk');
+  vi.stubEnv('SYNTHETIC_CREDENTIAL', 'must-not-reach-observer');
+  try {
+    const result = await captureTool(process.execPath, ['-e',
+      'process.stdout.write(JSON.stringify({sdk:process.env["ProgramFiles(x86)"],credential:process.env.SYNTHETIC_CREDENTIAL}))'],
+    { timeoutMs: 1000, maxBytes: 1024 });
+    expect(JSON.parse(result.text)).toEqual({ sdk: 'C:/synthetic-sdk' });
+  } finally { vi.unstubAllEnvs(); }
 });

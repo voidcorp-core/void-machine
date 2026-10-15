@@ -89,7 +89,13 @@ jobs:
           node node_modules/@playwright/test/cli.js install --with-deps chromium
       - name: Exercise the regenerated offline documents
         working-directory: ${{ runner.temp }}/browser-qa
-        run: node node_modules/@playwright/test/cli.js test
+        run: |
+          set +e
+          DEBUG=pw:protocol,pw:browser node node_modules/@playwright/test/cli.js test > browser-native.log 2>&1
+          browser_status=$?
+          set -e
+          printf 'Browser diagnostic exit=%s; full output: browser-native.log\n' "$browser_status"
+          exit "$browser_status"
       - name: Preserve browser evidence for the tested source SHA
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -99,6 +105,7 @@ jobs:
             ${{ runner.temp }}/browser-qa/playwright-report/
             ${{ runner.temp }}/browser-qa/test-results/
             ${{ runner.temp }}/browser-qa/tooling-tree.json
+            ${{ runner.temp }}/browser-qa/browser-native.log
             ${{ runner.temp }}/cheatsheet-fixture/evidence.json
           if-no-files-found: error
           retention-days: 14

@@ -178,6 +178,63 @@ it('completes Codex installation proofs independently of the latency campaign', 
 
 const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
 
+it.each([[37, true], [37, false], [0, true], [0, false]])(
+  'retains consumer outcome %s and cleanup failure %s through the actual entrypoint', async (code, cleanupFailure) => {
+    const { createArtifactManifest } = await import('./conformance-artifact.mjs');
+    const { PRODUCT_IDENTITY } = await import('../../../scripts/product-identity.mjs');
+    const { runConformanceProcess, conformanceFixtureEnvironment } = await import('./conformance-process.mjs');
+    const root = mkdtempSync(join(tmpdir(), 'consumer-cleanup-'));
+    try {
+      mkdirSync(join(root, 'tmp'));
+      const head = await runConformanceProcess({ command: 'git', args: ['rev-parse', 'HEAD'], cwd: process.cwd() });
+      const tarball = join(root, 'fixture.tgz');
+      const bytes = Buffer.from('synthetic artifact for process-boundary test');
+      writeFileSync(tarball, bytes);
+      writeFileSync(`${tarball}.json`, JSON.stringify(createArtifactManifest(bytes, {
+        packageName: PRODUCT_IDENTITY.packageName, packageVersion: '5.0.2', sourceSha: head.stdout.trim(),
+      })));
+      const preload = join(root, 'boundary.mjs');
+      const cleaned = join(root, 'cleanup-attempts');
+      writeFileSync(preload, `
+        import cp from 'node:child_process';
+        import fs from 'node:fs/promises';
+        import {basename} from 'node:path';
+        import {syncBuiltinESMExports} from 'node:module';
+        const spawn = cp.spawn;
+        cp.spawn = (command,args,options) => {
+          if (basename(args?.[0] ?? '') === 'conformance-update.mjs') {
+            return spawn(process.execPath, ['-e', ${JSON.stringify(`process.stdout.write('probe-marker\\n'); process.stderr.write('native diagnostic\\n' + 'x'.repeat(70000)); process.exitCode=${code};`)}], options);
+          }
+          return spawn(command,args,options);
+        };
+        const rm = fs.rm;
+        fs.rm = async (path,options) => {
+          if (basename(path).startsWith('harness-consumer-conformance-')) {
+            await fs.appendFile(${JSON.stringify(cleaned)}, 'attempt\\n');
+            if (${cleanupFailure}) throw Object.assign(new Error('EBUSY: fixture cleanup blocked'), {code:'EBUSY'});
+          }
+          return rm(path,options);
+        };
+        syncBuiltinESMExports();
+      `);
+      const result = await runConformanceProcess({ command: process.execPath,
+        args: ['--import', preload, fileURLToPath(new URL('./conformance-consumer.mjs', import.meta.url)),
+          '--suite', 'update', '--tarball', tarball], cwd: process.cwd(), env: conformanceFixtureEnvironment(root) });
+      expect(result.outcome).toEqual({ kind: 'exited', code: code || cleanupFailure ? 1 : 0 });
+      expect(readFileSync(cleaned, 'utf8')).toBe('attempt\n');
+      if (code) {
+        expect(result.stderr).toContain('update: exited');
+        expect(result.stderr).toContain('probe-marker');
+        expect(result.stderr).toContain('native diagnostic');
+      }
+      if (cleanupFailure) expect(result.stderr).toContain('EBUSY: fixture cleanup blocked');
+      else expect(result.stderr).not.toContain('EBUSY');
+      expect(Buffer.byteLength(result.stderr)).toBeLessThanOrEqual(2 * 64 * 1024 + 2);
+      expect(result.stdout.includes('consumer conformance passed')).toBe(!code && !cleanupFailure);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  },
+);
+
 it('isolates original File input consumption before expensive update work with unchanged bounds', async () => {
   const { probePowerShellInput } = await import('./conformance-update.mjs');
   const root = mkdtempSync(join(tmpdir(), 'powershell-input-'));

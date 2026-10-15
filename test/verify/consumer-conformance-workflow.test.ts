@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -55,5 +57,44 @@ describe('packed consumer CI topology', () => {
     expect(browser).not.toContain('continue-on-error');
     expect(browser).not.toContain('pnpm conformance:pack');
     expect(browser).not.toContain('self-hosted');
+  });
+
+  it('uploads native browser diagnostics alongside the existing evidence on success or failure', () => {
+    const browser = job('browser-conformance');
+    expect(browser).toContain('DEBUG=pw:protocol,pw:browser');
+    expect(browser).toContain('${{ runner.temp }}/browser-qa/browser-native.log');
+    expect(browser).toContain('if: ${{ !cancelled() }}');
+    expect(browser).toContain('retention-days: 14');
+    expect(browser).not.toContain('MAX_LOG_LENGTH');
+  });
+
+  it.each([0, 37])('captures both streams without replacing browser exit %s', (exitCode) => {
+    const step = job('browser-conformance')
+      .split('      - name: Exercise the regenerated offline documents\n')[1]
+      ?.split('      - name:')[0] ?? '';
+    const inline = /        run: (.*)\n/.exec(step)?.[1];
+    expect(inline).toBeDefined();
+    const script = inline === '|'
+      ? step.split('        run: |\n')[1]?.replace(/^          /gm, '') ?? ''
+      : inline ?? '';
+    const directory = mkdtempSync(resolve(tmpdir(), 'browser-workflow-'));
+    try {
+      // Substitute only the external browser command; execute the actual CI shell body.
+      const stub = `node() { printf '%s\\n' "\${DEBUG:-unset}" "$*"; printf 'browser-stderr\\n' >&2; return ${exitCode}; }\n`;
+      const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', stub + script], {
+        cwd: directory,
+        encoding: 'utf8',
+        timeout: 5_000,
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(exitCode);
+      const log = resolve(directory, 'browser-native.log');
+      expect(existsSync(log)).toBe(true);
+      expect(readFileSync(log, 'utf8')).toBe(
+        'pw:protocol,pw:browser\nnode_modules/@playwright/test/cli.js test\nbrowser-stderr\n',
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

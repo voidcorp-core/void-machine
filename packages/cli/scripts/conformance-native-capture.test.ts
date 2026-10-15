@@ -165,3 +165,23 @@ it('receives actual spawn identity before stderr without affecting stdin or the 
   expect(observations[1]).toMatchObject({ kind: 'stderr', text: 'observed' });
   expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stderr: 'observed' });
 });
+
+it('keeps native collector scope, readiness and attach mode explicit without claiming local Windows execution', () => {
+  const source = readFileSync(new URL('./conformance-native-capture.ps1', import.meta.url), 'utf8');
+  expect(source.indexOf('$watch.Arm()')).toBeLessThan(source.indexOf("Emit @{ kind='ready'"));
+  expect(source).toContain('stop.Start(); start.Start();');
+  expect(source).toContain('if (admitted >= 256)');
+  expect(source).toContain('Win32_ProcessStopTrace');
+  expect(source).toContain('-pvr -pd -sins -noshell -netsyms no');
+  expect(source).toContain('process.WaitForExit(5000)');
+  expect(source).toContain('$rounds -lt 2');
+  expect(source).not.toMatch(/Get-Process\s*$|CommandLine|[\x27\x22;]\.dump|[\x27\x22;]\.kill|\.closehandle|Invoke-WebRequest|ExecutionPolicy|Start-Sleep/mi);
+});
+
+it('correlates precise OS ticks within the millisecond spawn interval without accepting invalid intervals', async () => {
+  const { correlateCapture } = await load();
+  const precise = [{ ...events[0], utcMs: 210.25 }, events[1], events[2]];
+  expect(correlateCapture(precise, target, 190, false)).toMatchObject({ status: 'correlated' });
+  expect(correlateCapture(events, { ...target, beforeUtcMs: Number.NaN }, 190, false))
+    .toMatchObject({ status: 'unknown', events: [] });
+});

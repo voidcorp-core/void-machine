@@ -73,14 +73,35 @@ export async function verifyInstalledRelease(store, version) {
   return root;
 }
 
+async function launchVersion(store, args) {
+  let bytes;
+  try { bytes = await regularBytes(join(store, 'active.json'), 8192); }
+  catch (error) {
+    if (!(error instanceof Error) || error.code !== 'ENOENT' || args[0] !== 'update') throw error;
+    // First adoption can publish this launcher before active.json. Its target
+    // release was sealed before publication. This record only routes recovery;
+    // update still owns the lock, full journal/scope validation and rollback.
+    const directory = join(store, 'operation');
+    if (await realpath(directory) !== resolve(directory)) throw new Error('CLI recovery directory crosses a symbolic link');
+    const operation = JSON.parse((await regularBytes(join(directory, 'operation.json'), 65536)).toString('utf8'));
+    if (operation?.schemaVersion !== 1 || typeof operation.operationId !== 'string'
+      || !/^[a-zA-Z0-9-]{1,80}$/.test(operation.operationId)
+      || typeof operation.target !== 'string' || !versionPattern.test(operation.target)) {
+      throw new Error('Invalid CLI recovery routing record');
+    }
+    return operation.target;
+  }
+  const active = JSON.parse(bytes.toString('utf8'));
+  if (active.schemaVersion !== 1 || (active.previous !== undefined && !versionPattern.test(active.previous))) throw new Error('Invalid active CLI selection');
+  return active.version;
+}
+
 // Imports expose verification only; direct invocation delegates in this same process.
 if (process.argv[1] && await realpath(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const store = join(process.env.VOID_GLOBAL_DIR ?? join(homedir(), '.void'), 'cli');
     if (await realpath(store) !== resolve(store)) throw new Error('Stable CLI store crosses a symbolic link');
-    const active = JSON.parse((await regularBytes(join(store, 'active.json'), 8192)).toString('utf8'));
-    if (active.schemaVersion !== 1 || (active.previous !== undefined && !versionPattern.test(active.previous))) throw new Error('Invalid active CLI selection');
-    const root = await verifyInstalledRelease(store, active.version);
+    const root = await verifyInstalledRelease(store, await launchVersion(store, process.argv.slice(2)));
     const { run } = await import(pathToFileURL(join(root, 'dist/main.js')).href);
     await run(basename(process.argv[1], '.mjs'), process.argv.slice(2));
   } catch (error) {

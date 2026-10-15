@@ -48,6 +48,15 @@ atomic transaction. A handled failure restores operation-owned states. After int
 repeat the same selection to recover before beginning another update. A live updater
 blocks another updater; an old timestamp alone never permits lock takeover.
 
+First adoption can stop after replacing the invoking npm launcher but before creating
+`active.json`. Repeating that same native `update` command remains supported: only when
+the active selection is absent, the launcher reads the bounded pending operation target
+and verifies its completed release before dispatch. This routing hint does not authorize
+recovery writes; the update engine still acquires the lock and validates the complete
+journal and selected participants before rollback or acquisition. Other commands, an
+invalid active selection, malformed pending records and unverified releases refuse.
+The recovery path neither publishes a temporary active selection nor uses a checkout.
+
 The journal measures the filesystem's representation of a requested mode before publishing;
 it does not pretend Windows implements POSIX execute/owner bits ([native mode semantics](https://github.com/libuv/libuv/blob/v1.51.0/src/win/fs.c#L1712-L1762)). Recovery covers process
 interruption, not a power-loss durability guarantee for every filesystem or storage device.
@@ -100,9 +109,10 @@ pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/c
 | `install conformance (ubuntu-latest)` | npm-generated POSIX bins adopted; direct executable `void-machine` and `voidmachine`; offline version from unrelated cwd after bootstrap package disappears; real update, interruption and recovery through the new executable |
 | `install conformance (macos-latest)` | The same POSIX executable and recovery proof on macOS |
 | `install conformance (windows-latest)` | Actual npm-generated Windows bins adopted; `cmd.exe /d /s /c` executes both new `.cmd` aliases; `powershell.exe -NoLogo -NoProfile -NonInteractive -File` executes both `.ps1` aliases; actual update, interruption and recovery through the new `.cmd`, followed by the recovered `.ps1` |
-| `validate` | `test/cli/stable-update-packed.test.ts` is a focused adapter to the same seven phases on the host OS; it does not certify other OSes |
+| `validate` | `test/cli/stable-update-packed.test.ts` is a focused adapter to the same nine phases on the host OS; it does not certify other OSes |
 
-The seven shared phases prove complete-all preview without activation, manifest-only current
+The nine shared phases prove complete-all preview without activation, interrupted first
+adoption and same-native-command recovery with no active selection, manifest-only current
 project update with unchanged unselected projects, explicit all-project update, complete
 receipt recovery for Claude/Codex/both, termination
 after the launcher rename before active selection, rollback before deliberately failed network
@@ -115,6 +125,10 @@ A test-only Node preload instruments the
 actual filesystem rename and kills the child; it adds no production fault flag. Receipt,
 authored configuration/doctrine, managed before/after bytes, active selection and journal
 postconditions decide success. Installed sensitive-path/content probes still deny writes.
+The first-adoption acquisition probe asserts restored project bytes, receipt, original
+npm launcher bytes/link and mode, absent active selection and cleared operation before
+refusing acquisition. The next successful update uses that same native command. Windows
+runs these first-adoption phases through its actual `.cmd` launcher too.
 Registry transport supplies the same pinned verified tarball; npm extraction and all child
 execution are real and isolated. Existing finite process deadlines remain unchanged.
 

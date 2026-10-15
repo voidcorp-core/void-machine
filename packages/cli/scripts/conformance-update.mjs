@@ -4,9 +4,11 @@ import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { lstat, mkdir, readFile, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { delimiter, dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { delimiter, dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanceExit,
   runConformanceProcess, runConformanceStep, safeConformanceDiagnostic } from './conformance-process.mjs';
 
@@ -285,5 +287,18 @@ export async function exerciseStableUpdate(temporary, tarball) {
   for (const phase of ['preview', 'bootstrapInterrupt', 'bootstrapRecover', 'current', 'all', 'ownership', 'interrupt', 'recover', 'repeat']) {
     process.stdout.write(`stable update conformance (${process.platform}): ${phase}\n`);
     await proof[phase]();
+  }
+}
+
+// The consumer orchestrator gives this mandatory suite its own unchanged process
+// budget. Importers share the same phases without starting another qualification.
+if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  const { manifest, tarball } = await conformanceArtifactFromEnvironment();
+  const temporary = await mkdtemp(join(tmpdir(), 'void-update-conformance-'));
+  try {
+    await exerciseStableUpdate(temporary, tarball);
+    process.stdout.write(`stable update conformance passed (${process.platform}) for ${manifest.sourceSha}\n`);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
   }
 }

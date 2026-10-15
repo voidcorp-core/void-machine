@@ -8,7 +8,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
 import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
-import { exerciseStableUpdate } from './conformance-update.mjs';
 import {
   conformanceFixtureEnvironment,
   packageManagerCommand,
@@ -240,7 +239,6 @@ async function main() {
       (bin, runtime) => exerciseRuntime(temporary, bin, runtime),
     );
     await execByPackageName(temporary, tarball);
-    await exerciseStableUpdate(temporary, tarball);
     durations.sort((left, right) => left - right);
     const medianMs = Math.round(durations[Math.floor(durations.length / 2)] ?? 0);
     process.stdout.write(

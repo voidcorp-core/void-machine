@@ -104,12 +104,17 @@ public update behavior described in historical migration documents.
 ## Verification ownership
 
 The single packed behavior owner is `packages/cli/scripts/conformance-update.mjs`.
-`conformance-install.mjs` invokes it after its Claude/Codex/both init and exact offline
+`conformance-consumer.mjs` runs it as the mandatory `update` suite immediately after
+the separate `install` suite. Install keeps its Claude/Codex/both init and exact offline
 hydrate proofs, including manifest verification without a receipt. Complete receipt
 recovery belongs to `update`: its candidate preparation recovers missing claims from
 the prior manifest's matching hashes, keeps existing receipt evidence authoritative,
 and leaves later user edits unclaimed. Recovery is published by the same transaction,
 without a preliminary receipt write. Plain init and hydrate keep their own contract.
+The default order is `install`, `update`, `hooks`, `autopilot`, `latency`, serial and
+fail-fast on the same verified artifact. Each suite retains the existing 120-second
+process limit. Install no longer invokes update internally, so the proof runs once.
+Select update alone with `pnpm conformance:consumer --suite update --tarball <artifact>`.
 All existing hooks, Autopilot and latency conformance remain.
 The exact-SHA `consumer-artifact` job runs `pnpm conformance:pack` once. Every
 `install-conformance` matrix job runs this unchanged command on that artifact:

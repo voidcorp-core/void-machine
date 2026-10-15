@@ -401,10 +401,13 @@ The install suite performs one offline npm installation of the verified tarball
 in a suite-local package directory. Its CLI then exercises three independent
 consumer roots (Claude, Codex and both), each with its own environment, receipts
 and user files. Package installation is measured separately; runtime p50 covers
-init and both exact offline hydrate paths only. The same install suite then invokes
-`conformance-update.mjs`: real isolated npm-bin bootstrap/acquisition, native launchers,
+init and both exact offline hydrate paths only. The orchestrator then runs
+`conformance-update.mjs` as the mandatory separate `update` suite: real isolated npm-bin bootstrap/acquisition, native launchers,
 current/all project publication and killed-child recovery on each OS. Windows runs the
 new command and PowerShell shims, including update recovery through the command shim.
+The default order is install, update, hooks, autopilot, latency, serial and fail-fast on
+the same verified artifact. Every suite retains the 120-second process limit; install
+no longer runs update internally. All three OS jobs run this mandatory chain.
 The focused `test/cli/stable-update-packed.test.ts` adapter shares those exact phases;
 it is not a substitute for the OS matrix. See [UPDATING.md](UPDATING.md#verification-ownership)
 for commands and proof ownership. The package directory is never reused across

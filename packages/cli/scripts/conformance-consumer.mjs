@@ -20,6 +20,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..');
 const SUITES = Object.freeze({
   install: join(HERE, 'conformance-install.mjs'),
+  update: join(HERE, 'conformance-update.mjs'),
   hooks: join(HERE, 'conformance-hooks.mjs'),
   autopilot: join(HERE, 'conformance-autopilot.mjs'),
   latency: join(HERE, 'conformance-latency.mjs'),

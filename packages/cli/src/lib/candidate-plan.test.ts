@@ -1,10 +1,57 @@
 // @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cliVersion } from './paths.js';
+import type { FileMutation } from './transaction.js';
+
+async function provePolicyRollback(root: string, mutations: readonly FileMutation[], program: string, hold: string | undefined) {
+  const { withUpdateLock } = await import('./update-lock.js');
+  const { executeUpdateOperation } = await import('./update-operation.js');
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), 'policy-rollback-')));
+  roots.push(workspace);
+  const store = join(workspace, 'store');
+  const later = join(workspace, 'later');
+  const binRoot = join(workspace, 'bin');
+  for (const path of [store, binRoot, join(later, '.void')]) await mkdir(path, { recursive: true });
+  await writeFile(join(later, '.void/config.json'), 'later before');
+  await writeFile(join(store, 'active.json'), 'old CLI selection');
+  const programPath = join(root, '.void/program.md');
+  const holdPath = join(root, '.void/machine/autopilot/merge-hold.json');
+  const originalMode = (await stat(programPath)).mode & 0o777;
+  const migrated = mutations.find(mutation => mutation.path === '.void/program.md');
+  if (!migrated || !('content' in migrated)) throw new Error('Missing real programme migration');
+  let published = 0;
+  await expect(withUpdateLock(store, lease => executeUpdateOperation(lease, {
+    selection: { key: 'policy-all', projectRoots: [root, later], binRoot },
+    operationId: 'operation-1', target: cliVersion(), participants: [
+      { kind: 'project', root, mutations },
+      { kind: 'project', root: later, mutations: [{ path: '.void/config.json', content: Buffer.from('later after') }] },
+      { kind: 'active', root: store, mutations: [{ path: 'active.json', content: Buffer.from('new CLI selection') }] },
+    ],
+  }, { afterParticipant: async kind => {
+    expect(kind).toBe('project');
+    published++;
+    expect(await readFile(programPath)).toEqual(Buffer.from(migrated.content));
+    expect(JSON.parse(await readFile(holdPath, 'utf8')).mergedBy).toBe('human');
+    if (hold !== undefined) expect(await readFile(holdPath, 'utf8')).toBe(hold);
+    expect(await readFile(join(store, 'active.json'), 'utf8')).toBe('old CLI selection');
+    if (published === 2) {
+      expect(await readFile(join(later, '.void/config.json'), 'utf8')).toBe('later after');
+      throw new Error('later project failure');
+    }
+  } }))).rejects.toThrow('later project failure');
+  expect(published).toBe(2);
+  expect(await readFile(programPath, 'utf8')).toBe(program);
+  expect((await stat(programPath)).mode & 0o777).toBe(originalMode);
+  if (hold === undefined) await expect(readFile(holdPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  else expect(await readFile(holdPath, 'utf8')).toBe(hold);
+  expect(await readFile(join(later, '.void/config.json'), 'utf8')).toBe('later before');
+  expect(await readFile(join(store, 'active.json'), 'utf8')).toBe('old CLI selection');
+  await expect(stat(join(store, 'operation'))).rejects.toMatchObject({ code: 'ENOENT' });
+}
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -80,8 +127,11 @@ it('binds every write and removal to the original candidate input state', async 
   expect(await readFile(join(root, '.void/config.json'), 'utf8')).toBe('later user edit');
 });
 
-it.each(['human', 'union-reviewed'])('prepares equivalent %s programme policy before any project effects', async gate => {
+it.each([
+  ['human', false], ['human', true], ['union-reviewed', false],
+] as const)('prepares %s policy with existing hold %s and restores it after later-project failure', async (gate, existingHold) => {
   const { prepareCandidatePlan, decodeCandidatePlan } = await import('./candidate-plan.js');
+  const { mergeHoldRecord } = await import('./autopilot/merge-hold.js');
   const root = await realpath(await mkdtemp(join(tmpdir(), 'void-candidate-policy-')));
   roots.push(root);
   await mkdir(join(root, '.void'));
@@ -90,18 +140,28 @@ it.each(['human', 'union-reviewed'])('prepares equivalent %s programme policy be
   const program = `---\nschemaVersion: 1\nstatus: executing\nprogram: fixture\nplan: docs/plan.md\nspec: docs/spec.md\nprogress:\n  provider: linear\n  scope: fixture\n  order: [DEV-1022]\n  states:\n    ready: [Todo]\n    started: [Doing]\n    review: [Review]\n    done: [Done]\nautopilot:\n  schemaVersion: 1\n  enabled: false\n  mergeGate: ${gate}\n  base: develop\n  deployBranch: main\n  verifyCommands: [[pnpm, test]]\n---\nAuthored body\n`;
   await writeFile(join(root, '.void/program.md'), program);
   await chmod(join(root, '.void/program.md'), 0o600);
+  const programMode = (await stat(join(root, '.void/program.md'))).mode & 0o777;
+  const hold = existingHold ? mergeHoldRecord('2026-09-01T00:00:00.000Z') : undefined;
+  if (hold !== undefined) {
+    await mkdir(join(root, '.void/machine/autopilot'), { recursive: true });
+    await writeFile(join(root, '.void/machine/autopilot/merge-hold.json'), hold);
+  }
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   if (gate === 'union-reviewed') {
     await expect(prepareCandidatePlan(request(root)).then(() => undefined)).rejects.toThrow(/no proven equivalent/);
   } else {
     const plan = decodeCandidatePlan(JSON.stringify(await prepareCandidatePlan(request(root))), request(root));
-    expect(plan.mutations.slice(0, 2).map(mutation => mutation.path)).toEqual(['.void/machine/autopilot/merge-hold.json', '.void/program.md']);
-    const migrated = plan.mutations[1];
+    const policyPaths = existingHold ? ['.void/program.md'] : ['.void/machine/autopilot/merge-hold.json', '.void/program.md'];
+    expect(plan.mutations.slice(0, policyPaths.length).map(mutation => mutation.path)).toEqual(policyPaths);
+    const migrated = plan.mutations.find(mutation => mutation.path === '.void/program.md');
     expect(migrated && 'content' in migrated && Buffer.from(migrated.content).toString()).toContain('enabled: false');
-    expect(migrated && 'mode' in migrated && migrated.mode).toBe(0o600);
+    expect(migrated && 'mode' in migrated && migrated.mode).toBe(programMode);
+    expect(await readFile(join(root, '.void/program.md'), 'utf8')).toBe(program);
+    await provePolicyRollback(root, plan.mutations, program, hold);
   }
   expect(await readFile(join(root, '.void/program.md'), 'utf8')).toBe(program);
-  await expect(readFile(join(root, '.void/machine/autopilot/merge-hold.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  if (hold === undefined) await expect(readFile(join(root, '.void/machine/autopilot/merge-hold.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  else expect(await readFile(join(root, '.void/machine/autopilot/merge-hold.json'), 'utf8')).toBe(hold);
 });
 
 it.each(['operationId', 'version', 'root', 'protocol', 'traversal', 'global', 'git', 'duplicate', 'base64', 'mode', 'input-path'])(

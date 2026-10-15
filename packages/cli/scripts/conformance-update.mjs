@@ -7,7 +7,7 @@ import { lstat, mkdir, readFile, readlink, realpath, rename, rm, writeFile } fro
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanceExit,
-  runConformanceProcess, runConformanceStep } from './conformance-process.mjs';
+  runConformanceProcess, runConformanceStep, safeConformanceDiagnostic } from './conformance-process.mjs';
 
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
@@ -15,6 +15,31 @@ async function launcherState(path) {
   const info = await lstat(path);
   return { mode: info.mode & 0o777, link: info.isSymbolicLink(),
     content: info.isSymbolicLink() ? await readlink(path) : await read(path) };
+}
+
+// Isolate the batch-reader boundary: Node replaces its running adapter with the
+// original npm bytes, then exits. Only Windows can prove cmd's actual behavior.
+async function proveReplacedCommandExit(home, command, replacement, env) {
+  const root = join(home, 'adapter replacement');
+  await mkdir(root);
+  const target = join(root, 'void-machine.cmd');
+  for (const code of [37, 0]) {
+    await writeFile(target, command);
+    await writeFile(join(root, 'void-machine.mjs'), `
+      import {writeFile, rename} from 'node:fs/promises';
+      await writeFile(${JSON.stringify(`${target}.restore`)}, ${JSON.stringify(replacement)});
+      await rename(${JSON.stringify(`${target}.restore`)}, ${JSON.stringify(target)});
+      process.stdout.write(JSON.stringify(process.argv.slice(2)));
+      process.exitCode = ${code};
+    `);
+    const result = await runConformanceProcess({ command: env.ComSpec ?? 'cmd.exe',
+      args: ['/d', '/s', '/c', `""${target}" update "space value""`],
+      windowsVerbatimArguments: true, cwd: root, env });
+    const diagnostic = safeConformanceDiagnostic(JSON.stringify(result), 4096);
+    assert.equal(result.stdout, JSON.stringify(['update', 'space value']), diagnostic);
+    assert.equal(await read(target), replacement);
+    assert.deepEqual(result.outcome, { kind: 'exited', code }, diagnostic);
+  }
 }
 
 export async function prepareStableUpdate(temporary, tarball) {
@@ -151,9 +176,13 @@ export async function prepareStableUpdate(temporary, tarball) {
       `);
     },
     async bootstrapRecover() {
+      if (process.platform === 'win32') {
+        await proveReplacedCommandExit(home, await read(target), originalLauncher.content, env);
+      }
       const result = await invoke(['update'], [bootstrapDenied]);
-      assert.equal(result.outcome.kind, 'exited');
-      assert.notEqual(result.outcome.code, 0);
+      const diagnostic = safeConformanceDiagnostic(JSON.stringify(result), 4096);
+      assert.equal(result.outcome.kind, 'exited', diagnostic);
+      assert.notEqual(result.outcome.code, 0, diagnostic);
       assert.match(result.stdout + result.stderr, /BOOTSTRAP_RECOVERED_BEFORE_ACQUISITION/);
       assert.deepEqual(await launcherState(target), originalLauncher);
       assert.equal(await read(managed), 'bootstrap managed drift\n');

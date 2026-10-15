@@ -25,6 +25,8 @@ beforeAll(async () => {
 afterAll(async () => { if (root) await rm(root, { recursive: true, force: true }); });
 
 it('previews the complete selection without activation', async () => { await proof.preview(); });
+it('survives termination during first adoption with no active CLI selection', async () => { await proof.bootstrapInterrupt(); });
+it('recovers first adoption through the same native update command before acquisition', async () => { await proof.bootstrapRecover(); });
 it('adopts actual npm bins, preserves a clone and runs offline without its source', async () => { await proof.current(); });
 it('updates all three runtime projects through the native stable launcher only when explicitly selected', async () => { await proof.all(); });
 it('recovers complete absent and partial receipts for Claude, Codex and both through public update', async () => { await proof.ownership(); });

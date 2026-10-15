@@ -30,6 +30,59 @@ async function fixture() {
 const release = { version: '5.1.0', tarball: 'https://registry.npmjs.org/voidmachine/-/voidmachine-5.1.0.tgz',
   integrity: `sha512-${createHash('sha512').update('archive').digest('base64')}` };
 
+async function interruptedBootstrap() {
+  const { completeRelease } = await import('./cli-installation.js');
+  const state = await fixture();
+  const installed = await completeRelease(state.pkg, state.store, release);
+  const operation = join(state.store, 'operation');
+  await mkdir(operation);
+  const record = { schemaVersion: 1, operationId: 'first-adoption', target: release.version,
+    selectionKey: 'fixture', participants: [{ kind: 'active', root: state.store }] };
+  await writeFile(join(operation, 'operation.json'), JSON.stringify(record));
+  const launcher = fileURLToPath(new URL('../../bin/stable-launcher.mjs', import.meta.url));
+  const invoke = (args: string[]) => promisify(execFile)(process.execPath, [launcher, ...args], {
+    cwd: state.root, env: { PATH: process.env.PATH, VOID_GLOBAL_DIR: join(state.root, '.void') }, timeout: 10_000,
+  });
+  return { ...state, installed, operation, record, invoke };
+}
+
+it('dispatches update to the sealed pending release when first adoption has no active selection', async () => {
+  const state = await interruptedBootstrap();
+  await expect(state.invoke(['update', '--all'])).rejects.toMatchObject({ code: 23,
+    stdout: JSON.stringify({ name: 'stable-launcher', args: ['update', '--all'], cwd: state.root }) });
+  await expect(readFile(join(state.store, 'active.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+});
+
+it.each([
+  ['missing-operation', /ENOENT/], ['invalid-json', /JSON/], ['schema', /recovery/],
+  ['target', /recovery/], ['operation-id', /recovery/], ['oversized', /bounded/],
+  ['linked-operation', /symbolic/], ['linked-record', /bounded/],
+  ['corrupt-active', /JSON/], ['tampered-release', /integrity/], ['missing-release', /ENOENT/],
+  ['non-update', /ENOENT/],
+] as const)('refuses %s bootstrap recovery before executing a release', async (kind, diagnostic) => {
+  const state = await interruptedBootstrap();
+  const recordPath = join(state.operation, 'operation.json');
+  if (kind === 'missing-operation') await rm(recordPath);
+  if (kind === 'invalid-json') await writeFile(recordPath, 'not JSON');
+  if (kind === 'schema') await writeFile(recordPath, JSON.stringify({ ...state.record, schemaVersion: 99 }));
+  if (kind === 'target') await writeFile(recordPath, JSON.stringify({ ...state.record, target: '../outside' }));
+  if (kind === 'operation-id') await writeFile(recordPath, JSON.stringify({ ...state.record, operationId: '' }));
+  if (kind === 'oversized') await writeFile(recordPath, ' '.repeat(65_537));
+  if (kind === 'linked-operation') {
+    await rename(state.operation, join(state.root, 'foreign-operation'));
+    await symlink(join(state.root, 'foreign-operation'), state.operation, 'dir');
+  }
+  if (kind === 'linked-record') {
+    await rename(recordPath, join(state.root, 'foreign-record'));
+    await symlink(join(state.root, 'foreign-record'), recordPath);
+  }
+  if (kind === 'corrupt-active') await writeFile(join(state.store, 'active.json'), 'not JSON');
+  if (kind === 'tampered-release') await writeFile(join(state.installed, 'dist/main.js'), 'process.stdout.write("unverified");');
+  if (kind === 'missing-release') await rename(join(state.store, 'releases'), join(state.root, 'unavailable'));
+  await expect(state.invoke([kind === 'non-update' ? '--version' : 'update']))
+    .rejects.toMatchObject({ code: 1, stdout: '', stderr: expect.stringMatching(diagnostic) });
+});
+
 it('qualifies npm bins through package identity and the declared alias mapping', async () => {
   const { planLauncherBootstrap } = await import('./cli-installation.js');
   const { root } = await fixture();

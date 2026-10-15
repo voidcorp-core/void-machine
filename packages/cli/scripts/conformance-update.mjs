@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanceExit,
@@ -11,6 +11,11 @@ import { conformanceFixtureEnvironment, packageManagerCommand, requireConformanc
 
 const read = path => readFile(path, 'utf8');
 const receipt = project => join(project, '.void/machine/receipts/install-v1.json');
+async function launcherState(path) {
+  const info = await lstat(path);
+  return { mode: info.mode & 0o777, link: info.isSymbolicLink(),
+    content: info.isSymbolicLink() ? await readlink(path) : await read(path) };
+}
 
 export async function prepareStableUpdate(temporary, tarball) {
   const root = await realpath(temporary);
@@ -103,6 +108,9 @@ export async function prepareStableUpdate(temporary, tarball) {
   const update = async (args = [], imports = [transport]) => requireConformanceExit(
     await invoke(['update', ...args], imports), 'stable public update');
   let selection;
+  let originalLauncher;
+  let originalReceipt;
+  const bootstrapDenied = join(home, 'bootstrap-offline.mjs');
   return {
     async preview() {
       const result = await update(['--all', '--dry-run']);
@@ -111,6 +119,49 @@ export async function prepareStableUpdate(temporary, tarball) {
       assert.equal(existsSync(active), false);
       assert.equal(await read(receipt(second)), otherReceipt);
       assert.equal(await read(receipt(third)), thirdReceipt);
+    },
+    async bootstrapInterrupt() {
+      assert.equal(existsSync(active), false);
+      originalLauncher = await launcherState(target);
+      originalReceipt = await read(receipt(project));
+      await writeFile(managed, 'bootstrap managed drift\n');
+      const result = await invoke(['update'], [transport, interrupt]);
+      assert.ok(result.outcome.kind === 'signaled' || (result.outcome.kind === 'exited' && result.outcome.code !== 0));
+      assert.equal(await read(marker), 'after launcher rename, before active selection');
+      assert.notDeepEqual(await launcherState(target), originalLauncher);
+      assert.notEqual(await read(managed), 'bootstrap managed drift\n');
+      assert.equal(existsSync(active), false);
+      assert.ok(existsSync(join(home, '.void/cli/operation')));
+      // Acquisition itself observes the restored state, proving recovery precedes it.
+      await writeFile(bootstrapDenied, `
+        import assert from 'node:assert/strict';
+        import {lstat, readFile, readlink} from 'node:fs/promises';
+        globalThis.fetch = async () => {
+          const path = ${JSON.stringify(target)};
+          const info = await lstat(path);
+          assert.deepEqual({mode:info.mode & 0o777,link:info.isSymbolicLink(),
+            content:info.isSymbolicLink() ? await readlink(path) : await readFile(path,'utf8')},
+            ${JSON.stringify(originalLauncher)});
+          assert.equal(await readFile(${JSON.stringify(managed)},'utf8'),'bootstrap managed drift\\n');
+          assert.equal(await readFile(${JSON.stringify(receipt(project))},'utf8'),${JSON.stringify(originalReceipt)});
+          await assert.rejects(lstat(${JSON.stringify(active)}), {code:'ENOENT'});
+          await assert.rejects(lstat(${JSON.stringify(join(home, '.void/cli/operation'))}), {code:'ENOENT'});
+          throw new Error('BOOTSTRAP_RECOVERED_BEFORE_ACQUISITION');
+        };
+      `);
+    },
+    async bootstrapRecover() {
+      const result = await invoke(['update'], [bootstrapDenied]);
+      assert.equal(result.outcome.kind, 'exited');
+      assert.notEqual(result.outcome.code, 0);
+      assert.match(result.stdout + result.stderr, /BOOTSTRAP_RECOVERED_BEFORE_ACQUISITION/);
+      assert.deepEqual(await launcherState(target), originalLauncher);
+      assert.equal(await read(managed), 'bootstrap managed drift\n');
+      assert.equal(await read(receipt(project)), originalReceipt);
+      assert.equal(JSON.parse(await read(configPath)).authoredSetting, 'preserve this');
+      assert.equal(existsSync(active), false);
+      assert.equal(existsSync(join(home, '.void/cli/operation')), false);
+      await rm(marker);
     },
     async current() {
       await rm(receipt(project));
@@ -200,7 +251,7 @@ export async function prepareStableUpdate(temporary, tarball) {
 
 export async function exerciseStableUpdate(temporary, tarball) {
   const proof = await prepareStableUpdate(temporary, tarball);
-  for (const phase of ['preview', 'current', 'all', 'ownership', 'interrupt', 'recover', 'repeat']) {
+  for (const phase of ['preview', 'bootstrapInterrupt', 'bootstrapRecover', 'current', 'all', 'ownership', 'interrupt', 'recover', 'repeat']) {
     process.stdout.write(`stable update conformance (${process.platform}): ${phase}\n`);
     await proof[phase]();
   }

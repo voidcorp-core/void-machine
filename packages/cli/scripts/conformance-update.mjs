@@ -54,16 +54,24 @@ export async function probePowerShellNative({ home, cwd, env }, execute = runCon
   const expectedEnv = Object.fromEntries(['PATH', 'NODE_OPTIONS', 'VOID_GLOBAL_DIR', 'HOME', 'USERPROFILE']
     .map(key => [key, env[key]]));
   await writeFile(join(directory, 'void-machine.mjs'), `
+    import {writeSync} from 'node:fs';
     import {realpath} from 'node:fs/promises';
-    process.stderr.write('node-entered\\n');
+    const startedMs = performance.now();
+    const observe = (phase, code) => writeSync(2, JSON.stringify({phase,
+      elapsedMs:performance.now() - startedMs, ...(code === undefined ? {} : {code})}) + '\\n');
+    process.once('beforeExit', code => observe('node-before-exit', code));
+    process.once('exit', code => observe('node-exit', code));
+    observe('node-entered');
     const expected = ${JSON.stringify(expectedEnv)};
     const record = {execPath:process.execPath.slice(0,1024), argv:process.argv.slice(2,6).map(value=>value.slice(0,512)),
       executableMatches:process.execPath === ${JSON.stringify(process.execPath)},
       cwdMatches:await realpath(process.cwd()) === await realpath(${JSON.stringify(cwd)}),
       environmentMatches:Object.entries(expected).every(([key,value])=>process.env[key] === value),
       offlineImport:String(globalThis.fetch).includes('CONFORMANCE_OFFLINE')};
-    process.stderr.write(JSON.stringify(record) + '\\nnode-exiting-37\\n');
+    process.stderr.write(JSON.stringify(record) + '\\n');
+    observe('node-before-stdout');
     process.stdout.write(JSON.stringify(record));
+    observe('node-after-stdout');
     process.exitCode = 37;
   `, { flag: 'wx' });
   const result = requireConformanceExit(await execute({ command: 'powershell.exe',

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('one package installation proof across runtime consumers', () => {
@@ -279,6 +279,66 @@ it.each(['timed-out', 'nonzero', 'wrong output'])('preserves a failed stdin mech
     expect(calls).toBe(1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+it('probes native dispatch with the generated shim logic and a bounded real Node child', async () => {
+  const { probePowerShellNative } = await import('./conformance-update.mjs');
+  const { planLauncherBootstrap } = await import('../src/lib/cli-installation.js');
+  const { conformanceFixtureEnvironment, runConformanceProcess } = await import('./conformance-process.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-native-'));
+  const offline = join(root, 'offline.mjs');
+  writeFileSync(offline, "globalThis.fetch = async () => { throw new Error('CONFORMANCE_OFFLINE'); };\n");
+  const env = conformanceFixtureEnvironment(root, { NODE_OPTIONS: `--import=${pathToFileURL(offline).href}` });
+  try {
+    const plan = await planLauncherBootstrap(join(root, 'absent-bin'), Buffer.from('launcher'), undefined, 'win32');
+    const actual = plan.mutations.find(mutation => mutation.path === 'void-machine.ps1');
+    expect(actual).toBeDefined();
+    await probePowerShellNative({ home: root, cwd: root, env }, async options => {
+      expect(options).toMatchObject({ command: 'powershell.exe', cwd: root, env,
+        diagnosticStderr: true, diagnosticStdin: true });
+      expect(options.input).toBeUndefined();
+      expect(options.timeoutMs).toBeUndefined();
+      expect(options.args.slice(0, 4)).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-File']);
+      expect(options.args.slice(5)).toEqual(['--version']);
+      const script = readFileSync(options.args[4], 'utf8');
+      expect(script.split('\n').filter(line => !line.trimStart().startsWith('[Console]::Error.WriteLine(')).join('\n'))
+        .toBe(Buffer.from(actual?.content ?? '').toString());
+      for (const marker of ['native-entered', 'native-pipeline', 'native-direct', 'native-returned']) {
+        expect(script).toContain(marker);
+      }
+      const result = await runConformanceProcess({ command: process.execPath,
+        args: [join(dirname(options.args[4]), 'void-machine.mjs'), '--version'], cwd: root, env });
+      expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+      expect(result.stderr).toContain('node-entered');
+      expect(result.stderr).toContain('node-exiting-37');
+      expect(Buffer.byteLength(result.stderr + result.stdout)).toBeLessThan(4096);
+      expect(JSON.parse(result.stdout)).toMatchObject({ execPath: process.execPath, argv: ['--version'],
+        executableMatches: true, cwdMatches: true, environmentMatches: true, offlineImport: true });
+      return result;
+    });
+    const owner = readFileSync(fileURLToPath(new URL('./conformance-update.mjs', import.meta.url)), 'utf8');
+    const invocation = owner.indexOf('await probePowerShellNative({ home, cwd: root, env:');
+    expect(invocation).toBeGreaterThan(owner.indexOf('env.PATH ='));
+    expect(invocation).toBeLessThan(owner.indexOf("runConformanceStep('stable update npm-owned bootstrap'"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['timed-out', 'wrong exit', 'wrong argv', 'wrong environment', 'missing import'])(
+  'does not certify a failed native-child probe: %s', async failure => {
+    const { probePowerShellNative } = await import('./conformance-update.mjs');
+    const root = mkdtempSync(join(tmpdir(), 'powershell-native-failure-'));
+    let calls = 0;
+    try {
+      await expect(probePowerShellNative({ home: root, cwd: root, env: {} }, async () => {
+        calls++;
+        return { outcome: failure === 'timed-out' ? { kind: 'timed-out' } : { kind: 'exited', code: failure === 'wrong exit' ? 0 : 37 },
+          stdout: JSON.stringify({ execPath: process.execPath, argv: failure === 'wrong argv' ? [] : ['--version'],
+            executableMatches: true, cwdMatches: true, environmentMatches: failure !== 'wrong environment',
+            offlineImport: failure !== 'missing import' }), stderr: 'native diagnostic' };
+      })).rejects.toThrow();
+      expect(calls).toBe(1);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  },
+);
 
 it('qualifies the original PowerShell File invocation and preserves its failure without a comparison', async () => {
   const { measurePowerShellShim } = await import('./conformance-update.mjs');

@@ -18,7 +18,7 @@ describe('bounded native capture correlation', () => {
     const result = correlateCapture([
       { ...events[1], pid: 900, parentPid: 899, commandLine: 'private', env: 'secret' }, ...events,
     ], target, 190, false);
-    expect(result).toEqual({ status: 'correlated', events });
+    expect(result).toEqual({ status: 'correlated', events, target, readyUtcMs: 190 });
     expect(JSON.stringify(result)).not.toMatch(/private|secret|900|commandLine/);
   });
 

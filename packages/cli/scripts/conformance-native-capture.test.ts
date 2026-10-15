@@ -2,6 +2,8 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 const load = () => import('./conformance-native-capture.mjs');
@@ -11,6 +13,79 @@ const events = [
   { kind: 'start', pid: 101, parentPid: 100, name: 'node.exe', utcMs: 300 },
   { kind: 'stop', pid: 101, parentPid: 100, name: 'node.exe', utcMs: 315, code: 37 },
 ];
+
+it('keeps both idle input waits off the event-draining thread with one bounded pending read', () => {
+  const source = readFileSync(new URL('./conformance-native-capture.ps1', import.meta.url), 'utf8');
+  expect(source).not.toContain('[Console]::In.ReadLineAsync()');
+  expect(source.match(/\$inputTask = \[CaptureInput\]::Read\(\)/g)).toHaveLength(2);
+  expect(source).toContain('Task.Factory.StartNew');
+  expect(source).toContain('TaskCreationOptions.LongRunning, TaskScheduler.Default');
+  expect(source).toContain('line.Length >= 65536');
+  expect(source).toContain('if ($inputTask.IsCompleted)');
+  expect(source).toContain('$line=$inputTask.Result');
+});
+
+// The real Console.In/WMI regression needs Windows; source contracts are not its substitute.
+it.skipIf(process.platform !== 'win32')('drains real events with stdin open before and between requests', async () => {
+  const script = fileURLToPath(new URL('./conformance-native-capture.ps1', import.meta.url));
+  const observer = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'Capture'],
+    { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const children: ReturnType<typeof spawn>[] = [];
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let phase = 'ready';
+      let expectedPid: number | undefined;
+      let started = false;
+      let pending = '';
+      let bytes = 0;
+      const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}`)), 8000);
+      const fail = (error: Error) => { clearTimeout(deadline); reject(error); };
+      const produceEvent = () => {
+        const child = spawn(process.execPath, ['-e', 'process.exitCode=37'], { stdio: 'ignore', windowsHide: true });
+        children.push(child); expectedPid = child.pid; started = false;
+        child.once('error', fail);
+      };
+      observer.once('error', fail);
+      observer.stderr.on('data', () => fail(new Error('native observer stderr')));
+      observer.stdout.on('data', chunk => {
+        bytes += chunk.length;
+        if (bytes > 65536) { fail(new Error('native test output bound')); return; }
+        pending += chunk.toString('utf8');
+        let newline: number;
+        while ((newline = pending.indexOf('\n')) >= 0) {
+          const line = pending.slice(0, newline); pending = pending.slice(newline + 1);
+          try {
+            const event = JSON.parse(line);
+            if (phase === 'ready' && event.kind === 'ready') { phase = 'first-idle'; produceEvent(); }
+            else if (phase === 'request' && event.kind === 'unknown' && event.reason === 'identity-count') {
+              phase = 'between-requests'; produceEvent();
+            } else if (event.pid === expectedPid && event.kind === 'start') started = true;
+            else if (event.pid === expectedPid && event.kind === 'stop') {
+              expect(started).toBe(true);
+              expect(event.code).toBe(37);
+              if (phase === 'first-idle') {
+                phase = 'request';
+                // A rejected empty sample acknowledges consumption without any debugger attach.
+                observer.stdin.write(`${JSON.stringify({ kind: 'sample', events: [] })}\n`);
+              } else if (phase === 'between-requests') {
+                phase = 'complete'; observer.stdin.end(`${JSON.stringify({ kind: 'stop' })}\n`);
+              }
+            }
+          } catch (error) { fail(error instanceof Error ? error : new Error('invalid native test output')); }
+        }
+      });
+      observer.once('close', code => {
+        clearTimeout(deadline);
+        if (phase === 'complete' && code === 0) resolve();
+        else reject(new Error(`native observer exited ${code} during ${phase}`));
+      });
+    });
+  } finally {
+    observer.stdin.end();
+    if (observer.exitCode === null) observer.kill();
+    for (const child of children) if (child.exitCode === null) child.kill();
+  }
+});
 
 describe('bounded native capture correlation', () => {
   it('retains an already exited child from the prearmed queue without unrelated metadata', async () => {

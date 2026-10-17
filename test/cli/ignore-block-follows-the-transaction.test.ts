@@ -25,11 +25,12 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { init } from '../../packages/cli/src/commands/init.js';
 import { update } from '../../packages/cli/src/commands/update.js';
 
@@ -122,8 +123,16 @@ describe('the ignore block never outlives a transaction that failed', () => {
     expect(absent).toEqual([]);
   });
 
-  it('explains that prior layout repair remains after update fails', async () => {
+  it('refuses legacy layout before update can leave an unrecoverable repair', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
+    // Update owns a global transaction before classifying the project. Give this
+    // refusal proof its own physical store, not Vitest's shared /var tmp alias
+    // or a launcher selected from the developer's PATH.
+    const home = join(realpathSync(dir), 'fixture-home');
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    vi.stubEnv('VOID_GLOBAL_DIR', join(home, '.void'));
+    vi.stubEnv('PATH', dirname(process.execPath));
     const legacy = join(dir, '.void/state.json');
     const migrated = join(dir, '.void/machine/status.json');
     const bytes = Buffer.from('{"score":1}\n');
@@ -137,16 +146,13 @@ describe('the ignore block never outlives a transaction that failed', () => {
       return true;
     });
 
-    await expect(update([])).rejects.toThrow(/process\.exit\(1\)/);
+    await expect(update([], { fetcher: async () => {
+      throw new Error('Legacy refusal must precede acquisition');
+    } })).rejects.toThrow(/Legacy layout at/);
 
-    expect(existsSync(legacy)).toBe(false);
-    expect(readFileSync(migrated)).toEqual(bytes);
-    const output = printed.join('');
-    expect(output).toContain('PHILOSOPHY.md');
-    expect(output).toContain('unowned');
-    expect(output).toContain('Prior layout repairs remain applied');
-    expect(output).toContain('outside the install transaction');
-    expect(output).not.toContain('rolled back byte-for-byte');
+    expect(readFileSync(legacy)).toEqual(bytes);
+    expect(existsSync(migrated)).toBe(false);
+    expect(printed.join('')).not.toContain('Prior layout repairs remain applied');
   });
 
   // The reason the block was written before the transaction in the first place.

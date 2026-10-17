@@ -14,6 +14,7 @@ export interface ConfiguredProjectDiscovery extends DiscoveryResult {
 export interface ConfiguredProjectDiscoveryOptions {
   readonly globalDir?: string;
   readonly cwd?: string;
+  readonly requireComplete?: boolean;
 }
 
 export function voidGlobalDir(): string {
@@ -27,8 +28,10 @@ export function discoverConfiguredProjects(
   const config = readDiscoveryConfig({
     globalDir: options.globalDir ?? voidGlobalDir(),
     cwd: options.cwd ?? process.cwd(),
+    strict: options.requireComplete ?? false,
   });
-  const discovered = discoverProjects({ roots: config.roots, exclude: config.exclude });
+  const discovered = discoverProjects({ roots: config.roots, exclude: config.exclude },
+    { requireComplete: options.requireComplete ?? false });
   return {
     ...discovered,
     roots: config.roots,

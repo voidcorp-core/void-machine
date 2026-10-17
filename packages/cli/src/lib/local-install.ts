@@ -175,6 +175,8 @@ export interface PrepareInstallInput {
   readonly source: InstallSource;
   readonly runtimes: readonly Runtime[];
   readonly force: boolean;
+  /** Update alone recovers missing receipt claims attested by the prior manifest. */
+  readonly recoverManifestOwnership?: boolean;
   /** Runtime-add mode: keep unchanged ownership not represented in this partial stage. */
   readonly retainPreviousOwned?: boolean;
 }
@@ -256,6 +258,9 @@ export async function prepareInstallCommit(input: PrepareInstallInput): Promise<
     const current = info === undefined ? undefined : await readFile(target);
     const currentMode = info?.mode ?? 0;
     const priorOwnership = previousFiles.get(file.path);
+    const recoveredOwnership = input.recoverManifestOwnership === true
+      && priorOwnership === undefined && current !== undefined
+      && digest(current) === manifestFiles.get(file.path)?.sha256;
     const stillOwned = current !== undefined
       && priorOwnership !== undefined
       && sameOwnedFile(current, currentMode, priorOwnership);
@@ -296,9 +301,11 @@ export async function prepareInstallCommit(input: PrepareInstallInput): Promise<
     // ownership for a managed asset: whoever wrote that file wrote ours. Without
     // this, a file the install had nothing to write left the receipt in silence,
     // and the first version to change it met an asset it could not recognise.
-    // Managed only -- a shared file is co-owned, and claiming one would licence
-    // deleting it at the next update.
-    if (current === undefined || stillOwned || claimedManaged || (!changed && isManaged(file.path))) owned.push(file);
+    // Resemblance applies only to managed assets. Update may also recover a
+    // missing claim from the prior manifest's attested bytes, never resemblance
+    // to a newly compiled shared file or over authoritative receipt evidence.
+    if (current === undefined || stillOwned || recoveredOwnership || claimedManaged
+      || (!changed && isManaged(file.path))) owned.push(file);
   }
 
   if (conflicts.length > 0) throw new Error(conflictMessage(conflicts));

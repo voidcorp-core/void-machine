@@ -1,356 +1,194 @@
-import { spawnSync } from 'node:child_process';
-import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
+// @test-resource subprocess
+
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { INSTALL_RECEIPT_PATH, type InstallReceipt } from '../lib/receipts.js';
-import { sourceRepoVerdict } from './init.js';
-import {
-  completeOwnership,
-  localInitArgs,
-  ownedFromManifestPaths,
-  updateModeFor,
-  updateRouteFor,
-} from './update.js';
+import { delimiter, dirname, join } from 'node:path';
+import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
+import { afterEach, expect, it, vi } from 'vitest';
+import { bundledLauncher } from '../lib/fixtures/stable-launcher.js';
+import type { NpmInvocation } from '../lib/release-acquisition.js';
+import { update } from './update.js';
 
-const receipt = (source: InstallReceipt['source']): InstallReceipt => ({
-  schemaVersion: 1,
-  version: '2.0.2',
-  source,
-  runtimes: ['codex'],
-  files: [],
+const roots: string[] = [];
+const originalCwd = process.cwd();
+afterEach(async () => {
+  process.chdir(originalCwd);
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
-
-describe('update routing', () => {
-  it('keeps local receipts offline and marketplace receipts on the remote adapter', () => {
-    expect(updateModeFor(receipt('local'))).toBe('local');
-    expect(updateModeFor(receipt('marketplace'))).toBe('marketplace');
-    expect(updateModeFor(undefined)).toBe('marketplace');
-  });
-});
-
-describe('localInitArgs', () => {
-  it('carries the recorded runtimes and the selected packs', () => {
-    const args = localInitArgs(receipt('local'), ['monorepo', 'react'], { force: false });
-
-    expect(args).toContain('--no-interactive');
-    expect(args).toContain('--replace-packs');
-    expect(args.join(' ')).toContain('--runtime codex');
-    expect(args.join(' ')).toContain('--pack monorepo');
-    expect(args.join(' ')).toContain('--pack react');
-  });
-
-  it('does not force by default', () => {
-    expect(localInitArgs(receipt('local'), [], { force: false })).not.toContain('--force');
-  });
-
-  /**
-   * Reported from a real consumer project on 2.6.0. `init` refuses to clobber a
-   * managed file it cannot prove it wrote and says "preserve it or re-run with
-   * --force" — but `update` never parsed the flag nor passed it on, so the
-   * remedy the tool printed could not be applied through the command that
-   * printed it. An instruction that cannot be followed is worse than none.
-   */
-  it('forwards --force so the remedy it prints can actually be applied', () => {
-    expect(localInitArgs(receipt('local'), [], { force: true })).toContain('--force');
-  });
-
-  /**
-   * The two travel together on the source repo, and each keeps its own meaning:
-   * --force answers a conflict on some managed asset, --preserve-doctrine says
-   * the canonical CLAUDE.md / AGENTS.md / PHILOSOPHY.md here are the source and
-   * not a copy of it. Sending only the first rewrote the doctrine as a side
-   * effect of unblocking two hook files.
-   */
-  it('carries --preserve-doctrine alongside --force, since they answer different things', () => {
-    const args = localInitArgs(receipt('local'), [], { force: true, preserveDoctrine: true });
-    expect(args).toContain('--force');
-    expect(args).toContain('--preserve-doctrine');
-    expect(sourceRepoVerdict({ isSourceRepo: true, force: true, preserveDoctrine: true }))
-      .toBe('preserve-doctrine');
-  });
-});
-
-// The receipt is observed state, so it is gitignored and absent from every
-// clone. Reading the route from it alone made `update` fall through to the
-// marketplace branch on a colleague's fresh checkout: it pulled a plugin cache,
-// bumped the pins, materialised nothing, and reported success. The install
-// manifest is the committed half of the same fact and is always there.
-describe('updateRouteFor', () => {
-  it('follows the receipt when there is one', () => {
-    expect(updateRouteFor(receipt('local'), true)).toBe('local');
-    expect(updateRouteFor(receipt('marketplace'), true)).toBe('marketplace');
-  });
-
-  // A missing receipt used to end the command with two commands to type, one of
-  // them `--force`. It is the common case, not an edge: the receipt is
-  // machine-local, so EVERY fresh clone arrives without one. The committed
-  // manifest names the paths the harness owns, which is the only thing the
-  // update needs from it -- the contents come from the version being installed.
-  // Reading it is not guessing.
-  it('rehydrates ownership from the committed manifest instead of stopping', () => {
-    expect(updateRouteFor(undefined, true)).toBe('local-rehydrate');
-  });
-
-  it('is a marketplace install when neither is there', () => {
-    expect(updateRouteFor(undefined, false)).toBe('marketplace');
-  });
-})
-
-// Rehydration takes the paths from the committed manifest and the CONTENT from
-// disk, never the manifest's hashes: those describe the version that wrote it,
-// and the point is to reclaim ownership of what is there now so the new version
-// can overwrite it. Hashing the manifest's own values would fail every comparison
-// and reproduce the conflict this removes.
-describe('ownedFromManifestPaths', () => {
-  it('claims the paths the manifest names, with the content found on disk', () => {
-    const owned = ownedFromManifestPaths(
-      [
-        { path: '.void/hooks/_void-hook.mjs', sha256: 'sha-of-.void/hooks/_void-hook.mjs' },
-        { path: '.claude/skills/tdd/SKILL.md', sha256: 'sha-of-.claude/skills/tdd/SKILL.md' },
-      ],
-      (path) => ({ sha256: `sha-of-${path}`, mode: 0o644 }),
-    );
-    expect(owned).toEqual([
-      { path: '.void/hooks/_void-hook.mjs', sha256: 'sha-of-.void/hooks/_void-hook.mjs', mode: 0o644 },
-      { path: '.claude/skills/tdd/SKILL.md', sha256: 'sha-of-.claude/skills/tdd/SKILL.md', mode: 0o644 },
-    ]);
-  });
-
-  it('drops a path the manifest names and the disk no longer has', () => {
-    const owned = ownedFromManifestPaths(
-      [
-        { path: '.void/hooks/_void-hook.mjs', sha256: 'x' },
-        { path: '.claude/skills/retired/SKILL.md', sha256: 'x' },
-      ],
-      (path) => (path.includes('retired') ? undefined : { sha256: 'x', mode: 0o644 }),
-    );
-    expect(owned.map((file) => file.path)).toEqual(['.void/hooks/_void-hook.mjs']);
-  });
-
-  it('claims nothing from an empty manifest rather than inventing ownership', () => {
-    expect(ownedFromManifestPaths([], () => ({ sha256: 'x', mode: 0o644 }))).toEqual([]);
-  });
-});
-
-// A receipt that covers only part of what the manifest names is the state a real
-// consumer arrives in: the layout migration parked the previous receipt, the
-// install that followed rewrote a shorter one, and every path it dropped became
-// an asset the next update could not recognise. Ownership is the union of the
-// two proofs, not a choice between them.
-describe('completeOwnership', () => {
-  it('adds the manifest paths a partial receipt no longer covers', () => {
-    const owned = completeOwnership(
-      [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'from-receipt', mode: 0o644 }],
-      [
-        { path: '.claude/skills/tdd/SKILL.md', sha256: 'attested' },
-        { path: '.claude/agents/code-explorer.md', sha256: 'attested' },
-      ],
-      () => ({ sha256: 'attested', mode: 0o644 }),
-    );
-
-    expect(owned.map((file) => file.path)).toEqual([
-      '.claude/skills/tdd/SKILL.md',
-      '.claude/agents/code-explorer.md',
-    ]);
-  });
-
-  it('keeps the receipt authoritative for a path both of them name', () => {
-    // The receipt records what THIS machine wrote; the manifest only proves the
-    // path is ours. Letting the disk overwrite that entry would erase the very
-    // evidence that tells a hand-edited file from an untouched one.
-    const owned = completeOwnership(
-      [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'from-receipt', mode: 0o644 }],
-      [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'attested' }],
-      () => ({ sha256: 'on-disk', mode: 0o600 }),
-    );
-
-    expect(owned).toEqual([
-      { path: '.claude/skills/tdd/SKILL.md', sha256: 'from-receipt', mode: 0o644 },
-    ]);
-  });
-
-  it('leaves a complete receipt untouched', () => {
-    const files = [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'x', mode: 0o644 }];
-
-    expect(completeOwnership(files, [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'x' }], () => undefined)).toEqual(files);
-  });
-
-  it('drops a manifest path the disk no longer has', () => {
-    const owned = completeOwnership([], [{ path: '.claude/skills/gone/SKILL.md', sha256: 'x' }], () => undefined);
-
-    expect(owned).toEqual([]);
-  });
-});
-
-// The manifest proves a PATH is ours. It never proves the bytes sitting at that
-// path today are ours: a project that edited a skill we shipped has a path we
-// own holding content we do not. Reclaiming from disk without checking turned
-// "unknown content" into "proven ours", and the install then overwrote a
-// customisation it would otherwise have refused. Measured on a real project
-// before this guard existed.
-describe('completeOwnership, against content the project changed', () => {
-  it('declines a path whose bytes no longer match what the manifest attests', () => {
-    const owned = completeOwnership(
-      [],
-      [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'as-installed' }],
-      () => ({ sha256: 'edited-by-the-project', mode: 0o644 }),
-    );
-
-    expect(owned).toEqual([]);
-  });
-
-  it('reclaims a path the project left untouched', () => {
-    const owned = completeOwnership(
-      [],
-      [{ path: '.claude/skills/tdd/SKILL.md', sha256: 'as-installed' }],
-      () => ({ sha256: 'as-installed', mode: 0o644 }),
-    );
-
-    expect(owned).toEqual([
-      { path: '.claude/skills/tdd/SKILL.md', sha256: 'as-installed', mode: 0o644 },
-    ]);
-  });
-
-  it('reclaims a path the manifest cannot attest, since it never lists itself', () => {
-    // A file cannot carry the hash of contents that include that hash, so the
-    // manifest is absent from its own file list -- and it is ours by construction.
-    const owned = completeOwnership(
-      [],
-      [{ path: '.void/install-manifest.json', sha256: undefined }],
-      () => ({ sha256: 'whatever-it-is-now', mode: 0o644 }),
-    );
-
-    expect(owned.map((file) => file.path)).toEqual(['.void/install-manifest.json']);
-  });
-});
-
-// The receipt is machine-local and dates from 2026-07-24. A marketplace install
-// made before it carries none, and until now this was the one route of `update`
-// that never wrote one: the two local routes rebuild it from the manifest, the
-// marketplace route has no manifest to rebuild from and left the tree unmarked.
-// From a linked worktree that IS the install, an unmarked tree makes `doctor`
-// prefer the main checkout, which holds nothing (DEV-732, DEV-740).
-describe('update on a marketplace install that predates the receipt', () => {
-  const HERE = dirname(fileURLToPath(import.meta.url));
-  const REPO = resolve(HERE, '..', '..', '..', '..');
-  const CLI = resolve(HERE, '..', '..', 'bin', 'void-harness.mjs');
-
-  function git(cwd: string, ...args: string[]): void {
-    const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
-    if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
+async function fixture() {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'void-public-update-')));
+  roots.push(root);
+  const globalDir = join(root, 'home', '.void');
+  const bin = join(root, 'home', '.local', 'bin');
+  const projects = join(root, 'projects');
+  await mkdir(globalDir, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await mkdir(projects);
+  vi.stubEnv('HOME', join(root, 'home'));
+  vi.stubEnv('USERPROFILE', join(root, 'home'));
+  vi.stubEnv('VOID_GLOBAL_DIR', globalDir);
+  vi.stubEnv('PATH', [bin, dirname(process.execPath)].join(delimiter));
+  process.chdir(root);
+  const printed: string[] = [];
+  vi.spyOn(process.stdout, 'write').mockImplementation(chunk => { printed.push(String(chunk)); return true; });
+  const archive = Buffer.from('transport fixture, npm extraction boundary is injected');
+  const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
+  const fetched: string[] = [];
+  const fetcher: typeof fetch = async input => {
+    const url = String(input);
+    fetched.push(url);
+    return new Response(url.endsWith('.tgz') ? archive : JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '5.1.0',
+      dist: { tarball: `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`, integrity } }));
+  };
+  const runNpm = async ({ cwd }: NpmInvocation) => {
+    const pkg = join(cwd, `node_modules/${PRODUCT_IDENTITY.packageName}`);
+    await mkdir(join(pkg, 'bin'), { recursive: true });
+    await mkdir(join(pkg, 'dist'));
+    await writeFile(join(pkg, 'package.json'), JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '5.1.0', type: 'module',
+      engines: { node: '>=24.15.0' }, bin: { 'void-machine': './bin/void-machine.mjs', [PRODUCT_IDENTITY.packageName]: './bin/void-machine.mjs' },
+      voidUpdate: { protocol: 1, configSchemas: [1], receiptSchemas: [1], manifestSchemas: [1], programSchemas: [1], runtimeAdapters: ['codex', 'claude'] } }));
+    await writeFile(join(pkg, 'dist/main.js'), "export async function run() { process.stdout.write('5.1.0\\n'); }");
+    await writeFile(join(pkg, 'bin/void-machine.mjs'), "import {run} from '../dist/main.js'; await run();");
+    await writeFile(join(pkg, 'dist/stable-launcher.js'), await bundledLauncher());
+    await writeFile(join(pkg, 'bin/prepare-update.mjs'), `
+      import { readFile, writeFile, lstat } from 'node:fs/promises';
+      import { join } from 'node:path';
+      import { createHash } from 'node:crypto';
+      const request = JSON.parse(await readFile(process.argv[2], 'utf8'));
+      const inputs = [];
+      for (const path of ['.void/config.json', '.void/install-manifest.json']) {
+        const bytes = await readFile(join(request.root, path));
+        inputs.push({ path, sha256: createHash('sha256').update(bytes).digest('hex'), mode: (await lstat(join(request.root, path))).mode & 511 });
+      }
+      const config = JSON.parse(await readFile(join(request.root, '.void/config.json'), 'utf8'));
+      if (config.fail) throw new Error('fixture incompatible project');
+      const manifest = JSON.stringify({ schemaVersion: 1, version: request.version, files: [] });
+      await writeFile(process.argv[3], JSON.stringify({ ...request, inputs, runtimes: ['codex'], restored: [], preserved: [],
+        mutations: [{ path: '.void/install-manifest.json', content: Buffer.from(manifest).toString('base64'), mode: 420 }] }));
+    `);
+  };
+  async function project(name: string, fail = false) {
+    const directory = join(projects, name);
+    await mkdir(join(directory, '.void'), { recursive: true });
+    await writeFile(join(directory, '.void/config.json'), JSON.stringify({ packs: {}, authored: name, fail }));
+    await writeFile(join(directory, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version: '5.0.1', files: [] }));
+    return directory;
   }
+  return { root, globalDir, bin, projects, project, ports: { fetcher, runNpm }, fetched, printed };
+}
+async function version(root: string) {
+  return JSON.parse(await readFile(join(root, '.void/install-manifest.json'), 'utf8')).version;
+}
 
-  /**
-   * A `gh` that answers `gh api repos/<repo>/contents/<path>` from this
-   * checkout, so the marketplace route runs against the real catalog and the
-   * real core plugin.json without a network or an account. Nothing else of
-   * `gh` is imitated: the route asks for two files and stops.
-   */
-  function fakeGhOnPath(): string {
-    const bin = mkdtempSync(join(tmpdir(), 'update-gh-'));
-    const script = join(bin, 'gh');
-    writeFileSync(
-      script,
-      [
-        '#!/bin/sh',
-        'for argument in "$@"; do target="$argument"; done',
-        'path=$(printf %s "$target" | sed -e "s|^repos/[^/]*/[^/]*/contents/||" -e "s|?.*$||")',
-        `exec cat "${REPO}/$path"`,
-        '',
-      ].join('\n'),
-    );
-    chmodSync(script, 0o755);
-    return `${bin}:${process.env.PATH ?? ''}`;
-  }
-
-  function run(command: string, cwd: string, env: NodeJS.ProcessEnv): { code: number; out: string } {
-    const result = spawnSync(process.execPath, [CLI, ...command.split(' ')], { cwd, encoding: 'utf8', env });
-    return { code: result.status ?? 0, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
-  }
-
-  /** What `init` left in a tree before receipts existed: config, doctrine, wiring, no manifest. */
-  function installWithoutReceipt(root: string): void {
-    mkdirSync(join(root, '.void', 'installed'), { recursive: true });
-    mkdirSync(join(root, '.claude'), { recursive: true });
-    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
-    writeFileSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'), '# Philosophy\n');
-    writeFileSync(join(root, '.void', 'PROJECT-DOCTRINE.md'), '# Doctrine\n');
-    writeFileSync(
-      join(root, '.claude', 'settings.json'),
-      JSON.stringify({
-        extraKnownMarketplaces: { voidcorp: { source: { source: 'github', repo: PRODUCT_IDENTITY.repositorySlug } } },
-        enabledPlugins: { 'harness@voidcorp': true },
-      }),
-    );
-    writeFileSync(join(root, 'CLAUDE.md'), '# Project\n');
-  }
-
-  it('writes the receipt, so doctor from that worktree judges the install it holds', () => {
-    const main = mkdtempSync(join(tmpdir(), 'update-main-'));
-    git(main, 'init', '--quiet');
-    writeFileSync(join(main, 'README.md'), '# fixture\n');
-    git(main, 'add', 'README.md');
-    git(main, '-c', 'user.name=Void Test', '-c', 'user.email=void@example.test', 'commit', '--quiet', '-m', 'test: seed');
-    const linked = join(mkdtempSync(join(tmpdir(), 'update-linked-')), 'DEV-000');
-    git(main, 'worktree', 'add', '--quiet', linked, '-b', 'worker/DEV-000');
-    installWithoutReceipt(linked);
-    const env = { ...process.env, PATH: fakeGhOnPath() };
-
-    const before = run('doctor --no-remote', linked, env);
-    expect(before.out).toMatch(new RegExp(`^\\s+installed\\s+${realpathSync(main)}$`, 'm'));
-    expect(before.out).toContain('.void/config.json missing');
-
-    // `--pins-only` keeps the route off the marketplace cache under $HOME.
-    const updated = run('update --pins-only', linked, env);
-    expect(updated.code).toBe(0);
-
-    const receipt = JSON.parse(readFileSync(join(linked, INSTALL_RECEIPT_PATH), 'utf8')) as InstallReceipt;
-    expect(receipt.source).toBe('marketplace');
-    expect(receipt.runtimes).toEqual(['claude']);
-    expect(receipt.files).toEqual([]);
-
-    const after = run('doctor --no-remote', linked, env);
-    expect(after.out).not.toMatch(/^\s+installed\s+\//m);
-    expect(after.out).toMatch(/project config\s+valid JSON \+ schema/);
-    expect(after.out).toMatch(/doctrine files\s+PHILOSOPHY\.md \+ PROJECT-DOCTRINE\.md present/);
+it.each(['--local', '--cache-only', '--pins-only', '--untrack-derived', '--force', '--version', '--version=5.1.0-beta.1'])(
+  'refuses unsupported option %s before global or project effects', async argument => {
+    const f = await fixture();
+    await expect(update([argument], f.ports)).rejects.toThrow(/unsupported|exact stable|requires/i);
+    await expect(readFile(join(f.globalDir, 'cli/active.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(f.fetched).toEqual([]);
   });
 
-  it('previews and then retires the obsolete registry through update', () => {
-    const project = mkdtempSync(join(tmpdir(), 'update-registry-project-'));
-    const globalDir = mkdtempSync(join(tmpdir(), 'update-registry-global-'));
-    const registry = join(globalDir, 'projects');
-    installWithoutReceipt(project);
-    mkdirSync(registry);
-    writeFileSync(join(registry, 'a.path'), '/project/a\n');
-    writeFileSync(join(registry, 'b.path'), '/project/b\n');
-    const env = {
-      ...process.env,
-      PATH: fakeGhOnPath(),
-      VOID_GLOBAL_DIR: globalDir,
-    };
+it('updates only the current project and activates the same exact offline release', async () => {
+  const f = await fixture();
+  const selected = await f.project('selected');
+  const other = await f.project('other');
+  process.chdir(selected);
+  await update([], f.ports);
+  expect(await version(selected)).toBe('5.1.0');
+  expect(await version(other)).toBe('5.0.1');
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
+  expect(await readFile(join(f.bin, 'void-machine'), 'utf8')).toContain('verifyInstalledRelease');
+  expect(f.fetched).toEqual([`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/latest`, `https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/-/${PRODUCT_IDENTITY.packageName}-5.1.0.tgz`]);
+  expect(f.printed.join('')).toContain(selected);
+  expect(f.printed.join('')).toContain('5.0.1');
+});
 
-    const preview = run('update --pins-only --dry-run', project, env);
+it.each([false, true])('plans all selected projects, with dry run %s leaving targets untouched', async dryRun => {
+  const f = await fixture();
+  const first = await f.project('one');
+  const second = await f.project('two');
+  await writeFile(join(f.globalDir, 'discovery.json'), JSON.stringify({ roots: [f.projects] }));
+  await update(['--all', '--version', '5.1.0', ...(dryRun ? ['--dry-run'] : [])], f.ports);
+  expect(await version(first)).toBe(dryRun ? '5.0.1' : '5.1.0');
+  expect(await version(second)).toBe(dryRun ? '5.0.1' : '5.1.0');
+  if (dryRun) {
+    await expect(readFile(join(f.globalDir, 'cli/active.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(join(f.bin, 'void-machine'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(f.printed.join('')).toMatch(/cache|staging/i);
+  }
+  expect(f.fetched[0]).toBe(`https://registry.npmjs.org/${PRODUCT_IDENTITY.packageName}/5.1.0`);
+});
 
-    expect(preview.code).toBe(0);
-    expect(preview.out).toContain('would retire 2 obsolete project pointer(s)');
-    expect(existsSync(join(registry, 'a.path'))).toBe(true);
+it('a later incompatible project prevents every publication', async () => {
+  const f = await fixture();
+  const first = await f.project('one');
+  const second = await f.project('two', true);
+  await writeFile(join(f.globalDir, 'discovery.json'), JSON.stringify({ roots: [f.projects] }));
+  await expect(update(['--all'], f.ports)).rejects.toThrow(/incompatible project/);
+  expect(await version(first)).toBe('5.0.1');
+  expect(await version(second)).toBe('5.0.1');
+  await expect(readFile(join(f.bin, 'void-machine'))).rejects.toMatchObject({ code: 'ENOENT' });
+});
 
-    const applied = run('update --pins-only', project, env);
+it('reports CLI-only explicitly outside any installed project', async () => {
+  const f = await fixture();
+  await update([], f.ports);
+  expect(f.printed.join('')).toMatch(/no project selected/i);
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
+});
 
-    expect(applied.code).toBe(0);
-    expect(applied.out).toContain('retired 2 obsolete project pointer(s)');
-    expect(existsSync(join(registry, 'a.path'))).toBe(false);
-    expect(existsSync(join(registry, 'b.path'))).toBe(false);
-  });
+it('retains the qualified original launcher backup after successful bootstrap', async () => {
+  const f = await fixture();
+  const original = join(f.root, 'original-prefix');
+  await f.ports.runNpm({ cwd: original, args: [], env: {} });
+  const target = join(original, `node_modules/${PRODUCT_IDENTITY.packageName}/bin/void-machine.mjs`);
+  await symlink(target, join(f.bin, 'void-machine'));
+  await update([], f.ports);
+  expect(await readFile(join(f.globalDir, 'cli/bootstrap/0.before'), 'utf8')).toBe(target);
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/bootstrap/journal.json'), 'utf8')).root).toBe(f.bin);
+});
+
+it('lets an older executing CLI acquire the compatible target before judging newer project assets', async () => {
+  const f = await fixture();
+  const selected = await f.project('selected');
+  await writeFile(join(selected, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version: '5.1.0', files: [] }));
+  process.chdir(selected);
+  await update([], f.ports);
+  expect(await version(selected)).toBe('5.1.0');
+  expect(JSON.parse(await readFile(join(f.globalDir, 'cli/active.json'), 'utf8')).version).toBe('5.1.0');
+});
+
+it('reconciles interrupted records before compatibility classification on repeated invocation', async () => {
+  const { prepareFileTransaction, applyFileTransaction } = await import('../lib/transaction.js');
+  const f = await fixture();
+  const selected = await f.project('selected');
+  process.chdir(selected);
+  const store = join(f.globalDir, 'cli');
+  const operation = join(store, 'operation');
+  await mkdir(operation, { recursive: true });
+  await prepareFileTransaction(selected, [{ path: '.void/config.json', content: Buffer.from('{') }], join(operation, '0'), 'interrupted');
+  await prepareFileTransaction(store, [{ path: 'active.json', content: Buffer.from('{}') }], join(operation, '1'), 'interrupted');
+  await writeFile(join(operation, 'operation.json'), JSON.stringify({ schemaVersion: 1, operationId: 'interrupted', target: '5.1.0',
+    selectionKey: JSON.stringify({ all: false, roots: [selected], binRoot: f.bin }),
+    participants: [{ kind: 'project', root: selected }, { kind: 'active', root: store }] }));
+  await applyFileTransaction(selected, join(operation, '0'));
+  await update([], f.ports);
+  expect(await version(selected)).toBe('5.1.0');
+  expect(JSON.parse(await readFile(join(selected, '.void/config.json'), 'utf8')).authored).toBe('selected');
+});
+
+it.each(['marketplace', 'legacy'])('classifies %s before acquisition and preserves its records', async kind => {
+  const f = await fixture();
+  const project = await f.project('selected');
+  process.chdir(project);
+  const path = kind === 'legacy' ? '.void/state.json' : '.void/machine/receipts/install-v1.json';
+  await mkdir(join(project, '.void/machine/receipts'), { recursive: true });
+  const bytes = kind === 'legacy' ? '{}' : JSON.stringify({ schemaVersion: 1, version: '5.0.1', source: 'marketplace', runtimes: ['codex'], files: [] });
+  await writeFile(join(project, path), bytes);
+  await expect(update([], f.ports)).rejects.toThrow(/legacy|marketplace/i);
+  expect(await readFile(join(project, path), 'utf8')).toBe(bytes);
+  expect(f.fetched).toEqual([]);
 });

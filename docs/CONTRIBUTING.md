@@ -81,7 +81,10 @@ does not erase the earlier red evidence.
 - `pnpm anti-bloat:check` — the eight anti-bloat rules (skill ≤400 LOC, hook ≤100 LOC, discovery description non-blocking target ≤250 chars and hard cap 500, `.source` + audit note per skill, ...).
 - `pnpm graph:check` / `pnpm graph:check-bundle` — regenerate `catalog.v3.json`, its `model.json` compatibility projection, and the bundle when graph inputs change.
 - `pnpm conformance:consumer` — pack the local CLI once, then prove account-free install,
-  installed-hook execution and the Autopilot public surface for Claude, Codex, and both. The
+  stable CLI/project update, installed-hook execution and the Autopilot public surface for
+  Claude, Codex, and both. Install and update are separate mandatory serial suites, each
+  under the unchanged 120-second process limit. Select update alone with
+  `pnpm conformance:consumer --suite update`. The
   narrower `conformance:install`, `conformance:hooks` and `conformance:autopilot` commands select
   one suite through the same orchestrator. CI packs one exact-SHA artifact and makes Linux, macOS
   and Windows verify and execute those same bytes. The default run also executes the latency

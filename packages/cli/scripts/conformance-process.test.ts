@@ -10,6 +10,67 @@ import {
 } from './conformance-process.mjs';
 
 describe('contained conformance process', () => {
+  it.each([undefined, '', 'supplied input\n'])('observes stdin completion without changing EOF, bytes or status for %s', async input => {
+    const events: Array<{ phase: string; elapsedMs?: number }> = [];
+    const result = await runConformanceProcess({ command: process.execPath,
+      args: ['--input-type=module', '-e', "const chunks=[]; for await (const chunk of process.stdin) chunks.push(chunk); process.stdout.write(Buffer.concat(chunks)); process.exitCode=37;"],
+      cwd: process.cwd(), input, label: 'stdin mechanism', diagnosticStdin: true,
+      report: event => events.push(event) });
+    expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stdout: input ?? '' });
+    for (const phase of ['stdin-finish', 'stdin-close']) {
+      const observed = events.filter(event => event.phase === phase);
+      expect(observed).toHaveLength(1);
+      expect(observed[0]?.elapsedMs).toBeGreaterThanOrEqual(0);
+    }
+    expect(events.filter(event => event.phase === 'stdin-error')).toHaveLength(0);
+  });
+
+  it('reports bounded diagnostic stderr while a named child is still running', async () => {
+    const events: Array<{ phase: string; detail?: string; elapsedMs?: number }> = [];
+    const result = await runConformanceProcess({
+      command: process.execPath,
+      args: ['-e', "process.stderr.write('x'.repeat(8192)); setTimeout(() => process.exit(37), 10)"],
+      cwd: process.cwd(), label: 'measured shell', diagnosticStderr: true,
+      report: event => events.push(event),
+    });
+    expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+    expect(result.stderr).toHaveLength(8192);
+    const diagnostics = events.filter(event => event.phase === 'stderr');
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.reduce((size, event) => size + Buffer.byteLength(event.detail ?? ''), 0)).toBe(4096);
+    expect(diagnostics[0]?.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(events.at(-1)?.phase).toBe('finished');
+  });
+
+  it('records a monotonic start before awaiting a raw child and preserves its nonzero outcome', async () => {
+    const events: Array<{ phase: string; label: string; startedMs: number; durationMs?: number }> = [];
+    const before = performance.now();
+    const pending = runConformanceProcess({
+      command: process.execPath, args: ['-e', 'process.exit(37)'], cwd: process.cwd(),
+      label: 'native recovery child', report: (event) => events.push(event),
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ phase: 'started', label: 'native recovery child' });
+    expect(events[0]?.startedMs).toBeGreaterThanOrEqual(before);
+    const result = await pending;
+    expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+    expect(events[1]).toMatchObject({ phase: 'finished', label: 'native recovery child',
+      startedMs: events[0]?.startedMs, outcome: 'exited', code: 37 });
+    expect(events[1]?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('retains the named active child and its timeout without turning it into an exit', async () => {
+    const events: Array<{ phase: string; outcome?: string }> = [];
+    const result = await runConformanceProcess({
+      command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'],
+      cwd: process.cwd(), timeoutMs: 50, label: 'stalled native child',
+      report: (event) => events.push(event),
+    });
+    expect(result.outcome).toEqual({ kind: 'timed-out' });
+    expect(events.map(event => event.phase)).toEqual(['started', 'finished']);
+    expect(events[1]?.outcome).toBe('timed-out');
+  });
+
   it('reports the active installation step before completion and retains its failed outcome', async () => {
     const events: Array<{ phase: string; label: string; outcome?: string }> = [];
     const pending = runConformanceStep('codex update', {

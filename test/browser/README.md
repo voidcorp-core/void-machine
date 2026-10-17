@@ -29,6 +29,16 @@ success or failure and expire after fourteen days. The test step's failure is
 never replaced by the upload outcome. Missing fixtures or zero selected tests
 fail instead of certifying an empty run.
 
+The same job also retains `browser-native.log`, combining the original test
+command's stdout and stderr with Playwright's `pw:protocol,pw:browser` diagnostics.
+It records raw CDP requests/responses (including layout metrics and screenshot
+parameters) and browser process output without truncating protocol messages. The
+log lives outside `test-results`, which Playwright clears at startup. The shell
+returns the original command's exit status; logging changes no capture assertion,
+browser flag or execution limit. Match protocol session/request IDs to the retained
+trace when investigating a capture failure. These diagnostics may not reveal
+compositor internals, and a later passing run does not explain an earlier failure.
+
 Review the mobile and desktop catalogue, empty state, installed/absent availability, disabled
 skill versus inactive pack, keyboard
 focus, clipboard denial, 320 px reflow, enlarged text, print and no-JavaScript
@@ -45,6 +55,9 @@ local-file access, which remains refused.
 
 ## Official references
 
+- [Playwright 1.63.0 protocol logging](https://raw.githubusercontent.com/microsoft/playwright/v1.63.0/packages/playwright-core/src/server/helper.ts)
+- [Playwright 1.63.0 browser process logging](https://raw.githubusercontent.com/microsoft/playwright/v1.63.0/packages/playwright-core/src/server/browserType.ts)
+- [GitHub Actions shell and exit semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun)
 - [Playwright 1.63.0 configuration](https://raw.githubusercontent.com/microsoft/playwright/v1.63.0/docs/src/test-configuration-js.md)
 - [Playwright 1.63.0 CI](https://raw.githubusercontent.com/microsoft/playwright/v1.63.0/docs/src/ci.md)
 - [Playwright 1.63.0 browser context options](https://raw.githubusercontent.com/microsoft/playwright/v1.63.0/docs/src/test-use-options-js.md)

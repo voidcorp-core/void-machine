@@ -266,7 +266,7 @@ function derivedCheck(observation: LayoutObservation): CheckResult {
     ok: true,
     status: 'advisory',
     message: `git tracks ${observation.trackedDerivedCount} file(s) that \`hydrate\` restores from the manifest`,
-    fix: `${PRODUCT_COMMAND} update --untrack-derived (keeps the files on disk, drops them from the index)`,
+    fix: 'review the tracked generated paths, then use git rm --cached on only those paths (keeps files on disk); update never rewrites the index',
   };
 }
 

@@ -52,6 +52,14 @@
   "engines": {
     "node": ">=24.15.0"
   },
+  "voidUpdate": {
+    "protocol": 1,
+    "configSchemas": [1],
+    "receiptSchemas": [1],
+    "manifestSchemas": [1],
+    "programSchemas": [1],
+    "runtimeAdapters": ["claude", "codex"]
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true

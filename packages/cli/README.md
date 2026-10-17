@@ -87,7 +87,13 @@ npx voidmachine doctor [--no-remote]
 
 ### `list` / `check` / `update`
 
-`list` shows packs and their detection status; `check` reports version drift; `update` refreshes pinned versions.
+`list` shows packs and their detection status; `check` reports version drift.
+`update` acquires one stable CLI release and prepares the current installed project
+with that release before activating it. `--all` explicitly selects the complete
+discovered installation set; `--dry-run` plans without publication and reports its
+staging/cache. `--version X.Y.Z` pins an exact stable release and refuses downgrades.
+Outside a project, update reports CLI-only selection. `hydrate` remains exact/offline.
+See [the update contract](https://github.com/voidcorp-core/void-machine/blob/develop/docs/UPDATING.md).
 
 ### `decisions`
 

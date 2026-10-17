@@ -19,6 +19,12 @@ function capture(): string {
 }
 
 describe('printHelp', () => {
+  it('documents stable CLI and explicit project selection without retired update flags', () => {
+    const out = capture();
+    expect(out).toContain('update [--all] [--dry-run] [--version X.Y.Z]');
+    expect(out).toContain('stable CLI');
+    expect(out).not.toContain('--untrack-derived');
+  });
   it('exposes declared project knowledge', () => { expect(capture()).toContain('why <file>'); });
   it('names the core plugin harness, never the stale `void`', () => {
     const out = capture();

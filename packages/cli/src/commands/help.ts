@@ -82,7 +82,7 @@ export function printHelp(): void {
   example(`${PRODUCT_COMMAND} status`, 'offline project health');
   example(`${PRODUCT_COMMAND} autopilot status`, 'where the cluster in flight stands');
   example(`${PRODUCT_COMMAND} autopilot abort`, 'give the cluster back, losing no commit');
-  example(`${PRODUCT_COMMAND} update --dry-run`, 'preview version + floor drift');
+  example(`${PRODUCT_COMMAND} update --dry-run`, 'plan stable CLI + current project update');
   example(`${PRODUCT_COMMAND} decisions new --title "Use X" --slug use-x`, 'create one conflict-free ADR');
   example(`${PRODUCT_COMMAND} mission start --title "Ship feature"`, 'start a local team-mode evidence ledger');
   example(`${PRODUCT_COMMAND} mission resume --id mis_<id>`, 'resume from receipts without replaying proven effects');

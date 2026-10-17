@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { replayEventLog, serializeEvent } from '../events/index.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
 import { canonicalJsonHash } from '../evidence/canonical-json.js';
+import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js';
 import { event } from '../test/events.js';
 import { orchestrateMissionTeam, type MissionTeamControllerInput } from './controller.js';
 import { planStoppedMissionRecovery, validatedRecoveredReviewEvents } from './mission-recovery.js';
@@ -40,7 +41,9 @@ function incident(partial = false) {
 }
 function stream(events: readonly CanonicalEvent[]) { return replayEventLog(events.map(serializeEvent).join('\n')); }
 function candidate(events = incident(), completionEventIds = [id(12), id(15)]) {
-  return { stream: stream(events), request: { schemaVersion: 1 as const, closureEventId: events.at(-1)!.eventId,
+  const closure = events.at(-1);
+  if (closure === undefined) throw new Error('Expected fixture closure');
+  return { stream: stream(events), request: { schemaVersion: 1 as const, closureEventId: closure.eventId,
     expectedJournalHash: canonicalJsonHash(events), disposition: { kind: 'preparation-invocation' as const, completionEventIds } },
   observation: { stage: 'pre-implementation' as const, expectedSource: 'runtime:codex' as const,
     maxRounds: 2, contractVersions: Object.fromEntries(IDS.map(id => [id, 1])),
@@ -50,14 +53,14 @@ function recovered(events = incident(), completionEventIds = [id(12), id(15)]) {
   const result = planStoppedMissionRecovery(candidate(events, completionEventIds));
   expect(result.kind).toBe('recover');
   if (result.kind !== 'recover') throw new Error(JSON.stringify(result));
-  return [...events, entry(17, 'mission.recovered', 'mission', JSON.parse(JSON.stringify(result.receipt)), 'void-harness:mission.recover')];
+  return [...events, entry(events.length + 1, 'mission.recovered', 'mission', JSON.parse(JSON.stringify(result.receipt)), 'void-harness:mission.recover')];
 }
-function decide(events: readonly CanonicalEvent[]) {
+function decide(events: readonly CanonicalEvent[], inputHash = HASH) {
   const input: MissionTeamControllerInput = { plan: { planHash: HASH,
     context: { status: 'complete', issues: [] }, specialists: IDS.map(specialistId => ({ specialistId, contractVersion: 1,
       state: 'applicable', stages: ['pre-implementation'] })) }, stream: stream(events),
   evidenceContext: { dependencies: {} }, maxReviewRounds: 2,
-  currentInputHashesByStage: { 'pre-implementation': Object.fromEntries(IDS.map(id => [id, HASH])), 'post-implementation': {} },
+  currentInputHashesByStage: { 'pre-implementation': Object.fromEntries(IDS.map(id => [id, inputHash])), 'post-implementation': {} },
   specialistRuntime: { status: 'available', limitations: [] } };
   return orchestrateMissionTeam(input);
 }
@@ -99,7 +102,8 @@ describe('bounded preparation invocation replacement', () => {
   it('authenticates receipts and handles identical replay without another episode', () => {
     const next = recovered();
     expect(planStoppedMissionRecovery({ ...candidate(), stream: stream(next) }).kind).toBe('already-recovered');
-    const receipt = next.at(-1)!;
+    const receipt = next.at(-1);
+    if (receipt === undefined) throw new Error('Expected recovery receipt');
     const payload = receipt.payload as Record<string, JsonValue>;
     for (const edit of [{ consumedRounds: 1 }, { remainingRounds: 2 }, { inadmissibleCompletionEventIds: [id(4)] }]) {
       expect(validatedRecoveredReviewEvents([...next.slice(0, -1), { ...receipt, payload: { ...payload, ...edit } }]).ok).toBe(false);
@@ -138,4 +142,48 @@ describe('bounded preparation invocation replacement', () => {
     });
     expect(planStoppedMissionRecovery(candidate(events)).kind).toBe('refused');
   });
+});
+
+
+function withObligation(due = 'post-implementation', invalid = false) {
+  const events = incident();
+  const original = events[6];
+  if (original === undefined) throw new Error('Expected original QA completion');
+  const payload = original.payload as Record<string, JsonValue>;
+  const text = 'Provide real implementation verification.';
+  const completion = { ...(payload['completion'] as Record<string, JsonValue>), evidenceRequests: [text] };
+  events[6] = { ...original, payload: { ...payload, completion } };
+  const binding = { completionEventId: original.eventId, completionHash: canonicalJsonHash(completion),
+    specialistId: original.subject, nativeContextId: 'context-evidence-author', requestId: id(16) };
+  return [...events.slice(0, -1),
+    entry(16, 'specialist.evidence-classification-requested', original.subject, binding, 'void-harness:mission.dispatch'),
+    entry(17, 'specialist.evidence-classified', original.subject, { ...binding, items: [{ requestIndex: 0,
+      requestText: text, requestTextHash: canonicalJsonHash(text), due, reason: 'Implementation proof is due after implementation.' }] },
+    invalid ? 'writer:primary' : 'runtime:codex', id(16)),
+    entry(18, 'mission.closed', 'mission', { reason: 'controller-stop', episodeId: id(1) }, 'void-harness:mission.dispatch')];
+}
+
+it('preserves original future evidence obligations and requires all fresh replacements before implementation', () => {
+  const events = withObligation();
+  const next = recovered(events);
+  const before = reduceEvidenceObligations({ events, expectedSource: 'runtime:codex', phase: 'pre-implementation', proofs: [], evidenceContext: { dependencies: {} } });
+  const after = reduceEvidenceObligations({ events: next, expectedSource: 'runtime:codex', phase: 'pre-implementation', proofs: [], evidenceContext: { dependencies: {} } });
+  expect(before.issues).toEqual([]);
+  expect(after).toEqual(before);
+  expect(after.obligations).toHaveLength(1);
+  expect(after.obligations[0]).toMatchObject({ due: 'post-implementation', discharged: false });
+  expect(decide(next).action).toMatchObject({ kind: 'invoke-specialists', reviewRound: 2 });
+  const completed = [...next, ...triplet(20, IDS[0], 2, true), ...triplet(23, IDS[1], 2, true)];
+  expect(decide(completed).action.kind).toBe('run-lead-writer');
+  expect(reduceEvidenceObligations({ events: completed, expectedSource: 'runtime:codex', phase: 'post-implementation', proofs: [], evidenceContext: { dependencies: {} } }).blockingObligationIds).toHaveLength(1);
+});
+
+it.each(['current-review', 'invalid-author'])('refuses unrelated unresolved evidence problems: %s', cause => {
+  expect(planStoppedMissionRecovery(candidate(withObligation(cause === 'current-review' ? cause : 'post-implementation',
+    cause === 'invalid-author'))).kind).toBe('refused');
+});
+
+
+it('refuses dispatch when the admitted preparation inputs drift after recovery', () => {
+  expect(decide(recovered(), OLD).action.kind).toBe('stop');
 });

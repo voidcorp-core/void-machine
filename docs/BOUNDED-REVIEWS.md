@@ -46,6 +46,49 @@ is not silently replaced by this candidate. The verified delivery must include t
 candidate command and recovery request demonstrated against an isolated existing mission.
 No claim of consumer activation is implied by this source document.
 
+## Replacing reused preparation invocations
+
+A controller-stop caused solely by reused native contexts in a complete round-two
+preparation panel admits one explicit replacement request:
+
+```json
+{
+  "schemaVersion": 1,
+  "closureEventId": "evt_original_controller_closure",
+  "expectedJournalHash": "sha256:<canonical event-array hash>",
+  "disposition": {
+    "kind": "preparation-invocation",
+    "completionEventIds": ["evt_exact_invalid_round_two_completion"]
+  }
+}
+```
+
+Use `mission recover --id <same-id> --input <request.json> --json`, then
+`mission dispatch --id <same-id> --json` from the original bound worktree with the
+verified candidate binary. `expectedJournalHash` hashes the canonical parsed event
+array, not the JSONL bytes. Read the raw journal for diagnosis: `mission resume`
+appends events, and inspection may quarantine invalid lines. A replay fixture must be
+standalone with verified project roots; copying a linked checkout's `.git` pointer
+can redirect writes to the original installation.
+
+Admission requires every original request/start/completion binding, the same plan,
+runtime and current contracts/inputs, one actual preparation correction, and exactly
+the invalid reused-context completions. It refuses stale closures, input drift,
+unrelated defects, unknown work, unresolved current evidence and any prior recovery.
+It does not rehabilitate the invalid PASS results. Classified future evidence requests
+and valid panel members remain authoritative.
+
+The receipt keeps two consumed rounds, zero remaining rounds and the unchanged
+correction budget. Dispatch creates new episode-bound requests for only the invalid
+members in **round 2**. Launch new native read-only specialist sessions for each returned
+envelope, preserving each actual identity and result, then submit their start/completion
+through `mission specialist-event`. Never relabel or resume an old context as fresh:
+all historically started identities remain forbidden. Implementation waits for every
+replacement; another replacement failure cannot unlock another repair or a budget reset.
+No harness installation or provider action is part of this recovery.
+
+See the [preparation replacement decision](decisions-log/2026-10-17-replace-invalid-preparation-invocations--bbdbf42b-c286-43af-85a8-8e057b34274a.md).
+
 ## Preparation waiting for evidence
 
 Before implementation, `dispatch` returns `await-evidence` when a valid specialist

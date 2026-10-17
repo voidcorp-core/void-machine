@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.0.3](https://github.com/voidcorp-core/void-machine/compare/v5.0.2...v5.0.3) (2026-10-17)
+
+
+### Bug Fixes
+
+* **mission:** recover reused preparation review contexts without resetting budgets ([4c581be](https://github.com/voidcorp-core/void-machine/commit/4c581be69e313701320bd53f884faa288033dc55))
+* **mission:** replace reused preparation invocations without resetting budgets ([c488918](https://github.com/voidcorp-core/void-machine/commit/c488918dfd9e29a1619d89c603c57b8f82718e25))
+
 ## [5.0.2](https://github.com/voidcorp-core/void-machine/compare/v5.0.1...v5.0.2) (2026-10-14)
 
 

@@ -98,3 +98,16 @@ it('appends one second recovery after premature evidence closure under concurren
   expect(after).toHaveLength(stream.events.length + 1);
   expect(after.at(-1)?.payload).toMatchObject({ consumedRounds: 1, remainingRounds: 1 });
 });
+
+
+it('parses exact preparation invocation replacement IDs without accepting budget or observation overrides', () => {
+  const request = { schemaVersion: 1, closureEventId: 'evt_closure_preparation', expectedJournalHash: HASH,
+    disposition: { kind: 'preparation-invocation', completionEventIds: ['evt_invalid_preparation'] } };
+  expect(parseMissionRecoveryRequest(request)).toEqual(request);
+  for (const disposition of [
+    { ...request.disposition, reviewRound: 1 },
+    { ...request.disposition, completionEventIds: [] },
+    { ...request.disposition, completionEventIds: ['evt_invalid_preparation', 'evt_invalid_preparation'] },
+    { ...request.disposition, completionEventIds: ['unbound'] },
+  ]) expect(() => parseMissionRecoveryRequest({ ...request, disposition })).toThrow('MISSION_RECOVERY_INVALID');
+});

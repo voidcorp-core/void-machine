@@ -664,7 +664,7 @@ export async function recoverStoppedMission(
     : await captureMissionReviewSubject(workRoot, stored.baseCommit, true);
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
-  const recoverySpecialists = opaqueContextRecovery
+  const recoverySpecialists = opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
     ? migration.plan.specialists.filter(value => value.state === 'applicable'
       && value.stages?.includes('pre-implementation'))
     : migration.plan.specialists;

@@ -439,6 +439,9 @@ function boundedReceiptReasons(
 
 function recoveredPreparationTargets(events: readonly CanonicalEvent[]): {
   readonly recoverySeq: number;
+  readonly replacement: boolean;
+  readonly inputHashes: Readonly<Record<string, JsonValue>>;
+  readonly contractVersions: Readonly<Record<string, JsonValue>>;
   readonly specialistIds: readonly string[];
 } | undefined {
   const recovery = events.filter((item) => item.kind === 'mission.recovered').at(-1);
@@ -449,9 +452,12 @@ function recoveredPreparationTargets(events: readonly CanonicalEvent[]): {
   const disposition = record(request?.['disposition'] ?? null);
   const ids = disposition?.['completionEventIds'];
   if (observation?.['stage'] !== 'pre-implementation'
-    || disposition?.['kind'] !== 'review-blocker' || !Array.isArray(ids)) return undefined;
+    || !['review-blocker', 'preparation-invocation'].includes(String(disposition?.['kind'])) || !Array.isArray(ids)) return undefined;
   return {
     recoverySeq: recovery.seq,
+    replacement: disposition?.['kind'] === 'preparation-invocation',
+    inputHashes: record(observation['currentInputHashes'] ?? {}) ?? {},
+    contractVersions: record(observation['contractVersions'] ?? {}) ?? {},
     specialistIds: events.filter((item) =>
       item.kind === 'specialist.completed' && ids.includes(item.eventId)).map((item) => item.subject),
   };
@@ -565,7 +571,7 @@ export function orchestrateMissionTeam(
   const start = missionStart(input);
   const recovered = validatedRecoveredReviewEvents(input.stream.events);
   const reviewEvents = recovered.ok ? recovered.events : input.stream.events;
-  const preparationRecovery = recovered.ok ? recoveredPreparationTargets(reviewEvents) : undefined;
+  const preparationRecovery = recovered.ok ? recoveredPreparationTargets(input.stream.events) : undefined;
   const writerEvents = writerCompletions(input);
   const preparationCorrections = writerEvents.filter((event) =>
     lifecycleField(event, 'actionKind') === 'run-preparation-correction');
@@ -706,6 +712,13 @@ export function orchestrateMissionTeam(
       'Reconcile the invalid recovery receipt through the supported admission path without editing history.');
   }
   if (!migrated.ok) return stopped('degraded', preReview, baseVerdict, migrated.reasons);
+  if (preparationRecovery?.replacement && firstImplementationSeq === undefined
+    && requiredSpecialists(input.plan, 'pre-implementation').some(id =>
+      input.currentInputHashesByStage['pre-implementation'][id] !== preparationRecovery.inputHashes[id]
+      || contractVersions(input.plan)[id] !== preparationRecovery.contractVersions[id])) {
+    return stopped('blocked', preReview, baseVerdict,
+      ['Preparation replacement inputs or contracts changed; reconcile the admitted subject before dispatch']);
+  }
   const pendingEvidence = obligationStop(
     obligations, preReview, baseVerdict, firstImplementationSeq === undefined,
   );
@@ -738,7 +751,7 @@ export function orchestrateMissionTeam(
     return applyRuntimeCertification(pendingEvidence, input.specialistRuntime);
   }
 
-  if (preparationRecovery !== undefined && (lastPreparationSeq === undefined
+  if (preparationRecovery !== undefined && !preparationRecovery.replacement && (lastPreparationSeq === undefined
     || lastPreparationSeq < preparationRecovery.recoverySeq)) {
     if (preReview.issues.length > 0) {
       return decideReviewPhase(start, preReview, baseVerdict, 'pre-implementation');

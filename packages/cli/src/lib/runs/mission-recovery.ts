@@ -75,6 +75,12 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
   }
   const commandCorrection = disposition['kind'] === 'command-correction';
   const ids = disposition['completionEventIds'];
+  if (disposition['kind'] === 'preparation-invocation') {
+    if (!exact(disposition, ['kind', 'completionEventIds']) || !Array.isArray(ids)
+      || ids.length < 1 || ids.length > 64 || !ids.every(eventId)
+      || new Set(ids).size !== ids.length) invalid();
+    return { ...base, disposition: { kind: 'preparation-invocation', completionEventIds: ids } };
+  }
   const artifact = disposition['resolutionArtifact'];
   if ((!commandCorrection && disposition['kind'] !== 'review-blocker' && disposition['kind'] !== 'review-provenance')
     || !exact(disposition, ['kind', commandCorrection ? 'pairs' : 'completionEventIds', 'resolutionArtifact'])

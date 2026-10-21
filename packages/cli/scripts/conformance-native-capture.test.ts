@@ -1,5 +1,5 @@
 // @test-resource subprocess
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -30,11 +30,13 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
   const { conformanceEnvironment } = await import('./conformance-process.mjs');
   const env = conformanceEnvironment({ TEMP: process.env.TEMP, TMP: process.env.TMP });
   const script = fileURLToPath(new URL('./conformance-native-capture.ps1', import.meta.url));
-  const { captureStartup } = await load();
+  const { captureStartup, captureLifecycle } = await load();
   const startup = captureStartup();
   const startedAt = performance.now();
   const observer = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'Capture'],
     { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const processEvidence = captureLifecycle(observer, startedAt);
+  const diagnostic = () => JSON.stringify({ startup: startup.snapshot(), process: processEvidence.snapshot() });
   const children: ReturnType<typeof spawn>[] = [];
   try {
     await new Promise<void>((resolve, reject) => {
@@ -43,7 +45,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
       let started = false;
       let pending = '';
       let bytes = 0;
-      const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}; startup=${JSON.stringify(startup.snapshot())}`)), 8000);
+      const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}; evidence=${diagnostic()}`)), 8000);
       const fail = (error: Error) => { clearTimeout(deadline); reject(error); };
       const produceEvent = () => {
         const child = spawn(process.execPath, ['-e', 'process.exitCode=37'], { env, stdio: 'ignore', windowsHide: true });
@@ -51,7 +53,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
         child.once('error', fail);
       };
       observer.once('error', fail);
-      observer.stderr.on('data', () => fail(new Error(`native observer stderr; startup=${JSON.stringify(startup.snapshot())}`)));
+      observer.stderr.on('data', () => fail(new Error(`native observer stderr; evidence=${diagnostic()}`)));
       observer.stdout.on('data', chunk => {
         bytes += chunk.length;
         if (bytes > 65536) { fail(new Error('native test output bound')); return; }
@@ -85,7 +87,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
       observer.once('close', code => {
         clearTimeout(deadline);
         if (phase === 'complete' && code === 0) resolve();
-        else reject(new Error(`native observer exited ${code} during ${phase}; startup=${JSON.stringify(startup.snapshot())}`));
+        else reject(new Error(`native observer exited ${code} during ${phase}; evidence=${diagnostic()}`));
       });
     });
   } finally {
@@ -364,4 +366,55 @@ describe('observer process evidence before readiness', () => {
     expect(evidence.snapshot().close).toMatchObject({ code: 37 });
     expect(Buffer.byteLength(JSON.stringify(evidence.snapshot()))).toBeLessThan(1024);
   });
+});
+
+
+// Runs after the original observer, never as its warmup. This is a host control,
+// not consumer qualification or a benchmark: prior cache state remains a limit.
+it.skipIf(process.platform !== 'win32')('reports a minimal File host control with the same open input contract', async () => {
+  const { conformanceEnvironment } = await import('./conformance-process.mjs');
+  const { captureLifecycle } = await load();
+  const directory = mkdtempSync(join(tmpdir(), 'native-host-control-'));
+  const script = join(directory, 'control.ps1');
+  writeFileSync(script, `param([ValidateSet('Preflight','Capture')][string]$Mode,
+      [string]$Cdb, [string]$SymbolCache)
+[Console]::Out.WriteLine('native-host-control')
+exit 0
+`);
+  const env = conformanceEnvironment({ TEMP: process.env.TEMP, TMP: process.env.TMP });
+  const startedAt = performance.now();
+  const control = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'Capture'],
+    { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const evidence = captureLifecycle(control, startedAt);
+  let output = '';
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const deadline = setTimeout(() => reject(new Error(`native host control stalled; evidence=${JSON.stringify(evidence.snapshot())}`)), 8000);
+      const fail = () => { clearTimeout(deadline); reject(new Error(`native host control failed; evidence=${JSON.stringify(evidence.snapshot())}`)); };
+      control.once('error', fail);
+      control.stderr.on('data', fail);
+      control.stdout.on('data', chunk => {
+        if (Buffer.byteLength(output) + chunk.length > 64) { fail(); return; }
+        output += chunk.toString('utf8');
+      });
+      control.once('close', code => {
+        clearTimeout(deadline);
+        if (code === 0 && output.trim() === 'native-host-control') resolve();
+        else fail();
+      });
+    });
+  } finally {
+    control.stdin.end();
+    if (control.exitCode === null && control.signalCode === null) control.kill();
+    // Bounded cleanup only, after the unchanged observation deadline. Report a
+    // retained fixture explicitly rather than replacing the primary failure.
+    await new Promise<void>(resolve => {
+      if (evidence.snapshot().close !== undefined) { resolve(); return; }
+      const deadline = setTimeout(resolve, 500);
+      control.once('close', () => { clearTimeout(deadline); resolve(); });
+    });
+    try { rmSync(directory, { recursive: true, force: true }); }
+    catch { process.stderr.write('native host control cleanup incomplete\n'); }
+    process.stdout.write(`${JSON.stringify({ nativeHostControl: evidence.snapshot() })}\n`);
+  }
 });

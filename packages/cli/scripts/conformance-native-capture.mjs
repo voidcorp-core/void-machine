@@ -30,6 +30,26 @@ export function captureStartup() {
   };
 }
 
+// Attach synchronously after spawn, before awaiting readiness. Exit is separate
+// from close: inherited stdio can remain open after the process has ended.
+export function captureLifecycle(child, startedAt) {
+  const state = { pid: child.pid, stdout: { bytes: 0 }, stderr: { bytes: 0 } };
+  const elapsed = () => Math.round(performance.now() - startedAt);
+  child.once('spawn', () => { state.spawnMs = elapsed(); });
+  child.once('error', error => {
+    state.error = { atMs: elapsed(), code: /^E[A-Z0-9_]{1,24}$/.test(error.code ?? '') ? error.code : 'unclassified' };
+  });
+  for (const name of ['exit', 'close']) child.once(name, (code, signal) => {
+    state[name] = { atMs: elapsed(), code: code ?? undefined, signal: signal ?? undefined };
+  });
+  for (const name of ['stdout', 'stderr']) child[name].on('data', chunk => {
+    if (chunk.length > 0) state[name].firstMs ??= elapsed();
+    // 65537 means at least that many bytes; retain no arbitrary stream content.
+    state[name].bytes = Math.min(65537, state[name].bytes + chunk.length);
+  });
+  return { snapshot: () => structuredClone(state) };
+}
+
 function metadata(event) {
   if (!event || !['start', 'stop'].includes(event.kind)
     || !Number.isSafeInteger(event.pid) || event.pid <= 0
@@ -192,6 +212,7 @@ export async function armNativeCapture(directory) {
   const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', SCRIPT,
     '-Mode', 'Capture', '-Cdb', preflight.capability.cdb, '-SymbolCache', preflight.symbolCache],
   { env: TOOL_ENV(), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const processEvidence = captureLifecycle(child, started);
   let readyUtcMs;
   let target;
   let unknown = false;
@@ -224,7 +245,7 @@ export async function armNativeCapture(directory) {
   const persist = (phase = 'active') => {
     const state = queue.snapshot();
     const correlation = correlateCapture(state.events, target, readyUtcMs, unknown || state.overflow);
-    return journal.write({ ...correlation, phase, readinessMs, startup: startup.snapshot(),
+    return journal.write({ ...correlation, phase, readinessMs, startup: startup.snapshot(), process: processEvidence.snapshot(),
       durationMs: Math.round(performance.now() - started),
       snapshots: correlation.status === 'unknown' ? [] : snapshots, unknown,
       queueOverflow: state.overflow, observerBytes: total, stderrBytes, primaryOutcome })

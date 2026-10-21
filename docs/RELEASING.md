@@ -410,6 +410,12 @@ only five ordered startup boundaries and parent-observed elapsed times: script e
 type compilation, watcher construction, stop subscription, and start subscription.
 These diagnose collector readiness; they do not prove consumer qualification or
 explain a later native-child wait. No arbitrary observer text or environment is exported.
+Process evidence attaches before readiness: PID, spawn/error/exit/close, first-byte
+times and saturated byte counts, never stream contents. Exit and pipe closure are
+separate observations. One minimal PowerShell `-File` control runs after the original
+observer with the same flags, filtered environment and open stdin, under its own
+eight-second deadline. Its different script path and potentially warm OS caches
+limit comparisons; a passing control is neither a repair nor Windows qualification.
 The default order is install, update, hooks, autopilot, latency, serial and fail-fast on
 the same verified artifact. Every suite retains the 120-second process limit; install
 no longer runs update internally. All three OS jobs run this mandatory chain.

@@ -8,7 +8,7 @@ import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js
 import { type IndependentReviewReceipt, isReviewSubject, parseReviewReceipt, type ReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import type { SpecialistId, SpecialistInvocationStage } from '../specialist/routing.js';
 import { projectMissionLifecycle } from './mission-lifecycle.js';
-import { reduceReviewLoop, validNativeContextId } from './review-loop.js';
+import { BOUNDED_REVIEW_BUDGET, reduceReviewLoop, validNativeContextId } from './review-loop.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
 
 export interface RecoveryResolutionArtifact {
@@ -33,6 +33,8 @@ export interface RecoveredReviewBinding {
   readonly review: IndependentReviewReceipt;
 }
 export interface MissionRecoveryObservation {
+  /** Absent on historical receipts: their original reduction remains unchanged. */
+  readonly reviewPolicy?: 'bounded-corrections-v1';
   readonly reviewSubject?: ReviewSubject;
   readonly reviewBindings?: readonly RecoveredReviewBinding[];
   readonly stage: SpecialistInvocationStage;
@@ -320,7 +322,9 @@ function specialistId(value: string): value is SpecialistId {
   return /^core:[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
-function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly Completion[]): boolean {
+function validProvenanceRecovery(
+  input: MissionRecoveryInput, existing: readonly Completion[], afterSeqExclusive = 0,
+): boolean {
   const disposition = input.request.disposition;
   const observation = input.observation;
   const bindings = observation.reviewBindings;
@@ -337,7 +341,9 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   const observedSubject = observation.reviewSubject;
   return bindings.every(binding => {
     const original = existing.find(item => item.event.eventId === binding.completionEventId);
-    if (original === undefined || !disposition.completionEventIds.includes(binding.completionEventId)
+    if (parseReviewReceipt(binding.review) === undefined
+      || original === undefined || original.event.seq <= afterSeqExclusive
+      || !disposition.completionEventIds.includes(binding.completionEventId)
       || original.event.subject !== 'core:independent-code-reviewer'
       || original.event.source !== observation.expectedSource || original.completion.verdict !== 'pass'
       || original.completion.findings.some(finding => finding.classification !== 'advisory')
@@ -348,13 +354,14 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
       || binding.review.taskId !== original.event.missionId || binding.review.writerId !== writerId
       || binding.review.provenance.kind !== 'native-context'
       || binding.review.provenance.contextId !== field(original.event, 'contextId')) return false;
-    const requested = events.find(event => event.seq < original.event.seq && matchesRequest(original.event, event)
+    const requested = events.find(event => event.seq > afterSeqExclusive
+      && event.seq < original.event.seq && matchesRequest(original.event, event)
       && field(event, 'contractVersion') === original.completion.contractVersion
       && `runtime:${String(field(event, 'runtime'))}` === observation.expectedSource);
     return requested !== undefined && events.some(event => event.kind === 'specialist.started'
       && event.source === observation.expectedSource && event.subject === original.event.subject
       && event.seq > requested.seq && event.seq < original.event.seq
-      && ['stage', 'reviewRound', 'inputHash', 'contextId'].every(key =>
+      && ['stage', 'reviewRound', 'inputHash', 'contractVersion', 'contextId'].every(key =>
         field(event, key) === field(original.event, key)));
   });
 }
@@ -416,13 +423,15 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const journalHash = canonicalJsonHash(events);
   if (request.expectedJournalHash !== journalHash) return refuse('stale-journal', 'Re-observe the journal before requesting recovery');
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
+  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
     && event.kind === 'lead-writer.completed')
-    && !pendingPreparationClarification(input, previousRecovery)) {
+    && !pendingPreparationClarification(input, previousRecovery)
+    // Only a complete new independent invocation can advance provenance recovery.
+    && !validProvenanceRecovery(input, existing, previousRecovery.seq)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
   }
-  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const disposition = request.disposition;
   const replacement = disposition.kind === 'preparation-invocation';
   if (replacement && !preparationInvocationReplacement(input)) {
@@ -502,7 +511,9 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     ...(stageStart === undefined ? {} : { stageStartSeqExclusive: stageStart }),
     ...(lastWriter === undefined ? {} : { afterSeqExclusive: lastWriter }),
     requiredSpecialists: required, contractVersions: observation.contractVersions,
-    currentInputHashes: observation.currentInputHashes, maxRounds: observation.maxRounds };
+    currentInputHashes: observation.currentInputHashes,
+    ...(observation.reviewPolicy === 'bounded-corrections-v1'
+      ? BOUNDED_REVIEW_BUDGET : { maxRounds: observation.maxRounds }) };
   const originalReview = reduceReviewLoop({ ...reviewInput, events: projectedHistory });
   if (originalReview.issues.some((issue) => replacement
     ? issue.code !== 'reused-context' || !inadmissible.includes(issue.eventId)
@@ -521,7 +532,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const consumedRounds = Math.max(0, ...(replacement ? projectedHistory : projected).filter((event) =>
     ['specialist.completed', 'specialist.failed'].includes(event.kind)
       && field(event, 'stage') === observation.stage).map((event) => Number(field(event, 'reviewRound'))));
-  if (!replacement && disposition.kind !== 'review-provenance' && consumedRounds >= observation.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
+  if (!replacement && disposition.kind !== 'review-provenance' && consumedRounds >= reviewInput.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
   const consumedCorrectionBatches = projected.filter(event => event.kind === 'lead-writer.completed'
     && field(event, 'actionKind') === 'run-correction').length;
   if (disposition.kind === 'review-provenance' && consumedCorrectionBatches > 2) {
@@ -537,7 +548,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     requestHash: canonicalJsonHash(request), request, observation,
     preservedCompletionEventIds: [...preservedIds],
     invalidatedCompletionEventIds: existing.filter((item) => !preservedIds.has(item.event.eventId)).map((item) => item.event.eventId),
-    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, observation.maxRounds - consumedRounds),
+    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, reviewInput.maxRounds - consumedRounds),
     ...(!replacement && disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
     nextAction: replacement || disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
@@ -603,10 +614,12 @@ export function parseRecoveredReviewBindings(value: unknown): readonly Recovered
 function recoveryObservation(value: JsonValue | undefined): value is JsonValue & MissionRecoveryObservation {
   if (value === undefined || !record(value)
     || !exactKeys(value, ['stage', 'contractVersions', 'currentInputHashes', 'maxRounds', 'expectedSource',
+      ...(value['reviewPolicy'] === undefined ? [] : ['reviewPolicy']),
       ...(value['resolutionArtifact'] === undefined ? [] : ['resolutionArtifact']),
       ...(value['reviewSubject'] === undefined ? [] : ['reviewSubject']),
       ...(value['reviewBindings'] === undefined ? [] : ['reviewBindings']),
       ...(value['evidenceDependencies'] === undefined ? [] : ['evidenceDependencies'])])
+    || (value['reviewPolicy'] !== undefined && value['reviewPolicy'] !== 'bounded-corrections-v1')
     || !['pre-implementation', 'post-implementation'].includes(String(value['stage']))
     || !['runtime:codex', 'runtime:claude'].includes(String(value['expectedSource']))
     || typeof value['maxRounds'] !== 'number' || !Number.isSafeInteger(value['maxRounds']) || value['maxRounds'] < 1 || value['maxRounds'] > 8

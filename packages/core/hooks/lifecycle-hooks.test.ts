@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { adapterFor } from '../../cli/src/lib/runtime-adapters.js';
 import { describe, expect, it } from 'vitest';
 
 interface CommandHook {
@@ -102,5 +103,36 @@ describe('distributed global Herdr guard', () => {
       expect(readFileSync(capture)).toEqual(input);
       expect(existsSync(resolve(root, '.void'))).toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+describe('distributed first-ticket host discovery', () => {
+  it.each(['codex', 'claude'] as const)('emits host guidance from the installed %s SessionStart hook without central state', async runtime => {
+    const root = realpathSync(mkdtempSync(resolve(tmpdir(), 'distributed-herdr-bootstrap-')));
+    const bin = resolve(root, 'bin'); mkdirSync(bin);
+    const common = resolve(root, '.git'); mkdirSync(common);
+    writeFileSync(resolve(bin, 'git'), `#!${process.execPath}\nprocess.stdout.write(${JSON.stringify(common)});\n`, { mode: 0o755 });
+    writeFileSync(resolve(bin, 'herdr'), `#!${process.execPath}\n`
+      + 'const args = process.argv.slice(2);\n'
+      + 'const result = args[1] === "list" ? {panes:[{pane_id:"w1:p1",workspace_id:"w1",label:"ORCH",cwd:process.cwd()}]}'
+      + ': args[1] === "process-info" ? {process_info:{pane_id:"w1:p1",foreground_processes:[{pid:process.ppid}]}} : undefined;\n'
+      + 'if (!result) process.exit(1); process.stdout.write(JSON.stringify({result}));\n', { mode: 0o755 });
+    await adapterFor(runtime).wire({ stageRoot: root, installRoot: root,
+      sourceRoot: resolve('packages/cli/core-assets'), enabledPlugins: ['harness'], enabledPacks: [],
+      source: 'local', marketplaceRepo: 'test/harness', pinVersion: '0.0.0' });
+    const installedManifest = JSON.parse(readFileSync(resolve(root,
+      runtime === 'codex' ? '.codex/hooks.json' : '.claude/settings.json'), 'utf8')) as HookManifest;
+    const hook = commands(installedManifest, 'SessionStart').find(command => command.includes('herdr-metadata'));
+    expect(hook).toBeDefined();
+    const result = spawnSync('/bin/sh', ['-c', hook ?? 'exit 1'], {
+      cwd: root, input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'startup', cwd: root }), timeout: 4000,
+      env: { PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, CLAUDE_PROJECT_DIR: root,
+        HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1', HERDR_SOCKET_PATH: resolve(root, 'unused') },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr.toString()).toBe('');
+    expect(result.stdout.toString()).toContain('void-orchestrate');
+    expect(result.stdout.toString()).toContain('w1:p1');
+    expect(existsSync(resolve(root, '.local/state/orchestra'))).toBe(false);
   });
 });

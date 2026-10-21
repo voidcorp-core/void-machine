@@ -545,7 +545,6 @@ function obligationStop(
   state: EvidenceObligationState,
   review: ReviewLoopState,
   verdict: MissionVerdict,
-  preparation = false,
 ): MissionTeamDecision | undefined {
   if (state.issues.length > 0) {
     return stopped('degraded', review, verdict,
@@ -558,10 +557,8 @@ function obligationStop(
     state.obligations.filter((item) => blocking.has(item.obligationId)).map((item) =>
       `Evidence obligation ${item.obligationId} (${item.due}): ${item.requestText}`),
     'Use mission evidence-request, then record the authorized author response with mission evidence-event to classify or discharge the obligation; a writer completion does not replace the required proof.');
-  // Preparation proof can require an author response before any writer may run.
-  return preparation
-    ? { ...decision, action: { kind: 'await-evidence', reasons: decision.reasons } }
-    : decision;
+  // An outstanding proof is actionable at every phase; it is not a terminal stop.
+  return { ...decision, action: { kind: 'await-evidence', reasons: decision.reasons } };
 }
 
 export function orchestrateMissionTeam(
@@ -720,8 +717,14 @@ export function orchestrateMissionTeam(
     return stopped('blocked', preReview, baseVerdict,
       ['Preparation replacement inputs or contracts changed; reconcile the admitted subject before dispatch']);
   }
+  if (firstImplementationSeq !== undefined && input.stream.events.some(event =>
+    event.kind === 'specialist.completed' && event.seq > firstImplementationSeq
+      && lifecycleField(event, 'stage') === 'pre-implementation')) {
+    return stopped('blocked', preReview, baseVerdict,
+      ['pre-implementation review was replayed after implementation']);
+  }
   const pendingEvidence = obligationStop(
-    obligations, preReview, baseVerdict, firstImplementationSeq === undefined,
+    obligations, preReview, baseVerdict,
   );
   const migration = migrated.migration;
   if (migration !== undefined) {
@@ -744,6 +747,36 @@ export function orchestrateMissionTeam(
         review: preReview, verdict: overrideVerdict(baseVerdict, 'blocked', reasons), reasons,
       }, input.specialistRuntime);
     }
+  }
+  const postReview = firstImplementationSeq === undefined || lastWriterSeq === undefined
+    ? undefined : reduceReviewLoop({
+    stage: 'post-implementation',
+    expectedSource,
+    stageStartSeqExclusive: firstImplementationSeq,
+    afterSeqExclusive: lastWriterSeq,
+    events: reviewEvents,
+    requiredSpecialists: requiredSpecialists(input.plan, 'post-implementation', start.boundedReview),
+    contractVersions: contractVersions(input.plan),
+    currentInputHashes: input.currentInputHashesByStage['post-implementation'],
+    ...(start.boundedReview ? BOUNDED_REVIEW_BUDGET : { maxRounds: input.maxReviewRounds }),
+    // Pending proofs are handled by obligationStop; they must not mask failed reviews.
+    evidenceObligations: { ...obligations, blockingObligationIds: [] },
+    validProofIds: input.stream.events.flatMap(event => {
+      if (event.kind !== 'evidence.recorded') return [];
+      const parsed = parseEvidence(lifecycleField(event, 'evidence'));
+      return parsed.ok && parsed.value.evidenceId === event.subject
+        && parsed.value.missionId === event.missionId && parsed.value.status === 'passed'
+        && assessEvidence(parsed.value, input.evidenceContext).status === 'fresh'
+        ? [parsed.value.evidenceId] : [];
+    }),
+    ...(migration === undefined ? {} : { contractMigration: {
+      specialistId: migration.receipt.specialistId, afterSeq: migration.seq,
+      reviewRound: migration.receipt.reviewRound,
+    } }),
+  });
+  if (postReview?.status === 'blocked' || postReview?.status === 'degraded') {
+    return applyRuntimeCertification(
+      decideReviewPhase(start, postReview, baseVerdict, 'post-implementation'), input.specialistRuntime);
   }
   const correctiveFindingIds = pendingRecoveredCorrectionFindingIds(input.stream.events);
   const correctiveContinuation = pendingEvidence !== undefined && obligations.issues.length === 0
@@ -800,33 +833,10 @@ export function orchestrateMissionTeam(
       reasons,
     }, input.specialistRuntime);
   }
-  if (firstWriterSeq === undefined || firstImplementationSeq === undefined || lastWriterSeq === undefined) {
+  if (firstWriterSeq === undefined || firstImplementationSeq === undefined || lastWriterSeq === undefined
+    || postReview === undefined) {
     throw new Error('MISSION_TEAM_INVARIANT: writer completion boundary is missing');
   }
-  const postReview = reduceReviewLoop({
-    stage: 'post-implementation',
-    expectedSource,
-    stageStartSeqExclusive: firstImplementationSeq,
-    afterSeqExclusive: lastWriterSeq,
-    events: reviewEvents,
-    requiredSpecialists: requiredSpecialists(input.plan, 'post-implementation', start.boundedReview),
-    contractVersions: contractVersions(input.plan),
-    currentInputHashes: input.currentInputHashesByStage['post-implementation'],
-    ...(start.boundedReview ? BOUNDED_REVIEW_BUDGET : { maxRounds: input.maxReviewRounds }),
-    evidenceObligations: obligations,
-    validProofIds: input.stream.events.flatMap(event => {
-      if (event.kind !== 'evidence.recorded') return [];
-      const parsed = parseEvidence(lifecycleField(event, 'evidence'));
-      return parsed.ok && parsed.value.evidenceId === event.subject
-        && parsed.value.missionId === event.missionId && parsed.value.status === 'passed'
-        && assessEvidence(parsed.value, input.evidenceContext).status === 'fresh'
-        ? [parsed.value.evidenceId] : [];
-    }),
-    ...(migration === undefined ? {} : { contractMigration: {
-      specialistId: migration.receipt.specialistId, afterSeq: migration.seq,
-      reviewRound: migration.receipt.reviewRound,
-    } }),
-  });
   if (start.boundedReview && postReview.missingSpecialists.length === 0) {
     const receiptReasons = boundedReceiptReasons(input, start, reviewEvents);
     if (receiptReasons.length > 0) return stopped('degraded', postReview, baseVerdict, receiptReasons);

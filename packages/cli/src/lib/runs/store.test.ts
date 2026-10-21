@@ -162,6 +162,21 @@ describe('mission run store', () => {
     );
   });
 
+  it('binds the project input recipe to a versioned controller plan and rejects recipe tampering', async () => {
+    const root = await fixture();
+    await createMission(root, { missionId: ID, title: 'Recipe-bound mission', mode: 'team' });
+    const baseCommit = 'a'.repeat(40);
+    const routingHash = await writeMissionControllerPlan(root, ID, CONTROLLER_PLAN, CONTROLLER_TICKET,
+      baseCommit, 'project-v1');
+    expect(routingHash).not.toBe(missionControllerRoutingHash(CONTROLLER_PLAN, CONTROLLER_TICKET, baseCommit));
+    expect(await loadMissionControllerPlan(root, ID)).toMatchObject({ inputRecipe: 'project-v1', baseCommit, routingHash });
+    const path = join(root, '.void/machine/runs', ID, 'controller-plan.json');
+    const stored = JSON.parse(await readFile(path, 'utf8'));
+    expect(stored.schemaVersion).toBe(3);
+    await writeFile(path, JSON.stringify({ ...stored, inputRecipe: 'runtime-v1' }));
+    await expect(loadMissionControllerPlan(root, ID)).rejects.toThrow('MISSION_CONTROLLER_PLAN_INVALID');
+  });
+
   it('refuses to create an evidence-only run for an unknown mission', async () => {
     const root = await fixture();
 

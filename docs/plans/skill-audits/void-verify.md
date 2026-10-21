@@ -132,3 +132,13 @@ None directly. This skill composes with the existing hooks and skills.
 ## gstack /ship vendoring (DEV-388, de-gstackification Vague 2)
 
 **Integrated** the completion-verification half of /ship: the Plan-Completion Audit (classify every actionable item DONE/PARTIAL/NOT-DONE/CHANGED/UNVERIFIABLE against the diff), the honesty rule ("code that *handles* a deliverable is not the deliverable"), per-item confirmation for UNVERIFIABLE items (never a blanket "all done?"), and scope-drift flagging. Also sharpened "observed not assumed" with /ship's named rationalizations ("should work now"→run it, "trivial change"→trivial breaks prod). **Covered already** (not re-vendored): typecheck/tests/lint/hooks pass (the 12-item checklist). **Distinction preserved**: the checklist verifies the *build works*; the completion audit verifies *you built what was specified* — different subject, one skill.
+
+## Development feedback (2026-10-21)
+
+GitHub's documented event and concurrency semantics are distilled into a small
+executable admission guard beside this skill. Drafts explicitly refuse admission;
+readiness runs real validation on the same SHA. The portable workflow is an adoption
+example, not an automatic project rewrite. Full checks remain before integration.
+Rejected: skipped required jobs (success without tests), after-merge-only validation,
+and a new check-publishing service. Existing local hooks and configured commands own
+the fast iteration loop. Source URLs live in `.source` and `references/ci-feedback.md`.

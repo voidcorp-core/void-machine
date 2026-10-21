@@ -7,6 +7,7 @@ on:
   # set on both branches — no reduced coverage on the autonomous side.
   pull_request:
     branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   # The merge queue on `develop` replays the required checks on the combined
   # result before merging, and waits for them on this event only. GITHUB_SHA is
   # then the merge group commit, so every GATE_SHA below proves that commit.
@@ -14,14 +15,22 @@ on:
   merge_group:
     types: [checks_requested]
     branches: [develop]
+  # develop is proved before entry by merge_group; promotion still follows its push.
   push:
-    branches: [main, develop]
+    branches: [main]
   # Release Please uses GITHUB_TOKEN, so its PR events do not run unattended.
   # release.yml dispatches this workflow explicitly on the release PR branch.
   workflow_dispatch: {}
 
+# Never coalesce queue groups or release/manual runs. Only a newer PR state
+# invalidates that PR's earlier work (including conversion back to draft).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   consumer-artifact:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: packed consumer artifact
     runs-on: ubuntu-latest
     env:
@@ -130,6 +139,7 @@ jobs:
         run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"
 
   project-graph-conformance:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: project graph conformance (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -175,6 +185,7 @@ jobs:
   # instead of doubling every OS-bound conformance job. It is a separate job so
   # the required `validate` check keeps its name.
   node-current:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: tests (node 26)
     runs-on: ubuntu-latest
     # `validate` runs the same build, type check and suites in 4 to 5 minutes;
@@ -209,6 +220,11 @@ jobs:
           # checkout fetches one commit by default, so retain the base history.
           fetch-depth: 0
           ref: ${{ env.GATE_SHA }}
+
+      # Keep validate red on a draft: skipped required jobs report success.
+      - name: Admit integration validation
+        id: admission
+        run: node packages/core/skills/void-verify/references/ci-admission.mjs
 
       - name: Setup pnpm
         # No `version:` here: action-setup reads it from packageManager in
@@ -389,7 +405,7 @@ jobs:
           --report ".void/machine/gate-reports/typecheck.json"
 
       - name: Aggregate exact-SHA gate reports
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.admission.outcome == 'success' }}
         run: >-
           node scripts/verify.mjs --aggregate --sha "$GATE_SHA"
           --reports ".void/machine/gate-reports"

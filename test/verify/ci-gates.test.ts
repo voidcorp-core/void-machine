@@ -39,7 +39,7 @@ describe('generated CI gate projection', () => {
   });
 
   it('aggregates exact-SHA reports after failures without running after cancellation', () => {
-    expect(rendered).toMatch(/if: \$\{\{ !cancelled\(\) \}\}/);
+    expect(rendered).toMatch(/if: \$\{\{ !cancelled\(\) && steps\.admission\.outcome == 'success' \}\}/);
     expect(rendered).toContain('--aggregate --sha "$GATE_SHA"');
     expect(rendered).toContain('--reports ".void/machine/gate-reports"');
   });

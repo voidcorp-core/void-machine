@@ -4,22 +4,28 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { parseDocument } from 'yaml';
+import { isSeq, parseDocument } from 'yaml';
 
 const ROOT = resolve(import.meta.dirname, '../../../..');
 const REFERENCES = join(ROOT, 'packages/core/skills/void-verify/references');
 const contexts = {
   draft: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: true } }, run_id: 10 },
   ready: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: false } }, run_id: 11 },
-  queue: { event_name: 'merge_group', event: {}, run_id: 12 },
-  manual: { event_name: 'workflow_dispatch', event: {}, run_id: 13 },
-  push: { event_name: 'push', event: {}, run_id: 14 },
+  queue: { event_name: 'merge_group', event: { pull_request: {} }, run_id: 12 },
+  manual: { event_name: 'workflow_dispatch', event: { pull_request: {} }, run_id: 13 },
+  push: { event_name: 'push', event: { pull_request: {} }, run_id: 14 },
 };
 
 function workflow(path: string) {
   const document = parseDocument(readFileSync(join(ROOT, path), 'utf8'), { uniqueKeys: true });
   expect(document.errors).toEqual([]);
   return document;
+}
+
+function sequence(document: ReturnType<typeof workflow>, path: readonly string[]): unknown[] {
+  const node = document.getIn(path, true);
+  if (!isSeq(node)) throw new Error(`Missing workflow sequence: ${path.join('.')}`);
+  return node.toJSON() as unknown[];
 }
 
 function evaluate(value: unknown, github: object): unknown {
@@ -55,7 +61,7 @@ describe('development feedback and integration admission', () => {
 
   it.each(['ci.yml', 'void-enforce.yml'])('%s starts fresh on ready and cancels only obsolete PR runs', (name) => {
     const ci = workflow(`.github/workflows/${name}`);
-    const types = ci.getIn(['on', 'pull_request', 'types'])?.toJSON();
+    const types = sequence(ci, ['on', 'pull_request', 'types']);
     expect(types).toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft', 'synchronize']));
     const group = ci.getIn(['concurrency', 'group']);
     const cancel = ci.getIn(['concurrency', 'cancel-in-progress']);
@@ -71,11 +77,40 @@ describe('development feedback and integration admission', () => {
 
   it('keeps queue/main/manual validation without the develop post-merge duplicate', () => {
     const ci = workflow('.github/workflows/ci.yml');
-    expect(ci.getIn(['on', 'push', 'branches'])?.toJSON()).toEqual(['main']);
-    expect(ci.getIn(['on', 'merge_group', 'types'])?.toJSON()).toEqual(['checks_requested']);
+    expect(sequence(ci, ['on', 'push', 'branches'])).toEqual(['main']);
+    expect(sequence(ci, ['on', 'merge_group', 'types'])).toEqual(['checks_requested']);
     expect(ci.hasIn(['on', 'workflow_dispatch'])).toBe(true);
-    expect(workflow('.github/workflows/promotion.yml').getIn(['on', 'push', 'branches'])?.toJSON())
+    expect(sequence(workflow('.github/workflows/promotion.yml'), ['on', 'push', 'branches']))
       .toEqual(['develop']);
+  });
+
+  it('keeps admission inside required jobs before dependencies, including the consumer template', () => {
+    for (const [path, id] of [
+      ['.github/workflows/ci.yml', 'validate'],
+      ['.github/workflows/void-enforce.yml', 'enforce'],
+      ['packages/core/skills/void-verify/references/quality.yml', 'quality'],
+    ] as const) {
+      const ci = workflow(path);
+      expect(ci.getIn(['jobs', id, 'if'])).toBeUndefined();
+      const steps = sequence(ci, ['jobs', id, 'steps']) as {
+        run?: string; uses?: string; 'continue-on-error'?: boolean;
+      }[];
+      const admissionIndex = steps.findIndex((step) => step.run?.includes('ci-admission.mjs'));
+      expect(admissionIndex).toBeGreaterThanOrEqual(0);
+      expect(steps[admissionIndex]?.['continue-on-error']).toBeUndefined();
+      expect(steps.slice(0, admissionIndex).some((step) => /install|npm ci/.test(step.run ?? ''))).toBe(false);
+      expect(steps.slice(admissionIndex + 1).some((step) => /install|npm ci/.test(step.run ?? ''))).toBe(true);
+    }
+  });
+
+  it('proves delivered skill admission rather than merely shipping an inaccessible asset', async () => {
+    // @ts-expect-error dependency-free ESM conformance helper
+    const { proveInstalledCiAdmission } = await import('../../scripts/conformance-install.mjs');
+    const project = mkdtempSync(join(tmpdir(), 'void-ci-install-'));
+    try {
+      // An absent installed skill is an installation failure, not successful CI adoption.
+      await expect(proveInstalledCiAdmission(project, '.agents', {})).rejects.toThrow();
+    } finally { rmSync(project, { recursive: true, force: true }); }
   });
 
   it('refuses drafts explicitly without calling them failed tests', () => {

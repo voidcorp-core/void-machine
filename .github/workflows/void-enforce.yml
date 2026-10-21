@@ -13,7 +13,7 @@ on:
   # gate that blocks forever instead of a gate that judges.
   pull_request:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, auto_merge_enabled, auto_merge_disabled]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, auto_merge_enabled, auto_merge_disabled]
   # The merge queue on `develop` waits for its required checks on this event
   # only. `enforce` then diffs the group commit against the group base, which
   # the composite reads from the merge_group payload.
@@ -34,6 +34,10 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   enforce:
     runs-on: ubuntu-latest
@@ -41,6 +45,8 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+      - name: Admit integration validation
+        run: node packages/core/skills/void-verify/references/ci-admission.mjs
       # Auto-merge is the default way into develop: it waits for protection and
       # every required check. The live state is read, not the event payload, so
       # the step judges what is armed now. Only main refuses it: the promotion

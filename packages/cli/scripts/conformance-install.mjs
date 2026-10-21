@@ -129,6 +129,28 @@ async function assertDoctrine(fixture, bin, stage) {
   }
 }
 
+export async function proveInstalledCiAdmission(fixture, skillRoot, environment) {
+  const skill = join(fixture, skillRoot, 'skills', 'void-verify');
+  const guide = await readFile(join(skill, 'SKILL.md'), 'utf8');
+  if (!guide.includes('references/ci-feedback.md')) throw new Error('CI skill adoption guide missing');
+  const references = join(skill, 'references');
+  for (const name of ['ci-feedback.md', 'quality.yml', 'ci-admission.mjs']) {
+    requirePath(join(references, name), `installed CI reference ${name}`);
+  }
+  const eventPath = join(fixture, 'ci-admission-event.json');
+  for (const draft of [true, false]) {
+    await writeFile(eventPath, JSON.stringify({ pull_request: { draft }, action: 'ready_for_review' }));
+    const result = await runConformanceProcess({ command: process.execPath,
+      args: [join(references, 'ci-admission.mjs')], cwd: fixture,
+      env: { ...environment, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: eventPath },
+      timeoutMs: 5_000 });
+    if (result.outcome.kind !== 'exited' || result.outcome.code !== (draft ? 1 : 0)
+      || !(draft ? result.stderr.includes('CI_DEFERRED_DRAFT') : result.stdout.includes('CI_ADMITTED'))) {
+      throw new Error(`installed CI admission failed for draft=${draft}: ${result.stderr}`);
+    }
+  }
+}
+
 export async function exerciseRuntime(temporary, bin, runtime) {
   const fixture = join(temporary, `fixture-${runtime}`);
   await mkdir(join(fixture, 'tmp'), { recursive: true });
@@ -170,6 +192,7 @@ export async function exerciseRuntime(temporary, bin, runtime) {
   }
 
   const skillRoot = runtime === 'codex' ? '.agents' : '.claude';
+  await proveInstalledCiAdmission(fixture, skillRoot, environment);
   const receiptPath = join(fixture, '.void', 'machine', 'receipts', 'install-v1.json');
   const adjacent = join(fixture, skillRoot, 'skills', 'private', 'SKILL.md');
   await mkdir(dirname(adjacent), { recursive: true });

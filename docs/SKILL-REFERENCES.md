@@ -38,6 +38,7 @@ target of a redirection, and a sibling test already asserts each one still ships
 | `void-testing` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
 | `void-ticket` | `packages/cli/src/lib/autopilot/preflight.ts` |
 | `void-typescript-strict` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
+| `void-verify` | `packages/cli/scripts/conformance-install.mjs` |
 
 ## Declared `void-` identifiers
 

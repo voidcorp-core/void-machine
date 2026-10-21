@@ -479,3 +479,25 @@ installer provenance or human approval of doctrine changes. See the
 The bounded source reader still requires complete source within 64 KiB. When a
 command exceeds it, extract a cohesive module and preserve behavior with tests;
 do not raise the ceiling or exempt the command to make promotion green.
+
+## Development feedback and integration admission
+
+Keep implementation PRs in draft while iterating with focused local tests and types.
+`ci` skips its expensive draft jobs; the required `validate` job and `void-enforce`
+stop before package installation with `CI_DEFERRED_DRAFT`. This is expected preparation,
+not evidence that tests failed or passed. A skipped required job reports success in
+GitHub, so the admission guard must stay inside the required jobs. The
+`ready_for_review` event starts real validation even when the commit is unchanged.
+`converted_to_draft` cancels stale PR work; only PR runs share cancellation groups.
+
+Ready PRs and every merge group retain the complete job set and exact subject checks.
+`ci` no longer repeats that suite on push to `develop`: `promotion.yml` independently
+consumes that push; the review queue consumes only merge-group `ci` requests; release
+runs remain on `main`. Push to `main` and manual CI still run. No remote branch
+protection is changed. Work on merge-control paths still requires human integration.
+
+Consumers receive the same executable guard and workflow template beside installed
+`void-verify` skills. See [the adoption procedure](../packages/core/skills/void-verify/references/ci-feedback.md).
+Adoption is explicit and preserves each project's real validation commands, review
+and enforcement. Rollback restores prior workflow triggers and removes admission
+steps together; it restores draft CI cost without altering mission history or budgets.

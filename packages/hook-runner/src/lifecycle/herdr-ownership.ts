@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/hook-runner/src/lifecycle/herdr-bootstrap.test.ts
 import * as z from 'zod/mini';
 import { record } from './executor-shared.js';
 

@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/cli/src/lib/runs/mission-review-recovery-cli.test.ts
 import {
   existsSync,
   readFileSync,

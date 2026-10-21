@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.0.5](https://github.com/voidcorp-core/void-machine/compare/v5.0.4...v5.0.5) (2026-10-21)
+
+
+### Bug Fixes
+
+* **mission:** recover authentic author evidence after controller stops ([6ebb045](https://github.com/voidcorp-core/void-machine/commit/6ebb0456a7d8204055f61975a3d09157024f439d))
+* **mission:** retain actionable author evidence across stops ([d334b42](https://github.com/voidcorp-core/void-machine/commit/d334b424f9441dcd428e923d7ec53a0ae3566b05))
+
 ## [5.0.4](https://github.com/voidcorp-core/void-machine/compare/v5.0.3...v5.0.4) (2026-10-21)
 
 

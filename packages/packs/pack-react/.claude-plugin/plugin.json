@@ -1,6 +1,6 @@
 {
   "name": "harness-react",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "description": "React 19 conventions for Void Machine: component layer purity, shadcn/Radix primitives, mobile-first dual-quality tokens, Tappable touch targets, accessibility defaults.",
   "author": {
     "name": "VoidCorp",

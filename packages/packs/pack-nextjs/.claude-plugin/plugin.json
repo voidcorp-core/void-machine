@@ -1,6 +1,6 @@
 {
   "name": "harness-nextjs",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "description": "Next.js 16 App Router conventions for Void Machine: route groups (api|actions|app|marketing), Cache Components defaults, layout/page conventions, instrumentation.ts. Composes with harness-react (components), harness-server (Server Actions), harness-pwa (offline).",
   "author": {
     "name": "VoidCorp",

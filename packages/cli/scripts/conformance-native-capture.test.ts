@@ -317,3 +317,51 @@ describe('bounded observer startup evidence', () => {
     expect(startup.snapshot()).toEqual([{ stage: 'script-entered', receivedMs: 2 }]);
   });
 });
+
+
+describe('observer process evidence before readiness', () => {
+  it('observes immediate output and exit without a ready message or exporting content', async () => {
+    const { captureLifecycle } = await load();
+    expect(captureLifecycle).toBeTypeOf('function');
+    const child = spawn(process.execPath, ['-e', "process.stdout.write('private-out');process.stderr.write('private-err');process.exitCode=37"],
+      { stdio: ['pipe', 'pipe', 'pipe'] });
+    const evidence = captureLifecycle(child, performance.now());
+    await new Promise<void>(resolve => child.once('close', () => resolve()));
+    const snapshot = evidence.snapshot();
+    expect(snapshot.pid).toBe(child.pid);
+    expect(snapshot.spawnMs).toBeGreaterThanOrEqual(0);
+    expect(snapshot.stdout).toMatchObject({ bytes: 11 });
+    expect(snapshot.stderr).toMatchObject({ bytes: 11 });
+    expect(snapshot.stdout.firstMs).toBeGreaterThanOrEqual(snapshot.spawnMs);
+    expect(snapshot.exit).toMatchObject({ code: 37 });
+    expect(snapshot.close).toMatchObject({ code: 37 });
+    expect(snapshot.close.atMs).toBeGreaterThanOrEqual(snapshot.exit.atMs);
+    expect(JSON.stringify(snapshot)).not.toMatch(/private-out|private-err/);
+  });
+
+  it('observes a launch error before readiness without claiming a successful spawn', async () => {
+    const { captureLifecycle } = await load();
+    expect(captureLifecycle).toBeTypeOf('function');
+    const directory = mkdtempSync(join(tmpdir(), 'native-missing-executable-'));
+    try {
+      const child = spawn(join(directory, 'absent-executable'), [], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const evidence = captureLifecycle(child, performance.now());
+      await new Promise<void>(resolve => child.once('close', () => resolve()));
+      expect(evidence.snapshot()).toMatchObject({ error: { code: 'ENOENT' }, stdout: { bytes: 0 }, stderr: { bytes: 0 } });
+      expect(evidence.snapshot().spawnMs).toBeUndefined();
+      expect(JSON.stringify(evidence.snapshot())).not.toContain(directory);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('saturates counters without retaining output or altering the child outcome', async () => {
+    const { captureLifecycle } = await load();
+    expect(captureLifecycle).toBeTypeOf('function');
+    const child = spawn(process.execPath, ['-e', "process.stdout.write('x'.repeat(100000));process.exitCode=37"],
+      { stdio: ['pipe', 'pipe', 'pipe'] });
+    const evidence = captureLifecycle(child, performance.now());
+    await new Promise<void>(resolve => child.once('close', () => resolve()));
+    expect(evidence.snapshot().stdout).toMatchObject({ bytes: 65537 });
+    expect(evidence.snapshot().close).toMatchObject({ code: 37 });
+    expect(Buffer.byteLength(JSON.stringify(evidence.snapshot()))).toBeLessThan(1024);
+  });
+});

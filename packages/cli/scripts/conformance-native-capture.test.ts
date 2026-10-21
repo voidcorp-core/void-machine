@@ -275,3 +275,39 @@ it('passes only the SDK location needed by the observer, without inherited crede
     expect(JSON.parse(result.text)).toEqual({ sdk: 'C:/synthetic-sdk' });
   } finally { vi.unstubAllEnvs(); }
 });
+
+
+describe('bounded observer startup evidence', () => {
+  it('retains each reached boundary without claiming readiness or copying arbitrary fields', async () => {
+    const { captureStartup } = await load();
+    const startup = captureStartup();
+    expect(startup.snapshot()).toEqual([]);
+    for (const [index, stage] of ['script-entered', 'compile-types', 'create-watchers', 'arm-stop', 'arm-start'].entries()) {
+      expect(startup.add({ kind: 'startup', stage, privateText: 'must-not-export' }, index * 10)).toBe(true);
+    }
+    expect(startup.snapshot()).toEqual([
+      { stage: 'script-entered', receivedMs: 0 }, { stage: 'compile-types', receivedMs: 10 },
+      { stage: 'create-watchers', receivedMs: 20 }, { stage: 'arm-stop', receivedMs: 30 },
+      { stage: 'arm-start', receivedMs: 40 },
+    ]);
+    expect(JSON.stringify(startup.snapshot())).not.toMatch(/must-not-export|ready/);
+    expect(startup.add({ kind: 'startup', stage: 'arm-start' }, 50)).toBe(false);
+    expect(startup.snapshot()).toHaveLength(5);
+  });
+
+  it('refuses unknown, repeated, out-of-order and nonmonotonic startup evidence', async () => {
+    const { captureStartup } = await load();
+    const startup = captureStartup();
+    for (const record of [undefined, { kind: 'startup', stage: 'secret-path' },
+      { kind: 'startup', stage: 'compile-types' }, { kind: 'ready', stage: 'script-entered' }]) {
+      expect(startup.add(record, 1)).toBe(false);
+    }
+    expect(startup.add({ kind: 'startup', stage: 'script-entered' }, Number.NaN)).toBe(false);
+    expect(startup.add({ kind: 'startup', stage: 'script-entered' }, -1)).toBe(false);
+    expect(startup.snapshot()).toEqual([]);
+    expect(startup.add({ kind: 'startup', stage: 'script-entered' }, 2)).toBe(true);
+    expect(startup.add({ kind: 'startup', stage: 'script-entered' }, 3)).toBe(false);
+    expect(startup.add({ kind: 'startup', stage: 'compile-types' }, 1)).toBe(false);
+    expect(startup.snapshot()).toEqual([{ stage: 'script-entered', receivedMs: 2 }]);
+  });
+});

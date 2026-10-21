@@ -53,7 +53,7 @@ describe('consumer worker host bootstrap before any mission exists', () => {
         return JSON.stringify({ result: { panes: [{ ...f.pane, cwd: foreign }] } });
       }
       if (args[1] === 'list' && scenario === 'duplicate-coordinator') {
-        return JSON.stringify({ result: { panes: [f.pane, { ...f.pane, pane_id: 'w1:p2' }] } });
+        return JSON.stringify({ result: { panes: [f.pane, { ...f.pane, pane_id: 'w1:p2', cwd: `${f.root}/.` }] } });
       }
       if (args[1] === 'process-info' && scenario === 'unproven-process') {
         return JSON.stringify({ result: { process_info: { pane_id: f.pane.pane_id,

@@ -40,6 +40,22 @@ or act on an unrelated project. Native work independent of that action may conti
   mandatory independent review or required isolation remains a blocker; do not
   replace it with self-review or silently weaken its requirement.
 
+## First ticket and optional worker tabs
+
+SessionStart discovers Herdr even before central mission files exist. Its advice
+requires a fresh caller pane at the canonical checkout and process ownership;
+environment variables alone never authorize a host action. Revalidate before launch.
+On a new implementation ticket, reuse the assigned writer if one exists. Otherwise,
+in a validated Herdr session, register the mission and planned worker first, then
+create one background tab in the resolved coordinator workspace with the assigned
+worktree as cwd. Read the installed `herdr tab` schema, preserve focus with
+`--no-focus`, and use the returned root pane for the single agent start below.
+Reattach a matching existing worker instead of opening another tab. The coordinator
+stays in its existing pane. Hooks only discover and advise; they never create tabs,
+launch agents or write central files. Without Herdr, use native delegation normally.
+An invalid host or explicit mission selection refuses only that host action;
+independent native work may continue with the limitation stated.
+
 ## Brief and bound the delegation
 
 Use a fresh context by default. Choose a supported fork only when the task needs

@@ -37,6 +37,27 @@ select a target. Multiple compatible active missions refuse automatic selection.
 Without an explicit binding, terminal missions remain readable; with no active
 mission only the currently projected, identity-verified mission selects cleanup.
 
+## First-ticket host bootstrap
+
+The shared SessionStart hook discovers the optional host even when no compatible
+central mission exists. This closes the bootstrap dependency: a new ticket needs a
+validated host before its coordinator can create its first mission and worker tab.
+The hook first validates all existing state and any explicit selection. Invalid or
+ambiguous state never becomes an absent mission. For an absent mission it reads a
+fresh bounded pane inventory, matches the inherited caller ID to the canonical
+checkout, rejects duplicate label/worktree identities, and proves the hook process
+is in that pane's foreground ancestry. The process proof is shared with the global
+Codex relay; it uses at most 64 parent lookups within the existing two-second budget.
+
+Both installed runtimes receive advice to use `void-orchestrate`. The coordinator
+alone registers the mission, reuses its existing worker or opens one background tab
+per implementation ticket, and starts one agent in the returned pane. No hook opens
+a tab, starts an agent, writes central state or changes permissions. A missing Herdr
+environment performs no discovery and retains native delegation. A foreign checkout,
+stale caller ID, ambiguous identity or denied transport emits a diagnostic and blocks
+that host action; independent native work can continue. No global Herdr installation
+or dependency is introduced. Existing mission discovery and projection stay intact.
+
 ## Explicit coordinator selection
 
 When several missions share a coordinator worktree, ORCH chooses context without

@@ -749,6 +749,17 @@ function withRecoveryEvents(candidate: ReturnType<typeof provenanceAfterEvidence
 }
 
 describe('fresh independent provenance as recovery progress', () => {
+  it('retains a final third-round approval after two bounded correction batches', () => {
+    const candidate = provenanceAfterEvidenceRecovery(2);
+    const events = candidate.stream.events.map(item => item.subject === INDEPENDENT_REVIEWER
+      ? { ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), reviewRound: 3 } }
+      : item);
+    expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, events),
+      observation: { ...candidate.observation, reviewPolicy: 'bounded-corrections-v1' },
+    })).toMatchObject({ kind: 'recover', receipt: { consumedRounds: 3, remainingRounds: 0,
+      consumedCorrectionBatches: 2, remainingCorrectionBatches: 0, nextAction: 'verification' } });
+  });
+
   it.each([0, 2])('recovers after evidence discharge and new review while preserving %i correction batches', batches => {
     const candidate = provenanceAfterEvidenceRecovery(batches);
     const originalHash = canonicalJsonHash(candidate.stream.events);

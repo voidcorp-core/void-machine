@@ -137,6 +137,21 @@ describe('detectMutationRunner', () => {
 });
 
 describe('detectProfileInput', () => {
+  it('binds new mission inputs to the project Node declaration instead of the CLI runtime', () => {
+    const root = tmp();
+    writePkg(root, { engines: { node: '24.15.0' } });
+    const first = detectProfileInput(root, [], 'project-v1');
+    const version = Object.getOwnPropertyDescriptor(process.versions, 'node');
+    if (!version) throw new Error('Node runtime version descriptor required');
+    Object.defineProperty(process.versions, 'node', { ...version, value: '26.8.2' });
+    try {
+      const second = detectProfileInput(root, [], 'project-v1');
+      expect(second).toEqual(first);
+      expect(second.projects[0]?.technologies).toContainEqual({ id: 'node', version: '24.15.0',
+        sources: ['package.json:engines.node'] });
+    } finally { Object.defineProperty(process.versions, 'node', version); }
+  });
+
   function monorepo(): string {
     const root = tmp();
     writePkg(root, {

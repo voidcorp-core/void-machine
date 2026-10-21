@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 5664,
+      "staticTokens": 5716,
       "type": "skill"
     },
     {
@@ -2859,7 +2859,7 @@
         }
       ],
       "id": "skill:void-verify",
-      "lines": 184,
+      "lines": 203,
       "name": "void-verify",
       "owner": "folpe",
       "pack": null,
@@ -2868,7 +2868,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-verify/SKILL.md",
-      "staticTokens": 2267,
+      "staticTokens": 2552,
       "type": "skill"
     }
   ],

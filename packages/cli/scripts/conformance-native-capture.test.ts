@@ -302,17 +302,35 @@ describe('bounded observer startup evidence', () => {
     const { captureStartup } = await load();
     const startup = captureStartup();
     expect(startup.snapshot()).toEqual([]);
-    for (const [index, stage] of ['script-entered', 'compile-types', 'create-watchers', 'arm-stop', 'arm-start'].entries()) {
+    for (const [index, stage] of ['script-entered', 'encoding-before', 'encoding-after', 'emit-before',
+      'compile-types', 'emit-after', 'create-watchers', 'arm-stop', 'arm-start'].entries()) {
       expect(startup.add({ kind: 'startup', stage, privateText: 'must-not-export' }, index * 10)).toBe(true);
     }
     expect(startup.snapshot()).toEqual([
-      { stage: 'script-entered', receivedMs: 0 }, { stage: 'compile-types', receivedMs: 10 },
-      { stage: 'create-watchers', receivedMs: 20 }, { stage: 'arm-stop', receivedMs: 30 },
-      { stage: 'arm-start', receivedMs: 40 },
+      { stage: 'script-entered', receivedMs: 0 }, { stage: 'encoding-before', receivedMs: 10 },
+      { stage: 'encoding-after', receivedMs: 20 }, { stage: 'emit-before', receivedMs: 30 },
+      { stage: 'compile-types', receivedMs: 40 }, { stage: 'emit-after', receivedMs: 50 },
+      { stage: 'create-watchers', receivedMs: 60 }, { stage: 'arm-stop', receivedMs: 70 },
+      { stage: 'arm-start', receivedMs: 80 },
     ]);
     expect(JSON.stringify(startup.snapshot())).not.toMatch(/must-not-export|ready/);
-    expect(startup.add({ kind: 'startup', stage: 'arm-start' }, 50)).toBe(false);
-    expect(startup.snapshot()).toHaveLength(5);
+    expect(startup.add({ kind: 'startup', stage: 'arm-start' }, 90)).toBe(false);
+    expect(startup.snapshot()).toHaveLength(9);
+  });
+
+  it('requires each encoding and first serialization boundary in execution order', async () => {
+    const { captureStartup } = await load();
+    const startup = captureStartup();
+    expect(startup.add({ kind: 'startup', stage: 'script-entered' }, 0)).toBe(true);
+    for (const [required, premature] of [
+      ['encoding-before', 'encoding-after'], ['encoding-after', 'emit-before'],
+      ['emit-before', 'compile-types'], ['compile-types', 'emit-after'], ['emit-after', 'create-watchers'],
+    ]) {
+      expect(startup.add({ kind: 'startup', stage: premature }, 1)).toBe(false);
+      expect(startup.add({ kind: 'startup', stage: required }, 1)).toBe(true);
+      expect(startup.add({ kind: 'startup', stage: required }, 1)).toBe(false);
+    }
+    expect(startup.snapshot().at(-1)).toEqual({ stage: 'emit-after', receivedMs: 1 });
   });
 
   it('refuses unknown, repeated, out-of-order and nonmonotonic startup evidence', async () => {
@@ -327,7 +345,7 @@ describe('bounded observer startup evidence', () => {
     expect(startup.snapshot()).toEqual([]);
     expect(startup.add({ kind: 'startup', stage: 'script-entered' }, 2)).toBe(true);
     expect(startup.add({ kind: 'startup', stage: 'script-entered' }, 3)).toBe(false);
-    expect(startup.add({ kind: 'startup', stage: 'compile-types' }, 1)).toBe(false);
+    expect(startup.add({ kind: 'startup', stage: 'encoding-before' }, 1)).toBe(false);
     expect(startup.snapshot()).toEqual([{ stage: 'script-entered', receivedMs: 2 }]);
   });
 });

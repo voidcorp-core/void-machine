@@ -879,3 +879,61 @@ describe('fresh independent provenance as recovery progress', () => {
       .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
   });
 });
+
+function dischargedRecoveryFixture() {
+  const original = blockerHistory()[1]!;
+  const raw = original.payload as Readonly<Record<string, JsonValue>>;
+  const completion = raw['completion'] as Readonly<Record<string, JsonValue>>;
+  const proof = sealEvidence(evidenceDraft({ dependencies: [{ kind: 'diff', key: 'git:working-tree', hash: HASH }] }));
+  const obligationId = canonicalJsonHash({ completionEventId: original.eventId,
+    completionId: completion['completionId'], requestIndex: 0,
+    requestTextHash: canonicalJsonHash((completion['evidenceRequests'] as readonly JsonValue[])[0]) });
+  const binding = { completionEventId: original.eventId, completionHash: canonicalJsonHash(completion),
+    specialistId: SPECIALIST, nativeContextId: '/root/discharge', requestId: id(4) };
+  const events = [entry(1, 'mission.started'), original,
+    { ...entry(3, 'evidence.recorded', { evidence: { ...proof, environment: { ...proof.environment },
+      output: { ...proof.output }, dependencies: proof.dependencies.map(value => ({ ...value })) } }), subject: proof.evidenceId },
+    { ...entry(4, 'specialist.evidence-discharge-requested', { ...binding, obligationIds: [obligationId] }),
+      source: 'void-harness:mission.dispatch', subject: SPECIALIST },
+    { ...entry(5, 'specialist.evidence-started', binding), causationId: id(4), subject: SPECIALIST },
+    { ...entry(6, 'mission.closed', { reason: 'controller-stop' }), source: 'void-harness:mission.dispatch' },
+    { ...entry(7, 'specialist.evidence-discharged', { ...binding, items: [{ obligationId,
+      proofEventIds: [id(3)], reason: 'The exact canonical proof satisfies the original request.' }] }),
+      causationId: id(4), subject: SPECIALIST }];
+  return { ...input(events), request: { schemaVersion: 1 as const, closureEventId: id(6),
+    expectedJournalHash: canonicalJsonHash(events), disposition: {
+      kind: 'evidence-disposition' as const, responseEventIds: [id(7)] } }, observation: {
+      ...input(events).observation, currentInputHashes: { [SPECIALIST]: HASH },
+      evidenceDependencies: { 'git:working-tree': HASH } } };
+}
+it('recovers through a fresh completed author disposition and refuses recycling it at the next stop', () => {
+  const candidate = dischargedRecoveryFixture();
+  const result = planStoppedMissionRecovery(candidate);
+  expect(result).toMatchObject({ kind: 'recover', receipt: { nextAction: 'verification', consumedRounds: 1 } });
+  if (result.kind !== 'recover') throw new Error('Expected disposition recovery');
+  const recovered = parseEvent({ ...entry(8, 'mission.recovered'), source: 'void-harness:mission.recover', payload: result.receipt });
+  if (!recovered.ok) throw new Error('Expected valid receipt');
+  const events = [...candidate.stream.events, recovered.value,
+    entry(9, 'mission.closed', { reason: 'controller-stop', episodeId: recovered.value.eventId })];
+  expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+  expect(planStoppedMissionRecovery({ ...candidate, stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, closureEventId: id(9), expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused' });
+});
+it.each(['source', 'started', 'proof', 'contract', 'stale'] as const)(
+  'refuses %s corruption of a stopped author disposition', fault => {
+    const candidate = dischargedRecoveryFixture();
+    const events = candidate.stream.events.map(item => fault === 'source' && item.seq === 7
+      ? { ...item, source: 'writer:primary' } : fault === 'started' && item.seq === 5
+        ? { ...item, kind: 'runtime.tool.started' } : fault === 'proof' && item.seq === 3
+          ? { ...item, subject: 'evd_forged' } : item);
+    const observation = { ...candidate.observation,
+      ...(fault === 'contract' ? { contractVersions: { [SPECIALIST]: 2 } } : {}),
+      ...(fault === 'stale' ? { evidenceDependencies: { 'git:working-tree': `sha256:${'b'.repeat(64)}` } } : {}),
+    };
+    expect(planStoppedMissionRecovery({ ...candidate, observation,
+      stream: replayEventLog(events.map(serializeEvent).join('\n')),
+      request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+    }).kind).toBe('refused');
+  },
+);

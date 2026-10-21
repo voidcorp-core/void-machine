@@ -1178,3 +1178,14 @@ it.each(['pass', 'changes-requested'] as const)(
   expect(decide([...events, ...classifyEvidence(origin, 5, 'post-implementation')]).action.kind)
     .toBe(verdict === 'pass' ? 'run-lead-writer' : 'run-preparation-correction');
 });
+
+it.each(['post-implementation', 'completion'] as const)(
+  'waits for author proof at %s without closing the mission', due => {
+    const origin = completion('core:test-qa-engineer', 4, 'pass', 'pre-implementation',
+      HASH, 1, 'pending-proof', [PROOF_REQUEST]);
+    const events = [started(), ...preReviews().slice(0, 2), origin,
+      ...classifyEvidence(origin, 5, due), writer(7),
+      ...TEST_SPECIALIST_IDS.map((specialist, index) => completion(specialist, index + 8))];
+    expect(decide(events).action).toMatchObject({ kind: 'await-evidence' });
+  },
+);

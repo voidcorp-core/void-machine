@@ -65,6 +65,17 @@ IDs and contexts are not rewritten. Reusing the same event is idempotent; a cont
 already used by another request remains refused. Freshness is checked again under the
 sequenced journal lock, so concurrent starts cannot both claim the same native context.
 
+## Provenance correction after evidence recovery
+
+A fully validated independent review can establish progress after the latest
+recovery without requiring another writer completion. This applies only to
+`review-provenance`: every bound PASS must retain its exact completion hash,
+subject, contract and native context, and its complete requested/started/completed
+triplet must follow that authenticated recovery in order. Receipt validation,
+context uniqueness and real review/correction budgets still apply. Old bindings,
+replayed invocations, incomplete triplets and unrelated events cannot reopen an
+episode. Recovery authorizes verification; it never discharges evidence itself.
+
 ## Proof sequence
 
 First reproduce the observed incidents with behavioral RED tests. Keep refusal tests

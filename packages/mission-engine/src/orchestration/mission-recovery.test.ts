@@ -716,7 +716,7 @@ function provenanceAfterEvidenceRecovery(correctionBatches = 0) {
       }] }),
     },
   })));
-  const reviewSubject = { taskId: events[0]!.missionId, baseCommit: 'a'.repeat(40),
+  const reviewSubject = { taskId: event().missionId, baseCommit: 'a'.repeat(40),
     reviewedCommit: 'b'.repeat(40), acceptanceCriteriaHash: HASH };
   const review = { ...reviewSubject, reviewerId: 'reviewer:independent', writerId: 'writer:primary',
     readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
@@ -761,17 +761,38 @@ describe('fresh independent provenance as recovery progress', () => {
     } });
     expect(canonicalJsonHash(candidate.stream.events)).toBe(originalHash);
     if (decision.kind !== 'recover') throw new Error('Expected fresh independent provenance admission');
-    const events = [...candidate.stream.events, recoveryEvent(candidate.stream.events, decision.receipt)];
+    const recovered = recoveryEvent(candidate.stream.events, decision.receipt);
+    const events = [...candidate.stream.events, recovered];
     expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
     expect(planStoppedMissionRecovery({ ...candidate, stream: replayEventLog(events.map(serializeEvent).join('\n')) }))
       .toMatchObject({ kind: 'already-recovered' });
     const reclosed = [...events, { ...entry(events.length + 1, 'mission.closed', {
-      reason: 'controller-stop', episodeId: events.at(-1)!.eventId,
+      reason: 'controller-stop', episodeId: recovered.eventId,
     }), source: 'void-harness:mission.dispatch' }];
     expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, reclosed),
-      request: { ...candidate.request, closureEventId: reclosed.at(-1)!.eventId,
+      request: { ...candidate.request, closureEventId: id(reclosed.length),
         expectedJournalHash: canonicalJsonHash(reclosed) },
     })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  });
+
+  it('rejects replaying the old triplet with new event identifiers after another recovery', () => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    const decision = planStoppedMissionRecovery(candidate);
+    if (decision.kind !== 'recover') throw new Error('Expected fresh independent provenance admission');
+    const recovered = recoveryEvent(candidate.stream.events, decision.receipt);
+    const events = [...candidate.stream.events, recovered];
+    const triplet = candidate.stream.events.filter(item => item.subject === INDEPENDENT_REVIEWER);
+    events.push(...triplet.map((item, index) => ({ ...item, seq: events.length + index + 1,
+      eventId: id(events.length + index + 1) })));
+    const completionEventId = id(events.length);
+    events.push({ ...entry(events.length + 1, 'mission.closed', { reason: 'controller-stop',
+      episodeId: recovered.eventId }), source: 'void-harness:mission.dispatch' });
+    expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, events),
+      request: { ...candidate.request, closureEventId: id(events.length), expectedJournalHash: canonicalJsonHash(events),
+        disposition: { ...candidate.request.disposition, completionEventIds: [completionEventId] } },
+      observation: { ...candidate.observation,
+        reviewBindings: [{ ...candidate.observation.reviewBindings[0], completionEventId }] },
+    })).toMatchObject({ kind: 'refused', code: 'inconsistent-review' });
   });
 
   it('keeps the correction exhaustion gate', () => {
@@ -783,9 +804,11 @@ describe('fresh independent provenance as recovery progress', () => {
     const candidate = provenanceAfterEvidenceRecovery();
     // Move invocation evidence before the first closure; the prior recovery remains valid.
     const original = candidate.stream.events;
-    const moved = original.find(item => item.kind === kind && item.subject === INDEPENDENT_REVIEWER)!;
+    const moved = original.find(item => item.kind === kind && item.subject === INDEPENDENT_REVIEWER);
     const prefix = original.slice(0, 5);
-    const closure = original[5]!;
+    const closure = original[5];
+    const originalRecovery = original[6];
+    if (!moved || !closure || !originalRecovery) throw new Error('Expected complete invocation fixture');
     const beforeRecovery = [...prefix, moved, closure].map((item, index) => ({ ...item, seq: index + 1,
       ...(item === moved ? { eventId: 'evt_moved_invocation' } : {}), }));
     const initial = preparationObligationAtPost('post-implementation');
@@ -794,7 +817,7 @@ describe('fresh independent provenance as recovery progress', () => {
       request: { ...initial.request, expectedJournalHash: canonicalJsonHash(beforeRecovery) },
     });
     if (prior.kind !== 'recover') throw new Error(`Expected authentic prefix recovery: ${JSON.stringify(prior)}`);
-    const recovered = { ...recoveryEvent(beforeRecovery, prior.receipt), eventId: original[6]!.eventId };
+    const recovered = { ...recoveryEvent(beforeRecovery, prior.receipt), eventId: originalRecovery.eventId };
     const events = [...beforeRecovery, recovered, ...original.slice(7).filter(item => item !== moved)]
       .map((item, index) => ({ ...item, seq: index + 1 }));
     expect(validatedRecoveredReviewEvents(events).ok).toBe(true);

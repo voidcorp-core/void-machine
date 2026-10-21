@@ -320,7 +320,9 @@ function specialistId(value: string): value is SpecialistId {
   return /^core:[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
-function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly Completion[]): boolean {
+function validProvenanceRecovery(
+  input: MissionRecoveryInput, existing: readonly Completion[], afterSeqExclusive = 0,
+): boolean {
   const disposition = input.request.disposition;
   const observation = input.observation;
   const bindings = observation.reviewBindings;
@@ -337,7 +339,9 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   const observedSubject = observation.reviewSubject;
   return bindings.every(binding => {
     const original = existing.find(item => item.event.eventId === binding.completionEventId);
-    if (original === undefined || !disposition.completionEventIds.includes(binding.completionEventId)
+    if (parseReviewReceipt(binding.review) === undefined
+      || original === undefined || original.event.seq <= afterSeqExclusive
+      || !disposition.completionEventIds.includes(binding.completionEventId)
       || original.event.subject !== 'core:independent-code-reviewer'
       || original.event.source !== observation.expectedSource || original.completion.verdict !== 'pass'
       || original.completion.findings.some(finding => finding.classification !== 'advisory')
@@ -348,13 +352,14 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
       || binding.review.taskId !== original.event.missionId || binding.review.writerId !== writerId
       || binding.review.provenance.kind !== 'native-context'
       || binding.review.provenance.contextId !== field(original.event, 'contextId')) return false;
-    const requested = events.find(event => event.seq < original.event.seq && matchesRequest(original.event, event)
+    const requested = events.find(event => event.seq > afterSeqExclusive
+      && event.seq < original.event.seq && matchesRequest(original.event, event)
       && field(event, 'contractVersion') === original.completion.contractVersion
       && `runtime:${String(field(event, 'runtime'))}` === observation.expectedSource);
     return requested !== undefined && events.some(event => event.kind === 'specialist.started'
       && event.source === observation.expectedSource && event.subject === original.event.subject
       && event.seq > requested.seq && event.seq < original.event.seq
-      && ['stage', 'reviewRound', 'inputHash', 'contextId'].every(key =>
+      && ['stage', 'reviewRound', 'inputHash', 'contractVersion', 'contextId'].every(key =>
         field(event, key) === field(original.event, key)));
   });
 }
@@ -416,13 +421,15 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const journalHash = canonicalJsonHash(events);
   if (request.expectedJournalHash !== journalHash) return refuse('stale-journal', 'Re-observe the journal before requesting recovery');
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
+  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
     && event.kind === 'lead-writer.completed')
-    && !pendingPreparationClarification(input, previousRecovery)) {
+    && !pendingPreparationClarification(input, previousRecovery)
+    // Only a complete new independent invocation can advance provenance recovery.
+    && !validProvenanceRecovery(input, existing, previousRecovery.seq)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
   }
-  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const disposition = request.disposition;
   const replacement = disposition.kind === 'preparation-invocation';
   if (replacement && !preparationInvocationReplacement(input)) {

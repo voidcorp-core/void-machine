@@ -17,6 +17,32 @@ const report = {
 };
 const doc = (value: unknown) => `---\n${JSON.stringify(value)}\n---\nEvidence here.\n`;
 
+describe.each([
+  ['JSON', doc],
+  ['YAML', (value: Record<string, unknown>) =>
+    `---\n${Object.entries(value).map(([key, field]) => `${key}: ${JSON.stringify(field)}`).join('\n')}\n---\n`],
+])('orchestra timestamps in %s frontmatter', (_format, document) => {
+  it.each([
+    '2026-10-09T11:59:34.013112Z',
+    '2026-10-15T18:42:00.526864+00:00',
+    '2026-10-17T11:07:52.224919+00:00',
+    '2026-10-20T02:34:00+02:00',
+    '2026-10-21T00:30:00.123456789-05:30',
+  ])('preserves a zoned instant and its precision: %s', updated_at => {
+    expect(parseMission(document({ ...mission, updated_at })).updated_at).toBe(updated_at);
+    expect(parseReport(document({ ...report, updated_at })).updated_at).toBe(updated_at);
+  });
+  it.each([
+    '2026-10-21T10:00:00', '2026-02-30T10:00:00+02:00',
+    '2026-10-21T25:00:00+02:00', '2026-10-21T10:00:00+24:00',
+    '2026-10-21T10:00:00+02:60', '2026-10-21T10:00:00+0200',
+    '2026-10-21T10:00:00+02', 'yesterday',
+  ])('refuses an invalid or unqualified instant: %s', updated_at => {
+    expect(() => parseMission(document({ ...mission, updated_at }))).toThrow();
+    expect(() => parseReport(document({ ...report, updated_at }))).toThrow();
+  });
+});
+
 describe('schema 1 orchestra documents', () => {
   it('validates the bounded brief frontmatter and refuses unknown fields', () => {
     const brief = { schema: 1, mission: 'mission-1', attempt: 'attempt-1', worker: 'WORK-1' };

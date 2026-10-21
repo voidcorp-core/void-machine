@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 327,
+      "lines": 328,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 4673,
+      "staticTokens": 4684,
       "type": "skill"
     },
     {

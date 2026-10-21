@@ -1,5 +1,27 @@
 # Changelog
 
+## [5.0.4](https://github.com/voidcorp-core/void-machine/compare/v5.0.3...v5.0.4) (2026-10-21)
+
+
+### Bug Fixes
+
+* **ci:** declare existing integration coverage ([55805f6](https://github.com/voidcorp-core/void-machine/commit/55805f62a900c0573ff88b809bf98c578a99a02b))
+* **ci:** defer draft integration with explicit admission ([6969129](https://github.com/voidcorp-core/void-machine/commit/696912961f9f21047310aa1cc52c3947863c0808))
+* **ci:** reuse development drafts for review handoff ([b0c54f7](https://github.com/voidcorp-core/void-machine/commit/b0c54f70cd4627011581d9509a58c8353355344b))
+* **mission:** count fresh independent provenance as recovery progress ([895f8f6](https://github.com/voidcorp-core/void-machine/commit/895f8f69872ee359d4476481a30a01785cc83114))
+* **mission:** preserve review identity through stop and recovery ([169092e](https://github.com/voidcorp-core/void-machine/commit/169092eba2cfd27927e7ecf60451c9739e0179ee))
+* **orchestrate:** discover worker host before first mission ([aecf1a8](https://github.com/voidcorp-core/void-machine/commit/aecf1a88da8ed41bebdf6a23b5046117f6694061))
+* preserve mission continuity and streamline development feedback ([29e35a0](https://github.com/voidcorp-core/void-machine/commit/29e35a051aaae0a5309830cb702a25e80f914933))
+* **review:** bound generated patch capture separately ([6689749](https://github.com/voidcorp-core/void-machine/commit/6689749e342f665aa53e336eadfc627f44a4a6dc))
+
+## [5.0.3](https://github.com/voidcorp-core/void-machine/compare/v5.0.2...v5.0.3) (2026-10-17)
+
+
+### Bug Fixes
+
+* **mission:** recover reused preparation review contexts without resetting budgets ([4c581be](https://github.com/voidcorp-core/void-machine/commit/4c581be69e313701320bd53f884faa288033dc55))
+* **mission:** replace reused preparation invocations without resetting budgets ([c488918](https://github.com/voidcorp-core/void-machine/commit/c488918dfd9e29a1619d89c603c57b8f82718e25))
+
 ## [5.0.2](https://github.com/voidcorp-core/void-machine/compare/v5.0.1...v5.0.2) (2026-10-14)
 
 

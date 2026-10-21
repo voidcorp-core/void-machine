@@ -8,7 +8,7 @@ import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js
 import { type IndependentReviewReceipt, isReviewSubject, parseReviewReceipt, type ReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import type { SpecialistId, SpecialistInvocationStage } from '../specialist/routing.js';
 import { projectMissionLifecycle } from './mission-lifecycle.js';
-import { reduceReviewLoop, validNativeContextId } from './review-loop.js';
+import { BOUNDED_REVIEW_BUDGET, reduceReviewLoop, validNativeContextId } from './review-loop.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
 
 export interface RecoveryResolutionArtifact {
@@ -21,6 +21,7 @@ export interface MissionRecoveryRequest {
   readonly expectedJournalHash: string;
   readonly disposition:
     | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' | 'opaque-native-context' }
+    | { readonly kind: 'preparation-invocation'; readonly completionEventIds: readonly string[] }
     | { readonly kind: 'command-correction'; readonly pairs: readonly CommandEvidenceCorrection[];
         readonly resolutionArtifact: RecoveryResolutionArtifact }
     | { readonly kind: 'review-blocker' | 'review-provenance'; readonly completionEventIds: readonly string[];
@@ -32,6 +33,8 @@ export interface RecoveredReviewBinding {
   readonly review: IndependentReviewReceipt;
 }
 export interface MissionRecoveryObservation {
+  /** Absent on historical receipts: their original reduction remains unchanged. */
+  readonly reviewPolicy?: 'bounded-corrections-v1';
   readonly reviewSubject?: ReviewSubject;
   readonly reviewBindings?: readonly RecoveredReviewBinding[];
   readonly stage: SpecialistInvocationStage;
@@ -151,6 +154,89 @@ function opaqueNativeContextDefect(input: MissionRecoveryInput): boolean {
   });
 }
 
+/** Replace one malformed preparation panel, never its conclusions or consumed round. */
+function preparationInvocationReplacement(input: MissionRecoveryInput): boolean {
+  const { events } = input.stream;
+  const { observation, request } = input;
+  if (request.disposition.kind !== 'preparation-invocation') return false;
+  const start = events[0];
+  const closure = events.at(-1);
+  const writerRequests = events.filter(event => event.kind === 'lead-writer.requested');
+  const writers = events.filter(event => event.kind === 'lead-writer.completed');
+  const writer = writers[0];
+  const writerRequest = writerRequests[0];
+  if (start === undefined || start.kind !== 'mission.started' || start.source !== 'void-harness:mission'
+    || !['team', 'fortress'].includes(String(field(start, 'mode')))
+    || field(start, 'runtimeAttested') !== true
+    || `runtime:${String(field(start, 'runtime'))}` !== observation.expectedSource
+    || !/^sha256:[a-f0-9]{64}$/.test(String(field(start, 'planHash')))
+    || observation.stage !== 'pre-implementation' || observation.maxRounds !== 2
+    || closure?.source !== 'void-harness:mission.dispatch'
+    || writer === undefined || writerRequest === undefined || writers.length !== 1 || writerRequests.length !== 1
+    || writerRequest.seq >= writer.seq || writerRequest.source !== 'void-harness:mission.dispatch'
+    || writer.subject !== field(start, 'leadWriterId') || writer.source !== writer.subject
+    || writerRequest.subject !== writer.subject || writer.causationId !== writerRequest.eventId
+    || field(writer, 'requestEventId') !== writerRequest.eventId
+    || field(writer, 'actionKind') !== 'run-preparation-correction'
+    || field(writer, 'planHash') !== field(start, 'planHash')
+    || field(writer, 'writerId') !== writer.subject || field(writer, 'implementationRound') !== 1
+    || !['actionKind', 'planHash', 'writerId', 'implementationRound'].every(key => field(writer, key) === field(writerRequest, key))) return false;
+  const allowed = ['mission.started', 'mission.closed', 'lead-writer.requested', 'lead-writer.completed',
+    'specialist.requested', 'specialist.started', 'specialist.completed', 'evidence.recorded',
+    'specialist.evidence-classification-requested', 'specialist.evidence-started', 'specialist.evidence-classified',
+    'specialist.evidence-discharge-requested', 'specialist.evidence-discharged'];
+  if (events.some(event => !allowed.includes(event.kind))) return false;
+  const required = Object.keys(observation.contractVersions);
+  const panel = completions(events);
+  const invocations = events.filter(event => ['specialist.requested', 'specialist.started', 'specialist.completed'].includes(event.kind));
+  if (required.length === 0 || panel.length !== required.length * 2 || invocations.length !== panel.length * 3) return false;
+  const ids = request.disposition.completionEventIds;
+  if (ids.length === 0 || new Set(ids).size !== ids.length) return false;
+  for (const specialist of required) {
+    for (const round of [1, 2]) {
+      const matching = panel.filter(item => item.event.subject === specialist && field(item.event, 'reviewRound') === round);
+      const item = matching[0];
+      if (matching.length !== 1 || item === undefined) return false;
+      const { event, completion } = item;
+      if (event.source !== observation.expectedSource || field(event, 'stage') !== 'pre-implementation'
+        || completion.specialistId !== specialist || completion.contractVersion !== observation.contractVersions[specialist]
+        || field(event, 'contractVersion') !== completion.contractVersion || !validNativeContextId(field(event, 'contextId'))
+        || completion.verdict !== 'pass' || completion.findings.length > 0
+        || (round === 2 && (event.seq <= writer.seq || completion.evidenceRequests.length > 0
+          || field(event, 'inputHash') !== observation.currentInputHashes[specialist]))
+        || (round === 1 && event.seq >= writerRequest.seq)) return false;
+      const requests = invocations.filter(candidate => matchesRequest(event, candidate));
+      const requested = requests[0];
+      const starts = invocations.filter(candidate => candidate.kind === 'specialist.started'
+        && candidate.subject === specialist && field(candidate, 'reviewRound') === round);
+      const started = starts[0];
+      if (requests.length !== 1 || starts.length !== 1 || requested === undefined || started === undefined
+        || requested.seq >= started.seq || started.seq >= event.seq
+        || (round === 2 && requested.seq <= writer.seq)
+        || started.source !== observation.expectedSource
+        || field(requested, 'planHash') !== field(start, 'planHash')
+        || field(requested, 'runtime') !== field(start, 'runtime')
+        || field(requested, 'contractVersion') !== completion.contractVersion
+        || !['stage', 'reviewRound', 'inputHash', 'contractVersion', 'contextId'].every(key => field(started, key) === field(event, key))) return false;
+    }
+  }
+  const proofs = events.flatMap(event => {
+    if (event.kind !== 'evidence.recorded') return [];
+    const parsed = parseEvidence(field(event, 'evidence'));
+    return parsed.ok ? [{ eventId: event.eventId, evidence: parsed.value }] : [];
+  });
+  const obligations = reduceEvidenceObligations({ events, expectedSource: observation.expectedSource,
+    phase: 'pre-implementation', proofs, evidenceContext: { missionId: start.missionId,
+      dependencies: observation.evidenceDependencies ?? {} } });
+  if (obligations.issues.length > 0 || obligations.blockingObligationIds.length > 0) return false;
+  const review = reduceReviewLoop({ events, stage: 'pre-implementation', expectedSource: observation.expectedSource,
+    stageStartSeqExclusive: start.seq, afterSeqExclusive: writer.seq,
+    requiredSpecialists: required.filter(specialistId), contractVersions: observation.contractVersions,
+    currentInputHashes: observation.currentInputHashes, maxRounds: observation.maxRounds });
+  return review.issues.length === ids.length && review.issues.every(issue => issue.code === 'reused-context'
+    && ids.includes(issue.eventId) && events.some(event => event.eventId === issue.eventId && event.seq > writer.seq));
+}
+
 /** Only the observed initial preparation fanout defect is eligible for a round correction. */
 function partialFanoutCorrections(events: readonly CanonicalEvent[]): readonly RecoveryRoundCorrection[] {
   if (events.some((event) => event.kind === 'lead-writer.completed' || event.kind === 'specialist.failed')) return [];
@@ -236,7 +322,9 @@ function specialistId(value: string): value is SpecialistId {
   return /^core:[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
-function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly Completion[]): boolean {
+function validProvenanceRecovery(
+  input: MissionRecoveryInput, existing: readonly Completion[], afterSeqExclusive = 0,
+): boolean {
   const disposition = input.request.disposition;
   const observation = input.observation;
   const bindings = observation.reviewBindings;
@@ -253,7 +341,9 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
   const observedSubject = observation.reviewSubject;
   return bindings.every(binding => {
     const original = existing.find(item => item.event.eventId === binding.completionEventId);
-    if (original === undefined || !disposition.completionEventIds.includes(binding.completionEventId)
+    if (parseReviewReceipt(binding.review) === undefined
+      || original === undefined || original.event.seq <= afterSeqExclusive
+      || !disposition.completionEventIds.includes(binding.completionEventId)
       || original.event.subject !== 'core:independent-code-reviewer'
       || original.event.source !== observation.expectedSource || original.completion.verdict !== 'pass'
       || original.completion.findings.some(finding => finding.classification !== 'advisory')
@@ -264,13 +354,14 @@ function validProvenanceRecovery(input: MissionRecoveryInput, existing: readonly
       || binding.review.taskId !== original.event.missionId || binding.review.writerId !== writerId
       || binding.review.provenance.kind !== 'native-context'
       || binding.review.provenance.contextId !== field(original.event, 'contextId')) return false;
-    const requested = events.find(event => event.seq < original.event.seq && matchesRequest(original.event, event)
+    const requested = events.find(event => event.seq > afterSeqExclusive
+      && event.seq < original.event.seq && matchesRequest(original.event, event)
       && field(event, 'contractVersion') === original.completion.contractVersion
       && `runtime:${String(field(event, 'runtime'))}` === observation.expectedSource);
     return requested !== undefined && events.some(event => event.kind === 'specialist.started'
       && event.source === observation.expectedSource && event.subject === original.event.subject
       && event.seq > requested.seq && event.seq < original.event.seq
-      && ['stage', 'reviewRound', 'inputHash', 'contextId'].every(key =>
+      && ['stage', 'reviewRound', 'inputHash', 'contractVersion', 'contextId'].every(key =>
         field(event, key) === field(original.event, key)));
   });
 }
@@ -332,16 +423,22 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const journalHash = canonicalJsonHash(events);
   if (request.expectedJournalHash !== journalHash) return refuse('stale-journal', 'Re-observe the journal before requesting recovery');
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
+  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
     && event.kind === 'lead-writer.completed')
-    && !pendingPreparationClarification(input, previousRecovery)) {
+    && !pendingPreparationClarification(input, previousRecovery)
+    // Only a complete new independent invocation can advance provenance recovery.
+    && !validProvenanceRecovery(input, existing, previousRecovery.seq)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
   }
-  const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
-  const roundCorrections = partialFanoutCorrections(projectedHistory);
-  const inadmissible = staleDispatchCompletions(projectedHistory);
   const disposition = request.disposition;
+  const replacement = disposition.kind === 'preparation-invocation';
+  if (replacement && !preparationInvocationReplacement(input)) {
+    return refuse('invalid-preparation-invocation', 'Name exactly the reused-context preparation completions with intact invocation bindings; replacement is one-time and retains round two');
+  }
+  const roundCorrections = replacement ? [] : partialFanoutCorrections(projectedHistory);
+  const inadmissible = replacement ? disposition.completionEventIds : staleDispatchCompletions(projectedHistory);
   if (disposition.kind === 'controller-defect' && (disposition.defect === 'partial-fanout-round'
     ? roundCorrections.length === 0 : disposition.defect === 'stale-input-dispatch'
       ? inadmissible.length === 0 : !opaqueNativeContextDefect(input))) {
@@ -398,8 +495,8 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const writers = projected.filter((event) => event.kind === 'lead-writer.completed');
   const stageStart = observation.stage === 'post-implementation'
     ? writers.find((event) => field(event, 'actionKind') !== 'run-preparation-correction')?.seq
-    : undefined;
-  const lastWriter = observation.stage === 'post-implementation' ? writers.at(-1)?.seq : undefined;
+    : replacement ? events[0]?.seq : undefined;
+  const lastWriter = observation.stage === 'post-implementation' || replacement ? writers.at(-1)?.seq : undefined;
   const migration = validatedSpecialistContractMigrationBoundary(events);
   if (!migration.ok) return refuse('invalid-migration-receipt', migration.reasons.join('; '));
   const boundary = observation.stage === 'post-implementation' ? migration.migration : undefined;
@@ -414,9 +511,13 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     ...(stageStart === undefined ? {} : { stageStartSeqExclusive: stageStart }),
     ...(lastWriter === undefined ? {} : { afterSeqExclusive: lastWriter }),
     requiredSpecialists: required, contractVersions: observation.contractVersions,
-    currentInputHashes: observation.currentInputHashes, maxRounds: observation.maxRounds };
+    currentInputHashes: observation.currentInputHashes,
+    ...(observation.reviewPolicy === 'bounded-corrections-v1'
+      ? BOUNDED_REVIEW_BUDGET : { maxRounds: observation.maxRounds }) };
   const originalReview = reduceReviewLoop({ ...reviewInput, events: projectedHistory });
-  if (originalReview.issues.some((issue) => issue.code !== 'wrong-review-round')) {
+  if (originalReview.issues.some((issue) => replacement
+    ? issue.code !== 'reused-context' || !inadmissible.includes(issue.eventId)
+    : issue.code !== 'wrong-review-round')) {
     return refuse('inconsistent-review', 'Resolve inconsistent source, contract or context evidence before recovery');
   }
   const review = reduceReviewLoop({ ...reviewInput, events: projected });
@@ -428,10 +529,10 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
       || required.some(id => !existing.some(item => item.event.subject === id)))) {
     return refuse('incomplete-required-panel', 'Every required preparation specialist must have its original matching PASS triplet before recovery');
   }
-  const consumedRounds = Math.max(0, ...projected.filter((event) =>
+  const consumedRounds = Math.max(0, ...(replacement ? projectedHistory : projected).filter((event) =>
     ['specialist.completed', 'specialist.failed'].includes(event.kind)
       && field(event, 'stage') === observation.stage).map((event) => Number(field(event, 'reviewRound'))));
-  if (disposition.kind !== 'review-provenance' && consumedRounds >= observation.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
+  if (!replacement && disposition.kind !== 'review-provenance' && consumedRounds >= reviewInput.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
   const consumedCorrectionBatches = projected.filter(event => event.kind === 'lead-writer.completed'
     && field(event, 'actionKind') === 'run-correction').length;
   if (disposition.kind === 'review-provenance' && consumedCorrectionBatches > 2) {
@@ -447,10 +548,10 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     requestHash: canonicalJsonHash(request), request, observation,
     preservedCompletionEventIds: [...preservedIds],
     invalidatedCompletionEventIds: existing.filter((item) => !preservedIds.has(item.event.eventId)).map((item) => item.event.eventId),
-    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, observation.maxRounds - consumedRounds),
-    ...(disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
+    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, reviewInput.maxRounds - consumedRounds),
+    ...(!replacement && disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
-    nextAction: disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
+    nextAction: replacement || disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
       || (disposition.kind === 'controller-defect' && disposition.defect === 'opaque-native-context')
       ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
   };
@@ -479,6 +580,13 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
     || typeof value['expectedJournalHash'] !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value['expectedJournalHash'])
     || value['disposition'] === undefined || !record(value['disposition'])) return false;
   const disposition = value['disposition'];
+  if (disposition['kind'] === 'preparation-invocation') {
+    return exactKeys(disposition, ['kind', 'completionEventIds'])
+      && Array.isArray(disposition['completionEventIds']) && disposition['completionEventIds'].length > 0
+      && disposition['completionEventIds'].length <= 64
+      && disposition['completionEventIds'].every(item => typeof item === 'string' && /^evt_[A-Za-z0-9_-]{8,100}$/.test(item))
+      && new Set(disposition['completionEventIds']).size === disposition['completionEventIds'].length;
+  }
   if (disposition['kind'] === 'command-correction') {
     return exactKeys(disposition, ['kind', 'pairs', 'resolutionArtifact'])
       && isCommandEvidenceCorrections(disposition['pairs']) && artifact(disposition['resolutionArtifact']);
@@ -506,10 +614,12 @@ export function parseRecoveredReviewBindings(value: unknown): readonly Recovered
 function recoveryObservation(value: JsonValue | undefined): value is JsonValue & MissionRecoveryObservation {
   if (value === undefined || !record(value)
     || !exactKeys(value, ['stage', 'contractVersions', 'currentInputHashes', 'maxRounds', 'expectedSource',
+      ...(value['reviewPolicy'] === undefined ? [] : ['reviewPolicy']),
       ...(value['resolutionArtifact'] === undefined ? [] : ['resolutionArtifact']),
       ...(value['reviewSubject'] === undefined ? [] : ['reviewSubject']),
       ...(value['reviewBindings'] === undefined ? [] : ['reviewBindings']),
       ...(value['evidenceDependencies'] === undefined ? [] : ['evidenceDependencies'])])
+    || (value['reviewPolicy'] !== undefined && value['reviewPolicy'] !== 'bounded-corrections-v1')
     || !['pre-implementation', 'post-implementation'].includes(String(value['stage']))
     || !['runtime:codex', 'runtime:claude'].includes(String(value['expectedSource']))
     || typeof value['maxRounds'] !== 'number' || !Number.isSafeInteger(value['maxRounds']) || value['maxRounds'] < 1 || value['maxRounds'] > 8

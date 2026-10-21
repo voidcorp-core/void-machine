@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/cli/src/lib/runs/mission-review-recovery-cli.test.ts
 import {
   existsSync,
   readFileSync,
@@ -10,6 +11,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 export interface WorkspacePackageJson {
   readonly name?: string;
   readonly packageManager?: string;
+  readonly engines?: { readonly node?: string };
   readonly dependencies?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
   readonly peerDependencies?: Record<string, string>;

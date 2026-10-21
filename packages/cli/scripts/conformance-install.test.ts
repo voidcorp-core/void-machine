@@ -1,6 +1,6 @@
 // @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -158,6 +158,7 @@ vi.mock('./conformance-process.mjs', async (original) => {
       }
       write(join(fixture, '.void/hooks/_void-hook.mjs'), 'fixture');
       write(join(fixture, '.agents/skills/void-tdd/SKILL.md'), 'fixture');
+      cpSync(join(assets, 'skills/void-verify'), join(fixture, '.agents/skills/void-verify'), { recursive: true });
       write(join(fixture, '.codex/hooks.json'), '{}');
     }
     return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '', durationMs: 1 };

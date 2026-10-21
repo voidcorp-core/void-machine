@@ -10,3 +10,5 @@ Sources for `void-verify` skill (see `docs/plans/skill-audits/void-verify.md` fo
 Strategy: distill. Slim skill. Adapted for void-machine's specific signal set (12 items, each mapped to a skill or hook).
 
 No new hooks (composes with all existing).
+
+- GitHub Actions event, concurrency and merge-queue documentation: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows ; https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency ; https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue

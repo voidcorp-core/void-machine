@@ -262,17 +262,19 @@ export async function writeMissionControllerPlan(
   plan: MissionSpecialistPlan,
   ticket: MissionControllerTicketBinding,
   baseCommit?: string,
+  inputRecipe?: 'project-v1',
 ): Promise<string> {
   const run = await existingRunDirectory(root, missionId);
-  const routingHash = missionControllerRoutingHash(plan, ticket, baseCommit);
+  const routingHash = missionControllerRoutingHash(plan, ticket, baseCommit, inputRecipe);
   const handle = await open(join(run, 'controller-plan.json'), 'wx', 0o600);
   try {
     await handle.writeFile(`${JSON.stringify({
-      schemaVersion: baseCommit === undefined ? 1 : 2,
+      schemaVersion: inputRecipe === undefined ? (baseCommit === undefined ? 1 : 2) : 3,
       routingHash,
       plan,
       ticket,
       ...(baseCommit === undefined ? {} : { baseCommit }),
+      ...(inputRecipe === undefined ? {} : { inputRecipe }),
     })}\n`, 'utf8');
   } finally {
     await handle.close();
@@ -288,6 +290,7 @@ export async function loadMissionControllerPlan(
   readonly ticket: MissionControllerTicketBinding;
   readonly routingHash: string;
   readonly baseCommit?: string;
+  readonly inputRecipe?: 'project-v1';
 }> {
   const run = await existingRunDirectory(root, missionId);
   const path = join(run, 'controller-plan.json');
@@ -309,17 +312,20 @@ export async function loadMissionControllerPlan(
     'routingHash',
     'plan',
     'ticket',
-    ...(parsed.schemaVersion === 2 ? ['baseCommit'] : []),
+    ...(parsed.schemaVersion === 2 || parsed.schemaVersion === 3 ? ['baseCommit'] : []),
+    ...(parsed.schemaVersion === 3 ? ['inputRecipe'] : []),
   ])) {
     throw new Error('MISSION_CONTROLLER_PLAN_INVALID: plan envelope is malformed');
   }
   const plan = parseMissionSpecialistPlan(parsed.plan);
   const ticket = parseMissionControllerTicket(parsed.ticket);
   const routingHash = typeof parsed.routingHash === 'string' ? parsed.routingHash : '';
-  const baseCommit = parsed.schemaVersion === 2 ? parsed.baseCommit : undefined;
+  const baseCommit = parsed.schemaVersion === 2 || parsed.schemaVersion === 3 ? parsed.baseCommit : undefined;
+  const inputRecipe = parsed.schemaVersion === 3 && parsed.inputRecipe === 'project-v1' ? 'project-v1' : undefined;
   if (
-    (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2)
-    || (parsed.schemaVersion === 2 && (
+    (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2 && parsed.schemaVersion !== 3)
+    || (parsed.schemaVersion === 3 && inputRecipe === undefined)
+    || ((parsed.schemaVersion === 2 || parsed.schemaVersion === 3) && (
       typeof baseCommit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseCommit)
     ))
     || !/^sha256:[a-f0-9]{64}$/.test(routingHash)
@@ -327,21 +333,26 @@ export async function loadMissionControllerPlan(
     throw new Error('MISSION_CONTROLLER_PLAN_INVALID: plan integrity check failed');
   }
   const base = typeof baseCommit === 'string' ? { baseCommit } : {};
-  if (missionControllerRoutingHash(plan, ticket, base.baseCommit) !== routingHash) {
+  if (missionControllerRoutingHash(plan, ticket, base.baseCommit, inputRecipe) !== routingHash) {
     throw new Error('MISSION_CONTROLLER_PLAN_INVALID: plan integrity check failed');
   }
-  return Object.freeze({ plan, ticket, routingHash, ...base });
+  return Object.freeze({ plan, ticket, routingHash, ...base, ...(inputRecipe === undefined ? {} : { inputRecipe }) });
 }
 
 export function missionControllerRoutingHash(
   plan: MissionSpecialistPlan,
   ticket: MissionControllerTicketBinding,
   baseCommit?: string,
+  inputRecipe?: 'project-v1',
 ): string {
+  if (inputRecipe !== undefined && (inputRecipe !== 'project-v1' || baseCommit === undefined)) {
+    throw new Error('MISSION_CONTROLLER_PLAN_INVALID: project input recipe requires a committed baseline');
+  }
   if (baseCommit !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseCommit)) {
     throw new Error('MISSION_REVIEW_BASE_INVALID: expected a full commit object ID');
   }
-  return canonicalJsonHash({ plan, ticket, ...(baseCommit === undefined ? {} : { baseCommit }) });
+  return canonicalJsonHash({ plan, ticket, ...(baseCommit === undefined ? {} : { baseCommit }),
+    ...(inputRecipe === undefined ? {} : { inputRecipe }) });
 }
 
 function unknownRecord(value: unknown): value is Readonly<Record<string, unknown>> {

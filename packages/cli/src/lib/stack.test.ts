@@ -137,6 +137,17 @@ describe('detectMutationRunner', () => {
 });
 
 describe('detectProfileInput', () => {
+  it('retains changed Node range constraints without claiming an exact project version', () => {
+    const root = tmp();
+    writePkg(root, { engines: { node: '>=24' } });
+    const first = detectProfileInput(root, [], 'project-v1');
+    writePkg(root, { engines: { node: '>=26' } });
+    const second = detectProfileInput(root, [], 'project-v1');
+    expect(second).not.toEqual(first);
+    expect(second.projects[0]?.technologies).toContainEqual({ id: 'node', version: null,
+      sources: ['package.json:engines.node:>=26'] });
+  });
+
   it('binds new mission inputs to the project Node declaration instead of the CLI runtime', () => {
     const root = tmp();
     writePkg(root, { engines: { node: '24.15.0' } });

@@ -5,7 +5,9 @@ param([ValidateSet('Preflight','Capture')][string]$Mode,
       [string]$Cdb, [string]$SymbolCache)
 if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"script-entered"}') }
 $ErrorActionPreference = 'Stop'
+if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"encoding-before"}') }
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"encoding-after"}') }
 function Emit($value) { [Console]::Out.WriteLine(($value | ConvertTo-Json -Compress -Depth 6)) }
 function UtcMs { [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
 if ($Mode -eq 'Preflight') {
@@ -30,7 +32,9 @@ if ($Mode -eq 'Preflight') {
 }
 # Direct .NET callbacks avoid PowerShell's unbounded event-action queue. Stop
 # admitting after256 total records; even a drained queue cannot reset this cap.
+if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"emit-before"}') }
 Emit @{ kind='startup'; stage='compile-types' }
+if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"emit-after"}') }
 Add-Type -ReferencedAssemblies 'System.dll','System.Management.dll' -TypeDefinition @'
 using System;
 using System.Collections.Generic;

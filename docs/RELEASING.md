@@ -405,9 +405,14 @@ init and both exact offline hydrate paths only. The orchestrator then runs
 `conformance-update.mjs` as the mandatory separate `update` suite: real isolated npm-bin bootstrap/acquisition, native launchers,
 current/all project publication and killed-child recovery on each OS. Windows runs the
 new command and PowerShell shims, including update recovery through the command shim.
-The Windows observer regression retains its eight-second deadline. Its failure reports
-only five ordered startup boundaries and parent-observed elapsed times: script entry,
-type compilation, watcher construction, stop subscription, and start subscription.
+The Windows observer regression retains its eight-second deadline from spawn through
+close, including readiness; failure in the ready phase has not exercised stdin yet.
+The separate capture readiness contract remains ten seconds. Failure reports nine
+ordered startup boundaries with parent-observed times: script entry, before/after
+OutputEncoding assignment, before the first Emit, its compile-types record, after
+that Emit, watcher construction, stop subscription, and start subscription. The four
+interval markers write fixed ASCII directly; the original encoding assignment,
+serializer invocation, operation order and transport remain unchanged.
 These diagnose collector readiness; they do not prove consumer qualification or
 explain a later native-child wait. No arbitrary observer text or environment is exported.
 Process evidence attaches before readiness: PID, spawn/error/exit/close, first-byte

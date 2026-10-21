@@ -17,7 +17,8 @@ const report = status => process.stdout.write(`${JSON.stringify({ nativeCapture:
 // Fixed boundaries only: the last record identifies the operation entered,
 // never readiness, a process identity, or successful consumer qualification.
 export function captureStartup() {
-  const names = ['script-entered', 'compile-types', 'create-watchers', 'arm-stop', 'arm-start'];
+  const names = ['script-entered', 'encoding-before', 'encoding-after', 'emit-before',
+    'compile-types', 'emit-after', 'create-watchers', 'arm-stop', 'arm-start'];
   const stages = [];
   return {
     add(event, receivedMs) {

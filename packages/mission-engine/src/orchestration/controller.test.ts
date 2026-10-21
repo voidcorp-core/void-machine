@@ -387,7 +387,8 @@ describe('mission team controller', () => {
     expect(correction.review.readyForVerdict).toBe(false);
     expect(correction.verdict.status).not.toBe('verified');
     const corrected = decide([...recovered, writer(12, 'writer:primary', 'run-correction')], PLAN, inputs);
-    expect(corrected.action.kind).toBe('stop');
+    expect(corrected.action.kind).toBe('await-evidence');
+    expect(corrected.verdict.status).not.toBe('verified');
     expect(corrected.reasons.join(' ')).toContain('Provide the mixed included/excluded cleanup regression result.');
   });
 
@@ -454,7 +455,8 @@ describe('mission team controller', () => {
       }
       const reviews = TEST_SPECIALIST_IDS.map((id, index) => completion(id, index + 8));
       const decision = decide(due === 'completion' ? [...implemented, ...reviews] : implemented);
-      expect(decision.action.kind).toBe('stop');
+      expect(decision.action.kind).toBe('await-evidence');
+      expect(decision.verdict.status).not.toBe('verified');
       expect(decision.reasons.join(' ')).toContain(PROOF_REQUEST);
     },
   );
@@ -469,7 +471,8 @@ describe('mission team controller', () => {
         id, index + 12, 'pass', 'post-implementation', HASH, 2,
       ))];
     const decision = decide(events);
-    expect(decision.action.kind).toBe('stop');
+    expect(decision.action.kind).toBe('await-evidence');
+    expect(decision.verdict.status).not.toBe('verified');
     expect(decision.reasons.join(' ')).toContain(PROOF_REQUEST);
   });
 
@@ -485,7 +488,7 @@ describe('mission team controller', () => {
   it('still rejects a late preparation review after a corrected preparation', () => {
     const events = [started(), ...preparationReviews(1, 2, true),
       ...preparationReceipt(), ...preparationReviews(2, 7), writer(10)];
-    expect(decide(events).action.kind).toBe('stop');
+    expect(decide(events).action.kind).toBe('await-evidence');
     const late = completion(TEST_SPECIALIST_IDS[0], 11, 'pass', 'pre-implementation', HASH, 2, 'late');
     expect(decide([...events, late]).action.kind).toBe('stop');
   });

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { sealEvidence, reduceEvidenceObligations } from '@voidcorp/mission-engine';
+import { parseMissionRecoveryRequest } from './mission-recovery.js';
 import { parseMissionArgs } from '../../commands/mission.js';
 import { resolveProjectRoots } from '../project-roots.js';
 import { appendMissionEvent, createMission, inspectMission, recordMissionEvidence } from './store.js';
@@ -72,12 +73,25 @@ it.each(['fresh', 'stale', 'closed-fresh', 'closed-stale'] as const)('validates 
       source: 'void-harness:mission.dispatch', kind: 'mission.closed', subject: 'mission',
       correlationId: ID, payload: { reason: 'controller-stop' } });
     if (freshness.endsWith('stale')) await writeFile(join(root, 'changed.ts'), 'export const changed = true;\n');
+    if (freshness.startsWith('closed')) {
+      await expect(recordSpecialistEvidence(roots, ID, 'started', response)).rejects.toThrow('MISSION_CLOSED');
+      await expect(recordSpecialistEvidence(roots, ID, 'completed', { ...response, contextId: '/root/forged', items: [] }))
+        .rejects.toThrow('MISSION_CLOSED');
+    }
     const complete = recordSpecialistEvidence(roots, ID, 'completed',
       parseSpecialistEvidenceResponse('completed', { ...response, items: [{
       obligationId: obligation.obligationId, proofEventIds: [proofEvent.eventId], reason: 'Observed proof addresses this request.',
     }] }));
     if (freshness.endsWith('stale')) await expect(complete).rejects.toThrow('SPECIALIST_EVIDENCE_INVALID');
-    else await expect(complete).resolves.toBeUndefined();
+    else {
+      await expect(complete).resolves.toBeUndefined();
+      const beforeReplay = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
+      await recordSpecialistEvidence(roots, ID, 'completed', parseSpecialistEvidenceResponse('completed', {
+        ...response, items: [{ obligationId: obligation.obligationId, proofEventIds: [proofEvent.eventId],
+          reason: 'Observed proof addresses this request.' }],
+      }));
+      expect((await inspectMission(root, ID, { dependencies: {} })).stream.events).toEqual(beforeReplay);
+    }
     const after = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
     expect(after.filter(value => value.kind === 'specialist.evidence-discharged'))
       .toHaveLength(freshness.endsWith('fresh') ? 1 : 0);
@@ -105,4 +119,15 @@ it('diagnoses the author reason length without rewriting its content', () => {
       obligationId: HASH, proofEventIds: ['evt_proof_review_123'], reason: 'x'.repeat(1010),
     }],
   })).toThrow('reason has 1010 characters; maximum is 1000');
+});
+
+it('accepts only exact bounded response identifiers for disposition recovery', () => {
+  const request = { schemaVersion: 1, closureEventId: 'evt_closure_review_123', expectedJournalHash: HASH,
+    disposition: { kind: 'evidence-disposition', responseEventIds: ['evt_discharge_review_123'] } };
+  expect(parseMissionRecoveryRequest(request)).toEqual(request);
+  for (const disposition of [{ ...request.disposition, responseEventIds: [] },
+    { ...request.disposition, responseEventIds: ['evt_discharge_review_123', 'evt_discharge_review_123'] },
+    { ...request.disposition, observation: { verified: true } }]) {
+    expect(() => parseMissionRecoveryRequest({ ...request, disposition })).toThrow('MISSION_RECOVERY_INVALID');
+  }
 });

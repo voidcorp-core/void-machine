@@ -890,7 +890,7 @@ function dischargedRecoveryFixture() {
     requestTextHash: canonicalJsonHash((completion['evidenceRequests'] as readonly JsonValue[])[0]) });
   const binding = { completionEventId: original.eventId, completionHash: canonicalJsonHash(completion),
     specialistId: SPECIALIST, nativeContextId: '/root/discharge', requestId: id(4) };
-  const events = [entry(1, 'mission.started'), original,
+  const events = [entry(1, 'mission.started', { runtime: 'codex', runtimeAttested: true }), original,
     { ...entry(3, 'evidence.recorded', { evidence: { ...proof, environment: { ...proof.environment },
       output: { ...proof.output }, dependencies: proof.dependencies.map(value => ({ ...value })) } }), subject: proof.evidenceId },
     { ...entry(4, 'specialist.evidence-discharge-requested', { ...binding, obligationIds: [obligationId] }),
@@ -937,3 +937,15 @@ it.each(['source', 'started', 'proof', 'contract', 'stale'] as const)(
     }).kind).toBe('refused');
   },
 );
+
+it('keeps the real review budget and uncertain-effect refusal for disposition recovery', () => {
+  const candidate = dischargedRecoveryFixture();
+  expect(planStoppedMissionRecovery({ ...candidate,
+    observation: { ...candidate.observation, maxRounds: 1 },
+  })).toMatchObject({ kind: 'refused', code: 'review-budget-exhausted' });
+  const events = [...candidate.stream.events, entry(8, 'orchestration.node-started')];
+  expect(planStoppedMissionRecovery({ ...candidate,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) },
+  })).toMatchObject({ kind: 'refused', code: 'ambiguous-effect' });
+});

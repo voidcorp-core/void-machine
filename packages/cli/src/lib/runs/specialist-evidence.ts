@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { writeSequencedEventOnce } from '@voidcorp/hook-runner';
 import {
   canonicalJsonHash, parseEvidence, parseSpecialistCompletionValue, reduceEvidenceObligations,
-  validNativeContextId,
+  validNativeContextId, pendingStoppedEvidenceRequest,
   type CanonicalEvent, type EventDraft, type JsonValue,
 } from '@voidcorp/mission-engine';
 import type { ProjectRoots } from '../project-roots.js';
 import { inspectMission } from './store.js';
 import { computeProjectState } from './project-state.js';
-import { requireOpenMission } from './mission-lifecycle.js';
+import { observedMissionLifecycle, requireOpenMission } from './mission-lifecycle.js';
 
 export type SpecialistEvidenceRequest = {
   readonly operation: 'classification' | 'discharge';
@@ -113,16 +113,27 @@ async function validateCompletion(
     const items = field(candidate.payload, 'items');
     if (!Array.isArray(items) || items.some(item => !record(item)
       || !state.obligations.some(value => value.obligationId === item['obligationId'] && value.discharged))) {
-      invalid('requested obligations need fresh successful canonical proofs');
+      invalid(`requested obligations need fresh successful canonical proofs; observed git:working-tree ${dependencies['git:working-tree']} at ${roots.workRoot}; run from the proof worktree and inspect its commit/diff binding`);
     }
   }
+}
+function requireResponseAdmission(
+  events: readonly CanonicalEvent[], status: 'started' | 'completed', input: SpecialistEvidenceResponse,
+): void {
+  if (observedMissionLifecycle(events).status === 'open') return;
+  if (status === 'completed' && pendingStoppedEvidenceRequest(events, input.requestEventId, input.contextId)) return;
+  requireOpenMission(events);
 }
 export async function recordSpecialistEvidence(
   roots: ProjectRoots, missionId: string, status: 'started' | 'completed',
   input: SpecialistEvidenceResponse,
 ): Promise<void> {
-  const events = (await inspectMission(roots.installRoot, missionId, { dependencies: {} })).stream.events;
-  requireOpenMission(events);
+  const { stream } = await inspectMission(roots.installRoot, missionId, { dependencies: {} });
+  if (stream.continuity !== 'complete' || stream.invalidLines > 0 || stream.duplicateEventIds > 0) {
+    invalid('complete unaltered journal is required before author response admission');
+  }
+  const events = stream.events;
+  requireResponseAdmission(events, status, input);
   const source = identity(events);
   const request = exactRequest(events, input);
   const kind = status === 'started' ? 'specialist.evidence-started'
@@ -138,7 +149,7 @@ export async function recordSpecialistEvidence(
   if (existing && canonicalJsonHash(existing.payload) !== canonicalJsonHash(draft.payload)) invalid('conflicting existing author response');
   await writeSequencedEventOnce({ root: roots.installRoot, missionId, eventId: id, draft,
     validate: async current => {
-      requireOpenMission(current);
+      requireResponseAdmission(current, status, input);
       exactRequest(current, input);
       if (status === 'completed') {
         const started = current.find(event => event.kind === 'specialist.evidence-started'
@@ -179,6 +190,9 @@ export function parseSpecialistEvidenceRequest(value: unknown): SpecialistEviden
   return { ...base, operation: 'discharge', obligationIds: ids };
 }
 function responseItem(value: unknown): JsonValue {
+  if (record(value) && typeof value['reason'] === 'string' && value['reason'].length > 1_000) {
+    invalid(`reason has ${value['reason'].length} characters; maximum is 1000; request a corrected author response`);
+  }
   if (!record(value) || !text(value['reason'])) invalid('an author reason is required for each disposition');
   if ('requestIndex' in value) {
     const due = value['due'];

@@ -501,3 +501,14 @@ Consumers receive the same executable guard and workflow template beside install
 Adoption is explicit and preserves each project's real validation commands, review
 and enforcement. Rollback restores prior workflow triggers and removes admission
 steps together; it restores draft CI cost without altering mission history or budgets.
+
+Draft creation is permitted throughout development. Reuse the branch's existing PR
+when handing off the final candidate and mark that same PR ready; create a PR only
+when none exists. In Autopilot, workers remain commit-only: the coordinator owns
+pushes, PR changes and tracker transitions. Drafts remain ineligible for review
+and merge admission. No hook prohibiting draft creation exists to disable.
+
+`update` replaces harness-owned skill files from the new package in both runtimes,
+including older handoff wording. It preserves private project doctrine and adjacent
+user skills; changed files whose ownership cannot be proved remain conflicts rather
+than being silently overwritten. No consumer update is implied by a source change.

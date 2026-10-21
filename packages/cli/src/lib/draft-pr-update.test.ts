@@ -31,6 +31,8 @@ it('updates old managed PR guidance in both installed runtimes without overwriti
     writeFileSync(join(project, '.void/PROJECT-DOCTRINE.md'), privateRule);
     writeFileSync(join(project, 'package.json'), '{"name":"draft-pr-fixture","private":true}\n');
     const env = { PATH: process.env.PATH, HOME: fixture, TMPDIR: tmpdir(),
+      SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR, ComSpec: process.env.ComSpec,
+      TEMP: tmpdir(), TMP: tmpdir(), USERPROFILE: fixture, APPDATA: join(fixture, 'appdata'),
       VOID_GLOBAL_DIR: join(fixture, 'global'), npm_config_offline: 'true' };
     const run = (bin: string, args: string[]) => {
       const result = spawnSync(process.execPath, [bin, ...args], {

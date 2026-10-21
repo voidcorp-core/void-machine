@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -417,4 +419,44 @@ exit 0
     catch { process.stderr.write('native host control cleanup incomplete\n'); }
     process.stdout.write(`${JSON.stringify({ nativeHostControl: evidence.snapshot() })}\n`);
   }
+});
+
+
+describe('observer closure admission', () => {
+  it('refuses after 500ms when exit occurs without close', async () => {
+    const { captureLifecycle } = await load();
+    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough() });
+    const evidence = captureLifecycle(child, performance.now());
+    expect(evidence.waitForClose).toBeTypeOf('function');
+    vi.useFakeTimers();
+    try {
+      const closed = evidence.waitForClose();
+      const refused = expect(closed).rejects.toThrow('native observer close unconfirmed after 500ms; host control refused');
+      child.emit('exit', 0);
+      await vi.advanceTimersByTimeAsync(500);
+      await refused;
+      expect(child.listenerCount('close')).toBe(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('admits only after observed close and accepts close already recorded', async () => {
+    const { captureLifecycle } = await load();
+    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough() });
+    const evidence = captureLifecycle(child, performance.now());
+    expect(evidence.waitForClose).toBeTypeOf('function');
+    vi.useFakeTimers();
+    try {
+      let admitted = false;
+      const closed = evidence.waitForClose().then(() => { admitted = true; });
+      child.emit('exit', 0);
+      await vi.advanceTimersByTimeAsync(499);
+      expect(admitted).toBe(false);
+      child.emit('close', 0);
+      await closed;
+      expect(admitted).toBe(true);
+      await expect(evidence.waitForClose()).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(child.listenerCount('close')).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
 });

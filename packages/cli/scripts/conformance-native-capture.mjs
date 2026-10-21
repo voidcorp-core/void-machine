@@ -47,7 +47,18 @@ export function captureLifecycle(child, startedAt) {
     // 65537 means at least that many bytes; retain no arbitrary stream content.
     state[name].bytes = Math.min(65537, state[name].bytes + chunk.length);
   });
-  return { snapshot: () => structuredClone(state) };
+  return {
+    snapshot: () => structuredClone(state),
+    waitForClose: () => new Promise((resolve, reject) => {
+      if (state.close !== undefined) { resolve(); return; }
+      const closed = () => { clearTimeout(deadline); resolve(); };
+      const deadline = setTimeout(() => {
+        child.removeListener('close', closed);
+        reject(new Error('native observer close unconfirmed after 500ms; host control refused'));
+      }, 500);
+      child.once('close', closed);
+    }),
+  };
 }
 
 function metadata(event) {

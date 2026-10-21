@@ -414,7 +414,10 @@ Process evidence attaches before readiness: PID, spawn/error/exit/close, first-b
 times and saturated byte counts, never stream contents. Exit and pipe closure are
 separate observations. One minimal PowerShell `-File` control runs after the original
 observer with the same flags, filtered environment and open stdin, under its own
-eight-second deadline. Its different script path and potentially warm OS caches
+eight-second deadline. The observer must first emit `close`; termination requested
+with `kill` or an `exit` event alone does not admit the control. Cleanup waits at
+most 500ms for `close`, then refuses the control explicitly if unconfirmed while
+preserving the observer's original failure. Its different script path and potentially warm OS caches
 limit comparisons; a passing control is neither a repair nor Windows qualification.
 The default order is install, update, hooks, autopilot, latency, serial and fail-fast on
 the same verified artifact. Every suite retains the 120-second process limit; install

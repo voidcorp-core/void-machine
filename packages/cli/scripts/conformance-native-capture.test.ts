@@ -27,8 +27,11 @@ it('keeps both idle input waits off the event-draining thread with one bounded p
   expect(source).toContain('$line=$inputTask.Result');
 });
 
+let observerCloseConfirmed = false;
+
 // The real Console.In/WMI regression needs Windows; source contracts are not its substitute.
 it.skipIf(process.platform !== 'win32')('drains real events with stdin open before and between requests', async () => {
+  observerCloseConfirmed = false;
   const { conformanceEnvironment } = await import('./conformance-process.mjs');
   const env = conformanceEnvironment({ TEMP: process.env.TEMP, TMP: process.env.TMP });
   const script = fileURLToPath(new URL('./conformance-native-capture.ps1', import.meta.url));
@@ -96,6 +99,13 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
     observer.stdin.end();
     if (observer.exitCode === null) observer.kill();
     for (const child of children) if (child.exitCode === null) child.kill();
+    try {
+      await processEvidence.waitForClose();
+      observerCloseConfirmed = true;
+    } catch {
+      // Preserve the original regression failure; the control independently refuses.
+      process.stderr.write('native observer close unconfirmed after 500ms; host control refused\n');
+    }
   }
 });
 
@@ -374,6 +384,7 @@ describe('observer process evidence before readiness', () => {
 // Runs after the original observer, never as its warmup. This is a host control,
 // not consumer qualification or a benchmark: prior cache state remains a limit.
 it.skipIf(process.platform !== 'win32')('reports a minimal File host control with the same open input contract', async () => {
+  if (!observerCloseConfirmed) throw new Error('native host control refused: observer close not confirmed');
   const { conformanceEnvironment } = await import('./conformance-process.mjs');
   const { captureLifecycle } = await load();
   const directory = mkdtempSync(join(tmpdir(), 'native-host-control-'));

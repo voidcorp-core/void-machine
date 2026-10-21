@@ -240,15 +240,47 @@ export async function prepareStableUpdate(temporary, tarball) {
     args: [...npm.prefixArguments, 'install', '--global', '--prefix', prefix, '--offline',
       '--ignore-scripts', '--no-audit', '--no-fund', tarball], cwd: home, env });
   const pkg = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), `node_modules/${PRODUCT_IDENTITY.packageName}`);
+  // The previous package installer creates truthful ownership of the legacy
+  // guidance. The frozen candidate archive remains unchanged for public update.
+  const legacyGuidance = {
+    'void-autopilot': 'When its proofs are green it pushes its own branch, opens one pull request towards the base, ready for review rather than as a draft.',
+    'void-implement': 'Under void-autopilot the worker pushes its own branch and opens the PR.',
+  };
+  const expectedGuidance = new Map();
+  for (const [name, legacy] of Object.entries(legacyGuidance)) {
+    const path = join(pkg, 'core-assets/skills', name, 'SKILL.md');
+    expectedGuidance.set(name, await read(path));
+    await writeFile(path, `---\nname: ${name}\ndescription: Previous PR handoff guidance.\n---\n\n${legacy}\n`);
+  }
+  const runtimePaths = runtime => runtime === 'both' ? ['.agents', '.claude'] : [runtime === 'codex' ? '.agents' : '.claude'];
+  const runtimeProjects = [[project, 'claude'], [second, 'codex'], [third, 'both']];
+  const assertUpdatedGuidance = async (cwd, runtime) => {
+    for (const directory of runtimePaths(runtime)) {
+      for (const [name, expected] of expectedGuidance) {
+        const installed = await read(join(cwd, directory, 'skills', name, 'SKILL.md'));
+        assert.equal(installed, expected);
+        for (const required of ['coordinator may create or reuse a draft pull request', 'mark the same pull request ready', 'commit-only']) {
+          assert.ok(installed.includes(required), `${name} missing ${required}`);
+        }
+        assert.ok(!installed.includes(legacyGuidance[name]), `${name} retained legacy PR guidance`);
+      }
+      assert.equal(await read(join(cwd, directory, 'skills/private/SKILL.md')), '# private user skill\n');
+    }
+  };
   const source = join(pkg, 'bin/void-machine.mjs');
   const version = JSON.parse(await read(join(pkg, 'package.json'))).version;
   const direct = (args, cwd = project) => runConformanceStep(`stable update ${args.join(' ')}`, {
     command: process.execPath, args: [source, ...args], cwd, env });
-  for (const [cwd, runtime] of [[project, 'claude'], [second, 'codex'], [third, 'both']]) {
+  for (const [cwd, runtime] of runtimeProjects) {
     await direct(['init', '--runtime', runtime, '--no-interactive'], cwd);
-    const privateSkill = join(cwd, runtime === 'codex' ? '.agents' : '.claude', 'skills/private/SKILL.md');
-    await mkdir(dirname(privateSkill), { recursive: true });
-    await writeFile(privateSkill, '# private user skill\n');
+    for (const directory of runtimePaths(runtime)) {
+      for (const [name, legacy] of Object.entries(legacyGuidance)) {
+        assert.ok((await read(join(cwd, directory, 'skills', name, 'SKILL.md'))).includes(legacy));
+      }
+      const privateSkill = join(cwd, directory, 'skills/private/SKILL.md');
+      await mkdir(dirname(privateSkill), { recursive: true });
+      await writeFile(privateSkill, '# private user skill\n');
+    }
   }
   await mkdir(join(home, '.void'), { recursive: true });
   await writeFile(join(home, '.void/discovery.json'), JSON.stringify({ roots: [join(home, 'projects')] }));
@@ -364,6 +396,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       await rm(receipt(project));
       await update();
       assert.equal(JSON.parse(await read(receipt(project))).version, version);
+      await assertUpdatedGuidance(project, 'claude');
       assert.equal(JSON.parse(await read(configPath)).authoredSetting, 'preserve this');
       assert.equal(await read(join(project, '.void/PROJECT-DOCTRINE.md')), '# Authored doctrine\r\n');
       assert.equal(await read(receipt(second)), otherReceipt);
@@ -394,6 +427,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       assert.equal(await read(join(second, '.void/PROJECT-DOCTRINE.md')), 'Second project doctrine\n');
       assert.equal(JSON.parse(await read(receipt(second))).version, version);
       assert.equal(JSON.parse(await read(receipt(third))).version, version);
+      for (const [cwd, runtime] of runtimeProjects) await assertUpdatedGuidance(cwd, runtime);
     },
     async ownership() {
       // Update, not offline hydrate, owns complete manifest/receipt recovery.

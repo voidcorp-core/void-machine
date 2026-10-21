@@ -387,7 +387,8 @@ describe('mission team controller', () => {
     expect(correction.review.readyForVerdict).toBe(false);
     expect(correction.verdict.status).not.toBe('verified');
     const corrected = decide([...recovered, writer(12, 'writer:primary', 'run-correction')], PLAN, inputs);
-    expect(corrected.action.kind).toBe('stop');
+    expect(corrected.action.kind).toBe('await-evidence');
+    expect(corrected.verdict.status).not.toBe('verified');
     expect(corrected.reasons.join(' ')).toContain('Provide the mixed included/excluded cleanup regression result.');
   });
 
@@ -454,7 +455,8 @@ describe('mission team controller', () => {
       }
       const reviews = TEST_SPECIALIST_IDS.map((id, index) => completion(id, index + 8));
       const decision = decide(due === 'completion' ? [...implemented, ...reviews] : implemented);
-      expect(decision.action.kind).toBe('stop');
+      expect(decision.action.kind).toBe('await-evidence');
+      expect(decision.verdict.status).not.toBe('verified');
       expect(decision.reasons.join(' ')).toContain(PROOF_REQUEST);
     },
   );
@@ -469,7 +471,8 @@ describe('mission team controller', () => {
         id, index + 12, 'pass', 'post-implementation', HASH, 2,
       ))];
     const decision = decide(events);
-    expect(decision.action.kind).toBe('stop');
+    expect(decision.action.kind).toBe('await-evidence');
+    expect(decision.verdict.status).not.toBe('verified');
     expect(decision.reasons.join(' ')).toContain(PROOF_REQUEST);
   });
 
@@ -485,7 +488,7 @@ describe('mission team controller', () => {
   it('still rejects a late preparation review after a corrected preparation', () => {
     const events = [started(), ...preparationReviews(1, 2, true),
       ...preparationReceipt(), ...preparationReviews(2, 7), writer(10)];
-    expect(decide(events).action.kind).toBe('stop');
+    expect(decide(events).action.kind).toBe('await-evidence');
     const late = completion(TEST_SPECIALIST_IDS[0], 11, 'pass', 'pre-implementation', HASH, 2, 'late');
     expect(decide([...events, late]).action.kind).toBe('stop');
   });
@@ -1178,3 +1181,14 @@ it.each(['pass', 'changes-requested'] as const)(
   expect(decide([...events, ...classifyEvidence(origin, 5, 'post-implementation')]).action.kind)
     .toBe(verdict === 'pass' ? 'run-lead-writer' : 'run-preparation-correction');
 });
+
+it.each(['post-implementation', 'completion'] as const)(
+  'waits for author proof at %s without closing the mission', due => {
+    const origin = completion('core:test-qa-engineer', 4, 'pass', 'pre-implementation',
+      HASH, 1, 'pending-proof', [PROOF_REQUEST]);
+    const events = [started(), ...preReviews().slice(0, 2), origin,
+      ...classifyEvidence(origin, 5, due), writer(7),
+      ...TEST_SPECIALIST_IDS.map((specialist, index) => completion(specialist, index + 8))];
+    expect(decide(events).action).toMatchObject({ kind: 'await-evidence' });
+  },
+);

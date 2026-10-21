@@ -79,3 +79,67 @@ never truncate a journal or downgrade to an incompatible mutating CLI. A defect
 in a published recipe needs a further supported transition, not a history edit.
 
 See the [observation-recipe decision](decisions-log/2026-10-21-stable-review-observation-recipes--129ef8ef-77b5-4c51-a1de-7c5a711e3510.md).
+
+
+## Pending author evidence and existing stopped episodes
+
+A valid outstanding proof now returns `await-evidence` in preparation, after
+implementation and at completion. The verdict stays unverified. Invalid dispositions,
+failed reviews, exhausted review attempts and uncertain effects remain refusals.
+A caller must inspect every command result and stop dependent commands after a refusal.
+
+For an existing `controller-stop`, an already requested and started discharge may
+finish through `mission evidence-event --status completed`. This does not reopen the
+mission or authorize a new author invocation. The same request/context and unchanged
+author response must pass all original proof, contract and freshness checks. A forged,
+unstarted or stale response is refused without an appended event. Repeating an already
+accepted identical response is idempotent; it provides no additional recovery progress.
+
+Then create an exact recovery request from the newly observed journal:
+
+```json
+{
+  "schemaVersion": 1,
+  "closureEventId": "evt_current_controller_stop",
+  "expectedJournalHash": "sha256:<current canonical journal hash>",
+  "disposition": {
+    "kind": "evidence-disposition",
+    "responseEventIds": ["evt_new_author_discharge"]
+  }
+}
+```
+
+The canonical journal hash is SHA-256 of canonical JSON for the parsed event array,
+not SHA-256 of JSONL bytes. Keep both digests in the operational evidence. Never alter
+an event or copy an old subject hash into a current observation. The CLI recomputes
+Git dependencies from its working directory; an error names the observed worktree and
+Git hash. Run from the exact proof worktree with its unchanged committed candidate.
+An author reason over 1000 characters reports the actual length and limit; obtain a
+corrected author response instead of truncating it locally.
+
+Use an explicit fail-fast command sequence, after rehearsing it on a faithful copy:
+
+```sh
+set -eu
+cd "$mission_worktree"
+"$verified_node" "$verified_cli" mission evidence-event --id "$mission_id" \
+  --status completed --input "$author_response" --json
+# Inspect the accepted response and construct the closure/hash-bound request here.
+"$verified_node" "$verified_cli" mission recover --id "$mission_id" \
+  --input "$recovery_request" --json
+"$verified_node" "$verified_cli" mission dispatch --id "$mission_id" --json
+```
+
+Execute each distinct author's retained response before preparing the recovery
+request. Do not run dispatch if any response or recovery is refused. The next action
+may be the first independent review, a remaining evidence wait, or final verification;
+none is a claim that a missing review has happened. Reusing these responses for a later
+closure is refused. Existing round and correction budgets are preserved.
+
+Compatibility is additive: old requests and histories are unchanged. Once a new
+`evidence-disposition` recovery is recorded, 5.0.4 reports the recovery receipt as
+unreproducible and the mission as degraded. Keep a compatible CLI after this boundary;
+rollback never means deleting journal events. Before the transition, retain the old
+installation and original proofs; after it, fix forward through supported commands.
+
+See the [pending evidence decision](decisions-log/2026-10-21-pending-evidence-recovery--26c166d3-ffce-4896-b5f5-14b62e06512b.md).

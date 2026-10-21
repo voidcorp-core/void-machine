@@ -353,7 +353,7 @@ function collectCompletions(
       && envelope.event.seq < contractMigration.afterSeq));
   const highestRound = Math.max(historicalHighestRound, activeRound ?? 0);
   const pendingFailureRounds = [...failedRoundBySpecialist.entries()]
-    .filter(([id]) => !completedInWindow.has(id))
+    .filter(([id]) => !validAccepted.some(item => item.completion.specialistId === id))
     .map(([, round]) => round + 1);
   const nextRound = Math.max(firstCurrentRound, highestRound, ...pendingFailureRounds);
   return { accepted: [...retained, ...validAccepted], history, issues, highestRound, nextRound };

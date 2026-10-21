@@ -21,6 +21,7 @@ export interface MissionRecoveryRequest {
   readonly expectedJournalHash: string;
   readonly disposition:
     | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' | 'opaque-native-context' }
+    | { readonly kind: 'evidence-disposition'; readonly responseEventIds: readonly string[] }
     | { readonly kind: 'preparation-invocation'; readonly completionEventIds: readonly string[] }
     | { readonly kind: 'command-correction'; readonly pairs: readonly CommandEvidenceCorrection[];
         readonly resolutionArtifact: RecoveryResolutionArtifact }
@@ -407,6 +408,64 @@ function pendingPreparationClarification(
     blocking.has(item.obligationId) && completionEventIds.includes(item.completionEventId));
 }
 
+/** A stopped episode may finish an already-started author discharge, but never launch one. */
+export function pendingStoppedEvidenceRequest(
+  events: readonly CanonicalEvent[], requestEventId: string, contextId: string,
+): boolean {
+  const lifecycle = projectMissionLifecycle(events);
+  if (lifecycle.status !== 'closed' || lifecycle.closure.source !== 'void-harness:mission.dispatch'
+    || field(lifecycle.closure, 'reason') !== 'controller-stop' || ambiguousEffects(events)) return false;
+  const request = events.find(event => event.eventId === requestEventId);
+  const runtime = events[0] === undefined ? undefined : field(events[0], 'runtime');
+  if ((runtime !== 'codex' && runtime !== 'claude') || events[0] === undefined
+    || field(events[0], 'runtimeAttested') !== true
+    || !request || request.kind !== 'specialist.evidence-discharge-requested'
+    || request.source !== 'void-harness:mission.dispatch' || request.seq >= lifecycle.closure.seq
+    || field(request, 'nativeContextId') !== contextId || !validNativeContextId(contextId)) return false;
+  return events.some(event => event.kind === 'specialist.evidence-started'
+    && event.source === `runtime:${String(runtime)}` && event.subject === request.subject
+    && event.causationId === request.eventId && event.seq > request.seq
+    && event.seq < lifecycle.closure.seq && ['completionEventId', 'completionHash',
+      'specialistId', 'nativeContextId', 'requestId'].every(key => field(event, key) === field(request, key)));
+}
+
+function validEvidenceDispositionRecovery(input: MissionRecoveryInput): boolean {
+  const { events } = input.stream;
+  const { disposition } = input.request;
+  if (disposition.kind !== 'evidence-disposition' || disposition.responseEventIds.length < 1
+    || disposition.responseEventIds.length > 64
+    || new Set(disposition.responseEventIds).size !== disposition.responseEventIds.length) return false;
+  const closure = events.find(event => event.eventId === input.request.closureEventId);
+  if (!closure) return false;
+  const proofs = events.flatMap(event => {
+    const parsed = event.kind === 'evidence.recorded' ? parseEvidence(field(event, 'evidence')) : undefined;
+    return parsed?.ok ? [{ eventId: event.eventId, evidence: parsed.value }] : [];
+  });
+  const reduction = { expectedSource: input.observation.expectedSource, phase: 'completion' as const,
+    evidenceContext: { missionId: closure.missionId, dependencies: input.observation.evidenceDependencies ?? {} }, proofs };
+  const before = reduceEvidenceObligations({ ...reduction, events: events.filter(event => event.seq <= closure.seq) });
+  const after = reduceEvidenceObligations({ ...reduction, events });
+  if (before.issues.length > 0 || after.issues.length > 0) return false;
+  return disposition.responseEventIds.every(id => {
+    const response = events.find(event => event.eventId === id);
+    if (response?.kind !== 'specialist.evidence-discharged' || response.seq <= closure.seq
+      || response.source !== input.observation.expectedSource || !response.causationId
+      || typeof field(response, 'nativeContextId') !== 'string'
+      || !pendingStoppedEvidenceRequest(events.filter(event => event.seq < response.seq),
+        response.causationId, String(field(response, 'nativeContextId')))) return false;
+    const origin = completions(events).find(item => item.event.eventId === field(response, 'completionEventId'));
+    if (!origin || origin.completion.contractVersion !== input.observation.contractVersions[origin.event.subject]) return false;
+    const items = field(response, 'items');
+    return Array.isArray(items) && items.length > 0 && items.every(item => record(item)
+      && Array.isArray(item['proofEventIds']) && item['proofEventIds'].every(id => proofs.some(proof =>
+        proof.eventId === id && proof.evidence.dependencies.some(dependency =>
+          dependency.key === 'git:working-tree'
+          && dependency.hash === input.observation.evidenceDependencies?.['git:working-tree'])))
+      && before.obligations.some(value => value.obligationId === item['obligationId'] && !value.discharged)
+      && after.obligations.some(value => value.obligationId === item['obligationId'] && value.discharged));
+  });
+}
+
 function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = input.stream.events): MissionRecoveryDecision {
   const { stream, request, observation } = input;
   const events = stream.events;
@@ -423,11 +482,15 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const journalHash = canonicalJsonHash(events);
   if (request.expectedJournalHash !== journalHash) return refuse('stale-journal', 'Re-observe the journal before requesting recovery');
   if (ambiguousEffects(events)) return refuse('ambiguous-effect', 'Reconcile the unfinished external effect; recovery cannot replay it');
+  if (request.disposition.kind === 'evidence-disposition' && !validEvidenceDispositionRecovery(input)) {
+    return refuse('invalid-evidence-disposition', 'Complete a pending pre-stop author invocation with fresh canonical proofs; an old or unstarted response cannot reopen this episode');
+  }
   const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
     && event.kind === 'lead-writer.completed')
     && !pendingPreparationClarification(input, previousRecovery)
+    && !validEvidenceDispositionRecovery(input)
     // Only a complete new independent invocation can advance provenance recovery.
     && !validProvenanceRecovery(input, existing, previousRecovery.seq)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
@@ -551,7 +614,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, reviewInput.maxRounds - consumedRounds),
     ...(!replacement && disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
-    nextAction: replacement || disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
+    nextAction: replacement || disposition.kind === 'evidence-disposition' || disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
       || (disposition.kind === 'controller-defect' && disposition.defect === 'opaque-native-context')
       ? 'verification' : disposition.kind === 'review-blocker' ? 'clarification' : 'correction',
   };
@@ -580,6 +643,12 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
     || typeof value['expectedJournalHash'] !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value['expectedJournalHash'])
     || value['disposition'] === undefined || !record(value['disposition'])) return false;
   const disposition = value['disposition'];
+  if (disposition['kind'] === 'evidence-disposition') {
+    const ids = disposition['responseEventIds'];
+    return exactKeys(disposition, ['kind', 'responseEventIds']) && Array.isArray(ids)
+      && ids.length > 0 && ids.length <= 64 && new Set(ids).size === ids.length
+      && ids.every(id => typeof id === 'string' && /^evt_[A-Za-z0-9_-]{8,100}$/.test(id));
+  }
   if (disposition['kind'] === 'preparation-invocation') {
     return exactKeys(disposition, ['kind', 'completionEventIds'])
       && Array.isArray(disposition['completionEventIds']) && disposition['completionEventIds'].length > 0

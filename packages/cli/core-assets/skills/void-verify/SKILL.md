@@ -19,6 +19,25 @@ If you find yourself wanting to skip the checklist "because it's a small change,
 
 ---
 
+## Local development and integration
+
+During development, run the smallest meaningful configured test command against the
+changed behavior, plus affected types and local hooks. Keep the PR in draft; do not
+wait for full remote CI after each edit or commit. Fresh local evidence still gates
+claims about the behavior tested. `commands.testUnit` and `commands.typecheck` in
+`.void/config.json` describe project commands; preserve their argv.
+
+When the candidate is committed and independently reviewed, run the applicable final
+checks below and mark the PR ready. Wait for real required CI on that head and, if
+configured, the merge group before integration. Local success cannot replace a required
+server check. Returning to draft cancels obsolete PR work without resetting reviews.
+
+For an explicitly requested CI setup or optimization, use the installed
+[executable admission guard and workflow template](references/ci-feedback.md).
+They defer draft validation with an explicit non-success outcome, rerun on readiness,
+and preserve merge queue checks. Never install them or change remote protection merely
+because this skill was invoked.
+
 ## The checklist
 
 Read item by item. Do not run from memory. Each item is OBSERVED, not assumed.

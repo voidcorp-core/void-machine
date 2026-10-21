@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 394,
+      "lines": 395,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 6967,
+      "staticTokens": 7051,
       "type": "skill"
     },
     {
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 5664,
+      "staticTokens": 5800,
       "type": "skill"
     },
     {
@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 311,
+      "lines": 327,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 4402,
+      "staticTokens": 4673,
       "type": "skill"
     },
     {
@@ -2859,7 +2859,7 @@
         }
       ],
       "id": "skill:void-verify",
-      "lines": 184,
+      "lines": 203,
       "name": "void-verify",
       "owner": "folpe",
       "pack": null,
@@ -2868,7 +2868,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-verify/SKILL.md",
-      "staticTokens": 2267,
+      "staticTokens": 2552,
       "type": "skill"
     }
   ],

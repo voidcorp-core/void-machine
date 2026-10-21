@@ -90,8 +90,8 @@ skip a step, merge, or decide that a refusal does not apply to it.
 
 **Orchestrator.** Runs the loop. Evaluates no ticket, edits no code, reads no diff.
 
-**Workers**, one per slot. Each carries one ticket from claim to an open pull request, in its own
-worktree, by running `void-implement` whole.
+**Workers**, one per slot, are commit-only. Each carries one ticket to a committed candidate
+and proof references in its own worktree; the coordinator owns pushes and pull requests.
 
 **Reviewer.** The independent pass of `void-implement`, invoked by ORCH through
 `void-orchestrate` in a fresh read-only context on the exact head SHA. `autopilot review`
@@ -203,8 +203,8 @@ in flight set it when they create or push their branch and drop it with a merged
 own settings still count. So start each worktree from
 `origin/<base>` and never move a local base branch while units are in flight. The baseline
 recorded at `assign` is written once: a second `--before` for the same ticket is refused, so a unit
-cannot re-record the state it left as the state it found. It is compared by the worker before it
-pushes, with `autopilot fingerprint --after <ticket>`, and again by the kernel before it arms a
+cannot re-record the state it left as the state it found. It is compared by the coordinator before it
+publishes, with `autopilot fingerprint --after <ticket>`, and again by the kernel before it arms a
 merge. A changed or missing baseline sends the ticket to a human, unpublished; only that person
 deletes the record.
 
@@ -273,21 +273,22 @@ It runs `void-implement` whole in that worktree, and starts its mission with the
 mission what it has done: each specialist result through `mission specialist-event`, each proof
 through `mission verify`, a committed candidate through `mission writer-event`. The journal accepts
 only these typed events, no free note; what is not yet one of them does not survive a respawn, and
-uncommitted edits survive only in the worktree. When its proofs are green it runs
-`autopilot fingerprint --after <ticket>`, pushes its own branch, opens one pull request towards the
-base, ready for review rather than as a draft, and moves the ticket to In Review. The reviewer the
-orchestrator invokes is that cycle's independent review; it reviews ready pull requests only, so a
-draft waits.
+uncommitted edits survive only in the worktree. During development, the coordinator may create or reuse a draft pull request
+for the branch; drafts are permitted for development, never for merge admission. After the worker
+returns its commit and green proofs, the coordinator runs `autopilot fingerprint --after <ticket>`,
+pushes, and must mark the same pull request ready (create one only if absent), then move the ticket
+to In Review. The independent reviewer examines ready pull requests only; an unfinished draft waits.
 Blocking findings come back as a hand-back and are corrected as a batch, per `void-implement`.
 
 On a hand-back the worker reads the reason: failing checks, blocking findings, a conflict, or a
 base that moved. It updates its branch by merging the base into it,
-never by rewriting pushed history, re-runs its proofs, and pushes again.
+never by rewriting pushed history, re-runs its proofs, and returns its commit to the coordinator.
+The coordinator updates the same PR; the worker does not create another one.
 
 May: run every `void-implement` pass whose predicate fires, run its own gates, apply a migration in
-dev/local only, push its own branch without force, and open or update its own pull request.
+dev/local only, and return its commits and proofs to the coordinator.
 
-May not: enable auto-merge, merge anything, post or record a verdict, run `autopilot review`, move a ticket to Done, close or cancel a ticket, touch another ticket's branch or worktree,
+May not: enable auto-merge, merge anything, post or record a verdict, run `autopilot review`, push, create or change pull requests, move a ticket to Done, close or cancel a ticket, touch another ticket's branch or worktree,
 prune the mission journals, or write the git state the repository shares -- `refs/stash`, tags,
 notes, remotes, the repository config.
 
@@ -332,7 +333,7 @@ head, then sends the ticket to a human. An ejected head whose own checks fail go
 worker as failing checks. A pull request in conflict with the base goes back to its worker. The
 worker classifies the conflict as the typed `conflict` judgment on the conflicting head, posted
 through `autopilot judgment conflict-class`: `mechanical` it resolves, re-runs
-its proofs and pushes; `semantic` -- two intents that disagree -- it leaves alone, and the kernel
+its proofs and returns its commit for coordinator publication; `semantic` -- two intents that disagree -- it leaves alone, and the kernel
 sends the ticket to a human. A worker never picks a side of a semantic conflict to keep the loop
 moving.
 

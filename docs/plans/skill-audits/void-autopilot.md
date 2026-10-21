@@ -130,3 +130,12 @@ permissions. Every worker is now one `void-machine agents dispatch --role work` 
 worktree, a hand-back is `agents send` to that same run, and the view is the kernel's business.
 Rejected: keeping the native subagent as a fallback when the dispatch is refused, which would
 hide the refusal the kernel exists to state.
+
+## Draft development handoff (2026-10-21)
+
+The former instruction to open a ready PR after proofs was a final-handoff rule,
+not a hook banning drafts. Explicitly allow the coordinator to create or reuse a
+development draft, then mark that same PR ready. Workers return commits and proofs;
+the coordinator owns publication. Keep the runtime's draft review/merge refusals.
+An integration regression installs the previous guidance with a real receipt and
+updates both runtime skill directories without changing private doctrine or skills.

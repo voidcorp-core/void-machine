@@ -11093,6 +11093,7 @@ function executeContextContinuity(rawInput, root, runtime3, now) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync2 } from "node:child_process";
+import { realpathSync as realpathSync5 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join12 } from "node:path";
 
@@ -12985,6 +12986,39 @@ function metadataCommands(snapshot, event, sequence, contextPercent, workspaceMi
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
+var discoverySchema = object2({ result: object2({ process_info: object2({
+  pane_id: string2(),
+  foreground_processes: array(object2({
+    pid: number2().check(int(), _gte(2))
+  })).check(_minLength(1), _maxLength(256))
+}) }) });
+function foreground(output, pane) {
+  try {
+    const value = JSON.parse(output.toString("utf8"));
+    if (record3(value)?.["error"] !== void 0) return void 0;
+    const result = discoverySchema.safeParse(value);
+    if (!result.success || result.data.result.process_info.pane_id !== pane) return void 0;
+    return result.data.result.process_info.foreground_processes.map((item) => item.pid);
+  } catch {
+    return void 0;
+  }
+}
+function proveOwnership(pids, call) {
+  let pid = process.pid;
+  const visited = /* @__PURE__ */ new Set();
+  for (let depth = 0; depth < 64; depth++) {
+    if (visited.has(pid)) return "parent-cycle";
+    visited.add(pid);
+    if (pids.includes(pid)) return void 0;
+    const parent = call("ps", ["-o", "ppid=", "-p", String(pid)]).toString("utf8").trim();
+    if (!/^[0-9]+$/.test(parent) || !Number.isSafeInteger(Number(parent))) return "invalid-parent";
+    pid = Number(parent);
+    if (pid <= 1) return "ownership-unproven";
+  }
+  return "parent-depth-exceeded";
+}
+
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { createHash as createHash4 } from "node:crypto";
 import { closeSync as closeSync3, constants as constants4, fstatSync as fstatSync3, lstatSync as lstatSync4, opendirSync, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync4 } from "node:fs";
 import { isAbsolute as isAbsolute6, join as join11, parse as parse2, relative as relative5, resolve as resolve6, sep } from "node:path";
@@ -13294,9 +13328,9 @@ function executeHerdrMetadata(raw, root, env, runtime3, run = runCommand) {
   };
   try {
     const common = call("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+    const inventory = () => paneList.parse(JSON.parse(call("herdr", ["pane", "list"]))).result.panes;
     const snapshot = readOrchestra(join12(env["HOME"] ?? homedir2(), ".local/state/orchestra"), common, root, () => {
-      const response = paneList.parse(JSON.parse(call("herdr", ["pane", "list"])));
-      return response.result.panes.flatMap((pane) => typeof pane.label === "string" && typeof pane.cwd === "string" ? [{
+      return inventory().flatMap((pane) => typeof pane.label === "string" && typeof pane.cwd === "string" ? [{
         pane_id: pane.pane_id,
         workspace_id: pane.workspace_id,
         label: pane.label,
@@ -13304,7 +13338,29 @@ function executeHerdrMetadata(raw, root, env, runtime3, run = runCommand) {
         ...pane.tokens === void 0 ? {} : { tokens: pane.tokens }
       }] : []);
     });
-    if (snapshot === void 0) return { status: "skipped", details: { reason: "no-orchestra-mission" } };
+    if (snapshot === void 0) {
+      if (event !== "SessionStart") return { status: "skipped", details: { reason: "no-orchestra-mission" } };
+      const paneId = env["HERDR_PANE_ID"];
+      if (!paneId || !env["HERDR_SOCKET_PATH"]) throw Error("missing-herdr-context");
+      const panes = inventory();
+      const matches2 = panes.filter((pane2) => pane2.pane_id === paneId);
+      const pane = matches2[0];
+      if (matches2.length !== 1 || !pane || !pane.cwd || realpathSync5(pane.cwd) !== realpathSync5(root)) {
+        throw Error("Herdr caller pane missing or foreign worktree");
+      }
+      if (pane.label && panes.filter((other) => other.label === pane.label && typeof other.cwd === "string" && realpathSync5(other.cwd) === realpathSync5(root)).length !== 1) {
+        throw Error("ambiguous Herdr coordinator identity");
+      }
+      const pids = foreground(Buffer.from(call("herdr", ["pane", "process-info", "--pane", paneId])), paneId);
+      if (pids === void 0) throw Error("invalid Herdr process discovery");
+      const denied = proveOwnership(pids, (command, args) => Buffer.from(call(command, args)));
+      if (denied !== void 0) throw Error(denied);
+      return { status: "ok", details: { host: "herdr", mission: "absent" }, output: { hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: `Validated Herdr caller: ${paneId}. No Orchestra mission selected.
+Use void-orchestrate before delegating a ticket: register the mission, create or reuse its worker tab, and launch the worker once. Revalidate live identity before acting; this hook never launches workers.`
+      } } };
+    }
     const workspace = snapshot.coordinator ? record3(record3(JSON.parse(call("herdr", ["workspace", "get", snapshot.pane.workspace_id])))?.["result"]) : void 0;
     const workspaceMission = record3(record3(workspace?.["workspace"])?.["tokens"])?.["mission"];
     const percent = measureHerdrContext(input, root, runtime3, now);
@@ -13341,8 +13397,17 @@ Read mission.md and the current brief/report before resuming; Herdr IDs are hint
     };
   } catch (error) {
     const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-    return { status: "degraded", details: { reason }, diagnostic: `herdr-metadata: ${reason}
-` };
+    return {
+      status: "degraded",
+      details: { reason },
+      diagnostic: `herdr-metadata: ${reason}
+`,
+      ...event === "SessionStart" ? { output: { hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: `Herdr discovery refused: ${reason}.
+Do not act on this host until resolved. Native delegation independent of that action may continue.`
+      } } } : {}
+    };
   }
 }
 
@@ -13356,40 +13421,9 @@ var runCommand2 = (command, args, options) => {
   if (result.error !== void 0 || result.status !== 0) throw Error("process-failed");
   return result.stdout;
 };
-var discoverySchema = object2({ result: object2({ process_info: object2({
-  pane_id: string2(),
-  foreground_processes: array(object2({
-    pid: number2().check(int(), _gte(2))
-  })).check(_minLength(1), _maxLength(256))
-}) }) });
 function refused(reason) {
   return { status: "degraded", details: { reason }, diagnostic: `herdr-session: ${reason}
 ` };
-}
-function foreground(output, pane) {
-  try {
-    const value = JSON.parse(output.toString("utf8"));
-    if (record3(value)?.["error"] !== void 0) return void 0;
-    const result = discoverySchema.safeParse(value);
-    if (!result.success || result.data.result.process_info.pane_id !== pane) return void 0;
-    return result.data.result.process_info.foreground_processes.map((item) => item.pid);
-  } catch {
-    return void 0;
-  }
-}
-function proveOwnership(pids, call) {
-  let pid = process.pid;
-  const visited = /* @__PURE__ */ new Set();
-  for (let depth = 0; depth < 64; depth++) {
-    if (visited.has(pid)) return "parent-cycle";
-    visited.add(pid);
-    if (pids.includes(pid)) return void 0;
-    const parent = call("ps", ["-o", "ppid=", "-p", String(pid)]).toString("utf8").trim();
-    if (!/^[0-9]+$/.test(parent) || !Number.isSafeInteger(Number(parent))) return "invalid-parent";
-    pid = Number(parent);
-    if (pid <= 1) return "ownership-unproven";
-  }
-  return "parent-depth-exceeded";
 }
 function nativeHook(env) {
   const path2 = join13(
@@ -13453,7 +13487,7 @@ function executeHerdrSession(input, env, runtime3, run = runCommand2, clock = ()
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { randomUUID } from "node:crypto";
-import { lstatSync as lstatSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync5, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { lstatSync as lstatSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync6, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
 import { basename as basename5, dirname as dirname6, isAbsolute as isAbsolute7, join as join16 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -13512,20 +13546,20 @@ function claimedPath(root, sessionId) {
     if (!within(runs, path2) || lstatSync5(dirname6(path2), { throwIfNoEntry: false })?.isDirectory() !== true) {
       return void 0;
     }
-    return within(realpathSync5(runs), realpathSync5(dirname6(path2))) ? path2 : void 0;
+    return within(realpathSync6(runs), realpathSync6(dirname6(path2))) ? path2 : void 0;
   } catch {
     return void 0;
   }
 }
 function waitingRun(root, cwd, now) {
   try {
-    const here = realpathSync5(cwd);
+    const here = realpathSync6(cwd);
     const directory = join16(root, "agents", "pending");
     return readdirSync3(directory).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
       const marker = record3(JSON.parse(readFileSync11(join16(directory, name), "utf8")));
       const createdAt = marker?.["createdAt"];
       const runCwd = marker?.["cwd"];
-      return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync5(runCwd) === here;
+      return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync6(runCwd) === here;
     });
   } catch {
     return false;
@@ -13953,7 +13987,7 @@ import { createHash as createHash5 } from "node:crypto";
 import {
   lstatSync as lstatSync7,
   mkdirSync as mkdirSync5,
-  realpathSync as realpathSync6,
+  realpathSync as realpathSync7,
   writeFileSync as writeFileSync4
 } from "node:fs";
 import { join as join18, relative as relative7 } from "node:path";
@@ -14024,11 +14058,11 @@ ${errors}
 
 function safeOutputDirectory(root) {
   try {
-    const canonicalRoot = realpathSync6(root);
+    const canonicalRoot = realpathSync7(root);
     const directory = voidMachinePath(root, "outputs");
     mkdirSync5(directory, { recursive: true, mode: 448 });
     const info = lstatSync7(directory);
-    const canonicalDirectory2 = realpathSync6(directory);
+    const canonicalDirectory2 = realpathSync7(directory);
     if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory2)) {
       return void 0;
     }
@@ -14064,7 +14098,7 @@ function executeTrim(rawInput, root, env) {
   const hash = createHash5("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
   const file = join18(directory, `${tool}-${process.pid}-${Date.now()}-${hash}.log`);
-  const spillPath = relative7(realpathSync6(root), file).replaceAll("\\", "/");
+  const spillPath = relative7(realpathSync7(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
     thresholdBytes,
@@ -14351,13 +14385,13 @@ Resolve before claiming done. This never blocks.
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync8 } from "node:child_process";
-import { closeSync as closeSync4, existsSync as existsSync8, lstatSync as lstatSync8, openSync as openSync4, readSync as readSync4, realpathSync as realpathSync7 } from "node:fs";
+import { closeSync as closeSync4, existsSync as existsSync8, lstatSync as lstatSync8, openSync as openSync4, readSync as readSync4, realpathSync as realpathSync8 } from "node:fs";
 import { dirname as dirname8, isAbsolute as isAbsolute10, join as join21, resolve as resolve9 } from "node:path";
 var GIT_TIMEOUT_MS2 = 5e3;
 var GIT_MAX_OUTPUT_BYTES = 1e6;
 function canonical2(path2) {
   try {
-    return realpathSync7(resolve9(path2));
+    return realpathSync8(resolve9(path2));
   } catch {
     return resolve9(path2);
   }

@@ -683,3 +683,199 @@ it('refuses a third clarification recovery without progress after consuming the 
     .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
   expect(canonicalJsonHash(events)).toBe(before);
 });
+
+const INDEPENDENT_REVIEWER = 'core:independent-code-reviewer';
+function provenanceAfterEvidenceRecovery(correctionBatches = 0) {
+  const initial = preparationObligationAtPost('post-implementation');
+  const initialEvents = initial.stream.events.map(item => item.seq === 1
+    ? { ...item, payload: { leadWriterId: 'writer:primary', planHash: HASH } } : item);
+  for (let batch = 0; batch < correctionBatches; batch++) {
+    initialEvents.splice(-1, 0, { ...entry(0, 'lead-writer.completed', {
+      actionKind: 'run-correction', writerId: 'writer:primary',
+    }), subject: 'writer:primary' });
+  }
+  const closed = initialEvents.map((item, index) => ({ ...item, seq: index + 1, eventId: id(index + 1) }));
+  const first = planStoppedMissionRecovery({ ...initial,
+    stream: replayEventLog(closed.map(serializeEvent).join('\n')),
+    request: { ...initial.request, closureEventId: id(closed.length), expectedJournalHash: canonicalJsonHash(closed) },
+  });
+  if (first.kind !== 'recover') throw new Error(`Expected evidence recovery: ${JSON.stringify(first)}`);
+  const recovered = recoveryEvent(closed, first.receipt);
+  const events = [...closed, recovered];
+  const proofSeq = events.length + 1;
+  const dischargeSeq = proofSeq + 1;
+  const dischargeEvents = preparationObligationAtPost('post-implementation', 'discharged').stream.events.slice(4, 7);
+  events.push(...dischargeEvents.map((item, index) => ({ ...item,
+    seq: proofSeq + index, eventId: id(proofSeq + index),
+    ...(index === 2 ? { causationId: id(dischargeSeq) } : {}),
+    payload: { ...(item.payload as Readonly<Record<string, JsonValue>>),
+      ...(index === 0 ? {} : { requestId: id(dischargeSeq) }),
+      ...(index !== 2 ? {} : { items: [{
+        ...((item.payload as { items: readonly Readonly<Record<string, JsonValue>>[] }).items[0]),
+        proofEventIds: [id(proofSeq)],
+      }] }),
+    },
+  })));
+  const reviewSubject = { taskId: event().missionId, baseCommit: 'a'.repeat(40),
+    reviewedCommit: 'b'.repeat(40), acceptanceCriteriaHash: HASH };
+  const review = { ...reviewSubject, reviewerId: 'reviewer:independent', writerId: 'writer:primary',
+    readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
+    provenance: { kind: 'native-context', contextId: '/root/new_independent_review' } } as const;
+  const completion = { schemaVersion: 1, specialistId: INDEPENDENT_REVIEWER, contractVersion: 1,
+    completionId: 'completion-new-independent', verdict: 'pass', findings: [], evidenceRequests: [], limitations: [],
+    review: { ...review, writerId: '/root/original_writer' } };
+  const common = { stage: 'post-implementation', reviewRound: 1, inputHash: HASH, contractVersion: 1 };
+  events.push({ ...entry(events.length + 1, 'specialist.requested', { ...common, runtime: 'codex', planHash: HASH }),
+    source: 'void-harness:mission.dispatch', subject: INDEPENDENT_REVIEWER });
+  events.push({ ...entry(events.length + 1, 'specialist.started', { ...common, contextId: review.provenance.contextId }),
+    subject: INDEPENDENT_REVIEWER });
+  const completionEventId = id(events.length + 1);
+  events.push({ ...entry(events.length + 1, 'specialist.completed', { ...common,
+    contextId: review.provenance.contextId, completion }), subject: INDEPENDENT_REVIEWER });
+  events.push({ ...entry(events.length + 1, 'mission.closed', { reason: 'controller-stop', episodeId: recovered.eventId }),
+    source: 'void-harness:mission.dispatch' });
+  const artifact = { path: 'docs/review-provenance.json', sha256: HASH };
+  return { stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { schemaVersion: 1, closureEventId: id(events.length), expectedJournalHash: canonicalJsonHash(events),
+      disposition: { kind: 'review-provenance', completionEventIds: [completionEventId], resolutionArtifact: artifact } },
+    observation: { ...initial.observation, contractVersions: { [SPECIALIST]: 1, [INDEPENDENT_REVIEWER]: 1 },
+      currentInputHashes: { [SPECIALIST]: HASH, [INDEPENDENT_REVIEWER]: HASH }, resolutionArtifact: artifact,
+      reviewSubject, reviewBindings: [{ completionEventId, completionHash: canonicalJsonHash(completion), review }] },
+  } as const;
+}
+function withRecoveryEvents(candidate: ReturnType<typeof provenanceAfterEvidenceRecovery>, events: readonly CanonicalEvent[]) {
+  return { ...candidate, stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...candidate.request, expectedJournalHash: canonicalJsonHash(events) } };
+}
+
+describe('fresh independent provenance as recovery progress', () => {
+  it('retains a final third-round approval after two bounded correction batches', () => {
+    const candidate = provenanceAfterEvidenceRecovery(2);
+    const events = candidate.stream.events.map(item => item.subject === INDEPENDENT_REVIEWER
+      ? { ...item, payload: { ...(item.payload as Readonly<Record<string, JsonValue>>), reviewRound: 3 } }
+      : item);
+    expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, events),
+      observation: { ...candidate.observation, reviewPolicy: 'bounded-corrections-v1' },
+    })).toMatchObject({ kind: 'recover', receipt: { consumedRounds: 3, remainingRounds: 0,
+      consumedCorrectionBatches: 2, remainingCorrectionBatches: 0, nextAction: 'verification' } });
+  });
+
+  it.each([0, 2])('recovers after evidence discharge and new review while preserving %i correction batches', batches => {
+    const candidate = provenanceAfterEvidenceRecovery(batches);
+    const originalHash = canonicalJsonHash(candidate.stream.events);
+    const decision = planStoppedMissionRecovery(candidate);
+    expect(decision).toMatchObject({ kind: 'recover', receipt: { nextAction: 'verification',
+      consumedRounds: 1, remainingRounds: 1, consumedCorrectionBatches: batches,
+      remainingCorrectionBatches: 2 - batches,
+      preservedCompletionEventIds: candidate.request.disposition.completionEventIds,
+      invalidatedCompletionEventIds: [], roundCorrections: [],
+    } });
+    expect(canonicalJsonHash(candidate.stream.events)).toBe(originalHash);
+    if (decision.kind !== 'recover') throw new Error('Expected fresh independent provenance admission');
+    const recovered = recoveryEvent(candidate.stream.events, decision.receipt);
+    const events = [...candidate.stream.events, recovered];
+    expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+    expect(planStoppedMissionRecovery({ ...candidate, stream: replayEventLog(events.map(serializeEvent).join('\n')) }))
+      .toMatchObject({ kind: 'already-recovered' });
+    const reclosed = [...events, { ...entry(events.length + 1, 'mission.closed', {
+      reason: 'controller-stop', episodeId: recovered.eventId,
+    }), source: 'void-harness:mission.dispatch' }];
+    expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, reclosed),
+      request: { ...candidate.request, closureEventId: id(reclosed.length),
+        expectedJournalHash: canonicalJsonHash(reclosed) },
+    })).toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  });
+
+  it('rejects replaying the old triplet with new event identifiers after another recovery', () => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    const decision = planStoppedMissionRecovery(candidate);
+    if (decision.kind !== 'recover') throw new Error('Expected fresh independent provenance admission');
+    const recovered = recoveryEvent(candidate.stream.events, decision.receipt);
+    const events = [...candidate.stream.events, recovered];
+    const triplet = candidate.stream.events.filter(item => item.subject === INDEPENDENT_REVIEWER);
+    events.push(...triplet.map((item, index) => ({ ...item, seq: events.length + index + 1,
+      eventId: id(events.length + index + 1) })));
+    const completionEventId = id(events.length);
+    events.push({ ...entry(events.length + 1, 'mission.closed', { reason: 'controller-stop',
+      episodeId: recovered.eventId }), source: 'void-harness:mission.dispatch' });
+    expect(planStoppedMissionRecovery({ ...withRecoveryEvents(candidate, events),
+      request: { ...candidate.request, closureEventId: id(events.length), expectedJournalHash: canonicalJsonHash(events),
+        disposition: { ...candidate.request.disposition, completionEventIds: [completionEventId] } },
+      observation: { ...candidate.observation,
+        reviewBindings: [{ ...candidate.observation.reviewBindings[0], completionEventId }] },
+    })).toMatchObject({ kind: 'refused', code: 'inconsistent-review' });
+  });
+
+  it('keeps the correction exhaustion gate', () => {
+    expect(planStoppedMissionRecovery(provenanceAfterEvidenceRecovery(3)))
+      .toMatchObject({ kind: 'refused', code: 'review-budget-exhausted' });
+  });
+
+  it.each(['specialist.requested', 'specialist.started'])('requires a fresh %s after the authenticated recovery', kind => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    // Move invocation evidence before the first closure; the prior recovery remains valid.
+    const original = candidate.stream.events;
+    const moved = original.find(item => item.kind === kind && item.subject === INDEPENDENT_REVIEWER);
+    const prefix = original.slice(0, 5);
+    const closure = original[5];
+    const originalRecovery = original[6];
+    if (!moved || !closure || !originalRecovery) throw new Error('Expected complete invocation fixture');
+    const beforeRecovery = [...prefix, moved, closure].map((item, index) => ({ ...item, seq: index + 1,
+      ...(item === moved ? { eventId: 'evt_moved_invocation' } : {}), }));
+    const initial = preparationObligationAtPost('post-implementation');
+    const prior = planStoppedMissionRecovery({ ...initial,
+      stream: replayEventLog(beforeRecovery.map(serializeEvent).join('\n')),
+      request: { ...initial.request, expectedJournalHash: canonicalJsonHash(beforeRecovery) },
+    });
+    if (prior.kind !== 'recover') throw new Error(`Expected authentic prefix recovery: ${JSON.stringify(prior)}`);
+    const recovered = { ...recoveryEvent(beforeRecovery, prior.receipt), eventId: originalRecovery.eventId };
+    const events = [...beforeRecovery, recovered, ...original.slice(7).filter(item => item !== moved)]
+      .map((item, index) => ({ ...item, seq: index + 1 }));
+    expect(validatedRecoveredReviewEvents(events).ok).toBe(true);
+    expect(planStoppedMissionRecovery(withRecoveryEvents(candidate, events)))
+      .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  });
+
+  it.each(['specialist.requested', 'specialist.started', 'specialist.completed'])('rejects missing %s', kind => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    const events = candidate.stream.events.map(item => item.subject === INDEPENDENT_REVIEWER && item.kind === kind
+      ? { ...item, kind: 'runtime.tool.completed' } : item);
+    expect(planStoppedMissionRecovery(withRecoveryEvents(candidate, events))).toMatchObject({ kind: 'refused' });
+  });
+
+  it.each(['request-source', 'request-contract', 'request-input', 'start-source', 'start-contract', 'start-context',
+    'stale-subject', 'stale-input', 'malformed-review', 'self-review', 'wrong-hash'])('rejects %s', cause => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    const binding = candidate.observation.reviewBindings[0];
+    if (cause === 'malformed-review') Reflect.set(binding.review, 'readOnly', false);
+    if (cause === 'self-review') Reflect.set(binding.review, 'reviewerId', 'writer:primary');
+    if (cause === 'wrong-hash') Reflect.set(binding, 'completionHash', `sha256:${'f'.repeat(64)}`);
+    if (cause === 'stale-subject') Reflect.set(candidate.observation.reviewSubject, 'reviewedCommit', 'c'.repeat(40));
+    if (cause === 'stale-input') Reflect.set(candidate.observation.currentInputHashes, INDEPENDENT_REVIEWER, `sha256:${'f'.repeat(64)}`);
+    const events = candidate.stream.events.map(item => {
+      if (item.subject !== INDEPENDENT_REVIEWER) return item;
+      const payload = item.payload as Readonly<Record<string, JsonValue>>;
+      if (item.kind === 'specialist.requested') {
+        if (cause === 'request-source') return { ...item, source: 'runtime:codex' };
+        if (cause === 'request-contract') return { ...item, payload: { ...payload, contractVersion: 2 } };
+        if (cause === 'request-input') return { ...item, payload: { ...payload, inputHash: `sha256:${'f'.repeat(64)}` } };
+      }
+      if (item.kind === 'specialist.started') {
+        if (cause === 'start-source') return { ...item, source: 'runtime:claude' };
+        if (cause === 'start-contract') return { ...item, payload: { ...payload, contractVersion: 2 } };
+        if (cause === 'start-context') return { ...item, payload: { ...payload, contextId: 'other-context' } };
+      }
+      return item;
+    });
+    expect(planStoppedMissionRecovery(withRecoveryEvents(candidate, events))).toMatchObject({ kind: 'refused' });
+  });
+
+  it.each(['review-blocker', 'controller-defect'] as const)('does not grant the exception to %s', kind => {
+    const candidate = provenanceAfterEvidenceRecovery();
+    const disposition = kind === 'review-blocker'
+      ? { ...candidate.request.disposition, kind }
+      : { kind, defect: 'stale-input-dispatch' as const };
+    expect(planStoppedMissionRecovery({ ...candidate, request: { ...candidate.request, disposition } }))
+      .toMatchObject({ kind: 'refused', code: 'no-recovery-progress' });
+  });
+});

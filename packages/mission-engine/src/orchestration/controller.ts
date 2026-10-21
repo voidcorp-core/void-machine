@@ -22,6 +22,7 @@ import type {
 } from '../specialist/routing.js';
 import { validatedRecoveredReviewEvents } from './mission-recovery.js';
 import {
+  BOUNDED_REVIEW_BUDGET,
   type ReviewLoopState,
   reduceReviewLoop,
 } from './review-loop.js';
@@ -811,8 +812,7 @@ export function orchestrateMissionTeam(
     requiredSpecialists: requiredSpecialists(input.plan, 'post-implementation', start.boundedReview),
     contractVersions: contractVersions(input.plan),
     currentInputHashes: input.currentInputHashesByStage['post-implementation'],
-    maxRounds: start.boundedReview ? 3 : input.maxReviewRounds,
-    ...(start.boundedReview ? { maxCorrectionBatches: 2 as const } : {}),
+    ...(start.boundedReview ? BOUNDED_REVIEW_BUDGET : { maxRounds: input.maxReviewRounds }),
     evidenceObligations: obligations,
     validProofIds: input.stream.events.flatMap(event => {
       if (event.kind !== 'evidence.recorded') return [];

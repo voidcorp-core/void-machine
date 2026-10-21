@@ -43,7 +43,7 @@ export function renderGateBlock(gates) {
   }
   lines.push(
     '      - name: Aggregate exact-SHA gate reports',
-    '        if: ${{ !cancelled() }}',
+    "        if: ${{ !cancelled() && steps.admission.outcome == 'success' }}",
     '        run: >-',
     '          node scripts/verify.mjs --aggregate --sha "$GATE_SHA"',
     '          --reports ".void/machine/gate-reports"',

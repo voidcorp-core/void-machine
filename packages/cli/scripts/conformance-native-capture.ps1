@@ -3,6 +3,7 @@
 # PID/parent/time/name/exit metadata is collected transiently, never command lines.
 param([ValidateSet('Preflight','Capture')][string]$Mode,
       [string]$Cdb, [string]$SymbolCache)
+if ($Mode -eq 'Capture') { [Console]::Out.WriteLine('{"kind":"startup","stage":"script-entered"}') }
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 function Emit($value) { [Console]::Out.WriteLine(($value | ConvertTo-Json -Compress -Depth 6)) }
@@ -29,6 +30,7 @@ if ($Mode -eq 'Preflight') {
 }
 # Direct .NET callbacks avoid PowerShell's unbounded event-action queue. Stop
 # admitting after256 total records; even a drained queue cannot reset this cap.
+Emit @{ kind='startup'; stage='compile-types' }
 Add-Type -ReferencedAssemblies 'System.dll','System.Management.dll' -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -81,7 +83,12 @@ public sealed class CaptureEvents : IDisposable {
             } catch { Overflow=true; }
         }
     }
-    public void Arm() { stop.Start(); start.Start(); }
+    public void Arm() {
+        Console.Out.WriteLine("{\"kind\":\"startup\",\"stage\":\"arm-stop\"}");
+        stop.Start();
+        Console.Out.WriteLine("{\"kind\":\"startup\",\"stage\":\"arm-start\"}");
+        start.Start();
+    }
     public Dictionary<string,object> Take() {
         lock(gate) { return queue.Count==0 ? null : queue.Dequeue(); }
     }
@@ -149,6 +156,7 @@ function Inspect($request) {
         Emit $snapshot
     }
 }
+Emit @{ kind='startup'; stage='create-watchers' }
 $watch = New-Object CaptureEvents
 $clock = [Diagnostics.Stopwatch]::StartNew()
 try {

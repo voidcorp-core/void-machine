@@ -30,6 +30,9 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
   const { conformanceEnvironment } = await import('./conformance-process.mjs');
   const env = conformanceEnvironment({ TEMP: process.env.TEMP, TMP: process.env.TMP });
   const script = fileURLToPath(new URL('./conformance-native-capture.ps1', import.meta.url));
+  const { captureStartup } = await load();
+  const startup = captureStartup();
+  const startedAt = performance.now();
   const observer = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', script, '-Mode', 'Capture'],
     { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   const children: ReturnType<typeof spawn>[] = [];
@@ -40,7 +43,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
       let started = false;
       let pending = '';
       let bytes = 0;
-      const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}`)), 8000);
+      const deadline = setTimeout(() => reject(new Error(`idle-input event delivery stalled: ${phase}; startup=${JSON.stringify(startup.snapshot())}`)), 8000);
       const fail = (error: Error) => { clearTimeout(deadline); reject(error); };
       const produceEvent = () => {
         const child = spawn(process.execPath, ['-e', 'process.exitCode=37'], { env, stdio: 'ignore', windowsHide: true });
@@ -48,7 +51,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
         child.once('error', fail);
       };
       observer.once('error', fail);
-      observer.stderr.on('data', () => fail(new Error('native observer stderr')));
+      observer.stderr.on('data', () => fail(new Error(`native observer stderr; startup=${JSON.stringify(startup.snapshot())}`)));
       observer.stdout.on('data', chunk => {
         bytes += chunk.length;
         if (bytes > 65536) { fail(new Error('native test output bound')); return; }
@@ -58,7 +61,10 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
           const line = pending.slice(0, newline); pending = pending.slice(newline + 1);
           try {
             const event = JSON.parse(line);
-            if (phase === 'ready' && event.kind === 'ready') { phase = 'first-idle'; produceEvent(); }
+            if (event.kind === 'startup') {
+              expect(phase).toBe('ready');
+              expect(startup.add(event, Math.round(performance.now() - startedAt))).toBe(true);
+            } else if (phase === 'ready' && event.kind === 'ready') { phase = 'first-idle'; produceEvent(); }
             else if (phase === 'request' && event.kind === 'unknown' && event.reason === 'identity-count') {
               phase = 'between-requests'; produceEvent();
             } else if (event.pid === expectedPid && event.kind === 'start') started = true;
@@ -79,7 +85,7 @@ it.skipIf(process.platform !== 'win32')('drains real events with stdin open befo
       observer.once('close', code => {
         clearTimeout(deadline);
         if (phase === 'complete' && code === 0) resolve();
-        else reject(new Error(`native observer exited ${code} during ${phase}`));
+        else reject(new Error(`native observer exited ${code} during ${phase}; startup=${JSON.stringify(startup.snapshot())}`));
       });
     });
   } finally {
@@ -246,7 +252,7 @@ it('receives actual spawn identity before stderr without affecting stdin or the 
 it('keeps native collector scope, readiness and attach mode explicit without claiming local Windows execution', () => {
   const source = readFileSync(new URL('./conformance-native-capture.ps1', import.meta.url), 'utf8');
   expect(source.indexOf('$watch.Arm()')).toBeLessThan(source.indexOf("Emit @{ kind='ready'"));
-  expect(source).toContain('stop.Start(); start.Start();');
+  expect(source.indexOf('stop.Start();')).toBeLessThan(source.indexOf('start.Start();'));
   expect(source).toContain('if (admitted >= 256)');
   expect(source).toContain('Win32_ProcessStopTrace');
   expect(source).toContain('-pvr -pd -sins -noshell -netsyms no');

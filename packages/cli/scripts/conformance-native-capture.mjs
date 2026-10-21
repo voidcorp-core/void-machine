@@ -14,6 +14,22 @@ const TOOL_ENV = () => conformanceEnvironment({ TEMP: process.env.TEMP, TMP: pro
   'ProgramFiles(x86)': process.env['ProgramFiles(x86)'] });
 const report = status => process.stdout.write(`${JSON.stringify({ nativeCapture: status })}\n`);
 
+// Fixed boundaries only: the last record identifies the operation entered,
+// never readiness, a process identity, or successful consumer qualification.
+export function captureStartup() {
+  const names = ['script-entered', 'compile-types', 'create-watchers', 'arm-stop', 'arm-start'];
+  const stages = [];
+  return {
+    add(event, receivedMs) {
+      if (event?.kind !== 'startup' || stages.length >= names.length || event.stage !== names[stages.length]
+        || !Number.isFinite(receivedMs) || receivedMs < (stages.at(-1)?.receivedMs ?? 0)) return false;
+      stages.push({ stage: event.stage, receivedMs });
+      return true;
+    },
+    snapshot: () => stages.map(stage => ({ ...stage })),
+  };
+}
+
 function metadata(event) {
   if (!event || !['start', 'stop'].includes(event.kind)
     || !Number.isSafeInteger(event.pid) || event.pid <= 0
@@ -172,6 +188,7 @@ export async function armNativeCapture(directory) {
   }
   const started = performance.now();
   const queue = captureQueue();
+  const startup = captureStartup();
   const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', SCRIPT,
     '-Mode', 'Capture', '-Cdb', preflight.capability.cdb, '-SymbolCache', preflight.symbolCache],
   { env: TOOL_ENV(), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -207,7 +224,7 @@ export async function armNativeCapture(directory) {
   const persist = (phase = 'active') => {
     const state = queue.snapshot();
     const correlation = correlateCapture(state.events, target, readyUtcMs, unknown || state.overflow);
-    return journal.write({ ...correlation, phase, readinessMs,
+    return journal.write({ ...correlation, phase, readinessMs, startup: startup.snapshot(),
       durationMs: Math.round(performance.now() - started),
       snapshots: correlation.status === 'unknown' ? [] : snapshots, unknown,
       queueOverflow: state.overflow, observerBytes: total, stderrBytes, primaryOutcome })
@@ -228,7 +245,9 @@ export async function armNativeCapture(directory) {
       const line = pending.slice(0, newline); pending = pending.slice(newline + 1);
       try {
         const event = JSON.parse(line);
-        if (event.kind === 'ready' && readyUtcMs === undefined && Number.isFinite(event.utcMs)) {
+        if (event.kind === 'startup' && readyUtcMs === undefined) {
+          if (!startup.add(event, Math.round(performance.now() - started))) unknown = true;
+        } else if (event.kind === 'ready' && readyUtcMs === undefined && Number.isFinite(event.utcMs)) {
           readyUtcMs = event.utcMs; clearTimeout(readiness); readyResolve(true);
         } else if (event.kind === 'start' || event.kind === 'stop') queue.add(event);
         else if (event.kind === 'snapshot' && snapshots.length < 4

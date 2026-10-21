@@ -405,6 +405,11 @@ init and both exact offline hydrate paths only. The orchestrator then runs
 `conformance-update.mjs` as the mandatory separate `update` suite: real isolated npm-bin bootstrap/acquisition, native launchers,
 current/all project publication and killed-child recovery on each OS. Windows runs the
 new command and PowerShell shims, including update recovery through the command shim.
+The Windows observer regression retains its eight-second deadline. Its failure reports
+only five ordered startup boundaries and parent-observed elapsed times: script entry,
+type compilation, watcher construction, stop subscription, and start subscription.
+These diagnose collector readiness; they do not prove consumer qualification or
+explain a later native-child wait. No arbitrary observer text or environment is exported.
 The default order is install, update, hooks, autopilot, latency, serial and fail-fast on
 the same verified artifact. Every suite retains the 120-second process limit; install
 no longer runs update internally. All three OS jobs run this mandatory chain.

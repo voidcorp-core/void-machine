@@ -13,6 +13,8 @@ import type {
   SpecialistInvocationStage,
 } from '../specialist/routing.js';
 
+export const BOUNDED_REVIEW_BUDGET = { maxRounds: 3, maxCorrectionBatches: 2 } as const;
+
 export type ReviewLoopStatus =
   | 'awaiting-review'
   | 'correction-required'

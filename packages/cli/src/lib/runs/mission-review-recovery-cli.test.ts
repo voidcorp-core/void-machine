@@ -12,12 +12,13 @@ import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
 import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
 import { createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
+import { verifyMissionCommand } from './verify.js';
 
 const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
 const ID = 'mis_review_recovery_cli_12345678';
 const REVIEWER = 'core:independent-code-reviewer';
 
-async function stoppedReview(bounded: boolean) {
+async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1') {
   const root = await mkdtemp(join(tmpdir(), 'void-review-recovery-cli-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-review-recovery');
   const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -33,17 +34,17 @@ async function stoppedReview(bounded: boolean) {
   git(['add', '.']);
   commit();
   const baseCommit = git(['rev-parse', 'HEAD']);
-  const live = await planMission(root, 'ticket.md');
+  const live = await planMission(root, 'ticket.md', undefined, inputRecipe);
   const plan: MissionSpecialistPlan = { planHash: live.planHash, context: live.context,
     specialists: live.specialists.map(value => ({ specialistId: value.specialistId,
       contractVersion: value.contractVersion, inputHash: value.proof.inputHash,
       state: value.state, stages: value.stages })) };
   const ticket = { path: 'ticket.md', contentHash: canonicalBody(body) };
   await createMission(root, { missionId: ID, title: 'Review recovery CLI', mode: 'team',
-    teamController: { planHash: plan.planHash, routingHash: missionControllerRoutingHash(plan, ticket, baseCommit),
+    teamController: { planHash: plan.planHash, routingHash: missionControllerRoutingHash(plan, ticket, baseCommit, inputRecipe),
       leadWriterId: 'writer:primary', runtime: 'codex', runtimeAttested: true,
       ...(bounded ? { reviewPolicy: 'bounded-corrections-v1' as const } : {}) } });
-  await writeMissionControllerPlan(root, ID, plan, ticket, baseCommit);
+  await writeMissionControllerPlan(root, ID, plan, ticket, baseCommit, inputRecipe);
   const roots = resolveProjectRoots(root);
   const dispatch = () => dispatchMissionSpecialists(roots, { kind: 'dispatch', missionId: ID, json: true });
   async function complete(envelope: SpecialistDispatchEnvelope, contextId: string) {
@@ -72,7 +73,8 @@ async function stoppedReview(bounded: boolean) {
   await recordMissionClosure(root, ID, 'controller-stop', 'void-harness:mission.dispatch');
   const events = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
   const original = events.find(event => event.kind === 'specialist.completed' && event.subject === REVIEWER);
-  if (!original || typeof original.payload !== 'object' || original.payload === null || Array.isArray(original.payload)) {
+  if (!original || typeof original.payload !== 'object' || original.payload === null
+    || !('completion' in original.payload) || !('contextId' in original.payload)) {
     throw new Error('Independent CLI review required');
   }
   const completion = original.payload['completion'];
@@ -96,9 +98,9 @@ function canonicalBody(body: string) {
   return `sha256:${createHash('sha256').update(body).digest('hex')}`;
 }
 
-it.each([false, true])('preserves the CLI review subject through provenance recovery (bounded: %s)', async bounded => {
+it.each([false, true, 'project-v1'] as const)('preserves the CLI review subject through provenance recovery (policy: %s)', async policy => {
   try {
-    const fixture = await stoppedReview(bounded);
+    const fixture = await stoppedReview(policy !== false, policy === 'project-v1' ? policy : undefined);
     const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
     const before = await readFile(log, 'utf8');
     expect(await recoverStoppedMission(fixture.roots, ID, fixture.request)).toMatchObject({ recorded: true });
@@ -110,8 +112,38 @@ it.each([false, true])('preserves the CLI review subject through provenance reco
     expect(next.action.kind).toBe('run-verification');
     expect(next.envelopes).toEqual([]);
     expect(fixture.git(['rev-parse', 'HEAD'])).toBe(fixture.reviewedCommit);
+    expect(await recoverStoppedMission(fixture.roots, ID, fixture.request)).toMatchObject({ recorded: false });
+    const proof = await verifyMissionCommand({ roots: fixture.roots, missionId: ID, shell: false, echo: false,
+      command: [process.execPath, '-e', "const fs=require('node:fs');require('node:assert/strict').equal(fs.readFileSync('runtime.ts','utf8'),'export const ready = true;\\n');"] });
+    expect(proof.exitCode).toBe(0);
+    expect((await fixture.dispatch()).action.kind).toBe('complete');
   } finally { vi.unstubAllEnvs(); }
 });
+
+it.each(['commit', 'base', 'writer', 'context', 'result', 'journal'] as const)(
+  'refuses a mismatched %s without appending recovery evidence', async mismatch => {
+    try {
+      const fixture = await stoppedReview(true);
+      const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
+      const before = await readFile(log, 'utf8');
+      const path = join(fixture.root, fixture.request.disposition.resolutionArtifact.path);
+      const artifact = JSON.parse(await readFile(path, 'utf8'));
+      const binding = artifact.bindings[0];
+      if (mismatch === 'commit') binding.review.reviewedCommit = 'b'.repeat(40);
+      if (mismatch === 'base') binding.review.baseCommit = 'b'.repeat(40);
+      if (mismatch === 'writer') binding.review.reviewerId = 'writer:primary';
+      if (mismatch === 'context') binding.review.provenance.contextId = 'reused_or_missing_context';
+      if (mismatch === 'result') binding.completionHash = `sha256:${'b'.repeat(64)}`;
+      const body = JSON.stringify(artifact);
+      await writeFile(path, body);
+      const request = { ...fixture.request,
+        expectedJournalHash: mismatch === 'journal' ? `sha256:${'b'.repeat(64)}` : fixture.request.expectedJournalHash,
+        disposition: { ...fixture.request.disposition,
+          resolutionArtifact: { ...fixture.request.disposition.resolutionArtifact, sha256: canonicalBody(body) } } };
+      await expect(recoverStoppedMission(fixture.roots, ID, request)).rejects.toThrow(/MISSION_RECOVERY_/);
+      expect(await readFile(log, 'utf8')).toBe(before);
+    } finally { vi.unstubAllEnvs(); }
+  });
 
 it('refuses changed routing after provenance recovery even when the committed subject is unchanged', async () => {
   try {
@@ -126,4 +158,24 @@ it('refuses changed routing after provenance recovery even when the committed su
     expect(next.action.kind).not.toBe('run-verification');
     expect(next.action.kind).not.toBe('complete');
   } finally { vi.unstubAllEnvs(); }
+});
+
+it.each([undefined, 'project-v1'] as const)('uses its durable recipe after a CLI runtime change (%s)', async recipe => {
+  const version = Object.getOwnPropertyDescriptor(process.versions, 'node');
+  if (!version) throw new Error('Node runtime version descriptor required');
+  try {
+    Object.defineProperty(process.versions, 'node', { ...version, value: '24.15.0' });
+    const fixture = await stoppedReview(true, recipe);
+    Object.defineProperty(process.versions, 'node', { ...version, value: '26.8.2' });
+    if (recipe === undefined) {
+      await expect(recoverStoppedMission(fixture.roots, ID, fixture.request))
+        .rejects.toThrow('invalid-review-provenance');
+    } else {
+      expect(await recoverStoppedMission(fixture.roots, ID, fixture.request)).toMatchObject({ recorded: true });
+      expect((await fixture.dispatch()).action.kind).toBe('run-verification');
+    }
+  } finally {
+    Object.defineProperty(process.versions, 'node', version);
+    vi.unstubAllEnvs();
+  }
 });

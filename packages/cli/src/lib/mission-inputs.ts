@@ -15,7 +15,7 @@ import { collectKnownSecrets, redactText } from './runs/redact.js';
 import type { MissionControllerTicketBinding } from './runs/store.js';
 import { readBoundedProjectFile } from './safe-read.js';
 import { loadSpecialists } from './specialists/load.js';
-import { detectProfileInput, detectStack } from './stack.js';
+import { detectProfileInput, detectStack, type MissionInputRecipe } from './stack.js';
 
 const execFile = promisify(nodeExecFile);
 const MAX_TICKET_BYTES = 100_000;
@@ -103,6 +103,7 @@ export async function captureMissionReviewSubject(
   root: string,
   baseCommit: string | undefined,
   committed = false,
+  hashFormat: 'legacy' | 'committed' = committed ? 'committed' : 'legacy',
 ): Promise<MissionReviewSubject> {
   if (baseCommit === undefined) {
     throw new Error(
@@ -162,7 +163,7 @@ export async function captureMissionReviewSubject(
       ...(reviewedCommit === undefined ? {} : { baseCommit, reviewedCommit }),
       diff: patch.stdout,
       files,
-      hash: canonicalJsonHash({ baseCommit, ...(reviewedCommit === undefined ? {} : { reviewedCommit }),
+      hash: canonicalJsonHash({ baseCommit, ...(hashFormat === 'legacy' ? {} : { reviewedCommit }),
         diff: patch.stdout, files: files.files }),
     });
   } catch (error) {
@@ -301,8 +302,9 @@ export async function planMission(
   root: string,
   ticketPath: string,
   generatedAt = new Date().toISOString(),
+  inputRecipe: MissionInputRecipe = 'runtime-v1',
 ): Promise<MissionPlan> {
-  return (await planBoundMission(root, ticketPath, generatedAt)).plan;
+  return (await planBoundMission(root, ticketPath, generatedAt, undefined, undefined, inputRecipe)).plan;
 }
 
 async function compileMission(
@@ -311,6 +313,7 @@ async function compileMission(
   generatedAt: string,
   detectedFiles?: DetectedFiles,
   specialistCatalog?: Awaited<ReturnType<typeof loadSpecialists>>,
+  inputRecipe: MissionInputRecipe = 'runtime-v1',
 ): Promise<MissionPlan> {
   const [coreRoot, diff] = await Promise.all([
     findCoreSource(),
@@ -321,7 +324,7 @@ async function compileMission(
     loadProfiles(root, join(coreRoot, 'profiles')),
     specialistCatalog ?? loadSpecialists(coreRoot),
   ]);
-  const profileInput = detectProfileInput(root, diff.files);
+  const profileInput = detectProfileInput(root, diff.files, inputRecipe);
   const stack = detectedStack(root, profileInput);
   return compileMissionPlan({
     schemaVersion: 2,
@@ -352,12 +355,13 @@ export async function planBoundMission(
   generatedAt = new Date().toISOString(),
   detectedFiles?: DetectedFiles,
   specialistCatalog?: Awaited<ReturnType<typeof loadSpecialists>>,
+  inputRecipe: MissionInputRecipe = 'runtime-v1',
 ): Promise<{
   readonly plan: MissionPlan;
   readonly ticket: MissionControllerTicketBinding;
 }> {
   const ticket = await readTicket(root, ticketPath);
-  const plan = await compileMission(root, ticket, generatedAt, detectedFiles, specialistCatalog);
+  const plan = await compileMission(root, ticket, generatedAt, detectedFiles, specialistCatalog, inputRecipe);
   return Object.freeze({
     plan,
     ticket: controllerTicketBinding(ticket),

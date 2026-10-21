@@ -8,7 +8,7 @@ import { reduceEvidenceObligations } from '../specialist/evidence-obligations.js
 import { type IndependentReviewReceipt, isReviewSubject, parseReviewReceipt, type ReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import type { SpecialistId, SpecialistInvocationStage } from '../specialist/routing.js';
 import { projectMissionLifecycle } from './mission-lifecycle.js';
-import { reduceReviewLoop, validNativeContextId } from './review-loop.js';
+import { BOUNDED_REVIEW_BUDGET, reduceReviewLoop, validNativeContextId } from './review-loop.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
 
 export interface RecoveryResolutionArtifact {
@@ -33,6 +33,8 @@ export interface RecoveredReviewBinding {
   readonly review: IndependentReviewReceipt;
 }
 export interface MissionRecoveryObservation {
+  /** Absent on historical receipts: their original reduction remains unchanged. */
+  readonly reviewPolicy?: 'bounded-corrections-v1';
   readonly reviewSubject?: ReviewSubject;
   readonly reviewBindings?: readonly RecoveredReviewBinding[];
   readonly stage: SpecialistInvocationStage;
@@ -509,7 +511,9 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     ...(stageStart === undefined ? {} : { stageStartSeqExclusive: stageStart }),
     ...(lastWriter === undefined ? {} : { afterSeqExclusive: lastWriter }),
     requiredSpecialists: required, contractVersions: observation.contractVersions,
-    currentInputHashes: observation.currentInputHashes, maxRounds: observation.maxRounds };
+    currentInputHashes: observation.currentInputHashes,
+    ...(observation.reviewPolicy === 'bounded-corrections-v1'
+      ? BOUNDED_REVIEW_BUDGET : { maxRounds: observation.maxRounds }) };
   const originalReview = reduceReviewLoop({ ...reviewInput, events: projectedHistory });
   if (originalReview.issues.some((issue) => replacement
     ? issue.code !== 'reused-context' || !inadmissible.includes(issue.eventId)
@@ -528,7 +532,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const consumedRounds = Math.max(0, ...(replacement ? projectedHistory : projected).filter((event) =>
     ['specialist.completed', 'specialist.failed'].includes(event.kind)
       && field(event, 'stage') === observation.stage).map((event) => Number(field(event, 'reviewRound'))));
-  if (!replacement && disposition.kind !== 'review-provenance' && consumedRounds >= observation.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
+  if (!replacement && disposition.kind !== 'review-provenance' && consumedRounds >= reviewInput.maxRounds) return refuse('review-budget-exhausted', 'The real review budget is exhausted; recovery cannot reset it');
   const consumedCorrectionBatches = projected.filter(event => event.kind === 'lead-writer.completed'
     && field(event, 'actionKind') === 'run-correction').length;
   if (disposition.kind === 'review-provenance' && consumedCorrectionBatches > 2) {
@@ -544,7 +548,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     requestHash: canonicalJsonHash(request), request, observation,
     preservedCompletionEventIds: [...preservedIds],
     invalidatedCompletionEventIds: existing.filter((item) => !preservedIds.has(item.event.eventId)).map((item) => item.event.eventId),
-    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, observation.maxRounds - consumedRounds),
+    inadmissibleCompletionEventIds: inadmissible, roundCorrections, consumedRounds, remainingRounds: Math.max(0, reviewInput.maxRounds - consumedRounds),
     ...(!replacement && disposition.kind !== 'review-provenance' ? {} : { consumedCorrectionBatches,
       remainingCorrectionBatches: 2 - consumedCorrectionBatches }),
     nextAction: replacement || disposition.kind === 'review-provenance' || disposition.kind === 'command-correction'
@@ -610,10 +614,12 @@ export function parseRecoveredReviewBindings(value: unknown): readonly Recovered
 function recoveryObservation(value: JsonValue | undefined): value is JsonValue & MissionRecoveryObservation {
   if (value === undefined || !record(value)
     || !exactKeys(value, ['stage', 'contractVersions', 'currentInputHashes', 'maxRounds', 'expectedSource',
+      ...(value['reviewPolicy'] === undefined ? [] : ['reviewPolicy']),
       ...(value['resolutionArtifact'] === undefined ? [] : ['resolutionArtifact']),
       ...(value['reviewSubject'] === undefined ? [] : ['reviewSubject']),
       ...(value['reviewBindings'] === undefined ? [] : ['reviewBindings']),
       ...(value['evidenceDependencies'] === undefined ? [] : ['evidenceDependencies'])])
+    || (value['reviewPolicy'] !== undefined && value['reviewPolicy'] !== 'bounded-corrections-v1')
     || !['pre-implementation', 'post-implementation'].includes(String(value['stage']))
     || !['runtime:codex', 'runtime:claude'].includes(String(value['expectedSource']))
     || typeof value['maxRounds'] !== 'number' || !Number.isSafeInteger(value['maxRounds']) || value['maxRounds'] < 1 || value['maxRounds'] > 8

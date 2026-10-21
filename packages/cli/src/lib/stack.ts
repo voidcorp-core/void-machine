@@ -156,7 +156,9 @@ function technology(
   return Object.freeze({ id, version, sources: Object.freeze([source]) });
 }
 
-function packageTechnologies(workspace: WorkspacePackage): readonly DetectedTechnology[] {
+export type MissionInputRecipe = 'runtime-v1' | 'project-v1';
+
+function packageTechnologies(workspace: WorkspacePackage, recipe: MissionInputRecipe): readonly DetectedTechnology[] {
   const technologies = new Map<string, DetectedTechnology>();
   const source = workspace.path === '.' ? 'package.json' : `${workspace.path}/package.json`;
   for (const [dependency, version] of dependencyEntries(workspace.packageJson)) {
@@ -170,7 +172,14 @@ function packageTechnologies(workspace: WorkspacePackage): readonly DetectedTech
     }
   }
   if (workspace.path === '.') {
-    technologies.set('node', technology('node', exactVersion(process.versions.node), 'runtime:node'));
+    const declaredNode = workspace.packageJson.engines?.node;
+    const projectNode = typeof declaredNode === 'string' && /^\d+\.\d+\.\d+$/.test(declaredNode)
+      ? declaredNode : null;
+    const projectNodeSource = projectNode === null && typeof declaredNode === 'string'
+      ? `package.json:engines.node:${declaredNode}` : 'package.json:engines.node';
+    technologies.set('node', recipe === 'runtime-v1'
+      ? technology('node', exactVersion(process.versions.node), 'runtime:node')
+      : technology('node', projectNode, projectNodeSource));
     const packageManager = workspace.packageJson.packageManager;
     if (packageManager !== undefined) {
       const separator = packageManager.indexOf('@');
@@ -207,7 +216,9 @@ function validChangedFile(file: string): boolean {
 }
 
 /** Build the project-scoped, deterministic input consumed by profile routing. */
-export function detectProfileInput(root: string, files: readonly string[]): ProfileRoutingInput {
+export function detectProfileInput(
+  root: string, files: readonly string[], recipe: MissionInputRecipe = 'runtime-v1',
+): ProfileRoutingInput {
   if (!files.every(validChangedFile)) {
     throw new Error('PROFILE_INPUT_INVALID: changed files must remain inside the project root');
   }
@@ -215,7 +226,7 @@ export function detectProfileInput(root: string, files: readonly string[]): Prof
   const rootWorkspace = workspaces.find((workspace) => workspace.path === '.');
   const projects = workspaces.map((workspace) => Object.freeze({
     path: workspace.path,
-    technologies: packageTechnologies(workspace),
+    technologies: packageTechnologies(workspace, recipe),
   }));
   if (projects.length > 1) {
     const rootProject = projects.find((project) => project.path === '.');

@@ -210,6 +210,22 @@ async function proveReplacedCommandExit(home, command, replacement, env) {
   }
 }
 
+export async function assertUpdatedPrGuidance(root, directories, expectedGuidance) {
+  for (const directory of directories) {
+    for (const [name, expected] of expectedGuidance) {
+      const installed = await read(join(root, directory, 'skills', name, 'SKILL.md'));
+      assert.equal(installed, expected);
+      for (const required of ['coordinator may create or reuse a draft pull request', 'mark the same pull request ready', 'commit-only']) {
+        assert.ok(installed.includes(required), `${name} missing ${required}`);
+      }
+      for (const forbidden of ['ready for review rather than as a draft', 'worker pushes its own branch and opens the PR']) {
+        assert.ok(!installed.includes(forbidden), `${name} retained ${forbidden}`);
+      }
+    }
+    assert.equal(await read(join(root, directory, 'skills/private/SKILL.md')), '# private user skill\n');
+  }
+}
+
 export async function prepareStableUpdate(temporary, tarball) {
   const root = await realpath(temporary);
   const home = join(root, 'stable home');
@@ -254,19 +270,6 @@ export async function prepareStableUpdate(temporary, tarball) {
   }
   const runtimePaths = runtime => runtime === 'both' ? ['.agents', '.claude'] : [runtime === 'codex' ? '.agents' : '.claude'];
   const runtimeProjects = [[project, 'claude'], [second, 'codex'], [third, 'both']];
-  const assertUpdatedGuidance = async (cwd, runtime) => {
-    for (const directory of runtimePaths(runtime)) {
-      for (const [name, expected] of expectedGuidance) {
-        const installed = await read(join(cwd, directory, 'skills', name, 'SKILL.md'));
-        assert.equal(installed, expected);
-        for (const required of ['coordinator may create or reuse a draft pull request', 'mark the same pull request ready', 'commit-only']) {
-          assert.ok(installed.includes(required), `${name} missing ${required}`);
-        }
-        assert.ok(!installed.includes(legacyGuidance[name]), `${name} retained legacy PR guidance`);
-      }
-      assert.equal(await read(join(cwd, directory, 'skills/private/SKILL.md')), '# private user skill\n');
-    }
-  };
   const source = join(pkg, 'bin/void-machine.mjs');
   const version = JSON.parse(await read(join(pkg, 'package.json'))).version;
   const direct = (args, cwd = project) => runConformanceStep(`stable update ${args.join(' ')}`, {
@@ -396,7 +399,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       await rm(receipt(project));
       await update();
       assert.equal(JSON.parse(await read(receipt(project))).version, version);
-      await assertUpdatedGuidance(project, 'claude');
+      await assertUpdatedPrGuidance(project, runtimePaths('claude'), expectedGuidance);
       assert.equal(JSON.parse(await read(configPath)).authoredSetting, 'preserve this');
       assert.equal(await read(join(project, '.void/PROJECT-DOCTRINE.md')), '# Authored doctrine\r\n');
       assert.equal(await read(receipt(second)), otherReceipt);
@@ -427,7 +430,7 @@ export async function prepareStableUpdate(temporary, tarball) {
       assert.equal(await read(join(second, '.void/PROJECT-DOCTRINE.md')), 'Second project doctrine\n');
       assert.equal(JSON.parse(await read(receipt(second))).version, version);
       assert.equal(JSON.parse(await read(receipt(third))).version, version);
-      for (const [cwd, runtime] of runtimeProjects) await assertUpdatedGuidance(cwd, runtime);
+      for (const [cwd, runtime] of runtimeProjects) await assertUpdatedPrGuidance(cwd, runtimePaths(runtime), expectedGuidance);
     },
     async ownership() {
       // Update, not offline hydrate, owns complete manifest/receipt recovery.

@@ -251,6 +251,36 @@ function classifyEvidence(
 }
 
 describe('mission team controller', () => {
+  it('starts the writer without a compulsory preparation panel', () => {
+    const decision = decide([started()]);
+    expect(decision.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });
+    expect(decision.verdict.status).not.toBe('verified');
+  });
+
+  it('ignores unstarted redundant preparation requests after actual passes and an empty correction', () => {
+    const changedInputs = Object.fromEntries(TEST_SPECIALIST_IDS.map(id => [id, HASH_B]));
+    const events = [started(true), ...preReviews(), ...preparationReceipt(),
+      ...TEST_SPECIALIST_IDS.map((id, index) => event({
+        seq: index + 7, eventId: `evt_pending_preparation_${index}`,
+        source: 'void-harness:mission.dispatch', kind: 'specialist.requested', subject: id,
+        payload: { stage: 'pre-implementation', reviewRound: 2, inputHash: HASH_B,
+          contractVersion: 1, runtime: 'codex', planHash: PLAN.planHash },
+      }))];
+    const decision = decide(events, PLAN, INPUTS, changedInputs);
+    expect(decision.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });
+    expect(decision.review.reviewRound).toBe(2);
+    expect(decision.verdict.status).not.toBe('verified');
+    expect(stream(events).events).toEqual(events);
+  });
+
+  it('keeps real preparation findings visible when their input hash has changed', () => {
+    const events = [started(), completion('core:security-engineer', 2,
+      'changes-requested', 'pre-implementation')];
+    const decision = decide(events, PLAN, INPUTS, { ...INPUTS, 'core:security-engineer': HASH_B });
+    expect(decision.action.kind).not.toBe('run-lead-writer');
+    expect(decision.reasons.join(' ')).toContain('Authorization can be bypassed.');
+  });
+
   it('starts implementation after a finding preparation correction without replaying the panel', () => {
     const initial = [completion(TEST_SPECIALIST_IDS[0], 2, 'changes-requested', 'pre-implementation'),
       ...preReviews().slice(1)];

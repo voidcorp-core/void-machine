@@ -6,12 +6,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJsonHash } from '@voidcorp/mission-engine';
+import { canonicalJsonHash, createSpecialistDispatch } from '@voidcorp/mission-engine';
 import type { MissionSpecialistPlan } from '@voidcorp/mission-engine';
 import { describe, expect, it } from 'vitest';
 import { writeExcludeBlock } from '../lib/git-exclude.js';
 import { resolveProjectRoots } from '../lib/project-roots.js';
-import { recordSpecialistLifecycle } from '../lib/runs/specialist-lifecycle.js';
+import { recordSpecialistLifecycle, recordSpecialistRequests } from '../lib/runs/specialist-lifecycle.js';
 import {
   appendMissionEvent,
   createMission,
@@ -136,6 +136,24 @@ async function completeDispatchedSpecialists(
       },
     });
   }
+}
+
+// Reconstruct a historical dispatch through the existing transport. The new
+// controller must read these real lifecycle events without issuing another panel.
+async function legacyPreparation(fixture: DispatchFixture, reviewRound = 1) {
+  const { root, missionId, plan } = fixture;
+  const live = await planMission(root, 'DEV-500.md', '2026-08-21T12:00:00.000Z');
+  const action = { kind: 'invoke-specialists' as const, stage: 'pre-implementation' as const,
+    reviewRound, specialistIds: plan.specialists.filter(item => item.state === 'applicable'
+      && item.stages.includes('pre-implementation')).map(item => item.specialistId) };
+  const envelopes = createSpecialistDispatch({ missionId, runtime: 'codex', plan, action,
+    currentInputHashes: Object.fromEntries(live.specialists.map(item =>
+      [item.specialistId, item.proof.inputHash])),
+    contextContent: { diff: '', touchedPaths: [], lens: 'full', budgetTokens: 6000,
+      artifacts: [{ path: 'DEV-500.md', text: fixture.ticketBody }] },
+  });
+  await recordSpecialistRequests(root, missionId, envelopes, plan.planHash);
+  return { planHash: plan.planHash, phase: 'preparation', action, envelopes };
 }
 
 async function admittedWriterFixture() {
@@ -499,6 +517,40 @@ describe('parseMissionArgs', () => {
       expect(inspected.stream.events.some(item => item.kind === 'mission.closed')).toBe(false);
     },
   );
+
+  it('dispatches the writer directly without requesting preparation specialists', async () => {
+    const { root, missionId, input, capability } = await dispatchFixture();
+    const dispatch = await dispatchMissionSpecialists(resolveProjectRoots(root), input,
+      '2026-08-21T12:00:00.000Z', capability);
+    expect(dispatch.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });
+    expect(dispatch.envelopes).toEqual([]);
+    const events = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+    expect(events.filter(event => event.kind === 'specialist.requested')).toEqual([]);
+  });
+
+  it('continues historical passes and an empty correction after unrelated tests without replay', async () => {
+    const fixture = await dispatchFixture();
+    const { root, missionId, input, capability, plan } = fixture;
+    const original = await legacyPreparation(fixture);
+    await writeFile(join(root, 'runtime.test.ts'), 'export const regression = true;\n');
+    await completeDispatchedSpecialists(fixture, original);
+    await appendMissionEvent(root, missionId, { kind: 'lead-writer.requested',
+      source: 'void-harness:mission.dispatch', subject: 'writer:primary',
+      payload: { writerId: 'writer:primary', planHash: plan.planHash,
+        actionKind: 'run-preparation-correction', implementationRound: 1 } });
+    await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId, json: true });
+    await legacyPreparation(fixture, 2);
+    const before = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+    const dispatch = await dispatchMissionSpecialists(resolveProjectRoots(root), input,
+      '2026-08-21T12:00:01.000Z', capability);
+    expect(dispatch.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });
+    expect(dispatch.nextWriterRound).toBe(2);
+    expect(dispatch.envelopes).toEqual([]);
+    const after = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after.slice(before.length).map(event => event.kind)).toEqual(['lead-writer.requested']);
+    expect(after.filter(event => event.kind === 'specialist.started')).toHaveLength(original.envelopes.length);
+  });
 
   it('refreshes the plan and dispatches every preparation lens idempotently', async () => {
     const { root, missionId, plan, input, capability } = await dispatchFixture();

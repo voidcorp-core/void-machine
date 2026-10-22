@@ -24,7 +24,7 @@ import {
   selectMissionMode,
   validatedSpecialistContractMigrations,
 } from '@voidcorp/mission-engine';
-import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission } from '../lib/mission-inputs.js';
+import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission, validateMissionReviewBase } from '../lib/mission-inputs.js';
 
 export { captureMissionReviewSubject, normalizeControllerTicketPath, planMission } from '../lib/mission-inputs.js';
 
@@ -776,6 +776,9 @@ export async function dispatchMissionSpecialists(
     event.kind === 'lead-writer.completed'
     && isUnknownRecord(event.payload)
     && event.payload.actionKind !== 'run-preparation-correction');
+  if (!implemented && stored.baseCommit !== undefined) {
+    await validateMissionReviewBase(workRoot, stored.baseCommit);
+  }
   const reviewSubject = implemented
     ? await captureControllerReviewSubject(workRoot, stored.baseCommit, inspected.stream.events)
     : undefined;

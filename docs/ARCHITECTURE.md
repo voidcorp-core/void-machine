@@ -1091,23 +1091,25 @@ the same journal and dependency context is byte-for-byte deterministic.
 
 `packages/mission-engine/src/orchestration/` owns the provider-neutral ticket cycle. The controller
 consumes the canonical mission plan and event stream; it never launches a process or writes a file.
-One lead writer owns implementation and every correction. Every specialist whose canonical routing
-decision is `applicable` runs through a runtime-native adapter in a separate fresh context and
-returns the shared structured completion contract. The controller has no fixed role list: it
-consumes specialist IDs and exact contract versions from the mission plan. Each receives a bounded
-plan slice and one assigned lens; findings outside that lens belong to the specialist that owns it.
-Each contract declares `pre-implementation`, `post-implementation`, or both. Applicable upstream
-specialists must pass before the lead writer starts; post-implementation reviewers receive a new
-context and completion identity, so an upstream approval cannot satisfy downstream review. Input
-hashes are keyed by stage: the pre-build snapshot stays frozen while post-build and correction
-hashes follow the implemented diff.
+One lead writer owns implementation and every correction. Normal dispatch admits that writer
+without a compulsory preparation panel or an empty preparation correction. Existing professional
+passes in `void-implement` select native advice for a concrete risk or unresolved question;
+baseline/profile applicability is not an automatic admission gate. This advisory selection is a
+workflow judgment, not a canonical CLI risk assessment or a new optional-advice API.
 
-Preparation corrections travel in an existing plan/spec directly cited by a backticked
-repository-relative path in the frozen ticket. Dispatch rereads that artifact for the next
-preparatory round. The writer resolves findings there before recording completion; it neither
-edits the frozen ticket nor starts implementation until `run-lead-writer`. A missing citation
-requires an explicit interrupted mission and corrected start inputs, preserving the old evidence.
-The context pack must contain the correction: a writer receipt alone proves no content change.
+The controller retains canonical specialist IDs, contracts, event readers and explicit recovery
+receipts. Historical preparation PASS results and requested-only rounds do not require revalidation
+to start implementation. They remain history, never approvals for a new input identity. Genuine
+unresolved findings and author-owned proof obligations retain their correction/evidence routes;
+stale findings stop with diagnostics instead of disappearing or causing an empty correction.
+An authentic preparation invocation started before the first implementation request can finish as
+advice afterward. A new preparation invocation after that boundary refuses; late advice cannot
+satisfy final code review. No history, consumed budget, or uncertain external effect is reset.
+
+Preparation hashes remain readable for explicit legacy recovery and obligation integrity.
+Post-implementation review retains its exact committed subject, base, acceptance criteria and
+contracts. Significant changes invalidate final review. Advisory users must revisit a question
+when its brief, cited artifacts, boundary or risk changes; the CLI does not claim to automate that.
 
 Controller records created with a ticket bind the initial Git commit into their version 2
 integrity envelope. Post-implementation review compares that fixed baseline with the working
@@ -1681,7 +1683,7 @@ Git subject observation, receipt ingestion and append-only persistence. Skills d
 the same procedure rather than defining a separate review engine. See
 [the bounded review decision](decisions-log/2026-09-19-bounded-independent-review--eb08fcc8-d50a-4574-89da-d5a174f4035d.md).
 
-Risk-specific preparation advice precedes implementation. One read-only independent
+Risk-specific preparation advice is conditional on a concrete question. One read-only independent
 review examines a commit, comparison base and acceptance criteria. Corrections receive
 targeted verification, at most two batches, retaining unaffected conclusions and proofs.
 Advisories, incomplete responses and transport retries never consume correction budget.

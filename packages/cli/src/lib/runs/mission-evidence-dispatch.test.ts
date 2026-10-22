@@ -52,14 +52,14 @@ it.each(['pre-implementation', 'post-implementation'] as const)(
     const dispatched = await historicalPreparation(root, ID, plan, { path: ticket.path, text: body });
     expect(dispatched.action).toMatchObject({ kind: 'invoke-specialists' });
     expect(dispatched.envelopes.length).toBeGreaterThan(1);
-    for (const [index, envelope] of dispatched.envelopes.entries()) {
-      const contextId = `context_routing_${index}`;
-      await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
-      await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
-        completion: { schemaVersion: 1, specialistId: envelope.specialistId,
-          contractVersion: envelope.contractVersion, completionId: `completion_routing_${index}`,
-          verdict: 'pass', findings: [], evidenceRequests: index === 0 ? ['Prove the current implementation.'] : [], limitations: [] } });
-    }
+    const envelope = dispatched.envelopes[0];
+    if (envelope === undefined) throw new Error('Expected the preparation evidence author.');
+    const contextId = 'context_routing_0';
+    await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
+    await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
+      completion: { schemaVersion: 1, specialistId: envelope.specialistId,
+        contractVersion: envelope.contractVersion, completionId: 'completion_routing_0',
+        verdict: 'pass', findings: [], evidenceRequests: ['Prove the current implementation.'], limitations: [] } });
     const events = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
     const obligation = reduceEvidenceObligations({ events, expectedSource: 'runtime:codex',
       phase: 'pre-implementation', proofs: [], evidenceContext: { dependencies: {} } }).obligations[0];

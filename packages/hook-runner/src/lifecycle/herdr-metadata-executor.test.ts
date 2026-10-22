@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -33,6 +33,30 @@ function setup() {
 }
 
 describe('bounded Herdr lifecycle boundary', () => {
+  it.each(['codex', 'claude'] as const)('resumes %s with offset mission and report dates without rewriting state', runtime => {
+    const f = setup();
+    const worker = { label: 'WORK-1', agent: 'codex', worktree: join(f.root, 'worker'),
+      branch: 'feature', ticket: 'DEV-1016', status: 'running', attempt: 'attempt-1' };
+    mkdirSync(worker.worktree);
+    mkdirSync(join(f.directory, 'workers', worker.label), { recursive: true });
+    const missionPath = join(f.directory, 'mission.md');
+    const reportPath = join(f.directory, 'workers', worker.label, 'report.md');
+    const missionText = `---\n${JSON.stringify({ ...f.mission,
+      updated_at: '2026-10-17T11:07:52.224919+00:00', workers: [worker] })}\n---\n`;
+    const reportText = `---\nschema: 1\nmission: mission-1\nattempt: attempt-1\nworker: WORK-1
+branch: feature\nstatus: blocked\ncommits: []\ntests: not_run
+updated_at: "2026-10-20T02:34:00.123456+02:00"\n---\nAwaiting evidence.\n`;
+    writeFileSync(missionPath, missionText);
+    writeFileSync(reportPath, reportText);
+    const result = executeHerdrMetadata({ hook_event_name: 'SessionStart', source: 'resume' }, f.root,
+      { HOME: f.root, HERDR_ENV: '1' }, runtime, f.run);
+    expect(result.status).toBe('ok');
+    expect(result.output?.hookSpecificOutput.additionalContext).toContain(f.directory);
+    expect(f.calls.filter(args => args[1] === 'report-metadata').flat()).toContain('wA:p2');
+    expect(readFileSync(missionPath, 'utf8')).toBe(missionText);
+    expect(readFileSync(reportPath, 'utf8')).toBe(reportText);
+  });
+
   it.each(['{}', '{"error":{"message":"refused"}}', 'invalid'])('refuses invalid metadata acknowledgement %s', output => {
     const f = setup();
     const result = executeHerdrMetadata({ hook_event_name: 'Stop' }, f.root,

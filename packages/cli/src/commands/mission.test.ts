@@ -518,6 +518,18 @@ describe('parseMissionArgs', () => {
     },
   );
 
+  it('refuses direct writer admission when the bound base is not an ancestor of HEAD', async () => {
+    const { root, missionId, input, capability } = await dispatchFixture();
+    execFileSync('git', ['checkout', '--orphan', 'unrelated'], { cwd: root, stdio: 'ignore' });
+    execFileSync('git', ['add', 'package.json'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
+      'commit', '--quiet', '-m', 'test: unrelated checkout'], { cwd: root });
+    const before = (await inspectMission(root, missionId, { dependencies: {} })).stream.events;
+    await expect(dispatchMissionSpecialists(resolveProjectRoots(root), input,
+      '2026-08-21T12:00:00.000Z', capability)).rejects.toThrow('MISSION_REVIEW_BASE_INVALID');
+    expect((await inspectMission(root, missionId, { dependencies: {} })).stream.events).toEqual(before);
+  });
+
   it('dispatches the writer directly without requesting preparation specialists', async () => {
     const { root, missionId, input, capability } = await dispatchFixture();
     const dispatch = await dispatchMissionSpecialists(resolveProjectRoots(root), input,

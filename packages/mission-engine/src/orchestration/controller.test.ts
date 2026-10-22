@@ -254,7 +254,7 @@ describe('mission team controller', () => {
   it.each(['partial journal', 'invalid evidence'] as const)(
     'refuses writer admission with %s', problem => {
       const invalid = problem === 'partial journal'
-        ? event({ seq: 3, eventId: 'evt_gap', kind: 'mission.resumed' })
+        ? event({ seq: 3, eventId: 'evt_journal_gap', kind: 'mission.resumed' })
         : event({ seq: 2, eventId: 'evt_bad_evidence', kind: 'evidence.recorded', payload: { evidence: {} } });
       const decision = decide([started(), invalid]);
       expect(decision.action.kind).toBe('stop');
@@ -762,7 +762,7 @@ describe('mission team controller', () => {
     const decision = decide([
       started(),
       ...preFindings,
-      writer(6, 'writer:primary', 'run-preparation-correction'),
+      ...preparationReceipt(6),
     ]);
 
     expect(decision.phase).toBe('implementation');
@@ -787,7 +787,7 @@ describe('mission team controller', () => {
     const decision = decide([
       started(),
       ...preFindings,
-      writer(6, 'writer:primary', 'run-preparation-correction'),
+      ...preparationReceipt(6),
       writer(7, 'writer:primary', 'run-lead-writer'),
     ]);
 

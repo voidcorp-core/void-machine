@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.0.6](https://github.com/voidcorp-core/void-machine/compare/v5.0.5...v5.0.6) (2026-10-22)
+
+
+### Bug Fixes
+
+* **hook-runner:** accept explicit timezone offsets in orchestra state ([849c905](https://github.com/voidcorp-core/void-machine/commit/849c90519eb6754c0ba6b5359d487f24043355a7))
+* **hook-runner:** accept explicit timezone offsets in Orchestra state ([99ec448](https://github.com/voidcorp-core/void-machine/commit/99ec448d8a2ac7de2d488cfd30eb49faa0027ea0))
+
 ## [5.0.5](https://github.com/voidcorp-core/void-machine/compare/v5.0.4...v5.0.5) (2026-10-21)
 
 

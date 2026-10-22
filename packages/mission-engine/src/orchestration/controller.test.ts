@@ -373,6 +373,17 @@ describe('mission team controller', () => {
     },
   );
 
+  it('does not assign a forged preparation request to an earlier correction window', () => {
+    const [request, invocation] = lifecycleCompletion('core:security-engineer', 5, 'pre-implementation');
+    if (request === undefined || invocation === undefined || !jsonRecord(request.payload)) {
+      throw new Error('Expected invocation');
+    }
+    const events = [started(true), ...lifecycleCompletion('core:solution-architect', 2, 'pre-implementation'),
+      { ...request, payload: { ...request.payload, planHash: HASH_B } }, invocation,
+      ...preparationReceipt(8), completion('core:security-engineer', 9, 'pass', 'pre-implementation')];
+    expect(decide(events).action.kind).toBe('stop');
+  });
+
   it('starts implementation after a finding preparation correction without replaying the panel', () => {
     const initial = [completion(TEST_SPECIALIST_IDS[0], 2, 'changes-requested', 'pre-implementation'),
       ...preReviews().slice(1)];

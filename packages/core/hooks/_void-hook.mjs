@@ -13035,7 +13035,7 @@ var selectionSchema = strictObject({
   mission: identifier,
   coordinator: strictObject({ label: identifier, worktree: path })
 });
-var instant = iso_exports.datetime();
+var instant = iso_exports.datetime({ offset: true });
 var status = _enum(["planned", "running", "blocked", "done", "failed"]);
 var workerSchema = strictObject({
   label: identifier,

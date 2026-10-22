@@ -161,7 +161,8 @@ mission bytes; exceeding a bound is incomplete, never a unique match.
 See the shipped technical contract `docs/ORCHESTRA.md` in the harness source for
 schemas; the operational fields are listed here so an installed skill is sufficient.
 
-- mission.md: schema, mission, project, status, updated_at (UTC ISO), repository
+- mission.md: schema, mission, project, status, updated_at
+  (ISO with `Z` or `+HH:MM`/`-HH:MM`; prefer UTC `Z`), repository
   (canonical Git common path), coordinator {label, worktree, workspace?}, workers.
 - Worker entries: label, agent (codex or claude), worktree, branch, ticket, status,
   attempt; optional pane_id and session are hints only. At most four workers.

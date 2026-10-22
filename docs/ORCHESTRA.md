@@ -20,6 +20,15 @@ fields refuse. A report matches mission, worker label, branch and attempt exactl
 Its valid status is authoritative; only an absent report falls back to the worker
 manifest. Mission refresh timestamps do not invalidate a current-attempt report.
 
+`updated_at` accepts an ISO datetime with `Z` or an explicit `+HH:MM`/`-HH:MM`
+offset. Fractional seconds retain their original precision, including microseconds
+and nanoseconds. Readers validate and preserve the string; they neither rewrite
+state nor convert it through JavaScript Date. Existing schema 1 files need no
+migration. Dates without a timezone, impossible calendar dates and malformed offsets
+remain invalid. Writers should prefer UTC `Z` for consistent display, but a valid
+explicit offset must not prevent discovery or resumption. This uses Zod 4's documented
+[`offset: true` option](https://zod.dev/api#iso-datetimes), shared by missions and reports.
+
 ORCH alone writes mission and briefs. Each worker writes only its own report.
 Writers create an exclusive temporary sibling, validate the whole document, then
 rename it over the destination; they never overwrite another owner's file.

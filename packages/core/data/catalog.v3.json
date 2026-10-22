@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:56012433234f5e7d537066868543df205e92f817003384489c7e698778a49ab2"
+    "rootHash": "sha256:e38546e5aa7fcb09bddd3c33954b340026d7d92ae9d74b0272191043b98cd706"
   },
   "nodes": [
     {
@@ -4677,7 +4677,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 327,
+          "lines": 328,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4686,7 +4686,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 4673,
+          "staticTokens": 4684,
           "type": "skill"
         }
       },

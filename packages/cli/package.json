@@ -1,6 +1,6 @@
 {
   "name": "voidmachine",
-  "version": "5.0.5",
+  "version": "5.0.6",
   "description": "void-machine CLI — install an opinionated engineering doctrine on any project; render deterministic project health. Run via `npx voidmachine`; command: void-machine (alias vm).",
   "license": "MIT",
   "author": "Folpe @ VoidCorp",

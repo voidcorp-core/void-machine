@@ -262,6 +262,32 @@ describe('mission team controller', () => {
     },
   );
 
+  it.each(['legacy blocker', 'advisory', 'incomplete'] as const)(
+    'preserves a bounded preparation %s without an empty correction', kind => {
+      const start = started();
+      if (!jsonRecord(start.payload)) throw new Error('Expected mission metadata');
+      const blocked = completion('core:security-engineer', 2, 'changes-requested', 'pre-implementation');
+      if (!jsonRecord(blocked.payload) || !jsonRecord(blocked.payload.completion ?? {})) {
+        throw new Error('Expected completion');
+      }
+      const result = blocked.payload.completion;
+      if (!jsonRecord(result) || !Array.isArray(result.findings)) throw new Error('Expected findings');
+      const finding = result.findings[0];
+      if (finding === undefined || !jsonRecord(finding)) throw new Error('Expected finding');
+      const observation = { ...blocked, payload: { ...blocked.payload, completion: { ...result,
+        findings: kind === 'incomplete' ? [] : kind === 'advisory'
+          ? [{ ...finding, classification: 'advisory' }] : result.findings,
+      } } };
+      const decision = decide([{ ...start, payload: { ...start.payload,
+        reviewPolicy: 'bounded-corrections-v1' } }, observation]);
+      expect(decision.action.kind).toBe(kind === 'advisory' ? 'run-lead-writer'
+        : kind === 'incomplete' ? 'stop' : 'run-preparation-correction');
+      if (decision.action.kind === 'run-preparation-correction') {
+        expect(decision.action.findingIds).toHaveLength(1);
+      }
+    },
+  );
+
   it('starts the writer without a compulsory preparation panel', () => {
     const decision = decide([started()]);
     expect(decision.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });

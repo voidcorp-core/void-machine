@@ -30,7 +30,7 @@ function triplet(seq: number, specialist: string, round: number, fresh = false) 
 function incident(partial = false) {
   const writer = { writerId: 'writer:primary', planHash: HASH,
     actionKind: 'run-preparation-correction', implementationRound: 1 };
-  return [entry(1, 'mission.started', 'mission', { planHash: HASH, routingHash: HASH,
+  return [entry(1, 'mission.started', 'mission', { title: 'Historical preparation', planHash: HASH, routingHash: HASH,
     runtime: 'codex', runtimeAttested: true, mode: 'fortress', leadWriterId: 'writer:primary',
     reviewPolicy: 'bounded-corrections-v1' }, 'void-harness:mission'),
   ...triplet(2, IDS[0], 1), ...triplet(5, IDS[1], 1),

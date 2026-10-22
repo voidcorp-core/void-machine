@@ -251,6 +251,17 @@ function classifyEvidence(
 }
 
 describe('mission team controller', () => {
+  it.each(['partial journal', 'invalid evidence'] as const)(
+    'refuses writer admission with %s', problem => {
+      const invalid = problem === 'partial journal'
+        ? event({ seq: 3, eventId: 'evt_gap', kind: 'mission.resumed' })
+        : event({ seq: 2, eventId: 'evt_bad_evidence', kind: 'evidence.recorded', payload: { evidence: {} } });
+      const decision = decide([started(), invalid]);
+      expect(decision.action.kind).toBe('stop');
+      expect(decision.verdict.status).toBe('degraded');
+    },
+  );
+
   it('starts the writer without a compulsory preparation panel', () => {
     const decision = decide([started()]);
     expect(decision.action).toEqual({ kind: 'run-lead-writer', writerId: 'writer:primary' });
@@ -315,25 +326,16 @@ describe('mission team controller', () => {
     expect(decide(corrected).action).toMatchObject({
       kind: 'run-lead-writer', writerId: 'writer:primary',
     });
-    expect(decide([...corrected, ...preparationReviews(2, 7)]).action.kind).toBe('stop');
+    expect(decide([...corrected, ...preparationReviews(2, 7)]).action.kind).toBe('run-lead-writer');
   });
 
-  it('collects every missing preparation review after correcting changed partial panel inputs', () => {
+  it('does not replace a partial historical preparation panel when unrelated inputs change', () => {
     const initial = [started(true),
       completion('core:solution-architect', 2, 'pass', 'pre-implementation')];
-    const changedInputs = Object.fromEntries(TEST_SPECIALIST_IDS.map((id) => [id, HASH_B]));
-    expect(decide(initial, PLAN, INPUTS, changedInputs).action.kind)
-      .toBe('run-preparation-correction');
-
+    const changedInputs = Object.fromEntries(TEST_SPECIALIST_IDS.map(id => [id, HASH_B]));
+    expect(decide(initial, PLAN, INPUTS, changedInputs).action.kind).toBe('run-lead-writer');
     const corrected = [...initial, ...preparationReceipt(4)];
-    expect(decide(corrected, PLAN, INPUTS, changedInputs).action).toMatchObject({
-      kind: 'invoke-specialists', specialistIds: TEST_SPECIALIST_IDS,
-      stage: 'pre-implementation', reviewRound: 2,
-    });
-    const reviewed = [...corrected, ...TEST_SPECIALIST_IDS.map((id, index) => completion(
-      id, index + 5, 'pass', 'pre-implementation', HASH_B, 2,
-    ))];
-    expect(decide(reviewed, PLAN, INPUTS, changedInputs).action.kind).toBe('run-lead-writer');
+    expect(decide(corrected, PLAN, INPUTS, changedInputs).action.kind).toBe('run-lead-writer');
   });
 
   it.each([HASH, HASH_B])('requires a fresh targeted review after recovered preparation clarification with input %s', (architectureHash) => {
@@ -548,15 +550,11 @@ describe('mission team controller', () => {
     expect(decide([...events, late]).action.kind).toBe('stop');
   });
 
-  it('runs pre-implementation specialists before keeping one lead writer as owner', () => {
+  it('keeps one lead writer as owner with or without historical preparation', () => {
     const beforePreparation = decide([started()]);
 
-    expect(beforePreparation.phase).toBe('preparation');
-    expect(beforePreparation.action).toMatchObject({
-      kind: 'invoke-specialists',
-      specialistIds: TEST_SPECIALIST_IDS,
-      stage: 'pre-implementation',
-    });
+    expect(beforePreparation.phase).toBe('implementation');
+    expect(beforePreparation.action).toMatchObject({ kind: 'run-lead-writer' });
     const beforeImplementation = decide([started(), ...preReviews()]);
 
     expect(beforeImplementation.phase).toBe('implementation');
@@ -621,10 +619,7 @@ describe('mission team controller', () => {
       { status: 'degraded', limitations: [limitation] },
     );
 
-    expect(preparing.action).toMatchObject({
-      kind: 'invoke-specialists',
-      specialistIds: TEST_SPECIALIST_IDS,
-    });
+    expect(preparing.action).toMatchObject({ kind: 'run-lead-writer' });
     expect(preparing.verdict.status).toBe('degraded');
     expect(preparing.reasons).toContain(`specialist runtime: ${limitation}`);
 
@@ -777,7 +772,7 @@ describe('mission team controller', () => {
     });
     expect(decision.review.stage).toBe('pre-implementation');
     expect(decision.reasons).toContain(
-      'preparation correction completed; implementation is pending',
+      'lead writer implementation is incomplete',
     );
   });
 

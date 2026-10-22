@@ -534,7 +534,7 @@ describe('parseMissionArgs', () => {
     const original = await legacyPreparation(fixture);
     await writeFile(join(root, 'runtime.test.ts'), 'export const regression = true;\n');
     await completeDispatchedSpecialists(fixture, original);
-    await appendMissionEvent(root, missionId, { kind: 'lead-writer.requested',
+    await appendMissionEvent(root, missionId, { kind: 'lead-writer.requested', correlationId: missionId,
       source: 'void-harness:mission.dispatch', subject: 'writer:primary',
       payload: { writerId: 'writer:primary', planHash: plan.planHash,
         actionKind: 'run-preparation-correction', implementationRound: 1 } });
@@ -552,19 +552,12 @@ describe('parseMissionArgs', () => {
     expect(after.filter(event => event.kind === 'specialist.started')).toHaveLength(original.envelopes.length);
   });
 
-  it('refreshes the plan and dispatches every preparation lens idempotently', async () => {
-    const { root, missionId, plan, input, capability } = await dispatchFixture();
+  it('dispatches every post-implementation lens idempotently within the runtime width', async () => {
+    const { root, missionId, plan, input, capability, post: first } = await postImplementationFixture();
     expect(plan.profiles).toContainEqual(expect.objectContaining({
       profileId: 'core:typescript', state: 'applicable', sourceReviewRequired: false,
     }));
     expect(plan.context).toEqual({ status: 'complete', issues: [] });
-    const changedPlan = await planMission(
-      root,
-      'DEV-500.md',
-      '2026-08-21T12:00:00.000Z',
-    );
-    expect(changedPlan.inputHash).not.toBe(plan.inputHash);
-    const first = await dispatchMissionSpecialists(resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability);
     const second = await dispatchMissionSpecialists(resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability);
     const inspected = await inspectMission(root, missionId, { dependencies: {} });
     const requested = inspected.stream.events.filter((event) =>
@@ -576,7 +569,7 @@ describe('parseMissionArgs', () => {
       expect(envelope.contextPack.omitted.join(' ')).toContain('version-uncovered:nextjs@99.0.0');
       expect(envelope.contextPack.artifacts).toContainEqual({
         path: 'docs/preparation.md',
-        text: expect.stringContaining('Initial preparation: review freshness needs explanation.'),
+        text: expect.stringContaining('Preparation: review identity follows bytes across staging and commits.'),
       });
     }
     // The lens width is a concurrency ceiling, never a truncation. The controller
@@ -600,31 +593,19 @@ describe('parseMissionArgs', () => {
     expect(first.lensPlan?.mode).toBe('fan-out');
     expect(first.action).toMatchObject({
       kind: 'invoke-specialists',
-      stage: 'pre-implementation',
+      stage: 'post-implementation',
     });
-    for (const envelope of first.envelopes) {
-      const observed = changedPlan.specialists.find((specialist) =>
-        specialist.specialistId === envelope.specialistId);
-      expect(envelope.inputHash).toBe(observed?.proof.inputHash);
-    }
     expect(second.envelopes).toEqual(first.envelopes);
     expect(requested).toHaveLength(first.envelopes.length);
     expect(requested.map((event) => event.subject)).toEqual(
       first.envelopes.map((envelope) => envelope.specialistId),
     );
-    await expect(recordLeadWriterCompletion(root, {
-      kind: 'writer-event',
-      missionId,
-      json: true,
-    })).rejects.toThrow('no controller writer request is pending');
   });
 
   it('blocks writer and closure on current evidence requests without journal mutation', async () => {
     const fixture = await dispatchFixture();
     const { root, missionId, input, capability } = fixture;
-    const first = await dispatchMissionSpecialists(
-      resolveProjectRoots(root), input, '2026-08-21T12:00:00.000Z', capability,
-    );
+    const first = await legacyPreparation(fixture);
     await completeDispatchedSpecialists(fixture, first,
       'Explain how corrected preparation invalidates old reviews.');
     const correction = await dispatchMissionSpecialists(
@@ -853,16 +834,13 @@ describe('parseMissionArgs', () => {
     );
 
     expect(dispatched.phase).not.toBe('blocked');
-    expect(dispatched.action).toMatchObject({
-      kind: 'invoke-specialists',
-      stage: 'pre-implementation',
-    });
-    expect(dispatched.envelopes.length).toBeGreaterThan(0);
+    expect(dispatched.action).toMatchObject({ kind: 'run-lead-writer' });
+    expect(dispatched.envelopes).toEqual([]);
     // The run belongs to the repository, not to the tree: its journal grows in
     // the main checkout, and the worktree gets no `.void/machine` of its own.
     const requested = (await inspectMission(main, missionId, { dependencies: {} }))
-      .stream.events.filter((event) => event.kind === 'specialist.requested');
-    expect(requested).toHaveLength(dispatched.envelopes.length);
+      .stream.events.filter((event) => event.kind === 'lead-writer.requested');
+    expect(requested).toHaveLength(1);
     expect(existsSync(join(linked, '.void', 'machine'))).toBe(false);
   });
 

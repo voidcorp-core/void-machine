@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/cli/src/lib/runs/mission-recovery-routing.test.ts
 import { createSpecialistDispatch, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
 import { recordSpecialistRequests } from '../specialist-lifecycle.js';
 

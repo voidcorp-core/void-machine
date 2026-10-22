@@ -1,3 +1,4 @@
+import { historicalPreparation } from './__fixtures__/preparation.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -42,7 +43,7 @@ it.each(['fresh', 'historically-stopped'] as const)(
       await writeMissionControllerPlan(root, ID, plan, ticket);
       const roots = resolveProjectRoots(root);
       const input = { kind: 'dispatch' as const, missionId: ID, json: true };
-      const dispatched = await dispatchMissionSpecialists(roots, input);
+      const dispatched = await historicalPreparation(root, ID, plan, { path: ticket.path, text: body });
       expect(dispatched.envelopes.length).toBeGreaterThan(1);
       for (const [index, envelope] of dispatched.envelopes.entries()) {
         const contextId = `/root/proof1_${index}`;
@@ -87,7 +88,7 @@ it.each(['fresh', 'historically-stopped'] as const)(
     }
   });
 
-it('keeps live preparation B authoritative after recovery instead of implementing from the old PASS panel A', async () => {
+it('preserves changed-input recovery without making historical PASS panels writer authority', async () => {
   const root = await mkdtemp(join(tmpdir(), 'void-recovery-routing-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-routing-session');
   try {
@@ -114,7 +115,7 @@ it('keeps live preparation B authoritative after recovery instead of implementin
     await writeMissionControllerPlan(root, ID, plan, ticket);
     const roots = resolveProjectRoots(root);
     const input = { kind: 'dispatch' as const, missionId: ID, json: true };
-    const dispatched = await dispatchMissionSpecialists(roots, input);
+    const dispatched = await historicalPreparation(root, ID, plan, { path: ticket.path, text: body });
     expect(dispatched.action).toMatchObject({ kind: 'invoke-specialists' });
     expect(dispatched.envelopes.length).toBeGreaterThan(1);
     const original = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
@@ -157,8 +158,8 @@ it('keeps live preparation B authoritative after recovery instead of implementin
         currentInputHashes: Object.fromEntries(changed.specialists.map(value =>
           [value.specialistId, value.proof.inputHash])) } });
     const resumed = await dispatchMissionSpecialists(roots, input);
-    expect(resumed.action.kind).toBe('run-preparation-correction');
-    expect(resumed.action.kind).not.toBe('run-lead-writer');
+    expect(resumed.action.kind).toBe('run-lead-writer');
+    expect(resumed.envelopes).toEqual([]);
   } finally {
     vi.unstubAllEnvs();
     await rm(root, { recursive: true });

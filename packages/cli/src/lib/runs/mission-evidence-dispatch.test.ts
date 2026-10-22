@@ -1,3 +1,4 @@
+import { historicalPreparation } from './__fixtures__/preparation.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -48,7 +49,7 @@ it.each(['pre-implementation', 'post-implementation'] as const)(
     await writeMissionControllerPlan(root, ID, plan, ticket, baseCommit);
     const roots = resolveProjectRoots(root);
     const input = { kind: 'dispatch' as const, missionId: ID, json: true };
-    const dispatched = await dispatchMissionSpecialists(roots, input);
+    const dispatched = await historicalPreparation(root, ID, plan, { path: ticket.path, text: body });
     expect(dispatched.action).toMatchObject({ kind: 'invoke-specialists' });
     expect(dispatched.envelopes.length).toBeGreaterThan(1);
     for (const [index, envelope] of dispatched.envelopes.entries()) {

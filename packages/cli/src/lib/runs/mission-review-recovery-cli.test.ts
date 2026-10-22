@@ -1,3 +1,4 @@
+import { historicalPreparation } from './__fixtures__/preparation.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -58,7 +59,7 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1') {
           scope: { kind: 'general' as const }, proofIds: [], resolutions: [],
           provenance: { kind: 'native-context' as const, contextId } } }) } });
   }
-  const preparation = await dispatch();
+  const preparation = await historicalPreparation(root, ID, plan, { path: 'ticket.md', text: body });
   expect(preparation.action.kind).toBe('invoke-specialists');
   for (const [index, envelope] of preparation.envelopes.entries()) await complete(envelope, `preparation_${index}`);
   expect((await dispatch()).action.kind).toBe('run-lead-writer');

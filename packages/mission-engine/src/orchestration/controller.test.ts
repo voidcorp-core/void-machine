@@ -281,6 +281,31 @@ describe('mission team controller', () => {
     expect(decision.reasons.join(' ')).toContain('Authorization can be bypassed.');
   });
 
+  it.each(['pass', 'changes-requested', 'evidence'] as const)(
+    'retains a genuine in-flight preparation %s after implementation without accepting it as code review', verdict => {
+      const [requested, invocation] = lifecycleCompletion('core:security-engineer', 2, 'pre-implementation');
+      if (requested === undefined || invocation === undefined) throw new Error('Expected lifecycle');
+      const implementationRequest = event({ seq: 4, eventId: 'evt_real_implementation_request',
+        source: 'void-harness:mission.dispatch', kind: 'lead-writer.requested', subject: 'writer:primary',
+        payload: { actionKind: 'run-lead-writer', writerId: 'writer:primary', planHash: PLAN.planHash } });
+      const late = completion('core:security-engineer', 6,
+        verdict === 'changes-requested' ? verdict : 'pass', 'pre-implementation', HASH, 1, '1',
+        verdict === 'evidence' ? ['Provide the authorization regression proof.'] : []);
+      const events = [started(), requested, invocation, implementationRequest, writer(), late];
+      const result = decide(events);
+      expect(result.action.kind).toBe(verdict === 'pass' ? 'invoke-specialists'
+        : verdict === 'evidence' ? 'await-evidence' : 'run-correction');
+      if (verdict === 'pass') expect(result.action).toMatchObject({ stage: 'post-implementation' });
+      expect(result.verdict.status).not.toBe('verified');
+      const replay = [started(), requested, { ...implementationRequest, seq: 3 },
+        { ...invocation, seq: 4 }, writer(), late];
+      expect(decide(replay).action.kind).toBe('stop');
+      if (!jsonRecord(late.payload)) throw new Error('Expected completion');
+      const unbound = { ...late, payload: { ...late.payload, contextId: 'ctx_wrong' } };
+      expect(decide([...events.slice(0, -1), unbound]).action.kind).toBe('stop');
+    },
+  );
+
   it('starts implementation after a finding preparation correction without replaying the panel', () => {
     const initial = [completion(TEST_SPECIALIST_IDS[0], 2, 'changes-requested', 'pre-implementation'),
       ...preReviews().slice(1)];

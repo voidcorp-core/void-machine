@@ -97,14 +97,7 @@ export async function missionReviewBase(root: string): Promise<string> {
   }
 }
 
-/** Git 2.50: diff <commit> compares the complete worktree with a fixed commit.
- * https://git-scm.com/docs/git-diff/2.50.0 */
-export async function captureMissionReviewSubject(
-  root: string,
-  baseCommit: string | undefined,
-  committed = false,
-  hashFormat: 'legacy' | 'committed' = committed ? 'committed' : 'legacy',
-): Promise<MissionReviewSubject> {
+export async function validateMissionReviewBase(root: string, baseCommit: string | undefined): Promise<string> {
   if (baseCommit === undefined) {
     throw new Error(
       'MISSION_REVIEW_BASE_MISSING: legacy mission has no review baseline; preserve its history and start a new mission',
@@ -114,8 +107,22 @@ export async function captureMissionReviewSubject(
   try {
     await execFile('git', ['merge-base', '--is-ancestor', baseCommit, 'HEAD'], options);
   } catch {
-    throw new Error('MISSION_REVIEW_BASE_INVALID: baseline is missing or is not an ancestor of HEAD');
+    throw new Error('MISSION_REVIEW_BASE_INVALID: baseline is missing or is not an ancestor of HEAD; '
+      + 'return to the mission worktree with a checkout descended from its bound base; preserve the journal');
   }
+  return baseCommit;
+}
+
+/** Git 2.50: diff <commit> compares the complete worktree with a fixed commit.
+ * https://git-scm.com/docs/git-diff/2.50.0 */
+export async function captureMissionReviewSubject(
+  root: string,
+  baseCommit: string | undefined,
+  committed = false,
+  hashFormat: 'legacy' | 'committed' = committed ? 'committed' : 'legacy',
+): Promise<MissionReviewSubject> {
+  const validatedBase = await validateMissionReviewBase(root, baseCommit);
+  const options = { cwd: root, encoding: 'utf8' as const, timeout: 10_000, maxBuffer: 4_000_000 };
   try {
     const paths = ['--', '.', ':(exclude).void/machine/**'];
     const reviewedCommit = committed ? await missionReviewBase(root) : undefined;
@@ -126,7 +133,7 @@ export async function captureMissionReviewSubject(
         throw new Error('MISSION_REVIEW_UNCOMMITTED: commit the implementation before independent review');
       }
     }
-    const range = reviewedCommit === undefined ? [baseCommit] : [baseCommit, reviewedCommit];
+    const range = reviewedCommit === undefined ? [validatedBase] : [validatedBase, reviewedCommit];
     const [patch, names, untracked] = await Promise.all([
       execFile('git', ['diff', '--no-ext-diff', '--no-textconv', '--binary', '--full-index',
         '--no-renames', '--relative', ...range, ...paths], {
@@ -160,10 +167,10 @@ export async function captureMissionReviewSubject(
       throw new Error('MISSION_REVIEW_CHANGED: HEAD changed while capturing the review subject');
     }
     return Object.freeze({
-      ...(reviewedCommit === undefined ? {} : { baseCommit, reviewedCommit }),
+      ...(reviewedCommit === undefined ? {} : { baseCommit: validatedBase, reviewedCommit }),
       diff: patch.stdout,
       files,
-      hash: canonicalJsonHash({ baseCommit, ...(hashFormat === 'legacy' ? {} : { reviewedCommit }),
+      hash: canonicalJsonHash({ baseCommit: validatedBase, ...(hashFormat === 'legacy' ? {} : { reviewedCommit }),
         diff: patch.stdout, files: files.files }),
     });
   } catch (error) {

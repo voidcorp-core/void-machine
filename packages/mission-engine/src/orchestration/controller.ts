@@ -248,12 +248,14 @@ function sameSpecialistDispatch(
 function unboundCompletionReasons(
   input: MissionTeamControllerInput,
   runtime: 'claude' | 'codex' | undefined,
+  completions = input.stream.events.filter(event => event.kind === 'specialist.completed'),
+  invocationBeforeSeq?: number,
 ): readonly string[] {
   const reasons: string[] = [];
-  for (const completion of input.stream.events.filter((event) =>
-    event.kind === 'specialist.completed')) {
+  for (const completion of completions) {
     const started = input.stream.events.find((event) =>
       event.seq < completion.seq
+      && (invocationBeforeSeq === undefined || event.seq < invocationBeforeSeq)
       && event.kind === 'specialist.started'
       && event.source === `runtime:${runtime ?? 'invalid'}`
       && sameSpecialistDispatch(event, completion)
@@ -376,8 +378,8 @@ function decideReviewPhase(
         ? {
             kind: 'run-preparation-correction',
             writerId: start.leadWriterId,
-            findingIds: review.findings.filter(finding => !start.boundedReview
-              || finding.classification === 'blocking').map((finding) => finding.findingId),
+            findingIds: review.findings.filter(finding => finding.classification !== 'advisory')
+              .map((finding) => finding.findingId),
           }
         : {
             kind: 'run-correction',
@@ -483,22 +485,6 @@ function retainedPreparationSpecialists(
   });
 }
 
-function preparationHasMissingOrStaleReviews(
-  input: MissionTeamControllerInput,
-  events: readonly CanonicalEvent[],
-  boundary: number,
-): boolean {
-  return requiredSpecialists(input.plan, 'pre-implementation').some((id) => {
-    const latest = events.filter((item) => item.kind === 'specialist.completed'
-      && item.subject === id && item.seq < boundary
-      && lifecycleField(item, 'stage') === 'pre-implementation').at(-1);
-    if (latest === undefined) return true;
-    const result = record(lifecycleField(latest, 'completion') ?? null);
-    return result?.['contractVersion'] !== contractVersions(input.plan)[id]
-      || lifecycleField(latest, 'inputHash') !== input.currentInputHashesByStage['pre-implementation'][id];
-  });
-}
-
 /** Called only after recovery receipts have reproduced their original admission. */
 function pendingRecoveredCorrectionFindingIds(events: readonly CanonicalEvent[]): readonly string[] {
   const recovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
@@ -586,16 +572,7 @@ export function orchestrateMissionTeam(
   const firstImplementationSeq = implementationCompletions.length === 0
     ? undefined
     : Math.min(...implementationCompletions.map((event) => event.seq));
-  const preparationCorrectionCompleted = preparationCorrections.length > 0;
-  const preparationFollowupRequired = preparationRecovery !== undefined
-    || (lastPreparationSeq !== undefined
-      && preparationHasMissingOrStaleReviews(input, reviewEvents, lastPreparationSeq));
-
-  const latePreparationCompletion = lastPreparationSeq !== undefined
-    && input.stream.events.some((event) =>
-      event.seq > lastPreparationSeq
-      && event.kind === 'specialist.completed'
-      && lifecycleField(event, 'stage') === 'pre-implementation');
+  const preparationFollowupRequired = preparationRecovery !== undefined;
   const lastWriterSeq = completions.length === 0
     ? undefined
     : Math.max(...completions.map((event) => event.seq));
@@ -607,6 +584,18 @@ export function orchestrateMissionTeam(
     input.stream.events.some((event) => event.eventId === obligation.completionEventId
       && lifecycleField(event, 'stage') === 'pre-implementation'))
     .map((obligation) => obligation.obligationId));
+  const preparationBoundary = Math.max(lastPreparationSeq ?? 0, ...completions
+    .filter(event => leadWriterActionKind(event) === 'run-correction').map(event => event.seq));
+  const observedPreparation = reviewEvents.filter(event => event.kind === 'specialist.completed'
+    && lifecycleField(event, 'stage') === 'pre-implementation');
+  const unresolvedPreparation = [...new Map(observedPreparation
+    .filter(event => event.seq > preparationBoundary).map(event => [event.subject, event])).values()]
+    .filter(event => {
+      const completion = parseSpecialistCompletionValue(lifecycleField(event, 'completion'));
+      return completion !== undefined && completion.verdict !== 'pass'
+        && (completion.verdict !== 'changes-requested' || completion.findings.length === 0
+          || completion.findings.some(finding => finding.classification !== 'advisory'));
+    });
   const preReview = reduceReviewLoop({
     stage: 'pre-implementation',
     expectedSource,
@@ -614,9 +603,12 @@ export function orchestrateMissionTeam(
       stageStartSeqExclusive: missionStartSeq,
       afterSeqExclusive: lastPreparationSeq,
     }),
-    ...(firstWriterSeq === undefined ? {} : { beforeSeqExclusive: firstWriterSeq }),
     events: reviewEvents,
-    requiredSpecialists: requiredSpecialists(input.plan, 'pre-implementation'),
+    // Historical advice is inspected, but the frozen plan is no longer a
+    // compulsory preparation quorum. Explicit admitted recoveries retain theirs.
+    requiredSpecialists: requiredSpecialists(input.plan, 'pre-implementation').filter(id =>
+      preparationRecovery !== undefined || (unresolvedPreparation.length > 0
+        ? unresolvedPreparation : observedPreparation).some(event => event.subject === id)),
     contractVersions: contractVersions(input.plan),
     currentInputHashes: input.currentInputHashesByStage['pre-implementation'],
     maxRounds: input.maxReviewRounds,
@@ -624,6 +616,11 @@ export function orchestrateMissionTeam(
       ...obligations,
       blockingObligationIds: obligations.blockingObligationIds.filter((id) => preparationObligationIds.has(id)),
     },
+    ...(preparationRecovery === undefined && lastPreparationSeq !== undefined
+      && missionStartSeq !== undefined ? {
+      retainedSpecialists: requiredSpecialists(input.plan, 'pre-implementation')
+        .filter(id => unresolvedPreparation.some(event => event.subject === id)),
+    } : {}),
     ...(!preparationFollowupRequired || lastPreparationSeq === undefined
       || (preparationRecovery !== undefined
         && lastPreparationSeq <= preparationRecovery.recoverySeq) ? {} : {
@@ -633,6 +630,9 @@ export function orchestrateMissionTeam(
     }),
   });
   const baseVerdict = deriveMissionVerdict(input.stream, input.evidenceContext);
+  if (baseVerdict.status === 'degraded') {
+    return stopped('degraded', preReview, baseVerdict, baseVerdict.reasons);
+  }
   const invalidRuntime = input.specialistRuntime === undefined
     || !Array.isArray(input.specialistRuntime.limitations)
     || input.specialistRuntime.limitations.some((item) =>
@@ -717,11 +717,20 @@ export function orchestrateMissionTeam(
     return stopped('blocked', preReview, baseVerdict,
       ['Preparation replacement inputs or contracts changed; reconcile the admitted subject before dispatch']);
   }
-  if (firstImplementationSeq !== undefined && input.stream.events.some(event =>
-    event.kind === 'specialist.completed' && event.seq > firstImplementationSeq
-      && lifecycleField(event, 'stage') === 'pre-implementation')) {
-    return stopped('blocked', preReview, baseVerdict,
-      ['pre-implementation review was replayed after implementation']);
+  const implementationBoundary = input.stream.events.find(event => event.kind === 'lead-writer.requested'
+    && leadWriterActionKind(event) === 'run-lead-writer')?.seq ?? firstImplementationSeq;
+  if (implementationBoundary !== undefined) {
+    const latePreparation = observedPreparation.filter(event => event.seq > implementationBoundary);
+    const lifecycleReasons = unboundCompletionReasons(input, start.runtime, latePreparation, implementationBoundary);
+    const replayed = input.stream.events.some(event => event.seq > implementationBoundary
+      && event.kind === 'specialist.started' && lifecycleField(event, 'stage') === 'pre-implementation');
+    if (replayed || lifecycleReasons.length > 0) {
+      return stopped('blocked', preReview, baseVerdict,
+        ['pre-implementation review was replayed after implementation', ...lifecycleReasons]);
+    }
+  }
+  if (preReview.issues.length > 0) {
+    return decideReviewPhase(start, preReview, baseVerdict, 'pre-implementation');
   }
   const pendingEvidence = obligationStop(
     obligations, preReview, baseVerdict,
@@ -737,8 +746,7 @@ export function orchestrateMissionTeam(
       && event.subject === receipt.specialistId && ['specialist.completed', 'specialist.failed'].includes(event.kind));
     const onlyAuthorObligations = obligations.issues.length === 0
       && obligations.blockingObligationIds.every(id => receipt.pendingAuthorObligationIds.includes(id));
-    const preparationAdmitted = preReview.readyForVerdict
-      || (preparationCorrectionCompleted && !preparationFollowupRequired && firstImplementationSeq !== undefined);
+    const preparationAdmitted = firstImplementationSeq !== undefined;
     if (!terminal && onlyAuthorObligations && preparationAdmitted) {
       const reasons = ['Explicit contract migration requires one fresh visual assessment; historical evidence obligations remain due'];
       return applyRuntimeCertification({ phase: 'review',
@@ -798,30 +806,29 @@ export function orchestrateMissionTeam(
       review: preReview, verdict: overrideVerdict(baseVerdict, 'unverified', reasons), reasons,
     }, input.specialistRuntime);
   }
-  if (!preparationFollowupRequired && preparationCorrectionCompleted && latePreparationCompletion) {
-    return applyRuntimeCertification(stopped(
-      'blocked',
-      preReview,
-      baseVerdict,
-      ['pre-implementation review was replayed after preparation correction'],
-    ), input.specialistRuntime);
-  }
-  if (!preparationFollowupRequired && preparationCorrectionCompleted && firstImplementationSeq === undefined) {
-    const reasons = ['preparation correction completed; implementation is pending'];
-    return applyRuntimeCertification({
-      phase: 'implementation',
-      action: { kind: 'run-lead-writer', writerId: start.leadWriterId },
-      review: preReview,
-      verdict: overrideVerdict(baseVerdict, 'unverified', reasons),
-      reasons,
-    }, input.specialistRuntime);
-  }
-
-  if (!preReview.readyForVerdict && (!preparationCorrectionCompleted || preparationFollowupRequired)) {
+  if (preparationFollowupRequired && !preReview.readyForVerdict) {
     return applyRuntimeCertification(
-      decideReviewPhase(start, preReview, baseVerdict, 'pre-implementation'),
-      input.specialistRuntime,
-    );
+      decideReviewPhase(start, preReview, baseVerdict, 'pre-implementation'), input.specialistRuntime);
+  }
+  if (unresolvedPreparation.length > 0) {
+    const reasons = unresolvedPreparation.flatMap(event => {
+      const completion = parseSpecialistCompletionValue(lifecycleField(event, 'completion'));
+      return completion === undefined ? [] : [...completion.findings.map(finding => finding.summary),
+        ...completion.limitations];
+    });
+    if (preReview.staleSpecialists.some(id => unresolvedPreparation.some(event => event.subject === id))) {
+      return stopped('blocked', preReview, baseVerdict,
+        ['Existing preparation findings require reconciliation against changed inputs.', ...reasons]);
+    }
+    const decision = decideReviewPhase(start, preReview, baseVerdict, 'pre-implementation');
+    if (decision.action.kind === 'run-preparation-correction' && decision.action.findingIds.length === 0) {
+      return stopped('blocked', preReview, baseVerdict,
+        ['Preparation requested changes without an actionable finding.', ...reasons]);
+    }
+    return applyRuntimeCertification({ ...decision, reasons: [...decision.reasons, ...reasons],
+      ...(firstImplementationSeq !== undefined && decision.action.kind === 'run-preparation-correction'
+        ? { action: { ...decision.action, kind: 'run-correction' } } : {}),
+    }, input.specialistRuntime);
   }
   if (completions.length === 0) {
     const reasons = ['lead writer implementation is incomplete'];

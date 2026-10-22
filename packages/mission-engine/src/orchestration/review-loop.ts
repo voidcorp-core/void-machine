@@ -181,9 +181,32 @@ function collectCompletions(
   const contextIds = new Set<string>();
   const currentFailedRounds: { readonly event: CanonicalEvent; readonly round: number }[] = [];
   let historicalHighestRound = 0;
-  const inStageWindow = (event: CanonicalEvent): boolean =>
-    (afterSeqExclusive === undefined || event.seq > afterSeqExclusive)
-    && (beforeSeqExclusive === undefined || event.seq < beforeSeqExclusive);
+  const inStageWindow = (event: CanonicalEvent): boolean => {
+    let seq = event.seq;
+    // Advice belongs to the invocation that asked for it. A writer correction
+    // cannot turn a genuine late round-one response into a round-two replay.
+    if (stage === 'pre-implementation' && event.kind === 'specialist.completed') {
+      const payload = record(event.payload);
+      const mission = events.find(candidate => candidate.kind === 'mission.started'
+        && candidate.missionId === event.missionId && candidate.seq < event.seq);
+      const planHash = record(mission?.payload)?.['planHash'];
+      const matches = (candidate: CanonicalEvent): boolean => candidate.missionId === event.missionId
+        && candidate.subject === event.subject && ['stage', 'reviewRound', 'inputHash', 'contractVersion']
+          .every(key => record(candidate.payload)?.[key] === payload?.[key]);
+      const invocation = events.find(candidate => candidate.seq < event.seq
+        && candidate.kind === 'specialist.started' && candidate.source === expectedSource
+        && matches(candidate) && typeof payload?.contextId === 'string'
+        && record(candidate.payload)?.contextId === payload.contextId);
+      if (invocation !== undefined && events.some(candidate => candidate.seq < invocation.seq
+        && candidate.kind === 'specialist.requested' && candidate.source === 'void-harness:mission.dispatch'
+        && typeof planHash === 'string' && SHA256.test(planHash)
+        && record(candidate.payload)?.['planHash'] === planHash
+        && `runtime:${record(candidate.payload)?.['runtime']}` === expectedSource
+        && matches(candidate))) seq = invocation.seq;
+    }
+    return (afterSeqExclusive === undefined || seq > afterSeqExclusive)
+      && (beforeSeqExclusive === undefined || seq < beforeSeqExclusive);
+  };
   for (const event of events) {
     const payload = record(event.payload);
     if (event.kind === 'specialist.failed') {

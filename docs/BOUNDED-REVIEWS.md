@@ -3,7 +3,7 @@
 ## Contract
 
 The orchestrator coordinates; the implementer owns and edits the worktree. Risk-relevant
-specialists advise before implementation. One independent read-only reviewer examines the
+specialists advise when a concrete question warrants their expertise. One independent read-only reviewer examines the
 committed result against an explicit base and acceptance criteria. Prefer a dedicated
 worktree pinned to the reviewed commit with native read-only permissions.
 
@@ -31,6 +31,22 @@ At the limit, automatic correction dispatch stops with a cause, responsible part
 resolution action. Unresolved blocking defects never become a successful completion.
 Incomplete panels, transport repair, agent restarts and task resumption do not spend or
 reset correction budget. A turn ending does not end a task.
+
+## Preparation is advice
+
+Normal `mission dispatch` starts the lead writer without a compulsory preparation panel.
+An unchanged brief followed by unrelated test additions no longer causes an empty preparation
+correction and another whole panel. Existing professional passes and native consultation remain
+available for concrete risks. This is workflow advice, not an automatic CLI relevance gate.
+Bind advice to its actual question and inputs; revisit it when the brief, artifacts, contract,
+boundary or risk changes. Final review still binds the exact commit, base and acceptance criteria.
+
+Existing requested-only preparation rounds remain in history and consume no new budget. Existing
+PASS results are not relabelled as current approvals. A preparation invocation authentically
+requested and started before implementation admission may finish later as advice; it never counts
+as code review. The controller rejects preparation newly started or replayed after admission. Real findings and evidence requests
+remain actionable, including late ones; current proof still returns `await-evidence`. Authentic
+explicit legacy recovery receipts retain their original admission, targets and budgets.
 
 ## Compatibility and recovery
 

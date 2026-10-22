@@ -20,7 +20,7 @@ const declaration = { id: 'visual-craft-director-v2-v3', specialistId: VISUAL,
 const stream = (events: readonly CanonicalEvent[]) => replayEventLog(events.map(serializeEvent).join('\n'));
 function fixture(completed = false) {
   const events = [event({ kind: 'mission.started', subject: 'mission', payload: {
-    mode: 'team', planHash: HASH, leadWriterId: 'writer:primary', runtime: 'codex' } }),
+    title: 'Historical migration', mode: 'team', planHash: HASH, leadWriterId: 'writer:primary', runtime: 'codex' } }),
   event({ seq: 2, eventId: 'evt_initial_writer', kind: 'lead-writer.completed', subject: 'writer:primary',
     payload: { writerId: 'writer:primary', planHash: HASH, actionKind: 'run-lead-writer' } }),
   event({ seq: 3, eventId: 'evt_old_visual_request', kind: 'specialist.requested',

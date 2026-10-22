@@ -343,6 +343,36 @@ describe('mission team controller', () => {
     },
   );
 
+  it.each(['preparation', 'implementation'] as const)(
+    'retains the original round of advice arriving after a %s correction', correction => {
+      const architect = lifecycleCompletion('core:solution-architect', 2, 'pre-implementation');
+      const [request, invocation] = lifecycleCompletion('core:security-engineer', 5, 'pre-implementation');
+      if (request === undefined || invocation === undefined) throw new Error('Expected invocation');
+      const beforeWriter = [started(), ...architect, request, invocation,
+        ...(correction === 'preparation' ? preparationReceipt(8) : [])];
+      const writerSeq = beforeWriter.length + 1;
+      const implementation = writer(writerSeq, 'writer:primary', 'run-lead-writer');
+      const corrected = [...beforeWriter, implementation,
+        ...(correction === 'implementation' ? [
+          ...TEST_SPECIALIST_IDS.map((id, index) => completion(id, writerSeq + index + 1,
+            id === 'core:solution-architect' ? 'changes-requested' : 'pass')),
+          writer(writerSeq + 4, 'writer:primary', 'run-correction'),
+        ] : [])];
+      const late = completion('core:security-engineer', corrected.length + 1, 'pass', 'pre-implementation');
+      const decision = decide([...corrected, late]);
+      expect(decision.action).toMatchObject({ kind: 'invoke-specialists', stage: 'post-implementation' });
+      expect(decision.review.issues).toEqual([]);
+      expect(decision.verdict.status).not.toBe('verified');
+      const blocker = completion('core:security-engineer', corrected.length + 1,
+        'changes-requested', 'pre-implementation');
+      expect(decide([...corrected, blocker]).action).toMatchObject({ kind: 'run-correction',
+        findingIds: [expect.any(String)] });
+      const proof = completion('core:security-engineer', corrected.length + 1,
+        'pass', 'pre-implementation', HASH, 1, '1', ['Provide the real late proof.']);
+      expect(decide([...corrected, proof]).action.kind).toBe('await-evidence');
+    },
+  );
+
   it('starts implementation after a finding preparation correction without replaying the panel', () => {
     const initial = [completion(TEST_SPECIALIST_IDS[0], 2, 'changes-requested', 'pre-implementation'),
       ...preReviews().slice(1)];
@@ -408,6 +438,14 @@ describe('mission team controller', () => {
     expect(decide(reviewed, PLAN, INPUTS, inputs).action.kind).toBe('run-lead-writer');
     expect(reviewed.filter((item) => item.kind === 'specialist.completed'))
       .toHaveLength(architectureHash === HASH ? 4 : 5);
+    const firstWriter = (reviewed.at(-1)?.seq ?? 0) + 1;
+    const codeCorrected = [...reviewed, writer(firstWriter, 'writer:primary', 'run-lead-writer'),
+      ...TEST_SPECIALIST_IDS.map((id, index) => completion(id, firstWriter + index + 1,
+        id === 'core:security-engineer' ? 'changes-requested' : 'pass')),
+      writer(firstWriter + 4, 'writer:primary', 'run-correction')];
+    expect(decide(codeCorrected, PLAN, INPUTS, inputs).action).toMatchObject({
+      kind: 'invoke-specialists', stage: 'post-implementation', reviewRound: 2,
+    });
   });
 
   it('allows only the recovered corrective work while its current-review regression proof remains due', () => {

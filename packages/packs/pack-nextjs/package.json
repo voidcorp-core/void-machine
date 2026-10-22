@@ -1,6 +1,6 @@
 {
   "name": "@voidcorp/pack-nextjs",
-  "version": "5.0.6",
+  "version": "5.0.7",
   "description": "Next.js 16 App Router conventions for Void Machine — route groups, Cache Components, instrumentation. Composes with @voidcorp/pack-react (UI) and @voidcorp/pack-server (Server Actions, webhooks).",
   "license": "MIT",
   "type": "module",

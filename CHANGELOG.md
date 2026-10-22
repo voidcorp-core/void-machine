@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.0.7](https://github.com/voidcorp-core/void-machine/compare/v5.0.6...v5.0.7) (2026-10-22)
+
+
+### Bug Fixes
+
+* **mission:** preserve original preparation invocation rounds ([56298e9](https://github.com/voidcorp-core/void-machine/commit/56298e9eaf07f4c0376869ab310320ce5282685b))
+* **mission:** remove compulsory preparation quorum ([1f0fcfe](https://github.com/voidcorp-core/void-machine/commit/1f0fcfe49a5f31f500f6679e747dbe75de80c1e2))
+* **mission:** remove compulsory preparation quorum ([8a3f70b](https://github.com/voidcorp-core/void-machine/commit/8a3f70bc1fc59fef588c6e8b668c665a4cf1d20c))
+
 ## [5.0.6](https://github.com/voidcorp-core/void-machine/compare/v5.0.5...v5.0.6) (2026-10-22)
 
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Non-blocking adapter for PostToolUse and Stop canonical events.
+# PostToolUse outcomes and repeated-read advice share this non-blocking process.
+# PostToolUseFailure resets advice only; Stop retains its canonical event.
 set -uo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"

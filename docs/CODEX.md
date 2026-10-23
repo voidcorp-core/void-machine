@@ -134,6 +134,25 @@ trusted project binding. Because neither runtime documents a reliable window siz
 nudge requires explicit `context.windowTokens` configuration; model names are never mapped to
 guessed windows. The handler does not invoke `/clear`, `/compact`, or a semantic checkpoint.
 
+### Repeated-read advice: narrow observation, no universal interception
+
+The existing `outcome-meter` handler uses documented `PostToolUse` JSON `additionalContext`
+without `decision`, `continue` or output replacement. Both native manifests already invoke that process; advice adds no separate
+PostToolUse process. Only exact `Read`, `Grep` and `Glob` payloads with session/call IDs and a
+complete result can increment its stream. Four identical consecutive successes
+produce one warning; changed results/arguments or other observed activity reset it.
+Codex commonly reads through `Bash`/`exec_command`; these are deliberately **not
+covered**, even when the command looks like `cat` or `rg`. MCP reads and arbitrary
+function names are also unsupported. Missing coverage does not mean no repetition.
+
+`write_stdin`, waits, task progress and effect recovery are never classified as
+reads. Claude's separate `PostToolUseFailure` resets its stream; Codex uses the
+errors its `PostToolUse` actually supplies. An unobserved failure cannot reset any
+cache. This advice is never a permission or delivery gate. See
+[the bounded cache contract](ARCHITECTURE.md#portable-hook-runtime) for limits and
+recovery. Direct candidate-handler replay proves that handler, not that the host
+intercepted a native invocation; runtime interception must be evidenced separately.
+
 ### Wiring the Codex hooks (auto-wired by `init`)
 
 `void-machine init` wires the hooks automatically whenever Codex is a selected

@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:d397a0d2a4de14c22947f961abd2cc56312ae94a30052545ec7c405d61708c1d"
+    "rootHash": "sha256:d17f299c420ca4411b2cae89324db57a5ae26829ec53fd125fa497b07bc07a92"
   },
   "nodes": [
     {
@@ -1108,11 +1108,11 @@
         "legacy": {
           "description": "",
           "id": "hook:outcome-meter",
-          "lines": 13,
+          "lines": 14,
           "name": "outcome-meter",
           "pack": null,
           "source": "packages/core/hooks/outcome-meter.sh",
-          "staticTokens": 104,
+          "staticTokens": 127,
           "type": "hook"
         }
       },

@@ -401,7 +401,35 @@ The install suite performs one offline npm installation of the verified tarball
 in a suite-local package directory. Its CLI then exercises three independent
 consumer roots (Claude, Codex and both), each with its own environment, receipts
 and user files. Package installation is measured separately; runtime p50 covers
-init and both update paths only. The package directory is never reused across
+init and both exact offline hydrate paths only. The orchestrator then runs
+`conformance-update.mjs` as the mandatory separate `update` suite: real isolated npm-bin bootstrap/acquisition, native launchers,
+current/all project publication and killed-child recovery on each OS. Windows runs the
+new command and PowerShell shims, including update recovery through the command shim.
+The Windows observer regression retains its eight-second deadline from spawn through
+close, including readiness; failure in the ready phase has not exercised stdin yet.
+The separate capture readiness contract remains ten seconds. Failure reports nine
+ordered startup boundaries with parent-observed times: script entry, before/after
+OutputEncoding assignment, before the first Emit, its compile-types record, after
+that Emit, watcher construction, stop subscription, and start subscription. The four
+interval markers write fixed ASCII directly; the original encoding assignment,
+serializer invocation, operation order and transport remain unchanged.
+These diagnose collector readiness; they do not prove consumer qualification or
+explain a later native-child wait. No arbitrary observer text or environment is exported.
+Process evidence attaches before readiness: PID, spawn/error/exit/close, first-byte
+times and saturated byte counts, never stream contents. Exit and pipe closure are
+separate observations. One minimal PowerShell `-File` control runs after the original
+observer with the same flags, filtered environment and open stdin, under its own
+eight-second deadline. The observer must first emit `close`; termination requested
+with `kill` or an `exit` event alone does not admit the control. Cleanup waits at
+most 500ms for `close`, then refuses the control explicitly if unconfirmed while
+preserving the observer's original failure. Its different script path and potentially warm OS caches
+limit comparisons; a passing control is neither a repair nor Windows qualification.
+The default order is install, update, hooks, autopilot, latency, serial and fail-fast on
+the same verified artifact. Every suite retains the 120-second process limit; install
+no longer runs update internally. All three OS jobs run this mandatory chain.
+The focused `test/cli/stable-update-packed.test.ts` adapter shares those exact phases;
+it is not a substitute for the OS matrix. See [UPDATING.md](UPDATING.md#verification-ownership)
+for commands and proof ownership. The package directory is never reused across
 runs or operating systems, and all three runtime proofs remain mandatory.
 Install conformance and later
 runtime-invocation certification remain separate gates.
@@ -414,9 +442,15 @@ with the immutable tag retry above or with a new fix and version.
 Consumers on a project pull the new version with:
 
 ```bash
-void-machine update    # refresh marketplace cache + bump .void/config.json pins
-# then restart Claude Code
+npx voidmachine@<released-version> update  # bootstrap the published stable updater
+void-machine update                        # stable CLI and current installed project
+void-machine update --all                  # only when every discovered project is intended
+# reload existing agent sessions as needed; native trust remains in its own UI
 ```
+
+The target must declare the stable update protocol; an older published package
+without it refuses before project publication. See [UPDATING.md](UPDATING.md) for
+launcher ownership, recovery, policy migration and the separate real rollout proof.
 
 ## Package size ceilings
 

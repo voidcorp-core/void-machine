@@ -54,6 +54,8 @@ import type { InstallSource } from '../lib/runtime-assets.js';
 import { isHarnessSourceRepo } from '../lib/self-repo.js';
 import { commandsFor, detectStack, type Stack } from '../lib/stack.js';
 import { commitFileTransaction } from '../lib/transaction.js';
+import { assertProjectCompatibility } from '../lib/update-compatibility.js';
+import { inspectInstallProjection, type InstallPreparation } from '../lib/install-plan.js';
 
 interface InitOptions {
   readonly explicitPacks: readonly string[];
@@ -233,9 +235,12 @@ export function configWriteVerdict(input: {
   return input.force ? 'overwrite-unreadable' : 'keep-unreadable';
 }
 
-export async function init(args: readonly string[]): Promise<void> {
+export async function init(
+  args: readonly string[], preparation?: InstallPreparation,
+): Promise<void> {
   const opts = parseArgs(args);
-  const projectRoot = process.cwd();
+  const projectRoot = preparation?.projectRoot ?? process.cwd();
+  await assertProjectCompatibility(projectRoot, { replaceUnparseableConfig: opts.force });
 
   banner('init');
   meta('project', projectRoot);
@@ -362,19 +367,6 @@ export async function init(args: readonly string[]): Promise<void> {
       }
       nextSteps.push(...outcome.nextSteps);
     }
-    if (opts.source === 'local') {
-      for (const adapter of adapters) {
-        const inspection = await adapter.inspect(stageRoot);
-        if (
-          inspection.evidence.installed !== true
-          || inspection.evidence.wired !== true
-          || inspection.evidence.fired === false
-        ) {
-          const failed = inspection.checks.filter((check) => !check.ok).map((check) => check.message);
-          throw new Error(`${adapter.label} staged doctor failed: ${failed.join('; ')}`);
-        }
-      }
-    }
     // Declare which half git keeps, AFTER wiring: the ignore block is scoped to
     // the files this install actually stages, never to a whole runtime directory
     // the project also writes its own skills into.
@@ -388,7 +380,7 @@ export async function init(args: readonly string[]): Promise<void> {
     // repository ignoring agents that were never written, and an agent the
     // project later writes under one of those names disappears at the first
     // clone. So they wait for the commit that makes them true.
-    await ensureIgnoreRules(projectRoot, stageRoot);
+    if (preparation === undefined) await ensureIgnoreRules(projectRoot, stageRoot);
 
     // The committed record of exactly what this install materialized, so any
     // other checkout can restore the same bytes and PROVE it did. Written last,
@@ -404,7 +396,17 @@ export async function init(args: readonly string[]): Promise<void> {
       source: opts.source,
       runtimes,
       force: opts.force,
+      recoverManifestOwnership: preparation?.recoverManifestOwnership === true,
     });
+    if (opts.source === 'local') {
+      await inspectInstallProjection(
+        projectRoot, stageRoot, [...keptByProject, ...prepared.preserved], adapters,
+      );
+    }
+    if (preparation !== undefined) {
+      preparation.onPrepared(prepared);
+      return;
+    }
     await commitFileTransaction(projectRoot, prepared.mutations);
     for (const path of prepared.restored) {
       line(`${c.yellow('!')}  restored ${path} from the delivered harness`);
@@ -438,6 +440,7 @@ export async function init(args: readonly string[]): Promise<void> {
       line(c.dim('     They still load, beside their replacements. Delete them to finish the update.'));
     }
   } catch (err) {
+    if (preparation !== undefined) throw err;
     blank();
     p.log.error(`init failed. Prior layout repairs remain applied: they are outside the install transaction. ${errorMessage(err)}`);
     installFailed = true;

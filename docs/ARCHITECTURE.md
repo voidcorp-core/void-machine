@@ -59,8 +59,9 @@ sat at the top while being ignored.
 
 `VOID_OWNERSHIP` in `packages/hook-runner/src/void-layout.ts` is the single
 source of truth the ignore block, the migration and `doctor` all read. A second
-copy would let `update` move a path the ignore rule does not cover, and the next
-commit would ship telemetry.
+copy would let a layout migration move a path the ignore rule does not cover, and the
+next commit would ship telemetry. Stable update refuses legacy layout repair until
+its effects can be prepared and recovered; see [UPDATING.md](UPDATING.md).
 
 Two properties are load-bearing and easy to break:
 
@@ -68,9 +69,9 @@ Two properties are load-bearing and easy to break:
   remove the file from anyone's disk; it makes it fall through to the `project`
   default, at which point `doctor` starts telling projects to commit their own
   telemetry. Retiring a READER is not retiring the data.
-- **Readers fall back through every previous layout.** A project migrates on
-  `update`, and until it does, a reader that only knew the current path would
-  report months of history as none.
+- **Readers fall back through every previous layout.** Until a project explicitly
+  reconciles its legacy layout, a reader that only knew the current path would
+  report months of history as none. Stable update does not move legacy telemetry.
 
 ### Naming what the harness owns in a shared directory
 
@@ -100,7 +101,7 @@ covered by nothing and listed by nothing, so its content is committed on the nex
 Both regimes fail the same way round on purpose. Absent a readable receipt, or on
 a project still holding pre-prefix skill directories, harness content becomes
 *visible* rather than the project's content becoming *hidden* — derived content
-committed is a diff in a review, reversible with `update --untrack-derived`;
+committed is a diff in a review, reversible with a separately reviewed index change;
 a project's own skill hidden is work that leaves at the next clone with nothing
 to see. See the decision on naming owned content by prefix then by list.
 
@@ -108,8 +109,8 @@ The migration merges rather than refuses: on a per-file collision the destinatio
 wins and the legacy copy is parked beside it as `*.legacy`. Choosing a winner by
 size or date was rejected on evidence — measured across the park, the legacy copy
 held more data in one journal and far less in another, so no rule picks
-correctly. It runs only inside `update`: writing to a project nobody asked to
-have written to is the line this repo does not cross.
+correctly. This historical repair implementation is retained for compatibility tests,
+but stable update refuses legacy layouts instead of running it outside recovery.
 
 The managed ignore block retains both historical journal locations, `.void/runs/`
 and `.void/local/`, alongside `.void/machine/`. Refreshing an installation keeps
@@ -282,10 +283,10 @@ Rules:
 - **Doc ownership is per-runtime.** Each adapter's `wire` writes only its own doctrine doc — a Claude-only project has just `CLAUDE.md`, a Codex-only project just `AGENTS.md`. `doctor` checks only the docs of *detected* runtimes, so a Codex-only project is never dinged for a missing `CLAUDE.md`. (`add` / `remove` still patch whichever docs exist, keeping active docs current.)
 - **`init` wires each selected runtime's layer via its adapter**, gated by `--runtime <claude|codex|both>` (default: auto-detected footprint, else both). Claude receives native project-local skills, agents, commands and hooks; Codex receives `.agents/skills`, native `.codex/agents` and `.codex/hooks.json`. The package is bundled with all CLI runtime dependencies, so a tarball installs offline. `--source marketplace` is opt-in and is the only path that checks `gh`/marketplace access.
 - **Publication is transactional.** `init` seeds only shared merge targets into an isolated stage, compiles and executes each selected adapter's doctor smoke there, then atomically publishes a finite mutation set. Every target is snapshotted before the first write; a failure restores bytes and modes and removes only transaction-created paths. `.void/machine/receipts/install-v1.json` hashes files the install created, already owned, or found already identical byte-for-byte to what it compiled — a managed asset matching our own output is ours, and letting it fall out of the receipt is what made a later version meet an asset it could not recognise. Unowned native conflicts fail unless `--force` (all of them named in one message, not the first alone), and even force never grants deletion ownership over a pre-existing file.
-- **Layout repair survives install failure.** `update` migrates legacy layout before invoking
-  `init`. That idempotent repair is outside the install transaction and remains applied if
-  installation fails. The failure message preserves the underlying error and names this boundary;
-  it does not claim that every failure rolled back or that publication never happened.
+- **Stable update publishes recoverably.** The candidate compiler prepares every selected
+  project before project, launcher and finally active-release publication. The same transaction
+  engine persists snapshots and compares bytes and native modes during forward writes and
+  recovery. Legacy layout/index repairs outside that scope refuse before publication.
 - **Failed installs clean before exiting.** The owned compilation stage is removed before the
   failure exit, as well as after success. A test observes staging paths at the exit boundary:
   throwing from a mocked `process.exit` would otherwise run `finally` and hide a real-process leak.
@@ -300,9 +301,9 @@ Rules:
   loop and ordinary pull-request critical path.
 - **Runtimes are added a posteriori without friction**: `void-machine runtime add <runtime>` wires exactly that runtime's layer on an already-`init`-ed project, touching nothing the other runtime owns (verified byte-for-byte in tests). `runtime list` shows which are wired. This is the `void runtime add` command from the multi-runtime spec.
 - **Pack and update lifecycle uses the same transaction.** Local `add`/`remove` compile the exact
-  config pack set and prune only unchanged receipt-owned stale assets. Local `update` recompiles
-  from the running CLI without a remote fetch. Legacy/explicit marketplace receipts retain their
-  cache and remote-pin adapter.
+  config pack set and prune only unchanged receipt-owned stale assets. Explicit `update` acquires
+  one stable release and asks its bundled compiler for project plans. Marketplace conversion is
+  refused. `hydrate` retains exact offline materialization from its matching manifest release.
   `init` resolves one effective pack set before staging: the deduplicated union of retained
   declarations and requested packs, or only the requested set under `--replace-packs`.
   Configuration, runtime assets and the installation summary use that same set. Existing pins
@@ -330,8 +331,8 @@ Rules:
   does not override collision withholding, non-regular targets, or grant stale-file deletion.
 - **Ownership is the union of the two proofs, never a choice between them.** The receipt is
   machine-local and records what *this machine* wrote; the committed `.void/install-manifest.json`
-  names the paths *this version* owns and travels with the repository. `update` completes the
-  receipt with every manifest path it does not cover — the receipt staying authoritative on any
+  names the paths *this version* owns and travels with the repository. The compiler combines
+  both proofs without a preliminary receipt write, with the receipt authoritative on any
   path both name, since only its hashes tell a hand-edited file from an untouched one. An absent
   receipt (every fresh clone) is the degenerate case of the same mechanism, not a separate route.
   See the ownership-is-union-of-receipt-and-manifest decision.
@@ -462,8 +463,11 @@ this are the record of why. And `doctor` **names the paths it looked at** when i
 because the same programme at one name printed eight autopilot lines and at another printed none,
 and a silent report is indistinguishable from not having looked.
 
-The programme is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
-mutate it. A declaration never migrates into a directory the harness ignores: one project's
+The programme is opt-in and project-owned. `init` and runtime adapters never create or mutate it.
+Stable `update` permits only a proven equivalent schema migration in its recoverable plan:
+the explicit schema1 human gate becomes schema2 with the human hold published first. Ambiguous
+or missing policy refuses. It never creates or relocates a programme. A declaration never
+migrates into a directory the harness ignores: one project's
 programme was moved from `plans/ACTIVE.md` to `.void/machine/ACTIVE.md` by an `update`, taking its
 running order, its human gates and the `autopilot` block that IS the consent to autonomous
 execution out of the repository with it, where nobody could audit or revise them in a PR. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
@@ -1410,9 +1414,9 @@ repository, rewritten whole on every version bump and in every review diff.
 **Observed state lives under `.void/machine/`**, so the ignore rule is a single
 line with no `!` exception and stops needing maintenance: a new runtime artifact
 is born inside `machine/` and no ignore file has to learn about it. `init` writes
-the marked block; `update` migrates a project off the previous layout, renaming
-`state.json` to `status.json` and filing the streams nothing reads any more under
-`machine/retired/`, and never overwrites a destination that already holds data;
+the marked block. Historical update versions migrated the previous layout, renaming
+`state.json` to `status.json` and filing retired streams under `machine/retired/`.
+Stable update refuses such legacy states for explicit reconciliation;
 `doctor` proves the result with git (`check-ignore` + `ls-files`) rather than
 trusting that the block is present — an ignore rule has no effect on a path that
 was already tracked.
@@ -1483,11 +1487,10 @@ ignored, so "ignored" here already means "ignored and not in the index", which i
 the only harmful state.
 
 An ignore rule has no effect on a path already in the index, so an existing
-project needs an explicit untrack. `void-machine update --untrack-derived` does
-it in one command — files stay on disk, the index forgets them. It is opt-in and
-never implied: rewriting a project's index is the project's call, not a side
-effect of updating. `doctor` reports the count as **advisory** (nothing is
-broken) with that command as its fix.
+project needs an explicit, separately reviewed `git rm --cached` limited to the
+intended paths. Files stay on disk; the index forgets them. Stable update refuses
+the historical `--untrack-derived` flag and never rewrites the index. `doctor`
+reports the count as **advisory** and points to that explicit review.
 
 ## Exact rehydration: the manifest and `hydrate`
 

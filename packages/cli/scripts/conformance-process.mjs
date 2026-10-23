@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { dirname, join, win32 } from 'node:path';
+import { join } from 'node:path';
+export { packageManagerCommand } from '../src/lib/package-manager.ts';
 
-const MAX_PATH_ENTRIES = 128;
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const TERMINATION_GRACE_MS = 5_000;
@@ -101,10 +100,14 @@ function processOutcome(state, code, signal) {
 }
 
 export function runConformanceProcess(options) {
+  const startedMs = performance.now();
+  const report = options.report ?? reportConformanceStep;
+  if (options.label !== undefined) report({ phase: 'started', label: options.label, startedMs });
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const captureStderr = options.captureStderr ?? true;
   return new Promise((resolveRun) => {
+    const beforeUtcMs = Date.now();
     const child = spawn(options.command, options.args, {
       cwd: options.cwd,
       detached: process.platform !== 'win32',
@@ -114,17 +117,26 @@ export function runConformanceProcess(options) {
       windowsHide: true,
       windowsVerbatimArguments: options.windowsVerbatimArguments === true,
     });
+    const observe = event => {
+      try { options.observeProcess?.(event); }
+      catch { report({ phase: 'diagnostic-error', label: options.label }); }
+    };
+    observe({ kind: 'spawn', pid: child.pid, parentPid: process.pid, beforeUtcMs, afterUtcMs: Date.now() });
     const stdout = [];
     const stderr = [];
     const state = { forcedKind: undefined, outputBytes: 0, spawnError: undefined };
     let finished = false;
     let terminationTimer;
+    let diagnosticBytes = 0;
 
     const finish = (outcome) => {
       if (finished) return;
       finished = true;
       clearTimeout(timeoutTimer);
       clearTimeout(terminationTimer);
+      if (options.label !== undefined) report({ phase: 'finished', label: options.label,
+        startedMs, durationMs: Math.round(performance.now() - startedMs),
+        outcome: outcome.kind, code: outcome.code });
       resolveRun({
         outcome,
         stderr: Buffer.concat(stderr).toString('utf8'),
@@ -148,6 +160,13 @@ export function runConformanceProcess(options) {
     if (captureStderr) {
       child.stderr.on('data', (chunk) => {
         captureBounded(state, stderr, chunk, maxOutputBytes, stop);
+        observe({ kind: 'stderr', text: chunk.toString('utf8') });
+        if (options.diagnosticStderr && options.label !== undefined && diagnosticBytes < 4096) {
+          const detail = safeConformanceDiagnostic(chunk.toString('utf8'), 4096 - diagnosticBytes);
+          diagnosticBytes += Buffer.byteLength(detail);
+          report({ phase: 'stderr', label: options.label,
+            elapsedMs: Math.round(performance.now() - startedMs), detail });
+        }
       });
     }
     child.once('error', (error) => {
@@ -160,6 +179,12 @@ export function runConformanceProcess(options) {
     child.stdin.on('error', () => {
       // The exit outcome and caller-owned postconditions remain authoritative.
     });
+    if (options.diagnosticStdin && options.label !== undefined) {
+      for (const event of ['finish', 'close', 'error']) child.stdin.once(event, () => {
+        report({ phase: `stdin-${event}`, label: options.label,
+          elapsedMs: Math.round(performance.now() - startedMs) });
+      });
+    }
     child.stdin.end(options.input);
   });
 }
@@ -203,61 +228,3 @@ export async function runConformanceSuites(suites, run) {
   }
 }
 
-function windowsNpmCli(options) {
-  const pathValue = options.environment.PATH
-    ?? options.environment.Path
-    ?? '';
-  const directories = [
-    dirname(options.nodeExecutable),
-    ...pathValue.split(win32.delimiter),
-  ].filter((entry) => entry !== '').slice(0, MAX_PATH_ENTRIES);
-  for (const directory of new Set(directories)) {
-    const candidate = win32.join(
-      directory,
-      'node_modules',
-      'npm',
-      'bin',
-      'npm-cli.js',
-    );
-    if (options.isFile(candidate)) return candidate;
-  }
-  return undefined;
-}
-
-function windowsCli(manager, options) {
-  if (manager === 'pnpm') {
-    const candidate = options.environment.npm_execpath;
-    if (
-      typeof candidate === 'string'
-      && /\.(?:cjs|mjs|js)$/i.test(candidate)
-      && options.isFile(candidate)
-    ) {
-      return candidate;
-    }
-  } else {
-    const candidate = windowsNpmCli(options);
-    if (candidate !== undefined) return candidate;
-  }
-  throw new Error(
-    `conformance cannot resolve ${manager} JavaScript entrypoint on Windows`,
-  );
-}
-
-export function packageManagerCommand(manager, overrides = {}) {
-  if (manager !== 'npm' && manager !== 'pnpm') {
-    throw new Error(`conformance unsupported package manager: ${String(manager)}`);
-  }
-  const options = {
-    platform: overrides.platform ?? process.platform,
-    nodeExecutable: overrides.nodeExecutable ?? process.execPath,
-    environment: overrides.environment ?? process.env,
-    isFile: overrides.isFile ?? existsSync,
-  };
-  if (options.platform !== 'win32') {
-    return { executable: manager, prefixArguments: [] };
-  }
-  return {
-    executable: options.nodeExecutable,
-    prefixArguments: [windowsCli(manager, options)],
-  };
-}

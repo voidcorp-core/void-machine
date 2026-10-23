@@ -71,8 +71,8 @@ export const COMMAND_CATALOG = {
     "aliases": [],
     "help": [
       {
-        "signature": "update [--dry-run] [--untrack-derived]",
-        "description": "Recompile local receipt-owned assets from this CLI; migrate the .void layout and retire the obsolete project-pointer registry in bounded batches. --untrack-derived drops regenerated files from the git index, keeping them on disk."
+        "signature": "update [--all] [--dry-run] [--version X.Y.Z]",
+        "description": "Acquire one stable CLI release and update the current installed project; --all selects every discovered installation. Outside a project, update the CLI only. Dry run plans without activation; downloads may populate staging."
       }
     ]
   },

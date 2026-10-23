@@ -1,9 +1,9 @@
 // @test-resource subprocess
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('one package installation proof across runtime consumers', () => {
@@ -177,20 +177,346 @@ it('completes Codex installation proofs independently of the latency campaign', 
   await expect(exerciseRuntime(root, bin, 'codex')).resolves.toBeGreaterThan(0);
 });
 
-it('runs latency in its own bounded process on the same artifact by default', async () => {
+const consumerSuites = ['install', 'update', 'hooks', 'autopilot', 'latency'];
+
+it.each([[37, true], [37, false], [0, true], [0, false]])(
+  'retains consumer outcome %s and cleanup failure %s through the actual entrypoint', async (code, cleanupFailure) => {
+    const { createArtifactManifest } = await import('./conformance-artifact.mjs');
+    const { PRODUCT_IDENTITY } = await import('../../../scripts/product-identity.mjs');
+    const { runConformanceProcess, conformanceFixtureEnvironment } = await import('./conformance-process.mjs');
+    const root = mkdtempSync(join(tmpdir(), 'consumer-cleanup-'));
+    try {
+      mkdirSync(join(root, 'tmp'));
+      const head = await runConformanceProcess({ command: 'git', args: ['rev-parse', 'HEAD'], cwd: process.cwd() });
+      const tarball = join(root, 'fixture.tgz');
+      const bytes = Buffer.from('synthetic artifact for process-boundary test');
+      writeFileSync(tarball, bytes);
+      writeFileSync(`${tarball}.json`, JSON.stringify(createArtifactManifest(bytes, {
+        packageName: PRODUCT_IDENTITY.packageName, packageVersion: '5.0.2', sourceSha: head.stdout.trim(),
+      })));
+      const preload = join(root, 'boundary.mjs');
+      const cleaned = join(root, 'cleanup-attempts');
+      writeFileSync(preload, `
+        import cp from 'node:child_process';
+        import fs from 'node:fs/promises';
+        import {basename} from 'node:path';
+        import {syncBuiltinESMExports} from 'node:module';
+        const spawn = cp.spawn;
+        cp.spawn = (command,args,options) => {
+          if (basename(args?.[0] ?? '') === 'conformance-update.mjs') {
+            return spawn(process.execPath, ['-e', ${JSON.stringify(`process.stdout.write('probe-marker\\n'); process.stderr.write('native diagnostic\\n' + 'x'.repeat(70000)); process.exitCode=${code};`)}], options);
+          }
+          return spawn(command,args,options);
+        };
+        const rm = fs.rm;
+        fs.rm = async (path,options) => {
+          if (basename(path).startsWith('harness-consumer-conformance-')) {
+            await fs.appendFile(${JSON.stringify(cleaned)}, 'attempt\\n');
+            if (${cleanupFailure}) throw Object.assign(new Error('EBUSY: fixture cleanup blocked'), {code:'EBUSY'});
+          }
+          return rm(path,options);
+        };
+        syncBuiltinESMExports();
+      `);
+      const result = await runConformanceProcess({ command: process.execPath,
+        args: ['--import', preload, fileURLToPath(new URL('./conformance-consumer.mjs', import.meta.url)),
+          '--suite', 'update', '--tarball', tarball], cwd: process.cwd(), env: conformanceFixtureEnvironment(root) });
+      expect(result.outcome).toEqual({ kind: 'exited', code: code || cleanupFailure ? 1 : 0 });
+      expect(readFileSync(cleaned, 'utf8')).toBe('attempt\n');
+      if (code) {
+        expect(result.stderr).toContain('update: exited');
+        expect(result.stderr).toContain('probe-marker');
+        expect(result.stderr).toContain('native diagnostic');
+      }
+      if (cleanupFailure) expect(result.stderr).toContain('EBUSY: fixture cleanup blocked');
+      else expect(result.stderr).not.toContain('EBUSY');
+      expect(Buffer.byteLength(result.stderr)).toBeLessThanOrEqual(2 * 64 * 1024 + 2);
+      expect(result.stdout.includes('consumer conformance passed')).toBe(!code && !cleanupFailure);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  },
+);
+
+it('isolates original File input consumption before expensive update work with unchanged bounds', async () => {
+  const { probePowerShellInput } = await import('./conformance-update.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-input-'));
+  const env = { HOME: root };
+  const calls: Array<{ command: string; args: string[]; input?: string; env: typeof env;
+    timeoutMs?: number; diagnosticStderr?: boolean; diagnosticStdin?: boolean }> = [];
+  try {
+    await probePowerShellInput(root, env, async options => {
+      calls.push(options);
+      return { outcome: { kind: 'exited', code: 0 }, stdout: calls.length === 1 ? 'ready' : options.input?.trim() ?? '', stderr: '' };
+    });
+    expect(calls).toHaveLength(3);
+    expect(calls.every(call => call.command === 'powershell.exe' && call.env === env
+      && call.timeoutMs === undefined && call.diagnosticStderr && call.diagnosticStdin)).toBe(true);
+    expect(calls.map(call => call.args.slice(0, 4))).toEqual(Array(3).fill(['-NoLogo', '-NoProfile', '-NonInteractive', '-File']));
+    expect(calls.map(call => call.input)).toEqual([undefined, undefined, 'fixture input\n']);
+    expect(calls[1]?.args[4]).toBe(calls[2]?.args[4]);
+    const plain = readFileSync(calls[0]?.args[4] ?? '', 'utf8');
+    const consuming = readFileSync(calls[1]?.args[4] ?? '', 'utf8');
+    expect(plain).not.toContain('$input');
+    expect(plain).toContain('plain-entered');
+    expect(consuming).toContain('input-before-read');
+    expect(consuming).toContain('@($input)');
+    expect(consuming).toContain('input-after-read');
+    const owner = readFileSync(fileURLToPath(new URL('./conformance-update.mjs', import.meta.url)), 'utf8');
+    const invocation = owner.indexOf("if (process.platform === 'win32') await probePowerShellInput(home, env)");
+    expect(invocation).toBeGreaterThan(0);
+    expect(invocation).toBeLessThan(owner.indexOf("runConformanceStep('stable update npm-owned bootstrap'"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['timed-out', 'nonzero', 'wrong output'])('preserves a failed stdin mechanism probe: %s', async failure => {
+  const { probePowerShellInput } = await import('./conformance-update.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-input-failure-'));
+  let calls = 0;
+  try {
+    await expect(probePowerShellInput(root, {}, async () => {
+      calls++;
+      return { outcome: failure === 'timed-out' ? { kind: 'timed-out' } : { kind: 'exited', code: failure === 'nonzero' ? 37 : 0 },
+        stdout: 'wrong', stderr: 'native diagnostic' };
+    })).rejects.toThrow();
+    expect(calls).toBe(1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it('probes native dispatch with the generated shim logic and a bounded real Node child', async () => {
+  const { probePowerShellNative } = await import('./conformance-update.mjs');
+  const { planLauncherBootstrap } = await import('../src/lib/cli-installation.js');
+  const { conformanceFixtureEnvironment, runConformanceProcess } = await import('./conformance-process.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'powershell-native-'));
+  const offline = join(root, 'offline.mjs');
+  writeFileSync(offline, "globalThis.fetch = async () => { throw new Error('CONFORMANCE_OFFLINE'); };\n");
+  const env = conformanceFixtureEnvironment(root, { NODE_OPTIONS: `--import=${pathToFileURL(offline).href}` });
+  try {
+    const plan = await planLauncherBootstrap(join(root, 'absent-bin'), Buffer.from('launcher'), undefined, 'win32');
+    const actual = plan.mutations.find(mutation => mutation.path === 'void-machine.ps1');
+    expect(actual).toBeDefined();
+    await probePowerShellNative({ home: root, cwd: root, env }, async options => {
+      expect(options).toMatchObject({ command: 'powershell.exe', cwd: root, env,
+        diagnosticStderr: true, diagnosticStdin: true });
+      expect(options.input).toBeUndefined();
+      expect(options.timeoutMs).toBeUndefined();
+      expect(options.args.slice(0, 4)).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-File']);
+      expect(options.args.slice(5)).toEqual(['--version']);
+      const script = readFileSync(options.args[4], 'utf8');
+      expect(script.split('\n').filter(line => !line.trimStart().startsWith('[Console]::Error.WriteLine(')).join('\n'))
+        .toBe(Buffer.from(actual?.content ?? '').toString());
+      for (const marker of ['native-entered', 'native-pipeline', 'native-direct', 'native-returned']) {
+        expect(script).toContain(marker);
+      }
+      const result = await runConformanceProcess({ command: process.execPath,
+        args: [join(dirname(options.args[4]), 'void-machine.mjs'), '--version'], cwd: root, env });
+      expect(result.outcome).toEqual({ kind: 'exited', code: 37 });
+      const observations = result.stderr.split('\n').filter(line => line.startsWith('{'))
+        .map(line => JSON.parse(line)).filter(event => typeof event.phase === 'string');
+      expect(observations.map(event => event.phase)).toEqual([
+        'node-entered', 'node-before-stdout', 'node-after-stdout', 'node-before-exit', 'node-exit',
+      ]);
+      for (const [index, event] of observations.entries()) {
+        expect(Number.isFinite(event.elapsedMs)).toBe(true);
+        expect(event.elapsedMs).toBeGreaterThanOrEqual(observations[index - 1]?.elapsedMs ?? 0);
+        expect(Object.keys(event).sort()).toEqual(index < 3 ? ['elapsedMs', 'phase'] : ['code', 'elapsedMs', 'phase']);
+      }
+      expect(observations.slice(-2).map(event => event.code)).toEqual([37, 37]);
+      expect(result.stderr).not.toContain('node-exiting-37');
+      expect(Buffer.byteLength(result.stderr + result.stdout)).toBeLessThan(4096);
+      expect(JSON.parse(result.stdout)).toMatchObject({ execPath: process.execPath, argv: ['--version'],
+        executableMatches: true, cwdMatches: true, environmentMatches: true, offlineImport: true });
+      return result;
+    });
+    const owner = readFileSync(fileURLToPath(new URL('./conformance-update.mjs', import.meta.url)), 'utf8');
+    const invocation = owner.indexOf('await probePowerShellNative({ home, cwd: root, env:');
+    expect(invocation).toBeGreaterThan(owner.indexOf('env.PATH ='));
+    expect(invocation).toBeLessThan(owner.indexOf("runConformanceStep('stable update npm-owned bootstrap'"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it.each(['timed-out', 'wrong exit', 'wrong argv', 'wrong environment', 'missing import'])(
+  'does not certify a failed native-child probe: %s', async failure => {
+    const { probePowerShellNative } = await import('./conformance-update.mjs');
+    const root = mkdtempSync(join(tmpdir(), 'powershell-native-failure-'));
+    let calls = 0;
+    try {
+      await expect(probePowerShellNative({ home: root, cwd: root, env: {} }, async () => {
+        calls++;
+        return { outcome: failure === 'timed-out' ? { kind: 'timed-out' } : { kind: 'exited', code: failure === 'wrong exit' ? 0 : 37 },
+          stdout: JSON.stringify({ execPath: process.execPath, argv: failure === 'wrong argv' ? [] : ['--version'],
+            executableMatches: true, cwdMatches: true, environmentMatches: failure !== 'wrong environment',
+            offlineImport: failure !== 'missing import' }), stderr: 'native diagnostic' };
+      })).rejects.toThrow();
+      expect(calls).toBe(1);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  },
+);
+
+it('qualifies the original PowerShell File invocation and preserves its failure without a comparison', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const env = { HOME: '/isolated', NODE_OPTIONS: '--import=file:///offline.mjs' };
+  const calls: Array<{ args: string[]; env: typeof env; timeoutMs?: number; diagnosticStderr?: boolean }> = [];
+  const result = await measurePowerShellShim({ shim: "C:/fixture's bin/launcher.ps1", args: ['--version', "space '$value"],
+    cwd: '/isolated', env, control: true, label: 'native shim' }, async options => {
+    calls.push(options);
+    return { outcome: { kind: 'exited', code: calls.length === 1 ? 0 : 37 },
+      stdout: calls.length === 1 ? 'ready' : 'original output', stderr: '' };
+  });
+  expect(calls).toHaveLength(2);
+  expect(calls.every(call => call.env === env && call.timeoutMs === undefined)).toBe(true);
+  expect(calls[0]?.args).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "[Console]::Out.Write('ready')"]);
+  expect(calls[1]?.args).toEqual(['-NoLogo', '-NoProfile', '-NonInteractive', '-File',
+    "C:/fixture's bin/launcher.ps1", '--version', "space '$value"]);
+  expect(result).toMatchObject({ outcome: { kind: 'exited', code: 37 }, stdout: 'original output' });
+});
+
+it('compares Command only after successful original File qualification in the same environment', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const env = { HOME: '/isolated' };
+  const calls: Array<{ args: string[]; env: typeof env; timeoutMs?: number; diagnosticStderr?: boolean }> = [];
+  const qualified = { outcome: { kind: 'exited', code: 0 }, stdout: '5.0.2\n', stderr: '' };
+  const result = await measurePowerShellShim({ shim: "C:/fixture's bin/launcher.ps1", args: ['--version'],
+    cwd: '/isolated', env, control: true, label: 'native shim' }, async options => {
+    calls.push(options);
+    return calls.length === 1 ? { ...qualified, stdout: 'ready' } : qualified;
+  });
+  expect(calls).toHaveLength(3);
+  expect(calls.every(call => call.env === env && call.timeoutMs === undefined)).toBe(true);
+  expect(calls[1]?.args[3]).toBe('-File');
+  expect(calls[2]?.args.at(-1)).toContain("& 'C:/fixture''s bin/launcher.ps1' '--version'");
+  expect(calls[2]?.diagnosticStderr).toBe(true);
+  expect(result).toBe(qualified);
+});
+
+it.each(['failure', 'different output'])('does not hide a PowerShell comparison %s behind successful File qualification', async kind => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  let invocation = 0;
+  await expect(measurePowerShellShim({ shim: '/fixture/shim.ps1', args: ['--version'],
+    cwd: '/fixture', env: {}, control: true, label: 'shim' }, async () => {
+    invocation++;
+    return { outcome: { kind: 'exited', code: invocation === 3 && kind === 'failure' ? 37 : 0 },
+      stdout: invocation === 1 ? 'ready' : invocation === 2 ? 'version' : 'different', stderr: '' };
+  })).rejects.toThrow();
+  expect(invocation).toBe(3);
+});
+
+it('measures real fixture children, transport and publication without changing results or errors', async () => {
+  const { stableUpdateTransportSource } = await import('./conformance-update.mjs');
+  const { PRODUCT_IDENTITY } = await import('../../../scripts/product-identity.mjs');
+  const { runConformanceProcess } = await import('./conformance-process.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'update-boundary-'));
+  try {
+    const archive = join(root, 'archive.tgz');
+    const target = join(root, 'launcher.cmd');
+    const fixture = join(root, 'transport.mjs');
+    writeFileSync(archive, 'archive bytes');
+    writeFileSync(fixture, stableUpdateTransportSource({ tarball: archive, target, version: '5.0.2', integrity: 'fixture-integrity' }));
+    for (const name of ['npm-cli.js', 'void-machine.mjs', 'prepare-update.mjs']) {
+      writeFileSync(join(root, name), "process.stdout.write('child-output'); process.stderr.write('child-error'); process.exitCode = Number(process.argv[2]);");
+    }
+    const probe = join(root, 'probe.mjs');
+    writeFileSync(probe, `
+      import assert from 'node:assert/strict';
+      import {execFile} from 'node:child_process';
+      import {promisify} from 'node:util';
+      import {rename, writeFile} from 'node:fs/promises';
+      import {join} from 'node:path';
+      const root = ${JSON.stringify(root)};
+      const metadata = await (await fetch('https://registry.npmjs.org/' + ${JSON.stringify(PRODUCT_IDENTITY.packageName)} + '/latest')).json();
+      assert.equal(await (await fetch(metadata.dist.tarball)).text(), 'archive bytes');
+      await assert.rejects(fetch('https://unreachable.invalid'), /Unexpected registry request/);
+      for (const [name, code] of [['npm-cli.js',0], ['void-machine.mjs',0], ['prepare-update.mjs',37]]) {
+        const promise = promisify(execFile)(process.execPath, [join(root,name), String(code)], {timeout:2000});
+        assert.ok(promise.child.pid);
+        if (code) await assert.rejects(promise, error => error.code === 37 && error.stdout === 'child-output' && error.stderr === 'child-error');
+        else assert.deepEqual(await promise, {stdout:'child-output',stderr:'child-error'});
+      }
+      await new Promise((resolve,reject) => execFile(process.execPath, [join(root,'npm-cli.js'),'0'], {timeout:2000}, (error,stdout,stderr) => {
+        if (error) return reject(error);
+        assert.equal(stdout,'child-output'); assert.equal(stderr,'child-error'); resolve();
+      }));
+      await assert.rejects(rename(join(root,'missing'), ${JSON.stringify(target)}), {code:'ENOENT'});
+      await writeFile(join(root,'replacement'), 'launcher bytes');
+      await rename(join(root,'replacement'), ${JSON.stringify(target)});
+      // Exhaust the diagnostic budget; transport and publication must still work.
+      for (let index = 0; index < 100; index++) {
+        assert.equal(await (await fetch(metadata.dist.tarball)).text(), 'archive bytes');
+      }
+      await assert.rejects(rename(join(root,'missing'), ${JSON.stringify(target)}), {code:'ENOENT'});
+      process.stdout.write('unchanged-result');
+    `);
+    const events: Array<{ phase: string; detail?: string }> = [];
+    const result = await runConformanceProcess({ command: process.execPath,
+      args: ['--import', fixture, probe], cwd: root, env: {}, label: 'fixture boundaries', diagnosticStderr: true,
+      report: event => events.push(event) });
+    expect(result.outcome).toEqual({ kind: 'exited', code: 0 });
+    expect(result.stdout).toBe('unchanged-result');
+    const measured = result.stderr.trim().split('\n').map(line => JSON.parse(line));
+    for (const label of ['npm-cli.js', 'void-machine.mjs', 'prepare-update.mjs', 'metadata', 'archive', 'launcher publication']) {
+      expect(measured.some(event => event.label === label && event.phase === 'started')).toBe(true);
+      expect(measured.some(event => event.label === label && event.phase === 'finished' && event.durationMs >= 0)).toBe(true);
+    }
+    expect(measured.some(event => event.label === 'prepare-update.mjs' && event.code === 37)).toBe(true);
+    expect(measured.some(event => event.label === 'launcher publication' && event.code === 'ENOENT')).toBe(true);
+    expect(events.some(event => event.phase === 'stderr')).toBe(true);
+    expect(Buffer.byteLength(result.stderr)).toBeLessThanOrEqual(4096);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it('does not repeat a PowerShell control or proceed after a failed control', async () => {
+  const { measurePowerShellShim } = await import('./conformance-update.mjs');
+  const options = { shim: '/fixture/shim.ps1', args: ['--version'], cwd: '/fixture', env: {}, label: 'shim' };
+  const execute = vi.fn(async () => ({ outcome: { kind: 'exited', code: 3 }, stdout: '', stderr: '' }));
+  await expect(measurePowerShellShim({ ...options, control: true }, execute)).rejects.toThrow('PowerShell output-only control');
+  expect(execute).toHaveBeenCalledTimes(1);
+  execute.mockClear();
+  expect((await measurePowerShellShim({ ...options, control: false }, execute)).outcome.code).toBe(3);
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it('runs install and stable update as mandatory serial processes on the same artifact with default bounds', async () => {
   const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
   const root = mkdtempSync(join(tmpdir(), 'consumer-suite-boundaries-'));
   const calls: Array<{ args: string[]; env: Record<string, string>; timeoutMs?: number }> = [];
+  let active = 0;
   const names = await exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async (options) => {
+    expect(active).toBe(0);
+    active++;
     calls.push(options);
+    await Promise.resolve();
+    active--;
     return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
   });
-  expect(names).toEqual(['install', 'hooks', 'autopilot', 'latency']);
-  expect(calls).toHaveLength(4);
-  expect(new Set(calls.map((call) => call.args[0])).size).toBe(4);
+  expect(names).toEqual(consumerSuites);
+  expect(calls.map((call) => basename(call.args[0] ?? '')))
+    .toEqual(consumerSuites.map((name) => `conformance-${name}.mjs`));
   expect(calls.every((call) => call.env.VOID_CONFORMANCE_TARBALL === '/artifact/consumer.tgz')).toBe(true);
   expect(calls.every((call) => call.timeoutMs === undefined)).toBe(true);
   await expect(exerciseConsumerSuites('latency', '/artifact/consumer.tgz', root, async () => ({
     outcome: { kind: 'timed-out' }, stdout: '', stderr: '',
   }))).rejects.toThrow('latency: timed-out');
+});
+
+it.each(consumerSuites)('selects only the requested %s suite through the same owner', async suite => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-selection-'));
+  const calls: string[] = [];
+  expect(await exerciseConsumerSuites(suite, '/artifact/consumer.tgz', root, async options => {
+    calls.push(basename(options.args[0]));
+    expect(options.env.VOID_CONFORMANCE_TARBALL).toBe('/artifact/consumer.tgz');
+    expect(options.timeoutMs).toBeUndefined();
+    return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
+  })).toEqual([suite]);
+  expect(calls).toEqual([`conformance-${suite}.mjs`]);
+});
+
+it.each(consumerSuites)('stops the mandatory chain on %s failure without launching any later proof', async suite => {
+  const { exerciseConsumerSuites } = await import('./conformance-consumer.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'consumer-suite-failure-'));
+  const calls: string[] = [];
+  await expect(exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async options => {
+    const name = basename(options.args[0], '.mjs').replace('conformance-', '');
+    calls.push(name);
+    return { outcome: { kind: 'exited', code: name === suite ? 1 : 0 }, stdout: '', stderr: 'proof failed' };
+  })).rejects.toThrow(`${suite}: exited`);
+  expect(calls).toEqual(consumerSuites.slice(0, consumerSuites.indexOf(suite) + 1));
 });

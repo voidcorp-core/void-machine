@@ -41,6 +41,7 @@ export interface DiscoveryResult {
 export interface DiscoveryOptions {
   /** How far below a root to look. Bounded so a scan cannot walk a disk. */
   readonly maxDepth?: number;
+  readonly requireComplete?: boolean;
 }
 
 /**
@@ -117,6 +118,10 @@ export function discoverProjects(
       return;
     }
     if (visited.has(real)) return;
+    if (visited.size >= 10_000) {
+      unreadable.push({ path: real, reason: 'discovery directory limit exceeded' });
+      return;
+    }
     visited.add(real);
 
     if (isProjectRoot(real)) {
@@ -124,11 +129,11 @@ export function discoverProjects(
       // and a nested marker is far more likely a fixture than a second project.
       // A worktree stops too, but is not reported — it is the same project on
       // another branch, not another project.
-      if (!isGitWorktree(real)) found.set(real, { name: basename(real), path: real });
+      if (options.requireComplete || !isGitWorktree(real)) found.set(real, { name: basename(real), path: real });
       return;
     }
 
-    if (depth >= maxDepth) return;
+    if (depth >= maxDepth && !options.requireComplete) return;
 
     let entries: readonly string[];
     try {
@@ -145,6 +150,11 @@ export function discoverProjects(
       try {
         if (!statSync(child).isDirectory()) continue;
       } catch {
+        if (options.requireComplete) unreadable.push({ path: child, reason: 'not readable' });
+        continue;
+      }
+      if (depth >= maxDepth) {
+        unreadable.push({ path: child, reason: 'discovery depth limit reached; declare this root explicitly' });
         continue;
       }
       walk(child, depth + 1);

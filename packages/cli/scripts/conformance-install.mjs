@@ -198,18 +198,18 @@ export async function exerciseRuntime(temporary, bin, runtime) {
   await mkdir(dirname(adjacent), { recursive: true });
   await writeFile(adjacent, '# private user skill\n');
   await run(
-    `${runtime} update`,
+    `${runtime} hydrate`,
     process.execPath,
-    [bin, 'update'],
+    [bin, 'hydrate'],
     fixture,
     environment,
   );
-  await assertDoctrine(fixture, bin, `${runtime} update`);
+  await assertDoctrine(fixture, bin, `${runtime} hydrate`);
   if ((await readFile(adjacent, 'utf8')) !== '# private user skill\n') {
-    throw new Error(`${runtime} update changed an adjacent user file`);
+    throw new Error(`${runtime} hydrate changed an adjacent user file`);
   }
-  // Normal update may complete ownership from the manifest. The recovery
-  // baseline is that current receipt, not the earlier init receipt.
+  // Hydrate restores exact offline materialization. Complete receipt ownership
+  // belongs to public update and is proved for all runtimes by conformance-update.
   const installed = JSON.parse(await readFile(receiptPath, 'utf8'));
   const doctrineBeforeRecovery = await readFile(join(fixture, '.void', 'PROJECT-DOCTRINE.md'));
   const adjacentBeforeRecovery = await readFile(adjacent);
@@ -217,9 +217,9 @@ export async function exerciseRuntime(temporary, bin, runtime) {
   // Preserve the current fixture evidence rather than manufacturing ownership.
   await rename(receiptPath, join(fixture, 'original-install-receipt.json'));
   await run(
-    `${runtime} update without machine receipt`,
+    `${runtime} hydrate without machine receipt`,
     process.execPath,
-    [bin, 'update'],
+    [bin, 'hydrate'],
     fixture,
     environment,
   );
@@ -232,11 +232,12 @@ export async function exerciseRuntime(temporary, bin, runtime) {
   const identity = (receipt) => JSON.stringify({
     source: receipt.source,
     runtimes: [...receipt.runtimes].sort(),
-    files: receipt.files.map((file) => file.path).sort(),
   });
   if (identity(recovered) !== identity(installed)) {
-    throw new Error(`${runtime} update failed to recover installed ownership from the manifest`);
+    throw new Error(`${runtime} hydrate changed the installed source or runtime selection`);
   }
+  await run(`${runtime} verify offline materialization`, process.execPath,
+    [bin, 'hydrate', '--verify-only'], fixture, environment);
   if ((await readFile(adjacent, 'utf8')) !== '# private user skill\n') {
     throw new Error(`${runtime} receipt recovery changed an adjacent user file`);
   }
@@ -264,7 +265,7 @@ async function main() {
     durations.sort((left, right) => left - right);
     const medianMs = Math.round(durations[Math.floor(durations.length / 2)] ?? 0);
     process.stdout.write(
-      `install conformance passed (${process.platform}) for ${manifest.sourceSha}; runtime init/update p50 ${medianMs}ms (package install excluded)\n`,
+      `install conformance passed (${process.platform}) for ${manifest.sourceSha}; runtime init/hydrate p50 ${medianMs}ms (package install excluded)\n`,
     );
   } finally {
     await rm(temporary, { recursive: true, force: true });

@@ -98,7 +98,13 @@ jobs:
           node node_modules/@playwright/test/cli.js install --with-deps chromium
       - name: Exercise the regenerated offline documents
         working-directory: ${{ runner.temp }}/browser-qa
-        run: node node_modules/@playwright/test/cli.js test
+        run: |
+          set +e
+          DEBUG=pw:protocol,pw:browser node node_modules/@playwright/test/cli.js test > browser-native.log 2>&1
+          browser_status=$?
+          set -e
+          printf 'Browser diagnostic exit=%s; full output: browser-native.log\n' "$browser_status"
+          exit "$browser_status"
       - name: Preserve browser evidence for the tested source SHA
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -108,6 +114,7 @@ jobs:
             ${{ runner.temp }}/browser-qa/playwright-report/
             ${{ runner.temp }}/browser-qa/test-results/
             ${{ runner.temp }}/browser-qa/tooling-tree.json
+            ${{ runner.temp }}/browser-qa/browser-native.log
             ${{ runner.temp }}/cheatsheet-fixture/evidence.json
           if-no-files-found: error
           retention-days: 14
@@ -135,8 +142,30 @@ jobs:
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/void-consumer-artifact
+      - name: Install locked tooling for the Windows capture regression
+        if: ${{ runner.os == 'Windows' }}
+        run: pnpm install --frozen-lockfile
+      - name: Exercise native Windows observer input before capture
+        if: ${{ runner.os == 'Windows' }}
+        run: pnpm exec vitest run packages/cli/scripts/conformance-native-capture.test.ts --maxWorkers=1
+      - name: Check installed Windows capture capability
+        if: ${{ runner.os == 'Windows' }}
+        run: node packages/cli/scripts/conformance-native-capture.mjs --preflight "${{ runner.temp }}/native-capture"
       - name: Exercise install, hooks and Autopilot from the same tarball
+        env:
+          VOID_CONFORMANCE_NATIVE_CAPTURE: ${{ runner.os == 'Windows' && format('{0}/native-capture', runner.temp) || '' }}
         run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"
+      - name: Retain bounded Windows native capture
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native-capture-${{ env.GATE_SHA }}
+          path: |
+            ${{ runner.temp }}/native-capture/preflight.json
+            ${{ runner.temp }}/native-capture/capture.json
+            ${{ runner.temp }}/native-capture/capture.sha256.txt
+          if-no-files-found: error
+          retention-days: 14
 
   project-graph-conformance:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}

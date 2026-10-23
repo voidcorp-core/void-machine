@@ -11,9 +11,10 @@
 // derived from where the command runs rather than left empty: a tool that asks
 // for setup before showing anything is a tool that never gets used.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { z } from 'zod';
 
 export interface DiscoveryConfigResolved {
   readonly roots: readonly string[];
@@ -28,6 +29,7 @@ export interface ReadDiscoveryOptions {
   readonly globalDir: string;
   readonly cwd: string;
   readonly home?: string;
+  readonly strict?: boolean;
 }
 
 const CONFIG_FILE = 'discovery.json';
@@ -84,16 +86,27 @@ function declaredExclude(raw: unknown): readonly string[] {
   return [...ALWAYS_EXCLUDE, ...usable];
 }
 
-/** Resolve the discovery configuration. Never throws. */
+/** Advisory readers retain fallback; mutating all-project operations require strict input. */
 export function readDiscoveryConfig(options: ReadDiscoveryOptions): DiscoveryConfigResolved {
   const home = options.home ?? homedir();
   const path = join(options.globalDir, CONFIG_FILE);
 
   let parsed: unknown;
   try {
-    parsed = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
-  } catch {
+    if (options.strict) {
+      const info = lstatSync(path);
+      if (!info.isFile() || info.isSymbolicLink() || info.size > 65536) throw new Error('Discovery configuration must be a bounded regular file');
+    }
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    if (options.strict && !(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw new Error(`Invalid discovery configuration at ${path}; repair it before update --all`, { cause: error });
+    }
     parsed = undefined;
+  }
+  if (options.strict && parsed !== undefined) {
+    z.object({ roots: z.array(z.string().min(1).max(4096).refine(value => isAbsolute(expand(value, home))))
+      .min(1).max(128), exclude: z.array(z.string().min(1).max(4096)).max(128).optional() }).parse(parsed);
   }
   if (Array.isArray(parsed)) parsed = undefined;
 

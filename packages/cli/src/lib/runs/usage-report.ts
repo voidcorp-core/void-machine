@@ -19,9 +19,11 @@ export async function loadMissionUsage(
     if (command !== undefined) hookSubjects[`hook:${command.split(' ').at(-1)}`] = entry.name;
   }
   const linked = await readUsageSessions(root, missionId, stream.events);
-  const report = projectMissionUsage({ missionId, events: stream.events, catalog, hookSubjects, linkedScopes: linked.scopes });
+  const incomplete = stream.continuity !== 'complete' || stream.events.some(event => event.missionId !== missionId);
+  const report = projectMissionUsage({ missionId, events: stream.events, catalog, hookSubjects, linkedScopes: linked.scopes,
+    incomplete, endedScopes: linked.links.filter(link => link.status !== 'open').map(link => link.sourceMissionId) });
   const notes = [...linked.notes, ...report.notes];
-  if (stream.continuity !== 'complete' || stream.events.some(event => event.missionId !== missionId)) {
+  if (incomplete) {
     notes.unshift('Journal incomplete or mixed: counts cover readable linked events only, never complete usage.');
   }
   try {

@@ -1,3 +1,4 @@
+import { projectSpecialistActivity, renderSpecialistActivity, type SpecialistActivity } from './usage-activity.js';
 import { activationName } from '@voidcorp/harness-graph';
 import type { CanonicalEvent, JsonValue } from '@voidcorp/mission-engine';
 import type { UsageLink, UsageScope } from './usage-sessions.js';
@@ -15,6 +16,8 @@ export interface UsageRow {
 export interface MissionUsage {
   readonly missionId: string;
   readonly rows: readonly UsageRow[];
+  readonly activity: readonly SpecialistActivity[];
+  readonly activityOmitted: number;
   readonly notes: readonly string[];
   readonly links?: readonly UsageLink[];
 }
@@ -59,6 +62,8 @@ export function projectMissionUsage(input: {
   readonly catalog: readonly CatalogEntry[];
   readonly hookSubjects: Readonly<Record<string, string>>;
   readonly linkedScopes?: readonly UsageScope[];
+  readonly endedScopes?: readonly string[];
+  readonly incomplete?: boolean;
 }): MissionUsage {
   const rows = new Map<string, { type: UsageKind; name: string; catalogued: boolean;
     observedHits: number; outcomes: Record<string, number>; runtimeHits: Record<string, number> }>();
@@ -71,10 +76,14 @@ export function projectMissionUsage(input: {
   const seen = new Set<string>();
   const runtimeChannels = new Set<string>();
   const scopes = [{ missionId: input.missionId, events: input.events }, ...(input.linkedScopes ?? [])];
-  for (const event of scopes.flatMap(scope => scope.events.filter(item => item.missionId === scope.missionId))) {
-    const identity = `${event.missionId}:${event.eventId}`;
-    if (seen.has(identity)) continue;
-    seen.add(identity);
+  const events = scopes.flatMap(scope => scope.events.filter(item => item.missionId === scope.missionId))
+    .filter(event => {
+      const identity = `${event.missionId}:${event.eventId}`;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+  for (const event of events) {
     const observed = observation(event);
     if (observed === undefined) continue;
     const rawName = event.subject.slice(event.subject.indexOf(':') + 1);
@@ -103,6 +112,9 @@ export function projectMissionUsage(input: {
     rows.set(key, row);
   }
   return { missionId: input.missionId,
+    ...projectSpecialistActivity({ missionId: input.missionId, events,
+      ...(input.endedScopes === undefined ? {} : { endedScopes: input.endedScopes }),
+      ...(input.incomplete === undefined ? {} : { incomplete: input.incomplete }) }),
     rows: [...rows.values()].map(row => ({ ...row,
       observedHits: channels.has(row.type) ? row.observedHits : 'unknown' as const,
       runtimeHits: Object.fromEntries([...new Set(['claude', 'codex', ...Object.keys(row.runtimeHits)])]
@@ -125,6 +137,8 @@ export function renderMissionUsage(report: MissionUsage): string {
   const observed = report.rows.filter(row => (typeof row.observedHits === 'number' && row.observedHits > 0)
     || Object.keys(row.outcomes).length > 0);
   return [
+    ...renderSpecialistActivity(report),
+    '',
     'Usage recap (explicit mission linkage only)',
     ...report.notes.map(note => `- ${note}`),
     ...(['skill', 'hook', 'specialist', 'advisory'] as const).map(kind => {

@@ -37,7 +37,8 @@ async function reference(root: string, target: string, source: string, interval:
           throw new Error('USAGE_LINK_LIMIT: at most 32 source journals per mission');
         }
       } });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('USAGE_LINK_LIMIT:')) throw error;
     throw new Error('USAGE_REFERENCE_PENDING: source receipt is durable; retry the same command to repair the target reference');
   }
 }
@@ -45,16 +46,35 @@ async function reference(root: string, target: string, source: string, interval:
 /** Source is authoritative. Target reference is a retryable second write, not an atomic transaction. */
 export async function changeUsageSession(input: unknown, write = writeSequencedEventOnce): Promise<UsageLink> {
   const request = requestSchema.parse(input);
-  const { root, missionId, sourceMissionId, action } = request;
+  const { root, missionId, sourceMissionId } = request;
   if (sourceMissionId === missionId) throw new Error('USAGE_SELF_LINK: source and target must differ');
   const targetEvents = await readUsageJournal(root, missionId);
   observedMissionLifecycle(targetEvents);
+  const interval = await changeSourceInterval(request, targetEvents, write);
+  try {
+    await reference(root, missionId, sourceMissionId, interval, write);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith('USAGE_LINK_LIMIT:')) throw error;
+    try {
+      await changeSourceInterval({ ...request, action: 'unbind' }, targetEvents, write);
+    } catch {
+      throw new Error('USAGE_CAPACITY_CLEANUP_PENDING: target is full; source closure is unconfirmed. '
+        + `Restore source access and run mission usage-unbind --id ${missionId} --source ${sourceMissionId}; `
+        + 'the full target cannot accept this reference');
+    }
+    throw new Error('USAGE_LINK_LIMIT: target is full; excess source interval is closed; no reference can be added');
+  }
+  return { sourceMissionId, status: interval.closing === undefined ? 'open' : 'closed', interval };
+}
+
+async function changeSourceInterval(request: z.infer<typeof requestSchema>,
+  targetEvents: readonly CanonicalEvent[], write: typeof writeSequencedEventOnce): Promise<UsageInterval> {
+  const { root, missionId, sourceMissionId, action } = request;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const scanned = scanUsageSource(await readUsageJournal(root, sourceMissionId), sourceMissionId);
     const interval = scanned.intervals.get(missionId);
     if (interval !== undefined && (action === 'bind' || interval.closing !== undefined)) {
-      await reference(root, missionId, sourceMissionId, interval, write);
-      return { sourceMissionId, status: interval.closing === undefined ? 'open' : 'closed', interval };
+      return interval;
     }
     if (action === 'unbind' && interval === undefined) throw new Error('USAGE_NOT_BOUND: no prospective interval exists');
     if (action === 'bind') {
@@ -82,8 +102,7 @@ export async function changeUsageSession(input: unknown, write = writeSequencedE
     }
     const updated = scanUsageSource(await readUsageJournal(root, sourceMissionId), sourceMissionId).intervals.get(missionId);
     if (updated === undefined) throw new Error('USAGE_BOUNDARY_INVALID: written interval is missing');
-    await reference(root, missionId, sourceMissionId, updated, write);
-    return { sourceMissionId, status: updated.closing === undefined ? 'open' : 'closed', interval: updated };
+    return updated;
   }
   throw new Error('USAGE_SOURCE_CHANGED: concurrent writes prevented a stable boundary; retry the same command');
 }

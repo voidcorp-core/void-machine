@@ -51,11 +51,17 @@ not change it or install source hooks into the host project.
 The source owns opening/closing receipts, appended with the existing sequenced writer. Opening
 begins strictly after its receipt; no historical range argument exists. A single target reference
 is the second, non-atomic write. If it fails, the command reports `USAGE_REFERENCE_PENDING`: retry
-the same command to repair the reference, without moving the opening boundary. Inspect remains
+the same command to repair the reference, without moving the opening boundary. A permanent capacity
+refusal is different: `USAGE_LINK_LIMIT` closes the excess source interval, releases its attribution
+lock and rejects the bind without claiming that a full target can be repaired. If that bounded
+closure cannot complete, `USAGE_CAPACITY_CLEANUP_PENDING` requires restoring source access and
+retrying `usage-unbind`; it never promises that retrying bind can add the missing reference.
+Inspect remains
 read-only and never repairs. One active target per source prevents conflicting attribution;
 close it before another target. Close works after target mission closure and freezes the interval.
-There is only one interval per source/target pair: bind/close retries return its existing state,
-including closed, never reopen it. Do not recreate a mission to evade a verdict or reopen proof.
+There is only one interval per source/target pair. Retries never reopen it; a successfully
+referenced interval returns its existing state, including closed. A capacity-rejected bind remains
+rejected even after its excess source interval is closed. Do not recreate a mission to evade a verdict or reopen proof.
 
 The report reads only explicit references (at most 32 source journals, each bounded by the
 existing 8 MiB journal limit). It validates exact sequence/event anchors and chained prefix

@@ -6,6 +6,7 @@ import { writeSequencedEvent, writeSequencedEventOnce } from '@voidcorp/hook-run
 import { projectMissionLifecycle, reduceReviewLoop } from '@voidcorp/mission-engine';
 import { createMission, eventLogPath, inspectMission } from './store.js';
 import { changeUsageSession, readUsageSessions } from './usage-sessions.js';
+import { scanUsageSource } from './usage-session-contract.js';
 import { recordUsageAdvisory } from './usage-advisory.js';
 
 const target = 'mis_target00000001';
@@ -60,6 +61,60 @@ describe('prospective explicit usage intervals', () => {
     const owner = outcomes[0]?.status === 'fulfilled' ? target : other;
     await change(root, 'unbind', owner);
     await expect(change(root, 'bind', owner === target ? other : target)).resolves.toMatchObject({ status: 'open' });
+  });
+
+  it.each([false, true])('releases the losing source at concurrent capacity, or exposes bounded cleanup (close failure=%s)', async failClose => {
+    const root = await fixture();
+    const seed = async (id: string) => writeSequencedEvent({ root, missionId: id, draft: {
+      source: 'runtime:codex', kind: 'hook.completed', subject: 'hook:tdd-order',
+      correlationId: id, payload: { status: 'ok' } } });
+    for (let index = 0; index < 31; index += 1) {
+      const id = `mis_seed_source_${index}`;
+      await seed(id);
+      await changeUsageSession({ root, missionId: target, sourceMissionId: id, action: 'bind' });
+    }
+    const candidates = ['mis_candidate_source_a', 'mis_candidate_source_b'];
+    await Promise.all(candidates.map(seed));
+    let arrivals = 0;
+    let release: () => void = () => { throw new Error('Barrier not initialized'); };
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const race: typeof writeSequencedEventOnce = async options => {
+      if (options.missionId === target && options.draft.kind === 'usage.session.linked') {
+        arrivals += 1;
+        if (arrivals === 2) release();
+        await barrier;
+      }
+      if (failClose && options.draft.kind === 'usage.session.closed') throw new Error('TEST_CLOSE_UNAVAILABLE');
+      return writeSequencedEventOnce(options);
+    };
+    const results = await Promise.allSettled(candidates.map(sourceMissionId =>
+      changeUsageSession({ root, missionId: target, sourceMissionId, action: 'bind' }, race)));
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const failed = results.findIndex(result => result.status === 'rejected');
+    const loser = candidates[failed];
+    const rejected = results[failed];
+    if (loser === undefined || rejected?.status !== 'rejected') throw new Error('Expected one capacity refusal');
+    expect(rejected.reason.message).toContain(failClose ? 'USAGE_CAPACITY_CLEANUP_PENDING' : 'USAGE_LINK_LIMIT');
+    expect(rejected.reason.message).not.toContain('USAGE_REFERENCE_PENDING');
+    const targetEvents = (await inspect(root)).stream.events;
+    expect(targetEvents.filter(event => event.kind === 'usage.session.linked')).toHaveLength(32);
+    expect(targetEvents.some(event => event.kind === 'usage.session.linked' && event.subject === loser)).toBe(false);
+    if (failClose) {
+      expect(scanUsageSource((await inspect(root, loser)).stream.events, loser).active).toBeDefined();
+      await expect(changeUsageSession({ root, missionId: target, sourceMissionId: loser, action: 'unbind' }))
+        .rejects.toThrow('USAGE_LINK_LIMIT');
+    }
+    const beforeRetry = (await inspect(root, loser)).stream.events;
+    expect(scanUsageSource(beforeRetry, loser).active).toBeUndefined();
+    expect(beforeRetry.filter(event => event.kind === 'usage.session.opened')).toHaveLength(1);
+    expect(beforeRetry.filter(event => event.kind === 'usage.session.closed')).toHaveLength(1);
+    await expect(changeUsageSession({ root, missionId: target, sourceMissionId: loser, action: 'bind' }))
+      .rejects.toThrow('USAGE_LINK_LIMIT');
+    expect((await inspect(root, loser)).stream.events).toEqual(beforeRetry);
+    const next = 'mis_capacity_next_target';
+    await createMission(root, { missionId: next, title: 'Next independent work', mode: 'fast' });
+    await expect(changeUsageSession({ root, missionId: next, sourceMissionId: loser, action: 'bind' }))
+      .resolves.toMatchObject({ status: 'open' });
   });
 
   it('repairs a source-written target-reference failure without backdating or duplicating the opening', async () => {

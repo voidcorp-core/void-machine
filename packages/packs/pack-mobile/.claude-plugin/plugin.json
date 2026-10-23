@@ -1,6 +1,6 @@
 {
   "name": "harness-mobile",
-  "version": "5.0.8",
+  "version": "6.0.0",
   "description": "Mobile conventions for Void Machine: Expo + React Native, EAS Build, native module integration, safe-area handling, touch + gesture patterns. Composes with harness-react for shared component primitives.",
   "author": {
     "name": "VoidCorp",

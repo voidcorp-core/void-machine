@@ -23,6 +23,7 @@ import type {
 import { validatedRecoveredReviewEvents } from './mission-recovery.js';
 import {
   BOUNDED_REVIEW_BUDGET,
+  freshReviewProofIds,
   type ReviewLoopState,
   reduceReviewLoop,
 } from './review-loop.js';
@@ -612,6 +613,7 @@ export function orchestrateMissionTeam(
     contractVersions: contractVersions(input.plan),
     currentInputHashes: input.currentInputHashesByStage['pre-implementation'],
     maxRounds: input.maxReviewRounds,
+    validProofIds: freshReviewProofIds(input.stream.events, input.evidenceContext),
     evidenceObligations: {
       ...obligations,
       blockingObligationIds: obligations.blockingObligationIds.filter((id) => preparationObligationIds.has(id)),
@@ -769,14 +771,7 @@ export function orchestrateMissionTeam(
     ...(start.boundedReview ? BOUNDED_REVIEW_BUDGET : { maxRounds: input.maxReviewRounds }),
     // Pending proofs are handled by obligationStop; they must not mask failed reviews.
     evidenceObligations: { ...obligations, blockingObligationIds: [] },
-    validProofIds: input.stream.events.flatMap(event => {
-      if (event.kind !== 'evidence.recorded') return [];
-      const parsed = parseEvidence(lifecycleField(event, 'evidence'));
-      return parsed.ok && parsed.value.evidenceId === event.subject
-        && parsed.value.missionId === event.missionId && parsed.value.status === 'passed'
-        && assessEvidence(parsed.value, input.evidenceContext).status === 'fresh'
-        ? [parsed.value.evidenceId] : [];
-    }),
+    validProofIds: freshReviewProofIds(input.stream.events, input.evidenceContext),
     ...(migration === undefined ? {} : { contractMigration: {
       specialistId: migration.receipt.specialistId, afterSeq: migration.seq,
       reviewRound: migration.receipt.reviewRound,

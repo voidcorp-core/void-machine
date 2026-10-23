@@ -34,61 +34,61 @@ Two long-lived branches, with different gates and different levels of autonomy.
 
 | | `develop` | `main` |
 |---|---|---|
-| Merged by | native auto-merge, once every required check passes, `independent-review` included | a human, after reading the change as a whole; `void-enforce` refuses an armed auto-merge |
+| Merged by | Autopilot after a clean local independent review and required CI, through the merge queue; protected paths go to a person | a human, after reading the change as a whole; `void-enforce` refuses an armed auto-merge |
 | Guarantees | the suite passed and the doctrine floor held | the above, plus a human said yes |
-| CI (`ci.yml`, `void-enforce.yml`) | job set of `main`, plus `independent-review` and the `merge_group` trigger | identical job set to `develop`, no merge queue |
-| `release.yml` | never fires | fires on every push — release-please, then publish |
-| Server-side protection | same required checks as `main`, no force-push, no deletion | unchanged |
+| CI (`ci.yml`, `void-enforce.yml`) | job set of `main`, plus the `merge_group` trigger | identical job set to `develop`, no merge queue |
+| `release.yml` | never fires | fires on every push: release-please, then publish |
+| Server-side protection | deterministic required checks, no force-push, no deletion | deterministic required checks and human promotion |
 
-**`develop` is the integration branch, so it carries the *same* checks as `main`,
-not fewer.** Auto-merge is the default way into it: native auto-merge waits for
-branch protection and every required check, so arming it early bypasses nothing,
-and `independent-review` holds each pull request until a reviewer in a fresh
-context approved its exact head. `void-enforce` refuses an armed auto-merge on any
-pull request into `main`, the promotion and the release pull request included:
-those are the two release actions below, and a person takes both. A `develop`
-without CI would make every automation path blind, which is why protection
-failures are treated as unprotected rather than inferred safe.
+**`develop` uses the same deterministic checks as `main`.** Autopilot requires
+one local independent review in a fresh read-only context, bound to the exact
+head, base and acceptance criteria. Missing, stale or blocking review evidence
+refuses automatic merge. The coordinator owns that evidence; GitHub does not
+recertify it through a second model review, signature bridge or verdict ledger.
+External contributions require maintainer review. This trusts the coordinator's
+local rights and deliberately gives up the separate review App's credential
+boundary. See the [superseding decision](decisions-log/2026-10-23-local-review-reusable-ci--b75aa91f-01a4-403d-924a-78192b2d09e4.md).
 
-The continuous autopilot loop still never arms a change to the machinery that
-judges merges (workflows, the verdict check, the programme, the hooks): it hands
-those pull requests to a person.
+The loop never merges changes to its own judging machinery: workflows, local
+review code, programme, enforcement hooks and publication controls go to a
+person. `void-enforce` refuses an armed auto-merge into `main`, including the
+promotion and release PRs. A missing branch protection is never inferred safe.
 
-The promotion audit in `promotion.yml` follows the same rule: every commit it
-promotes entered `develop` through a merged pull request, and
-`scripts/promotion-authority.mjs` accepts that pull request in exactly three
-cases. Its head SHA carries a successful `independent-review` check run from
-the review App, the review the required check demanded before it could merge, whoever merged it and
-whatever its timeline records: `gh pr merge --auto` on a pull request already
-mergeable merges at once and leaves no auto-merge event. Or it was merged
-by hand by the named human, with no auto-merge or merge queue event in its
-timeline. Or it is the release
-back-merge, proved by construction with the same check the `independent-review`
-job runs, replayed against `develop` as it stood (the first parent of the
-integration commit); one that does not hold needs the verdict like any other
-automatic merge. Everything else refuses the promotion, and so does every doubt:
-a missing field, a check not read on the head, a truncated timeline, a git or
-API error. Automatic merges into `develop` therefore reach `main` only with the
-evidence that let them merge, and the promotion itself stays a human merge.
+`promotion.yml` does not recertify historical commits. It checks repository and
+event ref, compares trees (so an empty release back-merge does not open a PR),
+and creates or updates one same-repository `develop` to `main` pull request.
+Duplicate or foreign promotions, unreadable trees and API failures refuse the
+operation. Old App checks, external contribution history and merge timelines
+are not inputs. The person reviews the complete promotion and required CI.
 
-**`develop` merges through a merge queue.** Every workflow that carries a
-required check of `develop` also answers `merge_group`, the only event a queue
-waits on, and falls back to the group's `base_sha` wherever it read the pull
-request base. The review itself is a job, `independent-review.yml`, on
-`pull_request_target`: it reads the head as data with read-only tools and
-publishes the `independent-review` check on it as the review App, a GitHub App
-of its own holding the Checks permission alone. Branch protection requires the
-check from that App, so a check under the same name from any workflow's
-`GITHUB_TOKEN` does not count. In the queue, `independent-review-queue.yml`
-runs on `workflow_run` of `ci` for each merge group, requires every pull
-request of the group to carry the App's successful check on its own head, and
-posts the App's check on the group commit. Both run from `main`, the default
-branch, so a change to the review applies once promoted, and both read the
-App's key (`REVIEW_APP_PRIVATE_KEY`) and the `CLAUDE_CODE_OAUTH_TOKEN` from the
-`independent-review` environment, whose deployment branch policy admits `main`
-alone; the App's ids are the repository variables `REVIEW_APP_CLIENT_ID` and
-`REVIEW_APP_ID`. See [the merge queue decision](decisions-log/2026-09-22-develop-merge-queue-review-verdict--413ec9cd-c186-4933-916f-215ae8dd54bb.md)
-and [the review App decision](decisions-log/2026-09-24-review-check-from-its-own-app--03e82acc-0f4b-4718-9b88-3d1b2acd4903.md).
+**`develop` merges through a merge queue.** Required deterministic workflows
+answer `merge_group` and use the group's base SHA where they need a diff base.
+The local review flow is unchanged; the GitHub model reviewer, App-check
+publisher and merge-group relay have been removed together.
+
+### Supervised migration of the live GitHub controls
+
+Versioned changes do not update branch protection. The coordinator must:
+
+1. Pause automatic admission during the transition and inspect required checks
+   and App bindings on both `develop` and `main`, including effective rulesets.
+2. Have the exact candidate independently reviewed and its deterministic CI
+   verified. Retain `validate`, `enforce` and install-conformance requirements,
+   strictness, queue policy, admin enforcement, and human `main` promotion.
+3. Coordinate the removal of required `independent-review` (App 5070504) with
+   workflow retirement. The old `pull_request_target` and `workflow_run` review
+   workflows run from default branch `main`; a develop-only merge does not
+   retire them. Promote the deletion to main under human control and verify
+   both branches before resuming admission. Do not use an admin bypass or leave
+   an orphan required check.
+4. Check a real PR and merge group for deterministic checks and a promotion for
+   create/update/no-diff behavior. `validate` keeps its name; the Node
+   compatibility job is now `tests (node 24)` instead of `tests (node 26)`.
+   Update any optional requirement that still names the latter.
+
+`RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` still open release/promotion PRs
+and are distinct from the retired review App. No credential deletion or rotation
+is part of this migration. Existing review secrets/variables may remain unused.
 
 Releasing is unchanged and still happens **only from `main`**: `release.yml` is
 triggered by `push: branches: [main]` and nothing about the two-branch flow touches
@@ -105,8 +105,8 @@ opens one and never merges it, which is the whole point: merging it is the gate,
 and it is the only decision in the cycle that is about content rather than
 mechanics. What is automated is the typing, not the judgement.
 
-It opens with the log of what it carries, because this is the one pull request
-whose diff is meant to be read as a whole.
+Its body points to the human decision and required CI; the complete PR diff is
+the change to read. An existing promotion body is refreshed without a merge.
 
 So a release costs exactly two human actions: merge the promotion, then merge
 the release pull request that release-please proposes on `main`. The first says
@@ -135,19 +135,12 @@ promotion out of date against a `main` that requires it up to date, with no
 merge button (after #381, repaired by hand in #414). Such a pull request carries
 no change, and nobody has to read it: it merges on its own.
 
-That pull request merges itself once the required checks pass. It needs no
-review verdict, and the reason is a property of its content rather than a
-relaxation: it carries the release output a human approved minutes earlier, so a
-second reading is ceremony. The exemption is proved rather than granted on the
-author alone: the `independent-review` job checks that the head is already on
-`main`, or is the clean merge of a `develop` commit and a `main` commit with
-nothing else `main` lacks. A commit pushed onto the branch by anyone else sends it
-back to needing a verdict. Every other pull request into `develop` waits for the
-independent reviewer's verdict on its head. Native auto-merge is used, so
-protection and the required checks stand; a failing check simply leaves it open. It opens rather than pushes: `develop` is
-protected with `enforce_admins`, and a branch only a robot may bypass is not
-protected. A conflict fails the job instead of being resolved unattended, since
-it means `develop` and `main` both touched a file release-please owns.
+That pull request merges itself once required deterministic checks pass. The
+back-merge workflow constructs it from the human-approved main history and
+refuses conflicts instead of resolving them unattended. Its same-repository,
+head and base guards remain in the workflow; the removed model reviewer no
+longer supplies a special exemption. Native auto-merge still obeys protection
+and the queue. It opens a PR instead of pushing into protected develop.
 
 ### Promotion cadence: `develop` to `main`
 
@@ -496,8 +489,8 @@ GitHub, so the admission guard must stay inside the required jobs. The
 
 Ready PRs and every merge group retain the complete job set and exact subject checks.
 `ci` no longer repeats that suite on push to `develop`: `promotion.yml` independently
-consumes that push; the review queue consumes only merge-group `ci` requests; release
-runs remain on `main`. Push to `main` and manual CI still run. No remote branch
+consumes that push; required deterministic checks still answer merge groups;
+release runs remain on `main`. Push to `main` and manual CI still run. No remote branch
 protection is changed. Work on merge-control paths still requires human integration.
 
 Consumers receive the same executable guard and workflow template beside installed
@@ -516,3 +509,20 @@ and merge admission. No hook prohibiting draft creation exists to disable.
 including older handoff wording. It preserves private project doctrine and adjacent
 user skills; changed files whose ownership cannot be proved remain conflicts rather
 than being silently overwritten. No consumer update is implied by a source change.
+
+## Shared primary Node and browser preparation
+
+`.node-version` owns the exact primary Node version for local development, CI
+and release. The isolated publication job receives setup-node's resolved version
+from `validate-release`, so it needs no source checkout or duplicate version.
+Recovery builds use the current trusted release-control version file even when
+an older release tag predates it. Node 24.15.0 remains only as an explicit CI
+compatibility lane because it is the supported engines floor. Reusable consumer
+enforcement reads `.void-enforce-runtime/.node-version` from its immutable harness
+checkout, never a required file in the caller repository.
+
+Browser conformance reuses the same consumer tarball as install conformance.
+Its official Playwright noble image follows the exact browser tooling manifest;
+the committed npm lockfile and setup-node npm cache support reproducible installs.
+No custom image, browser cache or node_modules cache is maintained. See
+[the browser suite](../test/browser/README.md) for update and visual evidence rules.

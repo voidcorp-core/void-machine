@@ -771,8 +771,7 @@ repository slug, a former package and its last major). Nothing else spells them 
   identity of the release that built them and read no file at run time.
 - Plain-ESM scripts read `scripts/product-identity.mjs`, which resolves the JSON relative to its
   own file: a guard running from a trusted checkout reads that checkout's identity, never one a
-  pull request brought. A job that sparse-checks-out a script must list both files;
-  `test/workflows/sparse-checkout-closure.test.ts` proves it does.
+  pull request brought. Workflows check out the complete trusted control tree.
 - Files that cannot import (package and plugin manifests, workflows) repeat the values, and
   `test/identity/product-identity.test.ts` fails when one disagrees, when code spells a slug or
   package name, or when a former name survives outside the historical record.
@@ -1707,7 +1706,9 @@ a GitHub-hosted runner. It consumes the same immutable archive as install
 conformance, verified against the checkout SHA and tarball digest. Playwright
 and axe are pinned QA tooling outside the shipped CLI and pnpm workspace; they
 do not add a consumer runtime dependency. The runner installs the archive
-offline, and browser contexts disable network access. No personal browser,
+offline, and browser contexts disable network access. The official Playwright image
+is derived from the pinned tooling manifest; npm ci and the setup-node npm cache
+reuse standard dependency installation without a browser or node_modules cache. No personal browser,
 developer export or home directory is an input.
 
 `browser conformance` retains SHA-bound reports, document digests, screenshots,

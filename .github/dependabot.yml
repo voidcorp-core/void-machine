@@ -1,0 +1,10 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /test/browser
+    target-branch: develop
+    schedule:
+      interval: weekly
+    groups:
+      browser-tooling:
+        patterns: ["*"]

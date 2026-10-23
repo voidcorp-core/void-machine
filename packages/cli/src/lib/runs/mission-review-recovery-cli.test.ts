@@ -21,7 +21,9 @@ const REVIEWER = 'core:independent-code-reviewer';
 async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targeted = false) {
   const root = await mkdtemp(join(tmpdir(), 'void-review-recovery-cli-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-review-recovery');
-  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: '2026-10-23T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-10-23T00:00:00Z' } }).trim();
   const commit = () => git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
     'commit', '--quiet', '-m', 'test: commit review subject']);
   git(['init', '--quiet']);
@@ -232,6 +234,7 @@ it.each(['wrong worktree', 'changed commit', 'dirty subject', 'changed journal']
       let roots = fixture.roots;
       if (mismatch === 'wrong worktree') {
         const unrelated = await stoppedReview(true, 'project-v1', true);
+        expect(unrelated.reviewedCommit).toBe(fixture.reviewedCommit);
         roots = { ...roots, workRoot: unrelated.root };
       }
       if (mismatch === 'changed commit' || mismatch === 'dirty subject') {

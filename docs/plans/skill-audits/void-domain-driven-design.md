@@ -131,3 +131,8 @@ DDD applies uniformly. The intensity scales with domain complexity (a CRUD admin
 - **Ubiquitous language glossary location**: `docs/DOMAIN.md` (single glossary) vs `<context>/DOMAIN.md` per context. Lean per-context (each bounded context has its own language; a single glossary blurs the boundaries).
 - **DDD "lite" vs full**: where to draw the line? Heuristic — a < 2-developer project with < 5 entities barely needs aggregates beyond value-object-rich entities. A full bounded-context split is overkill until 2 contexts exist. Document the dialing-in advice in SKILL.md.
 - **`docs/DOMAIN.md` template**: provide a starter via `voidcorp-harness init`? Lean yes for `pack-monorepo` activated projects.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

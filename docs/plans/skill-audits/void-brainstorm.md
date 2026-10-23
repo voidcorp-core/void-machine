@@ -140,3 +140,9 @@ None. Brainstorming is a process discipline; the gate is enforced via the SKILL.
 ## gstack /spec vendoring (DEV-388, de-gstackification Vague 2)
 
 /spec is a 5-phase intent→spec engine split across brainstorm + plan (DEV-388). **Integrated here** (the precision/grounding half): read-code-before-asking (cite `path:line`, "don't ask what you can read" — the strongest delta; this skill asked questions but never mandated evidence-grounding), the five mandatory "why" questions as a gate (esp. *verified* current behavior + the observable done-signal), quantify-everything (exact counts, metric+target), and failure-mode thinking as a first-class question axis (empty/null/enormous/dup/wrong-role/twice). **Deliberately NOT integrated**: /spec's single-solution "relentless" persona was not allowed to overwrite this skill's divergent 2-3-approaches step (spec converges, brainstorm explores — kept both). **Rejected**: /spec's plan-mode runtime + Phase-5 file/dispatch machinery. The executability gate + MVP-cut half went to plan.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

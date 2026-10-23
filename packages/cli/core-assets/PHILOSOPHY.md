@@ -69,7 +69,7 @@ Maximum efficiency, minimum motion. Every dependency, every layer, every file ea
 - Runtime feature flag services — env vars and build-time activation suffice
 - Hand-rolled accessibility — wrap Radix, do not re-derive ARIA
 
-If a credible alternative exists, it is logged as one immutable file under `docs/decisions/` (or the detected equivalent) with the reason it was rejected.
+A lasting structural choice with a credible alternative is logged as one immutable file under `docs/decisions/` (or the detected equivalent), per `void-decide`. Routine reversible implementation choices need no ADR.
 
 Every change is judged against four questions, in this order:
 
@@ -79,6 +79,16 @@ Every change is judged against four questions, in this order:
 - **Strong separation, minimum useful layers.** Each module owns one responsibility behind an explicit boundary. A layer with neither a responsibility nor a boundary of its own is removed; a port or facade that delegates but protects a real boundary is kept.
 
 These are judgments, not a metric: no hook or linter decides them, and the harness does not pretend otherwise. The review applies them to the actual change. An explanation (what was removed, which owner holds a rule, which boundary was crossed) is written briefly when it helps understand or record a choice; its absence never blocks on its own. A finding blocks only when it demonstrates a concrete defect: a security flaw, broken behavior, or an architecture violation (a boundary or contract broken with a real consequence). A preference, a hypothetical risk or a possible improvement is advisory: it triggers no new review and no loop.
+
+## Delivery economy
+
+The purpose is time saved with reliable, maintainable code. `void-implement` owns proportional
+applicability: clear authorized requests proceed, the primary domain specialist advises before
+coding, and TDD, KISS/SOLID, boundary security and independent review remain the floor.
+Stop once acceptance criteria, applicable proofs and independent review hold. Optional improvements
+never reopen that cycle. Reuse advice and evidence whose inputs remain valid; a new defect or
+changed contract warrants only the affected correction and verification. Required project CI
+and genuine authorization boundaries are never weakened to save time.
 
 ## "Ultra moderne, exceptionnel" — the Folpe quality bar
 

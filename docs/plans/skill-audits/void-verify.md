@@ -142,3 +142,9 @@ example, not an automatic project rewrite. Full checks remain before integration
 Rejected: skipped required jobs (success without tests), after-merge-only validation,
 and a new check-publishing service. Existing local hooks and configured commands own
 the fast iteration loop. Source URLs live in `.source` and `references/ci-feedback.md`.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

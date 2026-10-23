@@ -22,12 +22,12 @@ test evidence, and never use exploratory mode to mean "tested elsewhere".
 
 ## Modes
 
-Three postures, chosen by context. If unsure of the mode, ask explicitly before coding.
+Three postures, chosen from the actual behavior and project configuration. Resolve routine mode selection from those facts; ask only when a material trade-off needs the user.
 
 | Mode | When | Posture |
 |---|---|---|
-| **strict** | New behavior on production code, hotfix on paying surface, refactor that changes observable behavior, DB integration that affects business invariants | Iron Law (zero line of production code without a failing test that requested it) + mutation testing when the project has a mutation runner + 100% coverage + commit/PR evidence trail |
-| **souple** | Integration glue tested at a higher level (E2E + handler covers the chain), framework wiring, config | RED-GREEN-REFACTOR without mutation gate, ≥ 80% coverage on business code, no commit-by-phase ritual |
+| **strict** | New behavior on production code, hotfix on paying surface, refactor that changes observable behavior, DB integration that affects business invariants | Iron Law (zero line of production code without a failing test that requested it) + mutation testing when the project has a mutation runner + behavior/risk coverage + observed RED/GREEN evidence |
+| **souple** | Integration glue tested at a higher level (E2E + handler covers the chain), framework wiring, config | RED-GREEN-REFACTOR without mutation gate, project coverage thresholds, no commit-by-phase ritual |
 | **exploratory** | Documented spike, throwaway POC, scripts marked as such, draft work | No TDD obligation. The file MUST declare throwaway status + deletion date in a header comment. If the code survives the spike, it transitions to strict before merging to prod. |
 
 ### Auto-detection heuristic
@@ -37,9 +37,9 @@ If no explicit `Mode:` marker is in the task or a file header comment, apply:
 - Path matches `<config.paths.business>` and not in `<config.paths.spikes>` nor in `docs/` → **strict**
 - Path matches `<config.paths.spikes>`, draft folder, or scaffolds → **exploratory**
 - Path matches `<config.paths.serverActions>` (boundary HTTP / Server Action) AND the pure logic is in `services/` with strict tests → **souple** on the handler, **strict** on the service
-- Otherwise → **souple** + ask confirmation if in doubt
+- Otherwise → **souple** for wiring; **strict** for new behavior
 
-Paths come from `voidcorp.config.json`. Defaults are documented in `packages/core/claude/skills/void-tdd/defaults.md`.
+Paths and commands come from `.void/config.json`. Explicit project requirements take precedence.
 
 ### Override
 
@@ -61,14 +61,10 @@ ZERO LINE OF PRODUCTION CODE WITHOUT A FAILING TEST THAT REQUESTED IT.
 
 ### If you wrote code before the test (strict)
 
-- You **delete** it. Delete means delete.
-- Do not keep anything "as reference"
-- Do not "adapt" existing code while writing the tests
-- Do not look at the deleted code while re-implementing
-- Implement fresh from the tests
-
-Sunk-cost fallacy: the time is already lost. Keeping unverified code is technical debt, not an asset.
-
+Stop and report the missing RED evidence honestly. Reproduce the intended behavior against the
+unchanged base before continuing; preserve unrelated work. Never fabricate test chronology or
+claim a test that first passed on the implementation proved the missing behavior. The reviewer
+must be able to inspect the actual failing test before the production behavior change.
 ---
 
 ## Cycle
@@ -165,24 +161,15 @@ All tests must pass after fix.
 
 ### REFACTOR
 
-After GREEN (and after MUTATE/KILL in strict), assess the improvements.
-
-| Priority | Action | Examples |
-|---|---|---|
-| Critical | Now | Knowledge duplication, > 3 nesting levels, critical surviving mutations |
-| High | This session | Magic numbers, unclear names, functions > 30 lines |
-| Nice | Later | Minor renames, single-use helpers |
-| Skip | Do not touch | Already clean code |
-
-Tests must stay green at every step.
-
-Load the `void-refactor` skill for the detailed methodology (RED-GREEN-REFACTOR strict commit boundaries).
-
+After GREEN, make only the refactor needed to keep the changed code clear, correctly bounded
+and free of relevant duplication. KISS and SOLID guide that judgment. Stop once the behavior,
+applicable proofs and design contract hold; optional naming or extraction preferences do not
+start an improvement loop. Keep tests green. `void-refactor` owns behavior-preserving changes.
 ---
 
 ## Stack glue
 
-### Commands (read from `voidcorp.config.json`)
+### Commands (read from `.void/config.json`)
 
 - Unit: `<config.commands.testUnit>` (e.g. `bunx vitest run`, `pnpm vitest`, `npm test`)
 - E2E: `<config.commands.testE2e>` (e.g. `bunx playwright test`)
@@ -226,61 +213,23 @@ directly. Full anti-mock-business rationale: the `void-testing` skill.
 
 ## Coverage (strict)
 
-100% by default on the business layer (services + domain). Verification before PR approval:
-
-```bash
-<config.commands.testUnit> --coverage
-```
-
-Target reading:
-
-```
-All files | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
-----------|---------|----------|---------|---------|---
-All files |   100   |   100    |   100   |   100   |
-```
-
-### Exception
-
-If 100% is impossible (e.g. a Sentry wrapper whose init branch is not testable without an HTTP cassette):
-
-1. Document in the package README: why + where the missing coverage is compensated (integration/E2E)
-2. Explicit Folpe approval
-3. List in repo CLAUDE.md under "Test coverage exceptions"
-
-Burden of proof on the requester. 100% remains the default.
-
----
+The project's configured coverage thresholds remain binding; never lower them to obtain green.
+Cover the changed invariants, error paths and boundaries, including meaningful counterexamples.
+Use coverage to find missing behavior, not to create assertions that only mirror implementation.
+No universal percentage overrides the project's policy. If a branch is covered at a higher
+level, cite that real proof rather than duplicate it. A safety-critical gap still blocks.
 
 ## TDD Evidence (strict)
 
-The commit history must show the RED → GREEN → [MUTATE → KILL] → REFACTOR progression.
+Observe a failing test before changing production behavior. Keep the RED command and result
+from before the implementation, why it failed, then the GREEN command and result after it.
+Bind results to the tested source state and scope so later changes invalidate affected proofs.
+Separate RED and GREEN commits are not required; keep final commits logical and bisectable.
+A test file's existence, a skill read, or an arbitrary failed command is not RED evidence.
 
-```
-abc123  test: add failing test for retryOperation backoff
-def456  feat: implement retryOperation exponential backoff
-ghi789  test: strengthen boundary tests post-mutation (kills 3 survivors)
-jkl012  refactor: extract backoff helper for clarity
-```
-
-### Documented exceptions
-
-If evidence is not linear (multi-session, grouped refactor, context resume), document in the PR:
-
-```markdown
-## TDD Evidence
-
-RED phase: commit c925187
-GREEN phase: commits 5e0055b, 9a246d0
-MUTATE + KILL: commit 7b8c9d0
-REFACTOR: commit 11dbd1a
-
-Test Evidence:
-- 4/4 tests passing (vitest run, 7.7s)
-- Mutation score: 94% (3/52 documented survivors)
-```
-
-Exception on the evidence presentation, **never on the process**.
+Record the actual runner result and relevant assertion, not a ritual checklist. Existing
+project evidence storage is enough; no extra telemetry service or transcript export is required.
+Missing evidence is unknown, never reconstructed from memory as an observed run.
 
 ---
 
@@ -317,7 +266,7 @@ Source: superpowers/test-driven-development. Keep the full list — this is the 
 - "TDD is dogmatic, I am pragmatic"
 - "This case is different because..."
 
-→ **All these phrases mean: delete, start over in strict.**
+→ **Stop, identify the missing proof, and restore the test-first discipline without destroying unrelated work.**
 
 ---
 
@@ -352,11 +301,11 @@ Before marking the work complete:
 - [ ] Tests use real code (mocks only where unavoidable)
 - [ ] Edge cases and errors covered
 - [ ] Mutation testing run + survivors handled (strict, when `commands.mutation` exists)
-- [ ] Coverage verified 100% or exception documented (strict)
-- [ ] Commit history shows TDD evidence or documented exception (strict)
-- [ ] Refactor evaluated and applied where it has value (all Critical/High priorities addressed)
+- [ ] Relevant behavior covered and configured coverage thresholds satisfied
+- [ ] Actual RED-before-implementation and GREEN evidence retained (strict)
+- [ ] Necessary refactoring complete; optional improvements do not reopen the cycle
 
-Cannot check every box in strict? You skipped TDD. Restart.
+A missing required proof must be resolved or reported; do not restart already-proven work.
 
 ---
 
@@ -368,7 +317,7 @@ Cannot check every box in strict? You skipped TDD. Restart.
 | Test too complex | Design too complex. Simplify the API. |
 | Must mock everything | Code too coupled. Use parameter injection (see `void-hexagonal-architecture` skill). |
 | Huge test setup | Extract helpers. Still complex? Rethink the design. |
-| Mode not obvious | Ask the user. Default to souple > strict when in doubt. |
+| Mode not obvious | Inspect the changed behavior and project policy; ask only about a material trade-off. |
 
 ---
 

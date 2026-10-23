@@ -20,11 +20,11 @@ do not independently approve plans or start implementation.
 
 ## When to invoke
 
-Invoke immediately after `void-brainstorm` approves a spec. The plan is the next deliverable before any code.
+Use when approved work has dependencies, several units or continuity needs worth recording. A bounded request with clear acceptance criteria can go directly to `void-implement`; a plan is not required merely because code will change.
 
 **A `source: forge` spec is a ready spec.** When `docs/specs/YYYY-MM-DD-<slug>.md` carries `source: forge` in its frontmatter (the forge→harness artifact contract), consume it **directly** — it already holds the 18 recon variables, the winning design, and the critique verdict, so `void-brainstorm` need not have run. Plan from it as-is; if it is partial (missing critique, or a field absent in an older `forge_version`), plan around the holes and flag them as the first open decisions rather than re-deriving the whole thing.
 
-Do NOT invoke without an approved spec. If you find yourself wanting to plan without a spec, that means brainstorm was skipped — go back.
+Use the approved spec or explicit user request as the source. If a material design choice is missing, resolve that choice with `void-brainstorm`; do not restart settled discovery.
 
 ---
 
@@ -64,9 +64,7 @@ Each implementation step has this shape:
 - **Depends on**: [step-3, step-5] (or "none")
 - **TDD mode**: strict | souple | exploratory
 - **Verification gate**: <what must pass before moving to step N+1>
-- **Expected commits**:
-  - `test: <reproducing or new behavior>`
-  - `feat: <implementation>` (or `fix:` / `refactor:` per `void-commit-discipline`)
+- **Expected change**: one logical, bisectable commit or dependency-ordered commits; RED/GREEN evidence is retained independently of commit boundaries
 - **Notes**: <constraints, gotchas, hook implications>
 ```
 
@@ -86,7 +84,7 @@ Each step's gate states which checks must pass before moving on. Examples:
 
 - `tsc --noEmit && vitest run --filter checkoutCart`
 - `pre-commit hooks dry-run on staged set` (composes with `tdd-guard`, `tigerstyle-check`, `no-any-grep`, etc.)
-- `mutation testing score ≥ 90%` (strict mode steps with critical surface)
+- the configured mutation threshold, when the project has a mutation runner
 
 The gate is observable. The user sees the output before the next step begins.
 
@@ -165,7 +163,7 @@ After writing the plan, scan for:
 3. **Missing TDD mode** — every implementation step declares one? Fix.
 4. **Unrealistic dependencies** — does step N actually need step N-1, or could they parallelize?
 5. **Missing execution handoff** — a standalone plan has a correct resume point; a tracker-backed program has the complete stable order/dependency table?
-6. **Frontmatter `spec:`** — links back to the approved spec?
+6. **Source of authority** — links to the approved spec when present, otherwise records the explicit request?
 7. **Executability gate** (vendored from gstack `/spec`) — could an *unfamiliar* implementer or agent execute this plan with **zero follow-up questions**? Walk one step as if you'd never seen the codebase: is every file named, every metric quantified, every acceptance criterion observable? Any "figure it out at implementation time" is an ambiguity to resolve now.
 
 Fix inline. Then user-review gate.
@@ -174,12 +172,9 @@ Fix inline. Then user-review gate.
 
 ## User-review gate
 
-Ask the user to review the plan before execution begins:
-
-> "Plan written and committed to `docs/plans/<file>.md`. Please review and let me know if you want changes before we start executing."
-
-Wait for response. If changes requested, make them and re-run self-review.
-
+For already authorized scope, do not request approval again for the plan's formatting or routine
+sequencing. Link the plan and proceed. Ask only for a new consequential choice, expanded scope
+or declared human gate; continue independent authorized work while it is unresolved.
 ---
 
 ## Transition to execution
@@ -213,7 +208,7 @@ Set `high_risk: true` when the plan touches:
 
 ## Composition with other skills
 
-- **Upstream — `void-brainstorm`**: the approved spec is the input.
+- **Upstream**: the approved `void-brainstorm` spec or explicit complete user request supplies scope.
 - **Downstream — `void-ticket`**: converts a multi-ticket plan into native tracker items and installs its active handoff.
 - **Downstream — `void-implement`**: executes one complete ticket and maintains its tracker lifecycle.
 - **With `void-autopilot`**: drains independent ready tickets only through its attended flow.
@@ -227,11 +222,11 @@ Set `high_risk: true` when the plan touches:
 
 ## Anti-rules
 
-- MUST NOT plan without an approved spec.
+- MUST NOT invent scope beyond the approved spec or explicit request.
 - MUST NOT skip TDD mode declaration per implementation step.
 - MUST NOT skip verification gates per step.
 - MUST NOT omit the applicable execution handoff: resume point for standalone work, tracker table for a multi-ticket program.
-- MUST NOT skip the spec link in frontmatter.
+- MUST NOT omit the source of authority: link the spec when present, otherwise record the explicit request.
 - MUST NOT execute the plan (downstream skills do that).
 
 ---
@@ -239,7 +234,7 @@ Set `high_risk: true` when the plan touches:
 ## Final rule
 
 ```
-Approved spec → plan written → self-review → user approves → ticket or implement.
+Approved scope → useful sequence → self-review → resolve only new decisions → ticket or implement.
 Otherwise → it is not voidcorp plan.
 ```
 

@@ -14,8 +14,8 @@ budget. The rewrite keeps what protects and hands the rest to GitHub.
 
 ### What was kept
 
-- **`void-implement` as the one owner of the ticket cycle**, run whole by each worker, specialist
-  panel included. Nothing of the cycle is restated.
+- **`void-implement` as the one owner of the ticket cycle**, run whole by each worker with
+  its applicability decisions. Nothing of the cycle is restated; no extra preparation panel.
 - **Worktree isolation as a hard rule**, and the admission that it isolates only the working
   tree, the index and `HEAD`. The shared-ref prohibition survives, now proved by a fingerprint
   taken before and after each unit rather than by a denial list in a plan.

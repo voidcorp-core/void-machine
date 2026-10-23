@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:e655334c203730aa9d11d9e7e589fade59e23571109d317f6a17adfcebd1b410"
+    "rootHash": "sha256:887e5ecd29c2ca1fcd3677e1dcc58e1082d70e585bc30283d0cc5a04af5b1b7d"
   },
   "nodes": [
     {
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7051,
+          "staticTokens": 7052,
           "type": "skill"
         }
       },

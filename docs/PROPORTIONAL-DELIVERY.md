@@ -20,6 +20,9 @@ owner. This document explains the policy rather than defining another controller
 The smallest domain expert set is normally one. Add an expert for a different risk the primary
 cannot cover. `void-orchestrate` owns the invocation; no new panel quorum or mission ledger is
 created just to count advice. Missing consultation cannot be invented or described as complete.
+Autopilot inherits these applicability decisions; entering its loop adds no preparation panel.
+Keep the assigned writer and reuse relevant advice while its scope and inputs remain valid.
+Tiny direct work and substantive native delegation follow the existing `void-orchestrate` policy.
 
 Stop when acceptance, applicable proofs and independent review hold. A new concrete defect
 receives the existing bounded targeted correction cycle. An optional improvement does not.

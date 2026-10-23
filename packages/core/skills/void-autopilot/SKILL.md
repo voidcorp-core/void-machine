@@ -18,7 +18,7 @@ reviewed pull request instead. Promotion to the branch that deploys stays human.
 ## What this skill does NOT do
 
 It owns no ticket cycle. Every worker runs the canonical `void-implement` skill, whole, once per
-ticket, specialist panel included. If you find yourself writing "then the worker runs the tests,
+ticket, with applicability owned there. If you find yourself writing "then the worker runs the tests,
 then reviews..." inside autopilot, stop: that behaviour has one owner, and two copies drift until
 a ticket gets a different standard depending on how it was started.
 

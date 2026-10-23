@@ -85,6 +85,25 @@ describe('mission usage observations', () => {
     expect(renderMissionUsage(project([]))).not.toContain('| skill |');
   });
 
+  it('accepts only explicit separately scoped events and deduplicates source plus event ID', () => {
+    const direct = event(1, 'hook.completed', 'hook:tdd-order', { payload: { status: 'ok' } });
+    const linked = { ...direct, missionId: 'mis_source00000001' };
+    const report = projectMissionUsage({ missionId, events: [direct, linked], catalog,
+      hookSubjects: { 'hook:tdd-order': 'tdd-guard' },
+      linkedScopes: [{ missionId: linked.missionId, events: [linked, linked] }] });
+    expect(report.rows.find(row => row.name === 'tdd-guard')?.observedHits).toBe(2);
+    expect(linked.missionId).toBe('mis_source00000001');
+  });
+
+  it('renders advisory receipts distinctly and never credits formal specialist starts', () => {
+    const report = project([event(1, 'usage.advisory.started', 'core:test-qa-engineer', {
+      source: 'coordinator-observed', payload: { runtime: 'codex', contextId: '/root/expert' },
+    })]);
+    expect(report.rows.find(row => row.type === 'advisory')).toMatchObject({ observedHits: 1, runtimeHits: { codex: 1 } });
+    expect(report.rows.find(row => row.type === 'specialist')?.observedHits).toBe('unknown');
+    expect(renderMissionUsage(report)).toContain('| advisory |');
+  });
+
   it('retains observed names missing from the current catalogue without dumping event payloads', () => {
     const report = project([event(1, 'hook.completed', 'hook:legacy-rule', { payload: { status: 'degraded', secret: 'PRIVATE_CANARY' } })]);
     expect(report.rows.find(row => row.name === 'legacy-rule')).toMatchObject({ observedHits: 1, catalogued: false });

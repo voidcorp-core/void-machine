@@ -66,6 +66,37 @@ describe('mission usage CLI', () => {
       .toMatchObject({ observedHits: 1, catalogued: false });
   });
 
+  it('runs prospective bind, advisory and close through the shipped CLI without changing verification', () => {
+    const { root } = fixture();
+    const source = 'mis_native00000001';
+    const directory = join(root, '.void', 'machine', 'runs', source);
+    mkdirSync(directory, { recursive: true });
+    const path = join(directory, 'events.jsonl');
+    const hook = (seq: number): CanonicalEvent => ({ schemaVersion: 1, seq,
+      eventId: `evt_native_hook_${seq}`, missionId: source, correlationId: source,
+      ts: '2026-10-23T10:00:00.000Z', source: 'runtime:codex', kind: 'hook.completed',
+      subject: 'hook:tdd-order', payload: { status: 'ok' } });
+    writeFileSync(path, JSON.stringify(hook(1)) + '\n');
+    const command = (...args: string[]) => spawnSync(process.execPath,
+      [CLI, 'mission', ...args, '--json'], { cwd: root, encoding: 'utf8', timeout: 15000 });
+    const before = JSON.parse(run(root, false).stdout);
+    expect(command('usage-bind', '--id', id, '--source', source).status).toBe(0);
+    writeFileSync(path, readFileSync(path, 'utf8') + JSON.stringify(hook(3)) + '\n');
+    const advisory = command('advisory-start', '--id', id, '--specialist', 'core:security-engineer',
+      '--runtime', 'codex', '--context', '/root/native-advice');
+    expect(advisory.status, advisory.stderr).toBe(0);
+    expect(command('usage-unbind', '--id', id, '--source', source).status).toBe(0);
+    writeFileSync(path, readFileSync(path, 'utf8') + JSON.stringify(hook(5)) + '\n');
+    const result = run(root);
+    const report = JSON.parse(result.stdout);
+    expect(report.status).toBe(before.status);
+    expect(report.usage.links[0].status).toBe('closed');
+    expect(report.usage.rows.find((row: { name: string }) => row.name === 'tdd-guard'))
+      .toMatchObject({ observedHits: 2, outcomes: { ok: 1, skipped: 1 } });
+    expect(report.usage.rows.find((row: { type: string }) => row.type === 'advisory'))
+      .toMatchObject({ name: 'security-engineer', observedHits: 1, runtimeHits: { codex: 1 } });
+  });
+
   it('exposes a damaged journal as incomplete without creating quarantine or leaking invalid payloads', () => {
     const { root, log, directory } = fixture();
     const body = readFileSync(log, 'utf8') + '{PRIVATE_CANARY\n';

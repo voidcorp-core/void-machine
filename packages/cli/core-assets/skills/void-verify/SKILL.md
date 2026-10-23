@@ -80,7 +80,11 @@ the existing task/review evidence; summarize it when it explains a real omission
 For a plan, update its existing resume point; the tracker owns mutable programme progress.
 The PR evidence and final report reuse the same observed results rather than duplicate work.
 
-Once at ticket end, if a mission ID exists, include the informational recap from
+Once at ticket end, the coordinator closes each explicitly bound source with
+`void-machine mission usage-unbind --id <mission> --source <session-journal>`; this remains possible
+after mission closure. Close is final for that source/mission pair and retries never reopen it.
+Never recreate a mission to bypass a verdict or reopen proof. Then, if a mission ID exists,
+include the informational recap from
 `void-machine mission inspect --id <mission> --usage` (`--json` for structured output).
 Reuse that recap in the final report; do not run it per edit or chain its exit status as a new
 completion gate. Its exit status remains the mission verdict, not telemetry coverage. Missing

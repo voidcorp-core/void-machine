@@ -32,6 +32,7 @@ import { observeOrchestrationCapability } from '../lib/orchestration-capability.
 import { findCoreSource } from '../lib/paths.js';
 import { type ProjectRoots, resolveProjectRoots } from '../lib/project-roots.js';
 import { archiveMission, pruneMissions } from '../lib/runs/archive.js';
+import { parseUsageCommand, runUsageCommand, type UsageMissionArgs } from './mission-usage.js';
 import { loadMissionUsage } from '../lib/runs/usage-report.js';
 import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
@@ -109,6 +110,7 @@ interface InvalidArgs {
 }
 
 export type MissionArgs =
+  | UsageMissionArgs
   | { readonly kind: 'evidence-request'; readonly missionId: string; readonly inputPath: string; readonly json: boolean }
   | { readonly kind: 'evidence-event'; readonly missionId: string; readonly inputPath: string;
       readonly status: 'started' | 'completed'; readonly json: boolean }
@@ -243,6 +245,9 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     return { kind: 'help' };
   }
   const command = divider === -1 ? [] : args.slice(divider + 1);
+  const usageCommand = parseUsageCommand({ subcommand, options, divider },
+    { invalid, valueAfter, missionIdFrom, validateOptions });
+  if (usageCommand !== undefined) return usageCommand;
   if (subcommand === 'evidence-request' || subcommand === 'evidence-event') {
     if (divider !== -1) return invalid('evidence commands do not accept a command', 'remove --');
     const names = options.filter(value => value.startsWith('--'));
@@ -1234,6 +1239,9 @@ function usage(): string {
   mission verify --id <id> [--shell] [--json] -- <command...>
   mission resume --id <id> [--json]
   mission inspect --id <id> [--usage] [--json]
+  mission usage-bind --id <id> --source <session-journal-id> [--json]
+  mission usage-unbind --id <id> --source <session-journal-id> [--json]
+  mission advisory-start --id <id> --specialist core:<role> --runtime claude|codex --context <native-id> [--json]
   mission archive --id <id> [--json]
   mission prune --older-than <days> [--apply] [--json]
 
@@ -1298,6 +1306,10 @@ export async function mission(args: readonly string[]): Promise<void> {
   const root = roots.workRoot;
   const journal = roots.installRoot;
   try {
+    if (parsed.kind === 'usage-bind' || parsed.kind === 'usage-unbind' || parsed.kind === 'advisory-start') {
+      process.stdout.write(await runUsageCommand(parsed, journal));
+      return;
+    }
     if (parsed.kind === 'plan') {
       const plan = await planMission(root, parsed.ticketPath, undefined, 'project-v1');
       process.stdout.write(parsed.json ? `${JSON.stringify(plan)}\n` : `${renderPlan(plan)}\n`);

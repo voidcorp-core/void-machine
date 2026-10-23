@@ -60,11 +60,12 @@ export function targetedReviewFixture(corrections = 1) {
       limitations: ['Unchanged conclusions remain valid.'], review: { ...subject,
         reviewerId: CONTEXT, writerId: 'writer:primary', readOnly: true, scope, proofIds: [...proofIds],
         resolutions: batch === 0 ? [] : [{ findingId: finding.id, status: passed ? 'resolved' : 'unresolved',
-          proofIds: [proofIds.at(-1)!] }], provenance: { kind: 'native-context', contextId: CONTEXT },
+          proofIds: proofIds.slice(-1) }], provenance: { kind: 'native-context', contextId: CONTEXT },
       },
     } });
   }
-  const lastWriter = events.filter(e => e.kind === 'lead-writer.completed').at(-1)!;
+  const lastWriter = events.filter(e => e.kind === 'lead-writer.completed').at(-1);
+  if (!lastWriter) throw new Error('Synthetic writer completion required');
   const currentHash = `sha256:${(corrections + 11).toString(16).repeat(64)}`;
   return { events, proofIds, subject, input: { events, stage: 'post-implementation' as const,
     expectedSource: 'runtime:codex' as const, stageStartSeqExclusive: 3, afterSeqExclusive: lastWriter.seq,

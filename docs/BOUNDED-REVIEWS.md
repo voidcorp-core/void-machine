@@ -62,6 +62,58 @@ is not silently replaced by this candidate. The verified delivery must include t
 candidate command and recovery request demonstrated against an isolated existing mission.
 No claim of consumer activation is implied by this source document.
 
+## Recovering a retained native reviewer
+
+The initial general review uses a fresh independent context. Targeted verification may retain
+that same native reviewer: the reducer verifies the original and targeted invocation chains,
+the authorized correction request and writer completion, exact subjects and scope, and fresh
+proofs resolving the original findings. A changed product commit is not required for an
+otherwise authorized proof correction. General-review reuse and artifact reuse stay refused.
+
+For a bounded mission stopped solely by the former `reused-context` false positive after a
+valid targeted PASS, use this explicit disposition on the existing recovery command:
+
+```json
+{
+  "schemaVersion": 1,
+  "closureEventId": "evt_original_controller_stop",
+  "expectedJournalHash": "sha256:<canonical full journal hash>",
+  "disposition": {
+    "kind": "controller-defect",
+    "defect": "targeted-review-context"
+  }
+}
+```
+
+Generate the canonical journal hash using the helper below. Save the request under the
+actual reviewed worktree, then run both commands there with the same explicitly selected
+fixed CLI (`BOUNDED_CLI` points to its `bin/void-machine.mjs`):
+
+```sh
+node "$BOUNDED_CLI" mission recover --id "$MISSION_ID" --input .void/machine/recovery-request.json --json &&
+node "$BOUNDED_CLI" mission dispatch --id "$MISSION_ID" --json
+```
+
+Recovery observes Git, the frozen ticket, durable input recipe, native runtime, catalog and
+current proof dependencies itself. It accepts no caller-supplied subject or observation hash.
+It appends one receipt, retains the entire journal prefix and both review results, and spends
+no correction budget. A complete third review after the second correction can be admitted
+with zero corrections remaining. Dispatch still applies normal proof, obligation and effect
+checks; recovery does not authorize an external operation.
+
+Wrong worktree, dirty or changed subject, stale evidence, incomplete invocation, unresolved
+finding, forged receipt or uncertain external effect stay refused. Repeated recovery after
+another closure without genuine progress stays refused. Inspect that cause before issuing
+another dependent command; do not edit history or run another general review to mask it.
+
+No automatic migration or installation is performed. Existing journals without this recovery
+retain their formats and policy. After appending this new disposition, keep using its fixed
+CLI for subsequent mission commands: older readers cannot validate the new receipt. Rollback
+means reverting the code or installation before admission, or retaining the fixed reader for
+an admitted mission; it never means removing its recovery event.
+
+See the [bounded native continuity decision](decisions-log/2026-10-23-preserve-bounded-native-review-continuity--1411e10b-ff9f-4b92-8cbd-7ede876048e8.md).
+
 ## Replacing reused preparation invocations
 
 A controller-stop caused solely by reused native contexts in a complete round-two

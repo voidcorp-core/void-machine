@@ -623,6 +623,8 @@ export async function recoverStoppedMission(
   const identity = missionRuntimeIdentity(inspected.stream.events);
   const coordinator = coordinatorRuntimeIdentity(process.env);
   const provenanceRecovery = request.disposition.kind === 'review-provenance';
+  const targetedContextRecovery = request.disposition.kind === 'controller-defect'
+    && request.disposition.defect === 'targeted-review-context';
   if (identity === undefined || (coordinator.attested && coordinator.runtime !== identity.runtime)
     || (!provenanceRecovery && (!identity.attested || !coordinator.attested))) {
     throw new Error('MISSION_RECOVERY_RUNTIME: observe the original native runtime before recovery');
@@ -678,14 +680,16 @@ export async function recoverStoppedMission(
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
-  const recoverySpecialists = opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
+  const recoverySpecialists = targetedContextRecovery
+    ? migration.plan.specialists.filter(value => value.specialistId === 'core:independent-code-reviewer')
+    : opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
     ? migration.plan.specialists.filter(value => value.state === 'applicable'
       && value.stages?.includes('pre-implementation'))
     : migration.plan.specialists;
   const observation: MissionRecoveryObservation = {
-    ...(provenance === undefined || subject?.baseCommit === undefined
+    ...((provenance === undefined && !targetedContextRecovery) || subject?.baseCommit === undefined
       || subject.reviewedCommit === undefined ? {} : {
-      reviewBindings: provenance.bindings,
+      ...(provenance === undefined ? {} : { reviewBindings: provenance.bindings }),
       reviewSubject: { taskId: missionId, baseCommit: subject.baseCommit,
         reviewedCommit: subject.reviewedCommit, acceptanceCriteriaHash: stored.ticket.contentHash },
     }),

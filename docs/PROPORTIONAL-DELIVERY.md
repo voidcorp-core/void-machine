@@ -38,10 +38,10 @@ must retain its actual provenance and limitations, never pretend to be a canonic
 
 ## Deliberately subsequent work
 
-After this correction is accepted, extend the existing cheatsheet with all skills/hooks and a
+The follow-up described in [TICKET-USAGE.md](TICKET-USAGE.md) reuses the existing cheatsheet and adds a
 per-ticket recap of actual skills, hooks and specialists used, including unobservable states.
-The user explicitly deferred that tracking work. No Langfuse integration, event schema change,
-new dashboard or external transcript export belongs to this change.
+That tracking work was deliberately delivered separately from the workflow correction. No Langfuse
+integration, event schema change, new dashboard or external transcript export is introduced.
 
 Consumer measurements should compare elapsed delivery time, human interruptions, useful defects
 found and escaped regressions on comparable tasks. Reading fewer instructions is not alone proof

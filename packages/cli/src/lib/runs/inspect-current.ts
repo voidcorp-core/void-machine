@@ -7,6 +7,7 @@ export async function inspectCurrentMission(
   roots: ProjectRoots,
   missionId: string,
   secrets: readonly string[],
+  options: { readonly quarantine?: boolean } = {},
 ): Promise<{
   readonly inspected: Awaited<ReturnType<typeof inspectMission>>;
   readonly project: ProjectState;
@@ -17,7 +18,7 @@ export async function inspectCurrentMission(
       roots.installRoot,
       missionId,
       { dependencies: { 'git:working-tree': before.diffHash } },
-      { secrets },
+      { secrets, ...options },
     );
     const after = await computeProjectState(roots.workRoot);
     if (before.diffHash === after.diffHash) {

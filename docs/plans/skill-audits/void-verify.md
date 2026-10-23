@@ -148,3 +148,9 @@ the fast iteration loop. Source URLs live in `.source` and `references/ci-feedba
 Preserve the source principles while removing repeated approvals, proof duplication and optional
 improvement loops; the owning boundaries and retained safeguards are recorded in
 [Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.
+
+
+## Ticket usage recap (2026-10-23)
+
+Reuse one informational mission usage recap at ticket end, owned by verify. Unknown telemetry
+is explicit and never adds a delivery gate or per-edit loop. See `docs/TICKET-USAGE.md`.

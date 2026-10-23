@@ -171,9 +171,7 @@ function targetedReviewContextDefect(input: MissionRecoveryInput): boolean {
     || current.completion.verdict !== 'pass' || current.event.source !== observation.expectedSource
     || field(current.event, 'inputHash') !== observation.currentInputHashes[current.event.subject]
     || current.completion.contractVersion !== observation.contractVersions[current.event.subject]) return false;
-  return validNativeReviewContinuation(events, current.event, freshReviewProofIds(events, {
-    missionId: start.missionId, dependencies: observation.evidenceDependencies ?? {},
-  }));
+  return validNativeReviewContinuation(events, current.event);
 }
 
 /** Replace one malformed preparation panel, never its conclusions or consumed round. */

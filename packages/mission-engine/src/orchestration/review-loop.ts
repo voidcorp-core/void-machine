@@ -283,7 +283,7 @@ export function canContinueNativeReview(
 }
 
 export function validNativeReviewContinuation(
-  events: readonly CanonicalEvent[], completion: CanonicalEvent, validProofIds: readonly string[],
+  events: readonly CanonicalEvent[], completion: CanonicalEvent,
 ): boolean {
   const envelope = parseEnvelope(completion);
   if (!envelope || !envelope.contextId) return false;
@@ -296,10 +296,13 @@ export function validNativeReviewContinuation(
   const previousReceipt = previous && parseEnvelope(previous)?.completion.review;
   const correction = events.filter(event => event.kind === 'lead-writer.requested'
     && event.seq < request.seq && reviewField(event, 'actionKind') === 'run-correction').at(-1);
+  // Authenticate historical proof references, not their freshness against a later worktree.
+  // Current finding resolution is owned by reconcileReviewFindings and its observed proof set.
+  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq < completion.seq), { dependencies: {} });
   return receipt.reviewerId === previousReceipt?.reviewerId && correction !== undefined
     && receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
       && receipt.scope.findingIds.includes(resolution.findingId)
-      && (resolution.status !== 'resolved' || resolution.proofIds.every(id => validProofIds.includes(id)
+      && (resolution.status !== 'resolved' || resolution.proofIds.every(id => historicalProofIds.includes(id)
         && receipt.proofIds.includes(id) && events.some(event => event.kind === 'evidence.recorded'
           && event.subject === id && event.seq > correction.seq && event.seq < completion.seq))));
 }
@@ -315,7 +318,6 @@ function collectCompletions(
   retainedSpecialists: readonly SpecialistId[],
   contractMigration: ReviewLoopInput['contractMigration'],
   correctionBatches: number | undefined,
-  validProofIds: readonly string[],
 ): {
   readonly accepted: readonly CompletionEnvelope[];
   readonly history: readonly CompletionEnvelope[];
@@ -413,7 +415,7 @@ function collectCompletions(
       ? `artifact:${envelope.completion.review.provenance.sha256}` : undefined);
     const reusedContext = contextKey !== undefined && contextIds.has(contextKey)
       && !(envelope.stage === 'post-implementation'
-        && validNativeReviewContinuation(events, event, validProofIds));
+        && validNativeReviewContinuation(events, event));
     if (duplicateCompletion) {
       issues.push({
         code: 'duplicate-completion',
@@ -700,7 +702,6 @@ export function reduceReviewLoop(input: ReviewLoopInput): ReviewLoopState {
     input.retainedSpecialists ?? [],
     input.contractMigration,
     correctionBatches,
-    input.validProofIds ?? [],
   );
   const configurationIssues: ReviewLoopIssue[] = input.requiredSpecialists.flatMap((id) => {
     const version = input.contractVersions[id];

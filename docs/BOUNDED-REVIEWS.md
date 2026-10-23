@@ -70,6 +70,13 @@ the authorized correction request and writer completion, exact subjects and scop
 proofs resolving the original findings. A changed product commit is not required for an
 otherwise authorized proof correction. General-review reuse and artifact reuse stay refused.
 
+Historical proof authenticity is separate from current freshness: an earlier targeted receipt
+keeps its valid invocation and canonical proof references after the next correction changes
+the diff. It does not keep a finding resolved today on a stale proof. The final review must
+resolve every blocking finding against the currently observed proof set, including findings
+partially resolved in an earlier correction. Missing, forged or out-of-window historical
+proofs still invalidate native continuity; no historical Git observation is invented.
+
 For a bounded mission stopped solely by the former `reused-context` false positive after a
 valid targeted PASS, use this explicit disposition on the existing recovery command:
 

@@ -274,3 +274,23 @@ it('recovers final PASS without mistaking an authentic stale historical proof fo
   expect(planStoppedMissionRecovery(partiallyResolvedCorrections().recovery)).toMatchObject({ kind: 'recover',
     receipt: { consumedCorrectionBatches: 2, remainingCorrectionBatches: 0 } });
 });
+
+
+it.each(['forged', 'absent', 'before correction'] as const)(
+  'refuses a %s historical proof even when final resolution proofs are fresh', flaw => {
+    const fixture = partiallyResolvedCorrections();
+    const events = flaw === 'absent' ? fixture.events.filter(event => event.seq !== 8)
+      : flaw === 'before correction' ? fixture.events.map(event => event.seq === 8 ? { ...event, seq: 6 } : event)
+      : edited(fixture.events, event => event.seq === 8, p => { object(p['evidence'])['diffHash'] = `sha256:${'f'.repeat(64)}`; });
+    expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(false);
+  });
+it('reopens an old resolved finding when the final review omits its fresh resolution', () => {
+  const fixture = partiallyResolvedCorrections();
+  const events = edited(fixture.events, event => event.seq === 18, p => {
+    object(object(p['completion'])['review'])['resolutions'] = [{ findingId: 'refresh-error',
+      status: 'resolved', proofIds: ['evd_targeted_proof_2'] }];
+  });
+  expect(reduceReviewLoop({ ...fixture.input, events })).toMatchObject({ readyForVerdict: false,
+    findings: [{ sourceId: 'stale-history' }] });
+  expect(reduceReviewLoop({ ...fixture.input, validProofIds: [] }).readyForVerdict).toBe(false);
+});

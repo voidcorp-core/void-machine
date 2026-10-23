@@ -2195,7 +2195,7 @@
         }
       ],
       "id": "skill:void-implement",
-      "lines": 233,
+      "lines": 230,
       "name": "void-implement",
       "owner": "folpe",
       "pack": null,
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 6732,
+      "staticTokens": 6519,
       "type": "skill"
     },
     {
@@ -2256,7 +2256,7 @@
         }
       ],
       "id": "skill:void-llm-cost-discipline",
-      "lines": 299,
+      "lines": 302,
       "name": "void-llm-cost-discipline",
       "owner": "folpe",
       "pack": null,
@@ -2265,7 +2265,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-llm-cost-discipline/SKILL.md",
-      "staticTokens": 2519,
+      "staticTokens": 2554,
       "type": "skill"
     },
     {
@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 340,
+      "lines": 370,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 4920,
+      "staticTokens": 5446,
       "type": "skill"
     },
     {

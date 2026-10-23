@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:887e5ecd29c2ca1fcd3677e1dcc58e1082d70e585bc30283d0cc5a04af5b1b7d"
+    "rootHash": "sha256:d397a0d2a4de14c22947f961abd2cc56312ae94a30052545ec7c405d61708c1d"
   },
   "nodes": [
     {
@@ -4331,7 +4331,7 @@
             }
           ],
           "id": "skill:void-implement",
-          "lines": 233,
+          "lines": 230,
           "name": "void-implement",
           "owner": "folpe",
           "pack": null,
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6732,
+          "staticTokens": 6519,
           "type": "skill"
         }
       },
@@ -4428,7 +4428,7 @@
             }
           ],
           "id": "skill:void-llm-cost-discipline",
-          "lines": 299,
+          "lines": 302,
           "name": "void-llm-cost-discipline",
           "owner": "folpe",
           "pack": null,
@@ -4437,7 +4437,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-llm-cost-discipline/SKILL.md",
-          "staticTokens": 2519,
+          "staticTokens": 2554,
           "type": "skill"
         }
       },
@@ -4677,7 +4677,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 340,
+          "lines": 370,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4686,7 +4686,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 4920,
+          "staticTokens": 5446,
           "type": "skill"
         }
       },

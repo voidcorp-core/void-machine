@@ -131,3 +131,8 @@ Discipline is uniform. Volume scales the importance of caching / batching; the r
 - **Cache key per-user vs shared**: shared system prompt + per-user RAG context is the typical split. Document in SKILL.md.
 - **Cost dashboard surface**: Sentry custom metric vs OTel attribute on traces. Lean: structured log line per call + Sentry custom metric for aggregates. Defer dashboard mechanics to `observability` pack.
 - **Switching default from Sonnet to Haiku as Haiku improves**: monitor Anthropic model card per release. Update SKILL.md as defaults shift. Process: pin model version in code, periodic review.
+
+
+## Native model choice (DEV-1110, 2026-10-23)
+
+Clarify that API call-site budgets remain here while native coding-agent model choice belongs to void-orchestrate. Existing application API policy and hooks are unchanged; no pricing refresh or provider router is part of DEV-1110.

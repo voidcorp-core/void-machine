@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/mission-engine/src/orchestration/targeted-review-context.test.ts
 import { replayEventLog, serializeEvent } from '../events/index.js';
 import type { CanonicalEvent, JsonValue } from '../events/types.js';
 import { canonicalJsonHash } from '../evidence/canonical-json.js';

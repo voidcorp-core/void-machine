@@ -9,7 +9,7 @@ pnpm install
 pnpm test          # 1100+ tests, ~30s
 ```
 
-Use the exact Node version in `.node-version` (26.12.1) for local development and primary CI/release jobs. Every package still supports Node `>=24.15.0`; `tests (node 24)` repeats build, type check and tests at that minimum. Select the declared version with your Node manager; no tool here changes your global Node installation. pnpm is pinned via `packageManager`; do not pass a `--version` to `pnpm/action-setup`.
+Use the exact Node version in `.node-version` (26.12.1) for local development and primary CI/release jobs. Every first-party package declares Node `>=26.12.1`; CI and publication use this single current runtime, with no older-runtime compatibility lane. Select the declared version with your Node manager; no tool here changes your global Node installation. pnpm is pinned via `packageManager`; do not pass a `--version` to `pnpm/action-setup`.
 
 ## The rules CI actually enforces
 

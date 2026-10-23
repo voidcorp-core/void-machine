@@ -82,9 +82,10 @@ Versioned changes do not update branch protection. The coordinator must:
    both branches before resuming admission. Do not use an admin bypass or leave
    an orphan required check.
 4. Check a real PR and merge group for deterministic checks and a promotion for
-   create/update/no-diff behavior. `validate` keeps its name; the Node
-   compatibility job is now `tests (node 24)` instead of `tests (node 26)`.
-   Update any optional requirement that still names the latter.
+   create/update/no-diff behavior. `validate` keeps its name and runs the
+   current Node runtime. The separate Node compatibility job is removed;
+   remove any optional requirement that still names `tests (node 24)` or
+   `tests (node 26)` so an orphan check cannot block delivery.
 
 `RELEASE_APP_ID` and `RELEASE_APP_PRIVATE_KEY` still open release/promotion PRs
 and are distinct from the retired review App. No credential deletion or rotation
@@ -516,8 +517,12 @@ than being silently overwritten. No consumer update is implied by a source chang
 and release. The isolated publication job receives setup-node's resolved version
 from `validate-release`, so it needs no source checkout or duplicate version.
 Recovery builds use the current trusted release-control version file even when
-an older release tag predates it. Node 24.15.0 remains only as an explicit CI
-compatibility lane because it is the supported engines floor. Reusable consumer
+an older release tag predates it. Every first-party package declares Node
+`>=26.12.1`; the older-runtime compatibility lane is removed. Raising this floor
+is a breaking consumer change and carries a `BREAKING CHANGE` footer for
+release-please. Node 24 type declarations and bundle emit targets remain
+conservative compile-time baselines; they do not declare runtime support or
+select a CI runtime. Reusable consumer
 enforcement reads `.void-enforce-runtime/.node-version` from its immutable harness
 checkout, never a required file in the caller repository.
 

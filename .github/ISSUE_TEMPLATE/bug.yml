@@ -37,6 +37,6 @@ body:
     attributes:
       label: Versions
       description: "`void-machine --version`, Node, OS."
-      placeholder: "voidmachine 4.0.0, Node 24.15, macOS 15"
+      placeholder: "voidmachine 4.0.0, Node 26.12.1, macOS 15"
     validations:
       required: true

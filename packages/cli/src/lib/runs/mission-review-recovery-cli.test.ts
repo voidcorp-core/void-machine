@@ -235,6 +235,10 @@ it.each(['wrong worktree', 'changed commit', 'dirty subject', 'changed journal']
       if (mismatch === 'wrong worktree') {
         const unrelated = await stoppedReview(true, 'project-v1', true);
         expect(unrelated.reviewedCommit).toBe(fixture.reviewedCommit);
+        unrelated.git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+          'commit', '--allow-empty', '--quiet', '-m', 'test: distinct unrelated checkout']);
+        expect(unrelated.git(['rev-parse', 'HEAD'])).not.toBe(fixture.reviewedCommit);
+        expect(unrelated.git(['status', '--porcelain'])).toBe('');
         roots = { ...roots, workRoot: unrelated.root };
       }
       if (mismatch === 'changed commit' || mismatch === 'dirty subject') {
@@ -252,3 +256,17 @@ it.each(['wrong worktree', 'changed commit', 'dirty subject', 'changed journal']
       expect(await readFile(log, 'utf8')).toBe(before);
     } finally { vi.unstubAllEnvs(); }
   });
+
+
+it('accepts an isolated equivalent checkout of the exact same reviewed commit', async () => {
+  try {
+    const fixture = await stoppedReview(true, 'project-v1', true);
+    const equivalent = await stoppedReview(true, 'project-v1', true);
+    expect(equivalent.reviewedCommit).toBe(fixture.reviewedCommit);
+    const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
+    const before = await readFile(log, 'utf8');
+    expect(await recoverStoppedMission({ ...fixture.roots, workRoot: equivalent.root }, ID,
+      fixture.targetedRequest)).toMatchObject({ recorded: true });
+    expect((await readFile(log, 'utf8')).startsWith(before)).toBe(true);
+  } finally { vi.unstubAllEnvs(); }
+});

@@ -70,7 +70,7 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
     const defect = disposition['defect'];
     if (!exact(disposition, ['kind', 'defect'])
       || (defect !== 'partial-fanout-round' && defect !== 'stale-input-dispatch'
-        && defect !== 'opaque-native-context')) invalid();
+        && defect !== 'opaque-native-context' && defect !== 'targeted-review-context')) invalid();
     return { ...base, disposition: { kind: 'controller-defect', defect } };
   }
   if (disposition['kind'] === 'evidence-disposition') {

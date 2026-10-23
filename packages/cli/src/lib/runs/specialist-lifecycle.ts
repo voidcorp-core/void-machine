@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { writeSequencedEventOnce } from '@voidcorp/hook-runner';
 import {
+  canContinueNativeReview,
   type CanonicalEvent,
   canonicalJsonHash,
   type EventDraft,
@@ -314,7 +315,8 @@ export async function recordSpecialistLifecycle(
       if (!failed) invalid('dispatch already started with another contextId');
     }
     if (recovery !== undefined && input.contextId !== undefined && events.some(event =>
-      event.kind === 'specialist.started' && field(event.payload, 'contextId') === input.contextId)) {
+      event.kind === 'specialist.started' && field(event.payload, 'contextId') === input.contextId)
+      && !canContinueNativeReview(events, requested, input.contextId)) {
       invalid('contextId was already used by a previous dispatch');
     }
   } else {
@@ -352,7 +354,8 @@ export async function recordSpecialistLifecycle(
       if (recovery !== undefined && input.status === 'started' && input.contextId !== undefined && current.some(event =>
         event.kind === 'specialist.started'
         && field(event.payload, 'contextId') === input.contextId
-        && event.eventId !== eventId)) {
+        && event.eventId !== eventId)
+        && !canContinueNativeReview(current, requested, input.contextId)) {
         invalid('contextId was already used by a previous dispatch');
       }
     },

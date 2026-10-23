@@ -1,4 +1,8 @@
 import type { CanonicalEvent } from '../events/types.js';
+import { assessEvidence } from '../evidence/invalidation.js';
+import { parseEvidence } from '../evidence/schema.js';
+import type { EvidenceContext } from '../evidence/types.js';
+import { isReviewScope, isReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import { canonicalJsonHash } from '../evidence/canonical-json.js';
 import {
   parseSpecialistCompletionValue,
@@ -155,6 +159,154 @@ function parseEnvelope(event: CanonicalEvent): CompletionEnvelope | undefined {
   };
 }
 
+/** One proof-freshness rule for dispatch and recovery; callers supply observed dependencies. */
+export function freshReviewProofIds(events: readonly CanonicalEvent[], context: EvidenceContext): readonly string[] {
+  return events.flatMap(event => {
+    if (event.kind !== 'evidence.recorded') return [];
+    const parsed = parseEvidence(record(event.payload)?.['evidence']);
+    return parsed.ok && parsed.value.evidenceId === event.subject
+      && parsed.value.missionId === event.missionId && parsed.value.status === 'passed'
+      && assessEvidence(parsed.value, context).status === 'fresh' ? [parsed.value.evidenceId] : [];
+  });
+}
+
+function reviewField(event: CanonicalEvent | undefined, key: string): unknown {
+  return record(event?.payload)?.[key];
+}
+function sameNativeDispatch(left: CanonicalEvent, right: CanonicalEvent): boolean {
+  return left.missionId === right.missionId && left.subject === right.subject
+    && ['stage', 'reviewRound', 'inputHash', 'contractVersion', 'reviewSubject', 'reviewScope']
+      .every(key => reviewField(left, key) !== undefined && reviewField(right, key) !== undefined
+        && canonicalJsonHash(reviewField(left, key)) === canonicalJsonHash(reviewField(right, key)));
+}
+
+/** Native identity is reusable only through an intact committed-subject invocation. */
+function boundNativeRequest(events: readonly CanonicalEvent[], envelope: CompletionEnvelope): CanonicalEvent | undefined {
+  const { event, completion, contextId } = envelope;
+  const receipt = completion.review;
+  const subject = reviewField(event, 'reviewSubject');
+  const scope = reviewField(event, 'reviewScope');
+  const start = events[0];
+  if (!start || !receipt || !isReviewSubject(subject) || !isReviewScope(scope)
+    || !sameReviewSubject(receipt, subject) || canonicalJsonHash(receipt.scope) !== canonicalJsonHash(scope)
+    || receipt.taskId !== event.missionId || receipt.writerId !== reviewField(start, 'leadWriterId')
+    || receipt.provenance.kind !== 'native-context' || receipt.provenance.contextId !== contextId
+    || contextId === receipt.writerId || event.source !== `runtime:${String(reviewField(start, 'runtime'))}`
+    || event.subject !== completion.specialistId || reviewField(event, 'contractVersion') !== completion.contractVersion) return undefined;
+  const requests = events.filter(candidate => candidate.kind === 'specialist.requested'
+    && candidate.seq < event.seq && candidate.source === 'void-harness:mission.dispatch'
+    && sameNativeDispatch(candidate, event)
+    && reviewField(candidate, 'planHash') === reviewField(start, 'planHash')
+    && reviewField(candidate, 'runtime') === reviewField(start, 'runtime'));
+  const request = requests[0];
+  if (requests.length !== 1 || !request) return undefined;
+  const started = events.filter(candidate => candidate.kind === 'specialist.started'
+    && candidate.seq > request.seq && candidate.seq < event.seq && candidate.source === event.source
+    && sameNativeDispatch(candidate, event) && reviewField(candidate, 'contextId') === contextId
+    && (candidate.causationId === undefined || candidate.causationId === request.eventId));
+  return started.length === 1 && (event.causationId === undefined || event.causationId === request.eventId)
+    && (reviewField(event, 'reviewInvocationEventId') === undefined
+      || reviewField(event, 'reviewInvocationEventId') === started[0]?.eventId) ? request : undefined;
+}
+
+function sameMembers(actual: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(actual) && actual.length === new Set(expected).size
+    && new Set(actual).size === actual.length && actual.every(value => expected.includes(value));
+}
+
+function authorizedTargetedRequest(
+  events: readonly CanonicalEvent[], request: CanonicalEvent, history: readonly CompletionEnvelope[],
+): boolean {
+  const original = history[0]?.completion.review;
+  const previous = history.at(-1);
+  const subject = reviewField(request, 'reviewSubject');
+  const scope = reviewField(request, 'reviewScope');
+  if (!original || !previous || !isReviewSubject(subject) || !isReviewScope(scope) || scope.kind !== 'targeted'
+    || subject.taskId !== original.taskId || subject.baseCommit !== original.baseCommit
+    || subject.acceptanceCriteriaHash !== original.acceptanceCriteriaHash
+    || reviewField(request, 'contractVersion') !== previous.completion.contractVersion) return false;
+  const blockers = history.flatMap(item => item.completion.findings).filter(item => item.classification === 'blocking');
+  if (blockers.length === 0 || !sameMembers(scope.findingIds, blockers.map(item => item.id))
+    || !sameMembers(scope.affectedPaths, blockers.flatMap(item => item.evidence.map(proof => proof.path)))) return false;
+  const writers = events.filter(event => event.kind === 'lead-writer.completed'
+    && event.seq > previous.event.seq && event.seq < request.seq);
+  const writer = writers[0];
+  const correction = events.find(event => event.eventId === reviewField(writer ?? request, 'requestEventId'));
+  const count = events.filter(event => event.kind === 'lead-writer.completed' && event.seq < request.seq
+    && reviewField(event, 'actionKind') === 'run-correction').length;
+  if (writers.length !== 1 || !writer || !correction || count < 1 || count > 2
+    || reviewField(request, 'reviewRound') !== count + 1
+    || correction.kind !== 'lead-writer.requested' || correction.source !== 'void-harness:mission.dispatch'
+    || correction.seq <= previous.event.seq || correction.seq >= writer.seq
+    || correction.subject !== original.writerId || writer.subject !== original.writerId
+    || writer.source !== original.writerId || writer.causationId !== correction.eventId
+    || reviewField(writer, 'actionKind') !== 'run-correction'
+    || reviewField(writer, 'planHash') !== reviewField(events[0], 'planHash')
+    || reviewField(writer, 'implementationRound') !== count + 1
+    || !['actionKind', 'planHash', 'writerId', 'implementationRound'].every(key =>
+      reviewField(writer, key) === reviewField(correction, key))) return false;
+  const open = reconcileReviewFindings(history, freshReviewProofIds(events.filter(event => event.seq < correction.seq), { dependencies: {} }))
+    .filter(finding => finding.classification === 'blocking');
+  return open.length > 0 && sameMembers(reviewField(correction, 'findingIds'), open.map(finding => finding.findingId));
+}
+
+/** Retained native reviewer may start a targeted correction, including after recovery. */
+export function canContinueNativeReview(
+  events: readonly CanonicalEvent[], request: CanonicalEvent, contextId: string,
+): boolean {
+  const start = events[0];
+  if (!start || start.kind !== 'mission.started'
+    || reviewField(request, 'planHash') !== reviewField(start, 'planHash')
+    || reviewField(request, 'runtime') !== reviewField(start, 'runtime')
+    || request.kind !== 'specialist.requested' || request.source !== 'void-harness:mission.dispatch'
+    || request.subject !== 'core:independent-code-reviewer' || reviewField(request, 'stage') !== 'post-implementation'
+    || !validNativeContextId(contextId) || events.some(event => event.missionId !== request.missionId)) return false;
+  const history = events.filter(event => event.kind === 'specialist.completed' && event.seq < request.seq
+    && reviewField(event, 'contextId') === contextId).map(parseEnvelope);
+  if (history.length === 0 || history.some(item => !item)) return false;
+  const prior = history.filter((item): item is CompletionEnvelope => item !== undefined);
+  const first = prior[0];
+  if (!first || first.completion.review?.scope.kind !== 'general'
+    || first.completion.verdict !== 'changes-requested'
+    || new Set(prior.map(item => item.completion.completionId)).size !== prior.length
+    || events.some(event => event.seq < request.seq && ['specialist.started', 'specialist.completed'].includes(event.kind)
+      && reviewField(event, 'contextId') === contextId
+      && (event.subject !== request.subject || reviewField(event, 'stage') !== 'post-implementation'))
+    || events.filter(event => event.kind === 'specialist.completed' && event.subject === request.subject
+      && reviewField(event, 'stage') === 'post-implementation' && event.seq < request.seq).at(-1)?.eventId !== prior.at(-1)?.event.eventId) return false;
+  for (const [index, item] of prior.entries()) {
+    const bound = boundNativeRequest(events, item);
+    if (!bound || item.completion.review?.reviewerId !== first.completion.review.reviewerId
+      || (index > 0 && !authorizedTargetedRequest(events, bound, prior.slice(0, index)))) return false;
+  }
+  return authorizedTargetedRequest(events, request, prior);
+}
+
+export function validNativeReviewContinuation(
+  events: readonly CanonicalEvent[], completion: CanonicalEvent,
+): boolean {
+  const envelope = parseEnvelope(completion);
+  if (!envelope || !envelope.contextId) return false;
+  const request = boundNativeRequest(events, envelope);
+  const receipt = envelope.completion.review;
+  if (!request || !receipt || !canContinueNativeReview(events, request, envelope.contextId)
+    || receipt.scope.kind !== 'targeted') return false;
+  const previous = events.filter(event => event.kind === 'specialist.completed' && event.seq < request.seq
+    && reviewField(event, 'contextId') === envelope.contextId).at(-1);
+  const previousReceipt = previous && parseEnvelope(previous)?.completion.review;
+  const correction = events.filter(event => event.kind === 'lead-writer.requested'
+    && event.seq < request.seq && reviewField(event, 'actionKind') === 'run-correction').at(-1);
+  // Authenticate historical proof references, not their freshness against a later worktree.
+  // Current finding resolution is owned by reconcileReviewFindings and its observed proof set.
+  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq < completion.seq), { dependencies: {} });
+  return receipt.reviewerId === previousReceipt?.reviewerId && correction !== undefined
+    && receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
+      && receipt.scope.findingIds.includes(resolution.findingId)
+      && (resolution.status !== 'resolved' || resolution.proofIds.every(id => historicalProofIds.includes(id)
+        && receipt.proofIds.includes(id) && events.some(event => event.kind === 'evidence.recorded'
+          && event.subject === id && event.seq > correction.seq && event.seq < completion.seq))));
+}
+
 function collectCompletions(
   events: readonly CanonicalEvent[],
   stage: SpecialistInvocationStage,
@@ -261,7 +413,9 @@ function collectCompletions(
     const duplicateCompletion = completionIds.has(envelope.completion.completionId);
     const contextKey = envelope.contextId ?? (envelope.completion.review?.provenance.kind === 'review-artifact'
       ? `artifact:${envelope.completion.review.provenance.sha256}` : undefined);
-    const reusedContext = contextKey !== undefined && contextIds.has(contextKey);
+    const reusedContext = contextKey !== undefined && contextIds.has(contextKey)
+      && !(envelope.stage === 'post-implementation'
+        && validNativeReviewContinuation(events, event));
     if (duplicateCompletion) {
       issues.push({
         code: 'duplicate-completion',

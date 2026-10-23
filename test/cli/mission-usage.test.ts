@@ -21,7 +21,8 @@ function fixture() {
   });
   const log = join(directory, 'events.jsonl');
   writeFileSync(log, [event(1, 'mission.started', 'mission', { title: 'Example', mode: 'team' }),
-    event(2, 'specialist.started', 'core:devex-docs-engineer'),
+    event(2, 'specialist.started', 'core:devex-docs-engineer', { contextId: '/root/devex',
+      stage: 'post-implementation', reviewRound: 1, contractVersion: 1, inputHash: `sha256:${'a'.repeat(64)}` }),
     event(3, 'hook.completed', 'hook:tdd-order', { status: 'skipped' }),
   ].map(value => JSON.stringify(value)).join('\n') + '\n');
   return { root, log, directory };
@@ -46,6 +47,7 @@ describe('mission usage CLI', () => {
     expect(document.usage.rows.find((row: { name: string }) => row.name === 'devex-docs-engineer').observedHits).toBe(1);
     expect(document.usage.rows.find((row: { name: string }) => row.name === 'void-tdd').observedHits).toBe('unknown');
     expect(document.usage.notes.join(' ')).toContain('not a proven ticket');
+    expect(document.usage.activity[0]).toMatchObject({ observedState: 'running', nativeContextId: '/root/devex' });
   });
 
   it('counts actual native Skill subject namespaces without conflating foreign providers', () => {
@@ -106,6 +108,7 @@ describe('mission usage CLI', () => {
     expect(result.status).toBe(1);
     const document = JSON.parse(result.stdout);
     expect(document.usage.notes.join(' ')).toContain('Journal incomplete');
+    expect(document.usage.activity[0]).toMatchObject({ observedState: 'unknown', reason: 'journal incomplete' });
     expect(result.stdout + result.stderr).not.toContain('PRIVATE_CANARY');
     expect(readFileSync(log, 'utf8')).toBe(body);
     expect(readdirSync(directory, { recursive: true })).toEqual(before);

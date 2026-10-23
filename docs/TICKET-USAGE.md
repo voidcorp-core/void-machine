@@ -4,7 +4,7 @@ The complete catalogue already exists: `void-machine cheatsheet --format markdow
 skills, hooks, agents and specialists with their descriptions and declared triggers. The default
 HTML and JSON formats remain available. This is discovery, not proof of execution.
 
-At ticket end run once:
+During a ticket, use the same command on demand for an activity snapshot; at ticket end run once:
 
 ```sh
 void-machine mission inspect --id <mission> --usage
@@ -12,9 +12,32 @@ void-machine mission inspect --id <mission> --usage
 
 Add `--json` for the existing verdict object plus a `usage` field. Ordinary `inspect` output is
 unchanged. The exit status remains the mission verdict (0 for verified/excepted, 1 otherwise),
-not telemetry coverage. Text shows positive counts/outcomes and summarizes zero/unknown rows;
+not telemetry coverage. Text first shows observed specialist activity, then positive counts/outcomes and summarizes zero/unknown rows;
 JSON retains all catalogue rows and per-runtime counts. Do not chain this optional recap as a delivery gate. `void-verify` owns
 the one recap and `void-implement` composes it; no per-edit command or extra review loop.
+
+## Observed specialist activity
+
+The activity view projects the same explicitly scoped, deduplicated events as the counters.
+Each row names the specialist, safe mission/stage/round task context, runtime, native context
+when observed, source mission/session, provenance and last recorded state. It never prints
+prompts, completion bodies or arbitrary failure details. Shared-session attribution stays
+separate from an individually observed native context; a session ID is not a worker identity.
+
+`running` means a recorded formal start without a matching terminal receipt, not live presence.
+`completed` and `failed` require the exact source, dispatch and context (or explicit invocation
+receipt reference); the outcome is not a quality verdict. An orphan terminal stays `unknown`
+activity while its recorded outcome remains in the existing counts. Advisory receipts show
+`unknown` with an observed start and no end telemetry. Closure/interruption, a closed observation
+interval or an incomplete journal makes unfinished activity unknown; there is no wall-clock
+expiry or guessed completion. Missing telemetry is never an invented zero or a delivery gate.
+
+Text displays at most 20 activity rows; JSON includes up to 200 detailed rows. Omitted activity
+rows are explicitly counted and do not truncate the usage counters. This is a read-only snapshot:
+no new command, journal, polling loop, LLM pass or presentation dependency. The native runtime's
+own agent-status surface remains available where supported; this CLI does not control it.
+
+## Usage counters
 
 | Item | One observed hit | Separate outcomes |
 | --- | --- | --- |

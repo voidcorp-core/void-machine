@@ -32,8 +32,7 @@ import { observeOrchestrationCapability } from '../lib/orchestration-capability.
 import { findCoreSource } from '../lib/paths.js';
 import { type ProjectRoots, resolveProjectRoots } from '../lib/project-roots.js';
 import { archiveMission, pruneMissions } from '../lib/runs/archive.js';
-import { changeUsageSession } from '../lib/runs/usage-sessions.js';
-import { recordUsageAdvisory } from '../lib/runs/usage-advisory.js';
+import { parseUsageCommand, runUsageCommand, type UsageMissionArgs } from './mission-usage.js';
 import { loadMissionUsage } from '../lib/runs/usage-report.js';
 import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
@@ -111,10 +110,7 @@ interface InvalidArgs {
 }
 
 export type MissionArgs =
-  | { readonly kind: 'usage-bind'; readonly missionId: string; readonly sourceMissionId: string; readonly json: boolean }
-  | { readonly kind: 'usage-unbind'; readonly missionId: string; readonly sourceMissionId: string; readonly json: boolean }
-  | { readonly kind: 'advisory-start'; readonly missionId: string; readonly specialistId: string;
-      readonly runtime: 'claude' | 'codex'; readonly contextId: string; readonly json: boolean }
+  | UsageMissionArgs
   | { readonly kind: 'evidence-request'; readonly missionId: string; readonly inputPath: string; readonly json: boolean }
   | { readonly kind: 'evidence-event'; readonly missionId: string; readonly inputPath: string;
       readonly status: 'started' | 'completed'; readonly json: boolean }
@@ -249,29 +245,9 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     return { kind: 'help' };
   }
   const command = divider === -1 ? [] : args.slice(divider + 1);
-  if (subcommand === 'usage-bind' || subcommand === 'usage-unbind' || subcommand === 'advisory-start') {
-    if (divider !== -1) return invalid('usage commands do not accept a command', 'remove --');
-    const names = options.filter(value => value.startsWith('--'));
-    if (new Set(names).size !== names.length) return invalid('duplicate usage option', 'provide each option once');
-    const error = validateOptions(options, subcommand === 'advisory-start'
-      ? ['--id', '--specialist', '--runtime', '--context'] : ['--id', '--source'], ['--json']);
-    if (error !== undefined) return invalid(error, `${PRODUCT_COMMAND} mission --help`);
-    const missionId = missionIdFrom(options);
-    if (typeof missionId !== 'string') return missionId;
-    if (subcommand !== 'advisory-start') {
-      const sourceMissionId = valueAfter(options, '--source');
-      if (sourceMissionId === undefined || !MISSION_ID.test(sourceMissionId)) return invalid('invalid source ID', 'pass --source mis_<exact-session-journal>');
-      return { kind: subcommand, missionId, sourceMissionId, json: options.includes('--json') };
-    }
-    const specialistId = valueAfter(options, '--specialist');
-    const runtime = valueAfter(options, '--runtime');
-    const contextId = valueAfter(options, '--context');
-    if (specialistId === undefined || !/^core:[a-z0-9]+(?:-[a-z0-9]+)*$/.test(specialistId)
-      || (runtime !== 'claude' && runtime !== 'codex') || contextId === undefined || contextId.trim() === '') {
-      return invalid('advisory start needs a role, runtime and actual native context', 'pass --specialist core:<role> --runtime claude|codex --context <successful-native-context>');
-    }
-    return { kind: 'advisory-start', missionId, specialistId, runtime, contextId, json: options.includes('--json') };
-  }
+  const usageCommand = parseUsageCommand({ subcommand, options, divider },
+    { invalid, valueAfter, missionIdFrom, validateOptions });
+  if (usageCommand !== undefined) return usageCommand;
   if (subcommand === 'evidence-request' || subcommand === 'evidence-event') {
     if (divider !== -1) return invalid('evidence commands do not accept a command', 'remove --');
     const names = options.filter(value => value.startsWith('--'));
@@ -1330,16 +1306,8 @@ export async function mission(args: readonly string[]): Promise<void> {
   const root = roots.workRoot;
   const journal = roots.installRoot;
   try {
-    if (parsed.kind === 'usage-bind' || parsed.kind === 'usage-unbind') {
-      const result = await changeUsageSession({ root: journal, missionId: parsed.missionId,
-        sourceMissionId: parsed.sourceMissionId, action: parsed.kind === 'usage-bind' ? 'bind' : 'unbind' });
-      process.stdout.write(parsed.json ? `${JSON.stringify(result)}\n` : `${result.sourceMissionId}: ${result.status}\n`);
-      return;
-    }
-    if (parsed.kind === 'advisory-start') {
-      const result = await recordUsageAdvisory({ root: journal, missionId: parsed.missionId,
-        specialistId: parsed.specialistId, runtime: parsed.runtime, contextId: parsed.contextId });
-      process.stdout.write(parsed.json ? `${JSON.stringify(result)}\n` : `${result.eventId}: coordinator-observed advisory start\n`);
+    if (parsed.kind === 'usage-bind' || parsed.kind === 'usage-unbind' || parsed.kind === 'advisory-start') {
+      process.stdout.write(await runUsageCommand(parsed, journal));
       return;
     }
     if (parsed.kind === 'plan') {

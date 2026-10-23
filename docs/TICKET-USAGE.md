@@ -48,7 +48,10 @@ unknown. A shared session interval attributes its events to the declared work, n
 worker. The existing `VOID_MISSION_ID` still supports future runtime launches; these commands do
 not change it or install source hooks into the host project.
 
-The source owns opening/closing receipts, appended with the existing sequenced writer. Opening
+The source owns opening/closing receipts, appended with the existing sequenced writer. New
+receipts use the canonical current product identity. Readers accept declared legacy namespaces;
+retry preserves an existing reference's persisted source, and closing a legacy interval never
+rewrites its historical bytes or digest anchors. Opening
 begins strictly after its receipt; no historical range argument exists. A single target reference
 is the second, non-atomic write. If it fails, the command reports `USAGE_REFERENCE_PENDING`: retry
 the same command to repair the reference, without moving the opening boundary. A permanent capacity

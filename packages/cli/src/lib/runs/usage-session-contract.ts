@@ -1,4 +1,5 @@
 // tdd-cover: e2e packages/cli/src/lib/runs/usage-sessions.test.ts
+import { PRODUCT_COMMAND, PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
 import { canonicalJsonHash, type CanonicalEvent } from '@voidcorp/mission-engine';
 import { z } from 'zod';
 
@@ -15,7 +16,10 @@ export interface UsageInterval {
   readonly opening: UsageAnchor;
   readonly closing?: UsageAnchor;
 }
-export const USAGE_SOURCE = 'void-harness:usage';
+export const USAGE_SOURCE = `${PRODUCT_COMMAND}:usage`;
+/** Recognized persisted identities come from the product owner, never from rewritten journal bytes. */
+export const isUsageSource = (source: string): boolean =>
+  [PRODUCT_COMMAND, ...PRODUCT_IDENTITY.commands.deprecated].some(command => source === `${command}:usage`);
 export const MAX_USAGE_LINKS = 32;
 export const usageEventId = (...parts: readonly string[]): string => `evt_usage_${canonicalJsonHash(parts).slice(7)}`;
 export const sameUsageAnchor = (left: UsageAnchor, right: UsageAnchor): boolean =>
@@ -41,7 +45,7 @@ export function scanUsageSource(events: readonly CanonicalEvent[], sourceMission
       digest: canonicalJsonHash([prefix.digest, event]) };
     if (event.kind === 'usage.session.opened' || event.kind === 'usage.session.closed') {
       const parsed = (event.kind === 'usage.session.opened' ? openingSchema : closingSchema).safeParse(event.payload);
-      if (!parsed.success || event.source !== USAGE_SOURCE || event.subject !== parsed.data.targetMissionId
+      if (!parsed.success || !isUsageSource(event.source) || event.subject !== parsed.data.targetMissionId
         || !sameUsageAnchor(parsed.data.previous, prefix)) {
         throw new Error('USAGE_BOUNDARY_INVALID: source prefix or receipt changed');
       }

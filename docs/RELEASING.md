@@ -402,7 +402,11 @@ in a suite-local package directory. Its CLI then exercises three independent
 consumer roots (Claude, Codex and both), each with its own environment, receipts
 and user files. Package installation is measured separately; runtime p50 covers
 init and both update paths only. The package directory is never reused across
-runs or operating systems, and all three runtime proofs remain mandatory.
+runs or operating systems, and all three runtime proofs remain mandatory. The final
+`npm exec --offline --yes -- file:<tarball> --version` uses this same installed
+package directory and cache: it still proves manifest-based bin selection and
+avoids a second cold cache. npm may still materialize its internal execution tree;
+this does not remove the unchanged suite deadline or guarantee its Windows timing.
 Install conformance and later
 runtime-invocation certification remain separate gates.
 

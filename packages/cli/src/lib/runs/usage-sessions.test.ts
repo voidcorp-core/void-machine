@@ -2,11 +2,11 @@ import { mkdtemp, readFile, writeFile, appendFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeSequencedEvent, writeSequencedEventOnce } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, writeSequencedEvent, writeSequencedEventOnce } from '@voidcorp/hook-runner';
 import { projectMissionLifecycle, reduceReviewLoop } from '@voidcorp/mission-engine';
 import { createMission, eventLogPath, inspectMission } from './store.js';
 import { changeUsageSession, readUsageSessions } from './usage-sessions.js';
-import { scanUsageSource } from './usage-session-contract.js';
+import { USAGE_SOURCE, scanUsageSource } from './usage-session-contract.js';
 import { recordUsageAdvisory } from './usage-advisory.js';
 
 const target = 'mis_target00000001';
@@ -29,6 +29,30 @@ const change = (root: string, action: 'bind' | 'unbind', missionId = target) =>
 const resolved = async (root: string) => readUsageSessions(root, target, (await inspect(root)).stream.events);
 
 describe('prospective explicit usage intervals', () => {
+  it('writes usage receipts under the canonical current product identity', () => {
+    expect(USAGE_SOURCE).toBe(`${PRODUCT_COMMAND}:usage`);
+  });
+
+  it('retries and closes persisted legacy receipts without rewriting their identity or prefix', async () => {
+    const root = await fixture();
+    const legacy: typeof writeSequencedEventOnce = options => writeSequencedEventOnce({ ...options,
+      draft: { ...options.draft, source: 'void-harness:usage' } });
+    await changeUsageSession({ root, missionId: target, sourceMissionId: source, action: 'bind' }, legacy);
+    const sourcePath = await eventLogPath(root, source);
+    const targetPath = await eventLogPath(root, target);
+    const oldSource = await readFile(sourcePath, 'utf8');
+    const oldTarget = await readFile(targetPath, 'utf8');
+    await expect(change(root, 'bind')).resolves.toMatchObject({ status: 'open' });
+    expect(await readFile(sourcePath, 'utf8')).toBe(oldSource);
+    expect(await readFile(targetPath, 'utf8')).toBe(oldTarget);
+    await hook(root);
+    await expect(change(root, 'unbind')).resolves.toMatchObject({ status: 'closed' });
+    expect((await readFile(sourcePath, 'utf8')).startsWith(oldSource)).toBe(true);
+    expect(await readFile(targetPath, 'utf8')).toBe(oldTarget);
+    expect((await resolved(root)).links[0]?.status).toBe('closed');
+    expect((await inspect(root, source)).stream.events.at(-1)?.source).toBe(`${PRODUCT_COMMAND}:usage`);
+  });
+
   it('counts only after opening, freezes at close and retains original event identity', async () => {
     const root = await fixture();
     const opened = await change(root, 'bind');

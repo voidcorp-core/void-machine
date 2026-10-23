@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { requireData } from '../cheatsheet/read.js';
 import { observedMissionLifecycle, requireOpenMission } from './mission-lifecycle.js';
 import { eventLogPath } from './store.js';
-import { MAX_USAGE_LINKS, USAGE_SOURCE, sameUsageAnchor, scanUsageSource, usageEventId,
+import { MAX_USAGE_LINKS, USAGE_SOURCE, isUsageSource, sameUsageAnchor, scanUsageSource, usageEventId,
   usageMissionId, usageReferenceSchema, type UsageInterval } from './usage-session-contract.js';
 
 const requestSchema = z.strictObject({ root: z.string().min(1), missionId: usageMissionId,
@@ -28,8 +28,11 @@ export async function readUsageJournal(root: string, missionId: string): Promise
 async function reference(root: string, target: string, source: string, interval: UsageInterval,
   write: typeof writeSequencedEventOnce): Promise<void> {
   try {
-    await write({ root, missionId: target, eventId: usageEventId('reference', target, source),
-      draft: { source: USAGE_SOURCE, kind: 'usage.session.linked', subject: source, correlationId: target,
+    const eventId = usageEventId('reference', target, source);
+    const existing = (await readUsageJournal(root, target)).find(event => event.eventId === eventId);
+    const persistedSource = existing !== undefined && isUsageSource(existing.source) ? existing.source : USAGE_SOURCE;
+    await write({ root, missionId: target, eventId,
+      draft: { source: persistedSource, kind: 'usage.session.linked', subject: source, correlationId: target,
         payload: { sourceMissionId: source, opening: interval.opening } },
       validate: events => {
         observedMissionLifecycle(events);
@@ -128,7 +131,7 @@ export async function readUsageSessions(root: string, missionId: string, events:
     if (seen.has(source)) continue;
     seen.add(source);
     try {
-      if (!parsed.success || event.source !== USAGE_SOURCE || event.subject !== source
+      if (!parsed.success || !isUsageSource(event.source) || event.subject !== source
         || event.correlationId !== missionId || source === missionId || sourceCounts.get(source) !== 1) {
         throw new Error('USAGE_REFERENCE_INVALID');
       }

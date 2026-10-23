@@ -219,14 +219,11 @@ Violating the letter of the triage is violating its spirit: the predicate decide
 
 ---
 
-## Model tier by pass (frugality, no quality loss)
+## Native model choice
 
-Tokens follow stakes: mechanical work runs cheap, judgment runs at full strength. This never cheapens a judgment pass — the predicate that fires a pass also sets its tier.
-
-- **Mechanical (may run a cheaper model)**: the ingest read, artifact/mirror regeneration, a trivial edit whose predicate fired nothing else.
-- **Judgment (stay top-tier)**: architecture, security judgment, the review adversarial pass, verification adjudication of a red suite, and any brainstorm/design step.
-- **Subagents carry their own tier**: `doctrine-critic` / `silent-failure-hunter` / `code-explorer` run sonnet; `type-design-analyzer` runs sonnet, `migration-planner` opus (see the agent frontmatter). This skill composes them; it does not override their tier.
-- **Interactive vs worker**: run interactively, the cycle uses the session model (the human's choice); the tiering above is realized when the cycle runs as a `void-autopilot` **worker**, where the worker's model is set from the ticket's stakes (`workerTier`, top-tier by default). A light ticket's whole cycle runs cheaper; a high-stakes one stays full-strength.
+`void-orchestrate` owns model selection from the task's risk, explicit user choice and actual
+native controls. Use that policy for specialists and writers; keep the assigned writer's full
+quality cycle. This workflow adds no model names, worker-tier field or second selection rule.
 
 ## Composition
 

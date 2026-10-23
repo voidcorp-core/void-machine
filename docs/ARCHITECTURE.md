@@ -593,16 +593,23 @@ metadata are gitignored. Modes `shadow` and `warn` are advisory; `enforce` and
 
 ## Agent model tiers
 
-Authored legacy agents declare an explicit `model:` in their Claude frontmatter, chosen by the work's leverage, not by default. Canonical specialists deliberately omit a model: both compilers inherit the selected parent runtime model so the provider-neutral contract cannot pin a provider-specific tier. The tiering (distilled from `wshobson/agents`):
+`void-orchestrate` owns native model selection: explicit user choice, task risk, and supported
+runtime controls. `void-implement` composes that policy instead of pinning commercial names
+or reviving the retired `workerTier()` mechanism. No provider router or new configuration layer.
 
-| Tier | Use for |
-|---|---|
-| **opus** | Architecture, security, critical review, production-coding — high-leverage work where a wrong call cascades |
-| **sonnet** | Documentation, test authoring, debugging, codebase exploration — substantial but bounded reasoning |
-| **haiku** | Mechanical, fast ops — formatting, simple lookups, deterministic transforms |
-| **inherit** | Work whose complexity varies run to run; let the calling session's model carry through |
+Authored legacy Claude agents still carry native `model:` defaults such as `sonnet` or `opus`;
+these are runtime-specific defaults, not universal price/capability rankings. Never forward
+these aliases to another runtime or invent equivalents. A new authored
+runtime-specific agent declares a supported native default, including inheritance where suitable.
+Canonical cross-runtime specialists omit a model and retain canonical budgets; native dispatch
+uses only the current runtime's supported controls and precedence. A default never overrides
+an explicit user choice silently. Existing reviewer definitions and permissions stay unchanged.
 
-**Rule**: a new authored runtime-specific agent MUST declare an explicit `model:` per this tiering. A new cross-runtime specialist MUST instead inherit and put its hard limits in the canonical budget. The existing `doctrine-critic` is the authored-agent example; `solution-architect` is the canonical-specialist example.
+When selection is unsupported without a user override, inherit/default transparently. If an
+explicit choice cannot be honored, stop that dependent launch. Requested identity does not prove
+effective identity; absent runtime reporting stays unknown. Detailed model/version observation
+belongs to DEV-863, not a second registry. Application API budgets remain `void-llm-cost-discipline`'s
+separate concern. See the [native model choice decision](decisions-log/2026-10-23-native-model-choice--37476618-9e72-4199-ab31-853fde5548ff.md) for the retired workflow's supersession.
 
 ## Native specialist contracts
 

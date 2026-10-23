@@ -157,3 +157,8 @@ is explicit and never adds a delivery gate or per-edit loop. See `docs/TICKET-US
 Coordinator-owned start/end linkage uses known source journals only. Lightweight native advice
 may retain a distinct observed-start receipt after actual success; formal review stays separate.
 No per-edit call, guessed identity, retrospective receipt or delivery gate. See `docs/TICKET-USAGE.md`.
+
+
+## Native model choice (DEV-1110, 2026-10-23)
+
+Replace the retired workerTier and fixed per-agent commercial names with the single native model policy owned by void-orchestrate. Preserve the whole assigned writer cycle and applicable quality gates.

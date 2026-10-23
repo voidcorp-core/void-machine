@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.0.8](https://github.com/voidcorp-core/void-machine/compare/v5.0.7...v5.0.8) (2026-10-23)
+
+
+### Bug Fixes
+
+* **review:** preserve bounded native targeted review continuity ([98b58bf](https://github.com/voidcorp-core/void-machine/commit/98b58bfab868fc5f440609730699dd3d6b0bc0f3))
+* **review:** retain native reviewer for bound targeted corrections ([52a40fd](https://github.com/voidcorp-core/void-machine/commit/52a40fd7760b0dfa97bc68bf8ee4dd6efaebce60))
+* **review:** separate historical continuity from current proof freshness ([c819202](https://github.com/voidcorp-core/void-machine/commit/c81920281d629bcd1e723fa3925bab1aeebe45be))
+
 ## [5.0.7](https://github.com/voidcorp-core/void-machine/compare/v5.0.6...v5.0.7) (2026-10-22)
 
 

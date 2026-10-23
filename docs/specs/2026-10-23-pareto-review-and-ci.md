@@ -1,7 +1,7 @@
 ---
 title: Une seule revue et un environnement CI reutilisable
 date: 2026-10-23
-status: in-design
+status: approved
 author: folpe + Codex
 ticket: ""
 related:
@@ -64,9 +64,9 @@ separation de credentials.
 - Proposer les mises a jour navigateur par Dependabot cible sur ce manifeste.
   La PR met a jour paquet et lockfile ; l'image suit la version du paquet. Garder
   les tests et preuves visuelles avant fusion, sans auto-merge des mises a jour.
-- Declarer une version Node 24 exacte dans un fichier standard commun au local,
-  a la CI et a la publication. Conserver Node 26 comme exception explicite de
-  compatibilite. Ne pas modifier automatiquement le Node global de l'utilisateur.
+- Declarer la derniere version stable Node exacte (26.12.1 verifiee le 23 octobre) dans un fichier standard commun au local,
+  a la CI et a la publication. Conserver Node 24 comme exception explicite de
+  compatibilite avec le minimum supporte. Ne pas modifier automatiquement le Node global de l'utilisateur.
 
 ## Execution et preuves
 
@@ -100,4 +100,5 @@ Playwright sans desynchronisation et version Node primaire identique.
 
 Portee bornee a la revue et au cout de preparation CI. Risque d'autorite explicite,
 pas de gain presente comme acquis, pas de suppression de tests ou de publication
-incluse. Cette proposition ne change aucune protection active avant approbation.
+incluse. Choix approuve par folpe le 23 octobre 2026, avec Node stable le plus recent.
+Les protections actives ne changent qu apres preparation et verification de la bascule.

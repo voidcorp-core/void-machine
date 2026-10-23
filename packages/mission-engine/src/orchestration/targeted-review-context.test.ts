@@ -8,6 +8,8 @@ import { CONTEXT, REVIEWER } from '../test/targeted-review.js';
 import { describe, expect, it } from 'vitest';
 import { planStoppedMissionRecovery, validatedRecoveredReviewEvents } from './mission-recovery.js';
 import { stoppedTargetedReview, targetedReviewFixture } from '../test/targeted-review.js';
+import { parseEvidence, sealEvidence } from '../evidence/schema.js';
+import { finding, findingId } from '../test/targeted-review.js';
 import { reduceReviewLoop } from './review-loop.js';
 
 describe('native targeted review continuity', () => {
@@ -215,3 +217,60 @@ it.each(['missing sequence', 'duplicate event', 'malformed line'] as const)(
       request: { ...fixture.recovery.request, expectedJournalHash: canonicalJsonHash(stream.events) } }))
       .toMatchObject({ kind: 'refused', code: 'invalid-journal' });
   });
+
+function partiallyResolvedCorrections() {
+  const fixture = stoppedTargetedReview(2);
+  const second = { ...finding, id: 'refresh-error', summary: 'Refresh errors are lost' };
+  const secondId = `fnd_${canonicalJsonHash({ evidence: second.evidence,
+    sourceId: second.id, classification: second.classification }).slice('sha256:'.length, 29)}`;
+  const currentDiff = `sha256:${'e'.repeat(64)}`;
+  const events = edited(fixture.events, () => true, p => {
+    const completion = p['completion'] ? object(p['completion']) : undefined;
+    if (completion && p['reviewRound'] === 1) completion['findings'] = [finding, second];
+    if (p['actionKind'] === 'run-correction' && p['findingIds']) {
+      p['findingIds'] = p['implementationRound'] === 2 ? [findingId, secondId] : [secondId];
+    }
+    if (p['reviewScope'] && object(p['reviewScope'])['kind'] === 'targeted') {
+      object(p['reviewScope'])['findingIds'] = [finding.id, second.id];
+      if (completion) {
+        const receipt = object(completion['review']);
+        receipt['scope'] = p['reviewScope'];
+        receipt['resolutions'] = p['reviewRound'] === 2
+          ? [{ findingId: finding.id, status: 'resolved', proofIds: ['evd_targeted_proof_1'] },
+            { findingId: second.id, status: 'unresolved', proofIds: [] }]
+          : [finding.id, second.id].map(findingId => ({ findingId, status: 'resolved', proofIds: ['evd_targeted_proof_2'] }));
+      }
+    }
+    const proof = parseEvidence(p['evidence']);
+    if (proof.ok && proof.value.evidenceId === 'evd_targeted_proof_2') {
+      const { proofHash: _proofHash, ...draft } = proof.value;
+      p['evidence'] = JSON.parse(JSON.stringify(sealEvidence({ ...draft, diffHash: currentDiff,
+        dependencies: draft.dependencies.map(dependency => dependency.key === 'git:working-tree'
+          ? { ...dependency, hash: currentDiff } : dependency) })));
+    }
+  });
+  return { fixture, events, currentDiff, input: { ...fixture.input, events,
+    validProofIds: ['evd_targeted_proof_2'] }, recovery: { ...fixture.recovery,
+    stream: replayEventLog(events.map(serializeEvent).join('\n')),
+    request: { ...fixture.recovery.request, expectedJournalHash: canonicalJsonHash(events) },
+    observation: { ...fixture.recovery.observation, evidenceDependencies: { 'git:working-tree': currentDiff } } } };
+}
+
+it('retains authentic partial resolutions when the next correction changes the diff', () => {
+  const fixture = partiallyResolvedCorrections();
+  expect(reduceReviewLoop(fixture.input)).toMatchObject({ status: 'ready-for-verdict', issues: [], findings: [] });
+});
+it('completes after two corrections with refreshed final proofs for both findings', () => {
+  const fixture = partiallyResolvedCorrections();
+  const decision = orchestrateMissionTeam({ stream: replayEventLog(fixture.events.slice(0, -1).map(serializeEvent).join('\n')),
+    plan: { planHash: PLAN_HASH, context: { status: 'complete', issues: [] }, specialists: [{ specialistId: REVIEWER,
+      contractVersion: 1, state: 'applicable', stages: ['post-implementation'] }] },
+    evidenceContext: { dependencies: { 'git:working-tree': fixture.currentDiff } }, maxReviewRounds: 2,
+    currentInputHashesByStage: { 'pre-implementation': {}, 'post-implementation': fixture.input.currentInputHashes },
+    reviewSubject: fixture.fixture.subject, specialistRuntime: { status: 'available', limitations: [] } });
+  expect(decision.action.kind).toBe('complete');
+});
+it('recovers final PASS without mistaking an authentic stale historical proof for context reuse', () => {
+  expect(planStoppedMissionRecovery(partiallyResolvedCorrections().recovery)).toMatchObject({ kind: 'recover',
+    receipt: { consumedCorrectionBatches: 2, remainingCorrectionBatches: 0 } });
+});

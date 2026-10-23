@@ -133,23 +133,38 @@ describe('reusable browser environment and primary Node', () => {
     );
   });
 
-  it('shares the exact primary Node and retains only the supported-floor exception', () => {
+  it('shares the exact current Node without a separate older-runtime lane', () => {
     expect(existsSync(resolve(ROOT, '.node-version'))).toBe(true);
     expect(readFileSync(resolve(ROOT, '.node-version'), 'utf8').trim()).toBe('26.12.1');
     expect(job('validate')).toContain('node-version-file: .node-version');
-    expect(job('node-compatibility')).toContain('node-version: 24.15.0');
-    expect(job('node-compatibility')).toContain('name: tests (node 24)');
+    expect(job('node-compatibility')).toBe('');
     const sources = readdirSync(resolve(ROOT, '.github/workflows'))
       .filter(name => name.endsWith('.yml'))
       .map(name => readFileSync(resolve(ROOT, '.github/workflows', name), 'utf8'));
     const literalVersions = sources.flatMap(source => [...source.matchAll(/node-version: ([0-9][^\n]*)/g)].map(match => match[1]));
-    expect(literalVersions).toEqual(['24.15.0']);
+    expect(literalVersions).toEqual([]);
     const release = readFileSync(resolve(ROOT, '.github/workflows/release.yml'), 'utf8');
     expect(release).toContain('node-version-file: release-control/.node-version');
     expect(release).not.toMatch(/node-version-file: \.node-version/);
     expect(release).toContain(`node-version: ${expression('needs.validate-release.outputs.node-version')}`);
     expect(release).toContain(`node-version: ${expression('steps.primary-node.outputs.node-version')}`);
   });
+});
+
+it('aligns every first-party declared Node floor with the exact runtime CI proves', () => {
+  const version = readFileSync(resolve(ROOT, '.node-version'), 'utf8').trim();
+  const directories = ['.', ...['apps', 'packages', 'packages/packs'].flatMap(parent =>
+    readdirSync(resolve(ROOT, parent), { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => `${parent}/${entry.name}`))];
+  const manifests = directories.map(directory => resolve(ROOT, directory, 'package.json'))
+    .filter(path => existsSync(path));
+  for (const path of manifests) {
+    const manifest = JSON.parse(readFileSync(path, 'utf8'));
+    if (manifest.engines?.node !== undefined) {
+      expect(manifest.engines.node, path).toBe(`>=${version}`);
+    }
+  }
 });
 
 describe('browser image version boundary', () => {

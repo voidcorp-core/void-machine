@@ -202,30 +202,6 @@ jobs:
         if: steps.areas.outputs.graph == 'true'
         run: pnpm conformance:project-graph
 
-  # Only this lane uses the supported minimum; all primary jobs read .node-version.
-  node-compatibility:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: tests (node 24)
-    runs-on: ubuntu-latest
-    # `validate` runs the same build, type check and suites in 4 to 5 minutes;
-    # three times that bounds a hang without cutting a slow but healthy run.
-    timeout-minutes: 15
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ env.GATE_SHA }}
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24.15.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm typecheck
-      - run: pnpm test
-
   validate:
     runs-on: ubuntu-latest
     env:

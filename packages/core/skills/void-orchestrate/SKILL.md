@@ -97,6 +97,11 @@ Never invent a durable inbox. Preserve formal receipts separately from working n
 
 ## Short native specialists
 
+`void-implement` owns domain detection and the required primary domain consultation before coding.
+Dispatch that smallest relevant expert set once, collect actual advice and reuse it while its
+inputs hold. This skill owns transport and provenance, not a second applicability policy or
+an all-specialist preparation quorum. Extra experts need a distinct uncovered risk.
+
 Pass the returned specialist envelope unchanged: runtime, agentName, missionId,
 contextPack and, when present, reviewSubject and reviewScope. Invoke the runtime's
 native fresh-context primitive; native Agent calls are not intercepted. Keep the

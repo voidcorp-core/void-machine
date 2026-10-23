@@ -139,3 +139,9 @@ None. Planning is a process discipline; the verification gates leverage existing
 ## gstack /spec vendoring (DEV-388, de-gstackification Vague 2)
 
 **Integrated** the planning half of /spec: the **executability gate** (a plan is done only when an *unfamiliar* implementer or agent could execute it with **zero follow-up questions** — added as self-review item #7; this skill stated it qualitatively, now it is a walk-one-step-as-a-stranger check) and **MVP-cut-first** (the first vertical slice is the smallest version that delivers real value; grow from a shipping core). **Covered already** (not re-vendored): step structure, verification gates, TDD mode per step. The precision/grounding half of /spec (read-code-before-asking, the five why-questions) went to brainstorm, not here — authoring the plan is downstream of understanding the intent.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

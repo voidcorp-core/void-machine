@@ -51,3 +51,8 @@ completed turn as proof of task acceptance. Retain mandatory review/security
 isolation as blockers. This slice has no global scheduler, durable inbox or claimed
 speedup. Contract tests verify instructions and distribution; actual native probes
 are separately reported and do not establish universal execution or crash recovery.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

@@ -133,3 +133,8 @@ Within a TDD mode (`strict` / `souple` / `exploratory`), the `testing` disciplin
 - **E2E selector strategy**: `getByRole` (recommended Playwright) vs `data-testid`. Lean role-first; testid as escape hatch with explicit code-review approval.
 - **Coverage tool default**: vitest v8 vs c8 vs istanbul. Lean vitest v8 in `pack-monorepo`. Document the choice with rationale.
 - **Test pyramid actual ratios for solopreneur scale**: the 70/20/10 split assumes a team. For a solo dev with strong types and good design, 50/40/10 might be more accurate (integration tests buy more confidence per unit of effort). Defer to first 6 months of data.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

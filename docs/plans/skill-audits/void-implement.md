@@ -138,3 +138,9 @@ specialist lifecycle events keep their shape; `contextId` is the run's id. The k
 four open runs per mission is met by dispatching in waves, never by dropping a specialist, and a
 refused dispatch stops the cycle: a native subagent in its place would be the silent subset the
 dispatch contract forbids.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

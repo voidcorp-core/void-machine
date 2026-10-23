@@ -143,3 +143,9 @@ Total adapted lines: estimated ≤ 30. Functional equivalence preserved.
 - **Mode persistence across sessions**: should `souple` once chosen carry over to the next session in the same file? Probably yes via `.claude/mode.json` per-file map. Open.
 - **Interaction with `mutation-testing` skill**: where does the Stryker config live? Suggest `pack-monorepo` provides a default `stryker.conf.json` + the `mutation-testing` skill documents per-package overrides.
 - **`souple` as English term**: confirm with user that we keep the French word as a technical term. Alternative `lenient` loses the implication of "still disciplined, less ritualized" that `souple` captures.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

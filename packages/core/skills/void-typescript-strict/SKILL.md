@@ -5,7 +5,7 @@ description: TS strict baseline. Zero any budget, branded types for domain primi
 
 # typescript-strict — voidcorp craftsman edition
 
-Types describe truth. The compiler runs first. `any` is banned. `as` is rejected outside narrow exceptions. Domain primitives wear branded types. Discriminated unions model state. Exhaustive switches are verified by `never`. This skill is the language baseline — every other skill composes on top of it.
+Types describe truth. The compiler runs first. `any` is banned. `as` is rejected outside narrow exceptions. Non-interchangeable domain primitives use branded types. Discriminated unions model state. Exhaustive switches are verified by `never`. This skill is the language baseline — every other skill composes on top of it.
 
 **Attribution**: see `.source` in this directory.
 
@@ -169,7 +169,7 @@ ESLint rule `@typescript-eslint/switch-exhaustiveness-check` (configured in `pac
 
 ## Branded types for domain primitives
 
-Raw `string` for things with semantics is the #1 source of "passed the wrong ID" bugs. Brand it.
+Brand a primitive when accidental substitution or invalid construction violates a real domain contract. Preserve existing meaningful brands; avoid wrappers for local values with no distinct invariant.
 
 ```typescript
 // in @voidcorp/core/branded
@@ -189,7 +189,7 @@ function createUserId(raw: string): UserId {
 
 A function taking `UserId` cannot accept a raw `string`. The compiler refuses. Same shape, different identity.
 
-Apply to:
+Typical candidates, when the contract requires non-interchangeability:
 
 - IDs (`UserId`, `OrgId`, `OrderId`, ...)
 - Email, PhoneNumber, IsoDate, IsoDuration
@@ -255,7 +255,7 @@ See `../../hooks/`.
 ## Composition with other skills
 
 - **With `void-functional`**: this skill provides the type machinery (discriminated unions, `Result`, branded primitives); `void-functional` decides WHEN to model with sum types vs records, when to return `Result` vs throw.
-- **With `void-domain-driven-design`**: this skill enforces branded types for domain primitives; DDD decides which entities are aggregates and which are value objects.
+- **With `void-domain-driven-design`**: this skill enforces meaningful non-interchangeable domain types; DDD decides which entities are aggregates and which are value objects.
 - **With `void-hexagonal-architecture`**: ports are typed interfaces; types travel across boundaries via Zod schemas.
 - **With `void-tdd`**: a RED test using a branded type forces the production code to surface a smart constructor.
 - **With `void-code-review`**: review skill flags untyped IDs, `any` slips, missing `satisfies`.
@@ -287,7 +287,7 @@ See `../../hooks/`.
 ## Final rule
 
 ```
-Every TypeScript file → no any, no rogue as, exhaustive switches, branded domain primitives.
+Every TypeScript file → no any, no rogue as, exhaustive switches, brands where domain contracts require them.
 Otherwise            → this is not voidcorp typescript-strict.
 ```
 

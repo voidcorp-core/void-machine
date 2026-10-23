@@ -56,3 +56,8 @@ status, relations, assignee, comments, and review evidence; otherwise automatic
 continuity is not claimed. Rejected: creating ACTIVE for a standalone ticket,
 silently replacing another executing program, or treating a Markdown checkbox list
 as a fallback tracker.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

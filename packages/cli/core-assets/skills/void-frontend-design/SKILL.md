@@ -259,7 +259,7 @@ See `../../hooks/`.
 | Hero feels weak | Singular primary action. Recess everything else. Cut decorative gradient if generic. |
 | Too many font sizes | Reduce to the 3-token system. Vary by weight and color. |
 | Motion feels excessive | Cut decorative animations. Keep only state-change communication. |
-| Mobile screenshot fails | Layout was desktop-first. Restart at 360–390px. |
+| Mobile screenshot fails | Diagnose and repair the affected layout at 360–390px; retain unaffected proofs and verify desktop parity. |
 | Cannot reach AA contrast | Design system token failure. Adjust palette tokens, not per-component overrides. |
 
 ---

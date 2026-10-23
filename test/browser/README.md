@@ -6,8 +6,10 @@ offline npm installation. The installed CLI generates absent/installed synthetic
 documents on the runner. No exported developer document, personal browser
 profile, home directory or connected-browser permission is used.
 
-Playwright runs on GitHub-hosted Ubuntu 24.04, with the Chromium revision bundled
-with Playwright 1.63.0. Contexts are offline, service workers are blocked, and
+Playwright runs in its official noble image on GitHub-hosted Ubuntu 24.04.
+The existing artifact producer derives the image version from `package.json`
+and refuses an unpinned version or mismatched core override. The image supplies
+Chromium and OS dependencies; setup-node selects the primary `.node-version`. Contexts are offline, service workers are blocked, and
 unexpected requests or uncaught page errors fail the suite. One worker, zero
 retries, a five-minute suite limit and a fifteen-minute job limit bound execution.
 This suite intentionally refuses local execution; do not set CI markers on a
@@ -17,8 +19,13 @@ The private tooling manifest stays outside the pnpm workspace and shipped CLI.
 It pins Playwright and its exact playwright/playwright-core dependency chain,
 and pins both axe packages (including the transitive axe-core override). The
 playwright-core peer is also explicitly pinned. The
-runner installs with scripts and lockfile creation disabled. Review this complete
-dependency graph when upgrading; do not introduce floating transitives silently.
+runner installs the committed npm lockfile with `npm ci --ignore-scripts`, using
+setup-node's npm cache keyed by that lockfile. Cache misses work normally.
+Dependabot proposes weekly updates for `/test/browser` against develop; package,
+overrides and generated lockfile must agree before human review of the browser
+evidence. There is no automatic dependency merge or separate image-version pin.
+Generate the lockfile with npm, never by hand. Measure cold and warm preparation
+and test durations in real CI before claiming a performance improvement.
 
 ## Evidence and review
 

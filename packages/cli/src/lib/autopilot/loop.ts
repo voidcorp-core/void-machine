@@ -61,20 +61,17 @@ export const HUMAN_WAIT_LABEL = 'void:human-wait';
 /**
  * Paths the loop never merges itself: the machinery that decides whether a
  * change may merge. The workflows and actions run the required checks and
- * the review itself, the review scripts publish and verify it, the programme grants
- * the merge, and the hooks hold the enforcement floor. A change to any of them merged by the loop
+ * the local review machinery binds its verdict, the programme grants the merge,
+ * and the hooks hold the enforcement floor. A change to any of them merged by the loop
  * would be the loop approving its own judge. A programme adds to this floor
  * through `autopilot.protectedPaths`; nothing removes from it.
  */
 export const PROTECTED_PATHS_FLOOR = [
   '.github/**',
-  'scripts/independent-review-check.mjs',
-  'scripts/independent-review-run.mjs',
-  // What a judging workflow runs from outside `.github`: the promotion audit
-  // runs develop's own copy, void-enforce replays the auto-merge contract and
+  // What a judging workflow runs from outside `.github`: void-enforce
+  // replays the auto-merge contract and
   // the enforcement floor from the pull request, and ci.yml's required verdict
   // is aggregated by verify.mjs.
-  'scripts/promotion-authority.mjs',
   'scripts/auto-merge-contract.mjs',
   'scripts/verify.mjs',
   'packages/core/enforce/**',

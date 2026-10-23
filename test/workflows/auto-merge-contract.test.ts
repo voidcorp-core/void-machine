@@ -3,7 +3,7 @@ import { assertAutoMergeAllowed } from '../../scripts/auto-merge-contract.mjs';
 import { PRODUCT_IDENTITY } from '../../packages/hook-runner/src/identity.js';
 
 // Auto-merge is the default way a pull request lands on develop: branch
-// protection and the required checks, `independent-review` included, decide
+// protection and the required deterministic checks decide
 // when. Only a pull request into main is refused: promoting develop to main,
 // and merging the release pull request, are the two human release actions.
 

@@ -32,6 +32,8 @@ import { observeOrchestrationCapability } from '../lib/orchestration-capability.
 import { findCoreSource } from '../lib/paths.js';
 import { type ProjectRoots, resolveProjectRoots } from '../lib/project-roots.js';
 import { archiveMission, pruneMissions } from '../lib/runs/archive.js';
+import { loadMissionUsage } from '../lib/runs/usage-report.js';
+import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
 import { observedMissionLifecycle, requireOpenMission } from '../lib/runs/mission-lifecycle.js';
 import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
@@ -161,6 +163,7 @@ export type MissionArgs =
     }
   | {
       readonly kind: 'inspect';
+      readonly usage?: true;
       readonly missionId: string;
       readonly json: boolean;
     }
@@ -483,7 +486,7 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
         `${PRODUCT_COMMAND} mission ${subcommand} --id <id>`,
       );
     }
-    const optionError = validateOptions(options, ['--id'], ['--json']);
+    const optionError = validateOptions(options, ['--id'], subcommand === 'inspect' ? ['--json', '--usage'] : ['--json']);
     if (optionError !== undefined) {
       return invalid(optionError, `${PRODUCT_COMMAND} mission ${subcommand} --help`);
     }
@@ -491,6 +494,7 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     if (typeof missionId !== 'string') return missionId;
     return {
       kind: subcommand,
+      ...(subcommand === 'inspect' && options.includes('--usage') ? { usage: true as const } : {}),
       missionId,
       json: options.includes('--json'),
     };
@@ -1229,7 +1233,7 @@ function usage(): string {
   mission close --id <id> --reason interrupted|abandoned [--json]
   mission verify --id <id> [--shell] [--json] -- <command...>
   mission resume --id <id> [--json]
-  mission inspect --id <id> [--json]
+  mission inspect --id <id> [--usage] [--json]
   mission archive --id <id> [--json]
   mission prune --older-than <days> [--apply] [--json]
 
@@ -1483,11 +1487,16 @@ export async function mission(args: readonly string[]): Promise<void> {
         roots,
         parsed.missionId,
         collectKnownSecrets(),
+        parsed.usage ? { quarantine: false } : {},
       );
+      const usageReport = parsed.usage
+        ? await loadMissionUsage(roots.installRoot, parsed.missionId, inspected.stream) : undefined;
       process.stdout.write(
         parsed.json
-          ? `${JSON.stringify(inspected.verdict)}\n`
-          : `${renderInspection(inspected)}\n`,
+          ? `${JSON.stringify(usageReport === undefined ? inspected.verdict
+            : { ...inspected.verdict, usage: usageReport })}\n`
+          : `${renderInspection(inspected)}${usageReport === undefined ? ''
+            : `\n\n${renderMissionUsage(usageReport)}`}\n`,
       );
       process.exitCode = missionVerdictExitCode(inspected.verdict.status);
       return;

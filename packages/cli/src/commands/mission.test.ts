@@ -257,6 +257,15 @@ describe('parseMissionArgs', () => {
     })).toMatchObject({ status: 'degraded' });
   });
 
+  it('accepts informational usage only on inspect without changing ordinary inspect arguments', () => {
+    const id = 'mis_0123456789abcdef';
+    expect(parseMissionArgs(['inspect', '--id', id, '--usage', '--json']))
+      .toEqual({ kind: 'inspect', missionId: id, json: true, usage: true });
+    expect(parseMissionArgs(['inspect', '--id', id]))
+      .toEqual({ kind: 'inspect', missionId: id, json: false });
+    expect(parseMissionArgs(['archive', '--id', id, '--usage']).kind).toBe('invalid');
+  });
+
   it('keeps command argv separate from mission options', () => {
     expect(
       parseMissionArgs([

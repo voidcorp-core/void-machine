@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:63e7199bb4c5b32ed3f8cff0e0bbe972d9765f797fc49197238760ce1537d99b"
+    "rootHash": "sha256:0b36dd8771f732c148e59ca4998cec6825433a5c751fbd6e49c8fa36340369db"
   },
   "nodes": [
     {
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6544,
+          "staticTokens": 6559,
           "type": "skill"
         }
       },
@@ -5373,7 +5373,7 @@
             }
           ],
           "id": "skill:void-verify",
-          "lines": 90,
+          "lines": 97,
           "name": "void-verify",
           "owner": "folpe",
           "pack": null,
@@ -5382,7 +5382,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-verify/SKILL.md",
-          "staticTokens": 1335,
+          "staticTokens": 1471,
           "type": "skill"
         }
       },

@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -263,6 +264,22 @@ describe('mission run store', () => {
     expect(inspected.verdict.status).toBe('degraded');
     expect(inspected.quarantineFiles).toHaveLength(1);
     expect(quarantine).not.toContain('super-secret-token');
+  });
+
+  it('reports incomplete usage inspection without writing quarantine or modifying the journal', async () => {
+    const root = await fixture();
+    await createMission(root, { missionId: ID, title: 'Read-only recap', mode: 'team' });
+    const run = join(root, '.void', 'machine', 'runs', ID);
+    const log = join(run, 'events.jsonl');
+    await appendFile(log, '{invalid JSON\n');
+    const files = await readdir(run, { recursive: true });
+    const body = await readFile(log, 'utf8');
+    const inspected = await inspectMission(root, ID, { dependencies: {} }, { quarantine: false });
+    expect(inspected.stream.continuity).toBe('partial');
+    expect(inspected.verdict.status).toBe('degraded');
+    expect(inspected.quarantineFiles).toEqual([]);
+    expect(await readdir(run, { recursive: true })).toEqual(files);
+    expect(await readFile(log, 'utf8')).toBe(body);
   });
 
   it('archives only a completed green-or-excepted run as jsonl.gz', async () => {

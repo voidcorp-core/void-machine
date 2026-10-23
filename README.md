@@ -86,6 +86,10 @@ search by intention, filter by runtime, pack or type, and copy invocations.
 `--format markdown` and `--format json` export the same information. Inspection
 writes only to stdout; creating the file is your shell redirection.
 
+At ticket end, `void-machine mission inspect --id <mission> --usage` adds observed skill,
+hook and specialist counts. Unlinked telemetry stays unknown; counts do not certify quality.
+See [the usage recap contract](docs/TICKET-USAGE.md).
+
 For your own project rather than the catalogue, `npx voidmachine status` reports
 what is installed, active and actually used.
 

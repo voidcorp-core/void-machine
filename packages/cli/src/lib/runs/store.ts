@@ -531,7 +531,7 @@ export async function inspectMission(
   root: string,
   missionId: string,
   context: EvidenceContext,
-  options: { readonly secrets?: readonly string[] } = {},
+  options: { readonly secrets?: readonly string[]; readonly quarantine?: boolean } = {},
 ): Promise<MissionInspection> {
   const run = await existingRunDirectory(root, missionId);
   const log = join(run, 'events.jsonl');
@@ -544,7 +544,7 @@ export async function inspectMission(
   }
   const text = await readFile(log, 'utf8');
   const stream = replayEventLog(text);
-  const quarantineFiles = await quarantineInvalidLines(
+  const quarantineFiles = options.quarantine === false ? [] : await quarantineInvalidLines(
     run,
     text,
     options.secrets ?? collectKnownSecrets(),

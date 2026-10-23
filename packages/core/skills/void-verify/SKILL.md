@@ -80,6 +80,13 @@ the existing task/review evidence; summarize it when it explains a real omission
 For a plan, update its existing resume point; the tracker owns mutable programme progress.
 The PR evidence and final report reuse the same observed results rather than duplicate work.
 
+Once at ticket end, if a mission ID exists, include the informational recap from
+`void-machine mission inspect --id <mission> --usage` (`--json` for structured output).
+Reuse that recap in the final report; do not run it per edit or chain its exit status as a new
+completion gate. Its exit status remains the mission verdict, not telemetry coverage. Missing
+mission linkage or telemetry is explicitly unknown. Codex skill reads are not invocation hits.
+For the complete catalogue and triggers, use `void-machine cheatsheet --format markdown`.
+
 ## Bounded review evidence
 
 Use the review receipt from `void-implement`: exact commit and base, acceptance criteria,

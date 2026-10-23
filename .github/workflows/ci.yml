@@ -98,14 +98,17 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: test/browser/package-lock.json
+      - name: Resolve paths inside the browser container
+        id: browser-paths
+        run: echo "temp=$RUNNER_TEMP" >> "$GITHUB_OUTPUT"
       - name: Download the exact packed consumer artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/void-consumer-artifact
+          path: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact
       - name: Generate synthetic documents from the verified offline installation
         env:
-          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
+          VOID_CONFORMANCE_TARBALL: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact/consumer.tgz
         run: node test/browser/prepare.mjs
       - name: Install source-only browser QA tooling in runner temporary storage
         # Sources: test/browser/README.md; no dependency or lockfile in the consumer package.
@@ -116,7 +119,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund --omit=optional
           npm ls --all --json > tooling-tree.json
       - name: Exercise the regenerated offline documents
-        working-directory: ${{ runner.temp }}/browser-qa
+        working-directory: ${{ steps.browser-paths.outputs.temp }}/browser-qa
         run: node node_modules/@playwright/test/cli.js test
       - name: Preserve browser evidence for the tested source SHA
         if: ${{ !cancelled() }}
@@ -124,10 +127,10 @@ jobs:
         with:
           name: browser-evidence-${{ env.GATE_SHA }}
           path: |
-            ${{ runner.temp }}/browser-qa/playwright-report/
-            ${{ runner.temp }}/browser-qa/test-results/
-            ${{ runner.temp }}/browser-qa/tooling-tree.json
-            ${{ runner.temp }}/cheatsheet-fixture/evidence.json
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/playwright-report/
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/test-results/
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/tooling-tree.json
+            ${{ steps.browser-paths.outputs.temp }}/cheatsheet-fixture/evidence.json
           if-no-files-found: error
           retention-days: 14
 

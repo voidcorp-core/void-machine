@@ -15,6 +15,15 @@ retries, a five-minute suite limit and a fifteen-minute job limit bound executio
 This suite intentionally refuses local execution; do not set CI markers on a
 developer machine to evade that boundary. Run it through the PR's normal CI.
 
+Container paths come from the step's `RUNNER_TEMP`, published through
+`GITHUB_OUTPUT` for artifact inputs, the tarball environment, the test working
+directory and every evidence upload path. The host's `runner.temp` context is
+not a container path; a multiline action input must not depend on prefix
+translation of its first line. The conformance Git command retains its isolated
+environment: checkout's temporary `HOME` and Git configuration are not inherited.
+It passes `-c safe.directory=<exact source checkout>` for that command only,
+without wildcard trust or changes to local, global or system Git configuration.
+
 The private tooling manifest stays outside the pnpm workspace and shipped CLI.
 It pins Playwright and its exact playwright/playwright-core dependency chain,
 and pins both axe packages (including the transitive axe-core override). The
@@ -60,3 +69,8 @@ local-file access, which remains refused.
 - [Visual comparison environment constraints](https://playwright.dev/docs/test-snapshots)
 - [Automated accessibility limitations](https://playwright.dev/docs/accessibility-testing)
 - [GitHub Actions context availability](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability)
+- [GitHub Actions step outputs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-output-parameter)
+- [Pinned checkout temporary Git configuration](https://github.com/actions/checkout/blob/d23441a48e516b6c34aea4fa41551a30e30af803/src/git-auth-helper.ts)
+- [Git protected configuration scopes](https://git-scm.com/docs/git-config#SCOPES)
+- [Git safe.directory](https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory)
+- [Git ownership regression tests](https://github.com/git/git/blob/v2.43.0/t/t0033-safe-directory.sh)

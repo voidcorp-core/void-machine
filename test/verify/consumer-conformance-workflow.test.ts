@@ -66,6 +66,38 @@ describe('packed consumer CI topology', () => {
 });
 
 describe('reusable browser environment and primary Node', () => {
+  it('uses container-native temporary paths for every browser input and evidence path', () => {
+    const browser = job('browser-conformance');
+    const temporary = expression('steps.browser-paths.outputs.temp');
+    expect(browser).not.toContain(expression('runner.temp'));
+    expect(browser).toContain(`path: ${temporary}/void-consumer-artifact`);
+    expect(browser).toContain(`VOID_CONFORMANCE_TARBALL: ${temporary}/void-consumer-artifact/consumer.tgz`);
+    expect(browser).toContain(`working-directory: ${temporary}/browser-qa`);
+    for (const evidence of ['browser-qa/playwright-report/', 'browser-qa/test-results/',
+      'browser-qa/tooling-tree.json', 'cheatsheet-fixture/evidence.json']) {
+      expect(browser).toContain(`            ${temporary}/${evidence}`);
+    }
+    expect(browser.indexOf('id: browser-paths')).toBeLessThan(browser.indexOf('actions/download-artifact@'));
+  });
+
+  it('publishes the runtime temporary directory through the native step output', () => {
+    const script = job('browser-conformance').match(/id: browser-paths\n\s+run: (.+)/)?.[1];
+    expect(script).toBeDefined();
+    const root = mkdtempSync(resolve(tmpdir(), 'browser-paths-'));
+    try {
+      const output = resolve(root, 'output');
+      writeFileSync(output, '');
+      const result = spawnSync('sh', ['-ec', script ?? ''], {
+        encoding: 'utf8',
+        env: { ...process.env, RUNNER_TEMP: '/__w/_temp/with spaces', GITHUB_OUTPUT: output },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      expect(readFileSync(output, 'utf8')).toBe('temp=/__w/_temp/with spaces\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('derives the official image from the tooling manifest in the existing producer', () => {
     expect(job('consumer-artifact')).toContain(`playwright-version: ${expression('steps.browser-version.outputs.version')}`);
     expect(job('browser-conformance')).toContain(

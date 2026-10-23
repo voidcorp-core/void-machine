@@ -114,7 +114,9 @@ export function verifyConformanceArtifact(tarballPath, expectedSourceSha) {
 async function gitText(args) {
   const result = await runConformanceProcess({
     command: 'git',
-    args: ['-C', REPO_ROOT, ...args],
+    // Checkout's temporary HOME is not inherited by the isolated conformance process.
+    // Trust only this source checkout, for this command; never write global Git config.
+    args: ['-c', `safe.directory=${REPO_ROOT}`, '-C', REPO_ROOT, ...args],
     cwd: REPO_ROOT,
   });
   return requireConformanceExit(result, `git ${args[0]}`).stdout.trim();

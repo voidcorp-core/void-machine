@@ -663,6 +663,39 @@ receipts and health checks do not depend on them. `_hooklib.sh` and `_checks.sh`
 remain characterization inputs only and are not part of the active runtime.
 The local runtime therefore requires Node only, not `jq` or a POSIX shell.
 
+`outcome-meter` composes warning-only repeated-read advice in its existing
+`PostToolUse` process, with Claude's documented
+`PostToolUseFailure` used only to reset the stream. It compares exact `Read`, `Grep`
+and `Glob` calls within a runtime/session and project, using canonical object key
+order but preserving strings, paths, flags and array order. The fourth consecutive
+successful call with identical arguments and result emits one fixed `additionalContext`
+message; the counter saturates until new information, arguments or another observed
+activity resets it. Immediate duplicate tool-call IDs do not increment. It does not judge
+semantic progress, block tools, rewrite results, call an LLM or inspect shell commands.
+Interleaved loops are intentionally outside this last-call heuristic.
+
+The disposable `.void/machine/read-loop/state.json` cache retains only SHA-256
+digests, counts and timestamps: at most 32 sessions, 32 KiB and 24 hours. Digests are
+comparison keys, not encryption or authentication. JSON normalization is bounded
+at 32 levels, 4,096 nodes and 256 KiB per argument/result value, inside the runner's
+1 MiB input limit. Missing results, explicit error/interruption markers and
+uninspectable values reset rather than count. Missing session identity or unsafe
+cache access reports `READ_LOOP_UNAVAILABLE` without changing tool permission.
+The private cache refuses symlinks/nonregular or oversized state, uses atomic
+replacement and an exclusive no-wait lock. Contention skips advice. A crashed
+writer can leave the lock; with no hook process using it, remove this disposable
+`read-loop` cache directory to recover. There is no stale-lock takeover or retry loop.
+No raw arguments, results or session identifiers are written by this advice path.
+
+The existing `outcome-meter` wrapper remains the catalogue and cheat-sheet owner.
+There is no additional process on normal tool completions. One `hook.completed`
+receipt records the advice outcome, alongside the existing tool outcome event; a
+failure reset never manufactures a `runtime.tool.completed` receipt. Source: the
+[Claude hooks contract](https://code.claude.com/docs/en/hooks#posttooluse) and
+[Codex hooks contract](https://learn.chatgpt.com/docs/hooks#posttooluse).
+Slim's [tool-loop guard](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/hooks/tool-loop-guard/hook.ts)
+informed the identical-result check; its blocking and task/wait heuristics are not adopted.
+
 Context-sensitive focused-test checks reconstruct the complete proposed file
 before inspecting syntax. They use the official harness-owned TypeScript 6 API in a
 bounded child process. The hook invokes a companion `_syntax-worker.cjs` whose

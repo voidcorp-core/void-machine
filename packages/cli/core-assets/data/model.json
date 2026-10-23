@@ -394,11 +394,11 @@
     {
       "description": "",
       "id": "hook:outcome-meter",
-      "lines": 13,
+      "lines": 14,
       "name": "outcome-meter",
       "pack": null,
       "source": "packages/core/hooks/outcome-meter.sh",
-      "staticTokens": 104,
+      "staticTokens": 127,
       "type": "hook"
     },
     {

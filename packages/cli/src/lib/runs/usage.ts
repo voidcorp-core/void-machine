@@ -1,8 +1,9 @@
 import { activationName } from '@voidcorp/harness-graph';
 import type { CanonicalEvent, JsonValue } from '@voidcorp/mission-engine';
+import type { UsageLink, UsageScope } from './usage-sessions.js';
 import type { CatalogEntry } from '../cheatsheet/catalog.js';
 
-type UsageKind = 'skill' | 'hook' | 'specialist';
+type UsageKind = 'skill' | 'hook' | 'specialist' | 'advisory';
 export interface UsageRow {
   readonly type: UsageKind;
   readonly name: string;
@@ -15,6 +16,7 @@ export interface MissionUsage {
   readonly missionId: string;
   readonly rows: readonly UsageRow[];
   readonly notes: readonly string[];
+  readonly links?: readonly UsageLink[];
 }
 
 function field(payload: JsonValue, key: string): string | undefined {
@@ -37,6 +39,10 @@ function observation(event: CanonicalEvent): {
   if (event.subject.startsWith('hook:') && event.kind === 'hook.completed') {
     return { type: 'hook', hit: true, outcome: field(event.payload, 'status') ?? 'unknown' };
   }
+  if (event.kind === 'usage.advisory.started' && event.source === 'coordinator-observed'
+    && event.subject.startsWith('core:') && ['claude', 'codex'].includes(field(event.payload, 'runtime') ?? '')) {
+    return { type: 'advisory', hit: true };
+  }
   if (event.subject.startsWith('core:') && event.kind === 'specialist.started') {
     return { type: 'specialist', hit: true };
   }
@@ -52,6 +58,7 @@ export function projectMissionUsage(input: {
   readonly events: readonly CanonicalEvent[];
   readonly catalog: readonly CatalogEntry[];
   readonly hookSubjects: Readonly<Record<string, string>>;
+  readonly linkedScopes?: readonly UsageScope[];
 }): MissionUsage {
   const rows = new Map<string, { type: UsageKind; name: string; catalogued: boolean;
     observedHits: number; outcomes: Record<string, number>; runtimeHits: Record<string, number> }>();
@@ -63,9 +70,11 @@ export function projectMissionUsage(input: {
   const channels = new Set<UsageKind>();
   const seen = new Set<string>();
   const runtimeChannels = new Set<string>();
-  for (const event of input.events) {
-    if (event.missionId !== input.missionId || seen.has(event.eventId)) continue;
-    seen.add(event.eventId);
+  const scopes = [{ missionId: input.missionId, events: input.events }, ...(input.linkedScopes ?? [])];
+  for (const event of scopes.flatMap(scope => scope.events.filter(item => item.missionId === scope.missionId))) {
+    const identity = `${event.missionId}:${event.eventId}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
     const observed = observation(event);
     if (observed === undefined) continue;
     const rawName = event.subject.slice(event.subject.indexOf(':') + 1);
@@ -73,12 +82,14 @@ export function projectMissionUsage(input: {
       ? activationName('skill', rawName.startsWith('core/') ? rawName.slice(5) : rawName)
       : input.hookSubjects[event.subject] ?? rawName;
     if (!/^[a-zA-Z0-9]+(?:[-:/][a-zA-Z0-9]+)*$/.test(name)) continue;
-    const runtime = /^runtime:(claude|codex|unknown)$/.test(event.source)
+    const runtime = observed.type === 'advisory' ? field(event.payload, 'runtime') ?? 'unknown'
+      : /^runtime:(claude|codex|unknown)$/.test(event.source)
       ? event.source.slice('runtime:'.length) : 'unattributed';
     runtimeChannels.add(`${observed.type}:${runtime}`);
     channels.add(observed.type);
     const key = `${observed.type}:${name}`;
-    const row = rows.get(key) ?? { type: observed.type, name, catalogued: false,
+    const row = rows.get(key) ?? { type: observed.type, name,
+      catalogued: observed.type === 'advisory' && input.catalog.some(entry => entry.type === 'specialist' && entry.name === name),
       observedHits: 0, outcomes: {}, runtimeHits: {} };
     if (observed.hit) {
       row.observedHits += 1;
@@ -100,10 +111,11 @@ export function projectMissionUsage(input: {
     })).sort((a, b) => `${a.type}:${a.name}`.localeCompare(`${b.type}:${b.name}`, 'en')),
     notes: [
       ...(!channels.has('hook') && !channels.has('skill') ? ['hook/skill telemetry not linked to this mission.'] : []),
-      ...(['skill', 'hook', 'specialist'] as const).filter(kind => !channels.has(kind))
+      ...(['skill', 'hook', 'specialist', 'advisory'] as const).filter(kind => !channels.has(kind))
         .map(kind => `${kind}: unknown; no linked execution telemetry.`),
       'Hits are observed lower bounds. Zero means no recorded hit, not proof of non-use; gaps remain possible.',
       'Codex SKILL.md reads are loads, not observable native skill invocations; no skill hits are inferred from them.',
+      ...(channels.has('advisory') ? ['Advisory starts are coordinator-observed declarations, separate from formal specialist dispatch; no completion or verdict claimed.'] : []),
       'Counts do not prove applicability, instruction compliance, TDD or code quality. Missing telemetry is not a delivery gate.',
     ],
   };
@@ -115,7 +127,7 @@ export function renderMissionUsage(report: MissionUsage): string {
   return [
     'Usage recap (explicit mission linkage only)',
     ...report.notes.map(note => `- ${note}`),
-    ...(['skill', 'hook', 'specialist'] as const).map(kind => {
+    ...(['skill', 'hook', 'specialist', 'advisory'] as const).map(kind => {
       const rows = report.rows.filter(row => row.type === kind);
       return `${kind}: ${rows.filter(row => row.observedHits === 0).length} zero observed, `
         + `${rows.filter(row => row.observedHits === 'unknown').length} unknown catalogue entries.`;

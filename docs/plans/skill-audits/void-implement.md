@@ -150,3 +150,10 @@ improvement loops; the owning boundaries and retained safeguards are recorded in
 
 Reuse one informational mission usage recap at ticket end, owned by verify. Unknown telemetry
 is explicit and never adds a delivery gate or per-edit loop. See `docs/TICKET-USAGE.md`.
+
+
+## Explicit prospective usage (2026-10-23)
+
+Coordinator-owned start/end linkage uses known source journals only. Lightweight native advice
+may retain a distinct observed-start receipt after actual success; formal review stays separate.
+No per-edit call, guessed identity, retrospective receipt or delivery gate. See `docs/TICKET-USAGE.md`.

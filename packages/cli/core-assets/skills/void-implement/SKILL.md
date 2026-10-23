@@ -29,6 +29,16 @@ capability fallbacks follow that policy without skipping triggered quality gates
 Preserve one `leadWriterId` through corrections; the coordinator retains user intent
 and decisions. Pass any orchestrator-owned panel contract unchanged.
 
+## Optional usage linkage
+
+At work start, when both the existing mission ID and exact native session journal ID are known,
+the coordinator runs `void-machine mission usage-bind --id <mission> --source <session-journal>`.
+This begins prospective counting without changing installed hooks. Never guess a journal from
+recent activity, timestamps or an inherited thread/session variable; a shared session is not
+worker isolation. If identification is unavailable, report unknown and continue the authorized
+work. The coordinator owns this action, not an ID reconstruction task for the user. `void-verify`
+closes the interval and reports once at the end; no per-edit command or extra delivery gate.
+
 ## Canonical team orchestration
 
 When the caller supplies `panel.provider: orchestrator`, the orchestrator owns specialist

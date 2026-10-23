@@ -56,3 +56,10 @@ are separately reported and do not establish universal execution or crash recove
 
 Align the existing standard with the owning workflow, preserving its technical protection while
 removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).
+
+
+## Explicit prospective usage (2026-10-23)
+
+Coordinator-owned start/end linkage uses known source journals only. Lightweight native advice
+may retain a distinct observed-start receipt after actual success; formal review stays separate.
+No per-edit call, guessed identity, retrospective receipt or delivery gate. See `docs/TICKET-USAGE.md`.

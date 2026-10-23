@@ -102,6 +102,13 @@ Dispatch that smallest relevant expert set once, collect actual advice and reuse
 inputs hold. This skill owns transport and provenance, not a second applicability policy or
 an all-specialist preparation quorum. Extra experts need a distinct uncovered risk.
 
+For a lightweight consultation outside formal dispatch, after the native call actually succeeds
+and returns a context ID, the coordinator may record `void-machine mission advisory-start --id
+<mission> --specialist core:<role> --runtime claude|codex --context <actual-native-context>`.
+This is a coordinator-observed usage receipt, not `specialist-event`, completion or review proof.
+Never record a planned/failed start, reconstruct past receipts, or block delivery on missing
+telemetry. Repeated submission of the same context is idempotent; a different role conflicts.
+
 Pass the returned specialist envelope unchanged: runtime, agentName, missionId,
 contextPack and, when present, reviewSubject and reviewScope. Invoke the runtime's
 native fresh-context primitive; native Agent calls are not intercepted. Keep the

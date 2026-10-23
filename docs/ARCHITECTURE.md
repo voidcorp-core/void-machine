@@ -887,6 +887,10 @@ textconv, repository clean/process filters, or ambient config. Git HEAD, changes
 report degradation separately. Validated `HEAD` reads bracket their complete collection; a mismatch
 degrades the whole Git snapshot rather than combining evidence from different repository states.
 Commands that depend on a commit use the initial object ID, which also closes `HEAD` ABA transitions.
+On macOS, fixed Homebrew locations precede the system Git fallback, avoiding Apple's Xcode
+launcher when a direct Git is installed. Absolute executable validation, the closed environment,
+and the five-second default process ceiling remain unchanged; repository `PATH` entries are ignored.
+Apple documents the system launchers in [TN2339](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
 SHA-256 extraction records plus an explicitly authoritative accepted change-journal generation make
 unchanged builds perform zero traversal, extraction reads, hashing, and AST passes without trusting
 mutable JSON. The default Node `fs.watch` journal is advisory, so default builds verify sources before

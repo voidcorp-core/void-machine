@@ -140,7 +140,7 @@ export function createEmail(raw: string): Result<Email, ValidationError> {
 }
 ```
 
-Apply to every domain primitive: `UserId`, `OrgId`, `OrderId`, `Email`, `PhoneNumber`, `IsoDate`, `Money` (`{ amount: number; currency: CurrencyCode }`, with `CurrencyCode` itself branded).
+Use a branded type when it prevents a concrete mix-up or enforces an invariant: for example distinct `UserId`/`OrgId`, validated `Email`, or monetary units. Preserve existing meaningful brands. A local primitive with no distinct invariant needs no wrapper merely to satisfy a pattern.
 
 Composes with `void-typescript-strict` (branded type mechanics) and `void-functional` (smart constructors return `Result`).
 

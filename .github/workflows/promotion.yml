@@ -36,15 +36,6 @@ env:
   EXPECTED_REF: refs/heads/develop
   EXPECTED_HEAD: develop
   EXPECTED_BASE: main
-  EXPECTED_HUMAN: folpe
-  MAX_PROMOTION_COMMITS: 500
-  # GitHub refuses a query whose worst case exceeds 500,000 nodes; each commit
-  # of the batch asks for 100 pull requests, each with its head's review checks
-  # (5 suites of 3 runs, 2 and 1 observed) and 100 timeline events.
-  # test/workflows/release-authority.test.ts recomputes the bound.
-  PROMOTION_BATCH_SIZE: 30
-  PROMOTION_API_RETRIES: 3
-  PROMOTION_RETRY_DELAY_SECONDS: 1
 
 jobs:
   promotion:
@@ -76,188 +67,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The merge authority of each pull request is judged by
-      # scripts/promotion-authority.mjs, on the same Node as the
-      # independent-review job. https://github.com/actions/setup-node/tree/v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 24
-
-      - name: Audit and maintain the promotion pull request
+      - name: Maintain the human promotion pull request
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          # The review App, the only identity whose independent-review check
-          # counts as a review; anyone's job can post one under that name.
-          REVIEW_APP_ID: ${{ vars.REVIEW_APP_ID }}
         run: |
           set -euo pipefail
 
-          # Content, not commit counts: a back-merge leaves a merge commit on
-          # develop that main does not carry, and promoting that alone would be
-          # a pull request with an empty diff.
+          # A release back-merge can add commits without changing content.
           if git diff --quiet origin/main origin/develop; then
             echo "main already holds develop's tree; nothing to promote."
             exit 0
-          fi
-
-          commit_count=$(git rev-list --count origin/main..origin/develop)
-          if [ "$commit_count" -gt "$MAX_PROMOTION_COMMITS" ]; then
-            printf 'promotion contains %s commits; the audited maximum is %s.\n' \
-              "$commit_count" "$MAX_PROMOTION_COMMITS" >&2
-            exit 1
-          fi
-
-          if ! [[ "$REVIEW_APP_ID" =~ ^[1-9][0-9]*$ ]]; then
-            echo "no review App id to hold the independent-review check to." >&2
-            exit 1
-          fi
-          # GitHub Actions, whose check any job's GITHUB_TOKEN can post.
-          if [ "$REVIEW_APP_ID" = 15368 ]; then
-            echo "the review App id is the GitHub Actions app." >&2
-            exit 1
-          fi
-
-          audit_file=$(mktemp)
-          response_file=$(mktemp)
-          error_file=$(mktemp)
-          trap 'rm -f "$audit_file" "$response_file" "$error_file"' EXIT
-          # Git first-parent identifies where each nested commit entered develop.
-          # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---first-parent
-          mapfile -t integration_oids < <(git rev-list --first-parent --reverse origin/main..origin/develop)
-          mapfile -t commit_oids < <(git rev-list --reverse origin/main..origin/develop)
-          integration_for_commit=()
-          declare -A authority_for=()
-          for oid in "${commit_oids[@]}"; do
-            integration_oid=''
-            for entry in "${integration_oids[@]}"; do
-              if git merge-base --is-ancestor "$oid" "$entry"; then
-                integration_oid=$entry
-                break
-              fi
-            done
-            if [ -z "$integration_oid" ]; then
-              echo "unexplained commit $oid: no first-parent integration into develop." >&2
-              exit 1
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              echo "unable to compare promotion trees." >&2
+              exit "$status"
             fi
-            integration_for_commit+=("$integration_oid")
-          done
+          fi
 
-          query_for_batch() {
-            local query='query($owner:String!,$repo:String!){ repository(owner:$owner,name:$repo){ '
-            local index=0
-            for integration_oid in "$@"; do
-              query+="c${index}:object(oid:\"${integration_oid}\"){... on Commit{oid associatedPullRequests(first:100){nodes{number baseRefName headRefName isCrossRepository mergedAt mergeCommit{oid} mergedBy{login} headRefOid commits(last:1){nodes{commit{oid checkSuites(first:5,filterBy:{appId:${REVIEW_APP_ID}}){totalCount nodes{checkRuns(first:3,filterBy:{checkName:\"independent-review\"}){totalCount nodes{status conclusion completedAt}}}}}}} headRepository{nameWithOwner} headRepositoryOwner{login} timelineItems(first:100,itemTypes:[AUTO_MERGE_ENABLED_EVENT,ADDED_TO_MERGE_QUEUE_EVENT]){nodes{__typename ... on AutoMergeEnabledEvent{actor{login} createdAt} ... on AddedToMergeQueueEvent{actor{login} createdAt}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}} "
-              index=$((index + 1))
-            done
-            query+='} }'
-            printf '%s' "$query"
-          }
+          body='Merging this is release action 1: develop is ready to enter main.
+          Review the complete change and required CI before merging by hand.
+          Nothing publishes yet; release-please proposes the version and changelog afterwards.'
 
-          fetch_batch() {
-            local query="$1"
-            local batch_start="$2"
-            local batch_end="$3"
-            local attempt=1
-            local delay="$PROMOTION_RETRY_DELAY_SECONDS"
-            while [ "$attempt" -le "$PROMOTION_API_RETRIES" ]; do
-              : > "$response_file"
-              : > "$error_file"
-              if gh api graphql \
-                -f owner="$EXPECTED_OWNER" \
-                -f repo="$EXPECTED_NAME" \
-                -f query="$query" >"$response_file" 2>"$error_file" &&
-                jq -e '(.errors // []) | length == 0' "$response_file" >/dev/null &&
-                jq -e '.data.repository != null' "$response_file" >/dev/null; then
-                return 0
-              fi
-              if [ "$attempt" -lt "$PROMOTION_API_RETRIES" ]; then
-                printf 'GitHub GraphQL API failure for batch %s-%s; retry %s/%s after %ss.\n' \
-                  "$batch_start" "$batch_end" "$attempt" "$PROMOTION_API_RETRIES" "$delay" >&2
-                sleep "$delay"
-                delay=$((delay * 2))
-              fi
-              attempt=$((attempt + 1))
-            done
-            printf 'GitHub GraphQL API error for batch %s-%s after %s attempts.\n' \
-              "$batch_start" "$batch_end" "$PROMOTION_API_RETRIES" >&2
-            cat "$error_file" >&2
-            jq -r '.errors[]?.message // empty' "$response_file" >&2
-            return 1
-          }
-
-          for ((batch_start=0; batch_start<${#commit_oids[@]}; batch_start+=PROMOTION_BATCH_SIZE)); do
-            batch_end=$((batch_start + PROMOTION_BATCH_SIZE))
-            if [ "$batch_end" -gt "${#commit_oids[@]}" ]; then batch_end=${#commit_oids[@]}; fi
-            query=$(query_for_batch "${integration_for_commit[@]:batch_start:batch_end-batch_start}")
-            fetch_batch "$query" "$batch_start" "$((batch_end - 1))"
-
-            for ((index=batch_start; index<batch_end; index++)); do
-              oid=${commit_oids[index]}
-              integration_oid=${integration_for_commit[index]}
-              alias="c$((index - batch_start))"
-              commit_json=$(jq -c --arg alias "$alias" '.data.repository[$alias]' "$response_file")
-              jq -e --arg oid "$integration_oid" \
-                '. != null and .oid == $oid' <<<"$commit_json" >/dev/null || {
-                echo "unexplained commit $oid: GitHub returned no matching integration object." >&2
-                exit 1
-              }
-              if jq -e '.associatedPullRequests.pageInfo.hasNextPage' <<<"$commit_json" >/dev/null; then
-                echo "commit $oid has more than 100 associated PRs; refusing an incomplete audit." >&2
-                exit 1
-              fi
-
-              # https://docs.github.com/en/graphql/reference/pulls#pullrequest
-              candidates=$(jq -c --arg integration_oid "$integration_oid" \
-                '[.associatedPullRequests.nodes[] |
-                  select(.mergedAt != null and .baseRefName == "develop" and
-                    .mergeCommit.oid == $integration_oid)]' <<<"$commit_json")
-              if [ "$(jq 'length' <<<"$candidates")" -ne 1 ]; then
-                echo "unexplained commit $oid: expected exactly one merged PR targeting develop." >&2
-                exit 1
-              fi
-              pr=$(jq -c '.[0]' <<<"$candidates")
-              number=$(jq -r '.number' <<<"$pr")
-
-              # Who had the right to merge it is decided in one tested place:
-              # folpe by hand, an automatic merge whose head carries a successful
-              # independent-review check from GitHub Actions, or the back-merge proved by
-              # construction. Anything else, or any doubt, refuses.
-              if [ -z "${authority_for[$integration_oid]:-}" ]; then
-                authority_for[$integration_oid]=$(node \
-                  "$GITHUB_WORKSPACE/scripts/promotion-authority.mjs" "$integration_oid" <<<"$pr") || {
-                  echo "unauthorized commit $oid: PR #$number had no right to merge it." >&2
-                  exit 1
-                }
-              fi
-              authority=${authority_for[$integration_oid]}
-              merged_by=$(jq -r '.mergedBy.login // "missing"' <<<"$pr")
-
-              printf -- '- `%s` -> integration `%s` -> PR #%s (`%s` -> `%s`), merged by `%s`, authority: `%s`\n' \
-                "${oid:0:12}" "${integration_oid:0:12}" "$number" \
-                "$(jq -r '.headRefName' <<<"$pr")" \
-                "$(jq -r '.baseRefName' <<<"$pr")" \
-                "$merged_by" "$authority" | tee -a "$audit_file"
-            done
-          done
-
-          body=$(printf '%s %s\n\n%s\n\n%s\n' \
-            'Merging this is release action 1: `develop` is ready to enter `main`.' \
-            'Nothing publishes yet; release-please proposes the version and changelog afterwards.' \
-            'Complete commit and merge-authority audit:' \
-            "$(cat "$audit_file")")
-
-          mapfile -t existing < <(gh pr list --repo "$EXPECTED_REPOSITORY" \
+          # Assignment preserves API failures; process substitution would hide them.
+          existing=$(gh pr list --repo "$EXPECTED_REPOSITORY" \
             --head "$EXPECTED_HEAD" --base "$EXPECTED_BASE" --state open \
-            --limit 2 --json number --jq '.[].number')
-          if [ "${#existing[@]}" -gt 1 ]; then
+            --limit 2 --json number)
+          count=$(jq -er 'if type == "array" then length else error("invalid PR list") end' <<<"$existing")
+          if [ "$count" -gt 1 ]; then
             echo "more than one promotion pull request is open." >&2
             exit 1
           fi
 
-          if [ "${#existing[@]}" -eq 1 ]; then
-            pr_number=${existing[0]}
+          if [ "$count" -eq 1 ]; then
+            pr_number=$(jq -er '.[0].number | select(type == "number" and . > 0 and . == floor)' <<<"$existing")
             identity=$(gh pr view "$pr_number" --repo "$EXPECTED_REPOSITORY" \
-              --json baseRefName,headRefName,headRepository,headRepositoryOwner,isCrossRepository)
+              --json baseRefName,headRefName,headRepository,headRepositoryOwner,isCrossRepository,state)
             jq -e \
               --arg repository "$EXPECTED_REPOSITORY" \
               --arg owner "$EXPECTED_OWNER" \
@@ -266,15 +111,15 @@ jobs:
               '.baseRefName == $base and .headRefName == $head and
                .headRepository.nameWithOwner == $repository and
                .headRepositoryOwner.login == $owner and
-               (.isCrossRepository | not)' <<<"$identity" >/dev/null || {
-              echo "the existing promotion PR has an invalid repository, head, base or fork." >&2
+               .isCrossRepository == false and .state == "OPEN"' <<<"$identity" >/dev/null || {
+              echo "the existing promotion PR has an invalid repository, head, base, fork or state." >&2
               exit 1
             }
             gh pr edit "$pr_number" --repo "$EXPECTED_REPOSITORY" --body "$body" >/dev/null
-            echo "promotion PR #$pr_number updated with the current complete audit."
+            echo "promotion PR #$pr_number updated for human review."
           else
             gh pr create --repo "$EXPECTED_REPOSITORY" \
               --base "$EXPECTED_BASE" --head "$EXPECTED_HEAD" \
               --title 'chore: promote develop to main' --body "$body" >/dev/null
-            echo "promotion pull request opened with the complete audit."
+            echo "promotion pull request opened for human review."
           fi

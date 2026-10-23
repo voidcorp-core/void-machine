@@ -82,6 +82,7 @@ jobs:
       CONTROL_ROOT: ${{ github.workspace }}/release-control
       RELEASE_TREE: ${{ github.workspace }}/release-tree
     outputs:
+      node-version: ${{ steps.primary-node.outputs.node-version }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       version: ${{ steps.resolve.outputs.version }}
       release_commit: ${{ steps.resolve.outputs.release_commit }}
@@ -102,9 +103,10 @@ jobs:
           path: release-control
           persist-credentials: false
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - id: primary-node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: release-control/.node-version
 
       - name: Resolve the immutable tag, release and protected-main ancestry
         id: resolve
@@ -126,7 +128,7 @@ jobs:
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: release-control/.node-version
           cache: pnpm
           cache-dependency-path: release-tree/pnpm-lock.yaml
 
@@ -211,7 +213,7 @@ jobs:
     steps:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version: ${{ needs.validate-release.outputs.node-version }}
 
       - name: Require a Trusted Publishing-compatible npm
         run: |
@@ -461,7 +463,7 @@ jobs:
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: release-control/.node-version
 
       - name: Pin tested npm and require the tested GitHub CLI floor
         run: |

@@ -40,6 +40,11 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .void-enforce-runtime
           persist-credentials: false
+      # The caller need not declare Node: use the pinned implementation's file.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .void-enforce-runtime/.node-version
+          package-manager-cache: false
       - uses: ./.void-enforce-runtime/.github/actions/void-enforce
         with:
           base-ref: ${{ inputs.base-ref }}

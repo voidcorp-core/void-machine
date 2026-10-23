@@ -1,11 +1,11 @@
 ---
 name: void-brainstorm
-description: "Engage on a raw idea, or the moment an exchange settles a behaviour, boundary or trade-off: pressure-test, one question at a time, 2-3 approaches, spec written and approved before any code."
+description: "Resolve a raw idea or consequential design ambiguity: inspect context, compare alternatives and record approved choices. Clear authorized implementation requests go directly to void-implement."
 ---
 
 # brainstorm — voidcorp craftsman edition
 
-Start by understanding the project context. Then ask questions one at a time to refine the idea. Once you understand what is being built, present the design in sections, get approval, write the spec to `docs/specs/`, and transition to `void-plan`. **No implementation skill, no code, no scaffolding until the spec is written and approved.**
+Use this skill when intent, behavior or a consequential boundary remains undecided. Inspect the existing context, resolve the decisions that change the outcome, and record the approved design. `void-implement` owns applicability: a clear implementation request does not need a design interview.
 
 **Attribution**: see `.source`. Primary source: superpowers/brainstorm; the upstream idea-pressure-test mode is the distilled `gstack:/office-hours` diagnostic, vendored for void-machine.
 
@@ -53,23 +53,22 @@ everyone to skip Step 0 when it matters.
 
 ---
 
-## HARD GATE
+## Decision gate
 
-Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until:
+Do not implement an unresolved choice that materially changes scope, safety, external effects
+or a lasting contract. Present the decision and its trade-offs together, then obtain the needed
+approval. Work that does not depend on it may continue.
 
-1. The spec is written to `docs/specs/YYYY-MM-DD-<topic>.md`
-2. The spec has passed self-review
-3. The user has explicitly approved the written spec
-
-**This applies to EVERY project, regardless of perceived simplicity.**
-
-The anti-pattern is "this is too simple to need a design." Every project goes through this process. Simple projects' specs are short (a few sentences for truly trivial ones), but they MUST be written and approved.
+For already authorized scope, do not request approval again merely because it has been written
+into a spec or plan. The user's explicit request and accepted decisions are valid inputs.
+A durable spec is useful for a structural or multi-step change; a mechanical fix or bounded
+request may go directly to `void-implement` with its acceptance criteria.
 
 ---
 
 ## Ingesting a forge spec
 
-If `docs/specs/` holds a spec with `source: forge` in its frontmatter (the forge→harness artifact contract), the up-front thinking is already done. **Verify and fill the gaps — do not re-ask what the spec already answers.** The 18 recon variables cover persona, pain, positioning, competition, pricing, and the visual identity; the winning design and critique verdict are attached. Read them, confirm they still hold, and ask only about what is missing (a partial spec — recon without critique, or a field absent in an older `forge_version` — is ingested for what it has, with the holes listed as the only open questions). Then go straight to writing/approving the spec. Do not restart the interview from scratch.
+If `docs/specs/` holds a spec with `source: forge` in its frontmatter (the forge→harness artifact contract), the up-front thinking is already done. **Verify and fill the gaps — do not re-ask what the spec already answers.** The 18 recon variables cover persona, pain, positioning, competition, pricing, and the visual identity; the winning design and critique verdict are attached. Read them, confirm they still hold, and ask only about what is missing (a partial spec — recon without critique, or a field absent in an older `forge_version` — is ingested for what it has, with the holes listed as the only open questions). Record the accepted scope and resolve only remaining choices. Do not restart the interview or approval from scratch.
 
 ## Pressure-testing a raw idea (upstream mode)
 
@@ -86,7 +85,9 @@ Runs ONLY when the input is a raw *product idea* ("I want to build X"), not an a
 5. **Observation & surprise.** Have you watched someone use it without helping — what did they do that surprised you? Red flag: surveys and demo calls (surveys lie, demos are theater).
 6. **Future-fit.** If the world looks meaningfully different in 3 years, does this become more essential or less? Red flag: "the market grows 20%/yr" — every competitor cites the same tailwind.
 
-**Escape hatch.** If the user says "just do it": ask the 2 most critical remaining questions for their stage, then move on. If they push back a second time, respect it and proceed. Only a fully-formed plan with real evidence (named users, revenue) earns a full skip — and even then, still confirm the premises and generate alternatives.
+**Respect the mandate.** If the user says to proceed, reuse known answers and make routine
+reversible implementation choices. Ask only about a missing decision that materially changes
+the outcome or requires separate authority; do not make the user repeat the instruction.
 
 ## Process
 
@@ -119,7 +120,7 @@ Wait for the user's response. If they decline, proceed in text-only.
 
 ### Step 4 — Ask clarifying questions
 
-- One question at a time. Never batch.
+- Ask only unresolved consequential questions; group closely related questions when it reduces interruptions.
 - Multi-choice preferred when applicable (2–4 distinct mutually-exclusive options with brief descriptions and a recommended option labeled).
 - Open-ended fine when no obvious options exist.
 - Focus on: purpose, constraints, success criteria.
@@ -135,7 +136,10 @@ Wait for the user's response. If they decline, proceed in text-only.
 
 Runs on **every brainstorm, whatever the subject** — a product idea, a guard, a contract, a migration. Demand pressure-testing above belongs to a raw product idea, because a merge gate has no market to interrogate; ambition is not scoped that way, since timidity is not a property of product ideas. This pass lived inside the product-idea mode and therefore never fired on a technical subject, which is most of what gets designed here.
 
-Before settling, deliberately drop the self-imposed constraints: what does this look like at 10x — no resource limit, no "we can't because"? What is the *coolest* version the user has not considered? Carry that into Step 5: always include one "ideal / most ambitious" path and one "creative-lateral" reframing, not just the safe increment. YAGNI still prunes the *final* scope — but prune down from an ambitious set; do not start timid.
+Before settling an unresolved design, consider whether a simpler or materially better approach
+changes the outcome. Include an ambitious or lateral option only when it answers that question.
+Do not expand an already accepted scope or reopen a completed decision to manufacture alternatives.
+YAGNI prunes the options before asking the user to evaluate them.
 
 ### Step 5 — Propose 2–3 approaches
 
@@ -153,7 +157,7 @@ Once the intent is clear, present the design in sections:
 - Rollout / phases (if non-trivial)
 - TDD mode per implementation phase (strict / souple / exploratory — composes with `void-tdd` skill)
 
-Get approval AFTER each section before moving on. Scale each section to its complexity: a few sentences for simple projects, 200–300 words for nuanced ones.
+Present related decisions together and obtain approval for the unresolved consequential choices. Do not request approval section by section for explanatory prose.
 
 ### Step 7 — Write the spec
 
@@ -188,17 +192,15 @@ Read the spec with fresh eyes:
 
 Fix issues inline. No need to re-review — just fix and move on.
 
-### Step 9 — User reviews the written spec
+### Step 9 — Confirm unresolved choices
 
-Ask the user to review the spec file before proceeding:
+Link the written spec and identify any decision not yet authorized. Ask only about those
+remaining choices. If it records decisions already approved in this conversation, proceed.
 
-> "Spec written and committed to `docs/specs/<file>.md`. Please review and let me know if you want changes before we start the implementation plan."
+### Step 10 — Transition to execution
 
-Wait for the user's response. If they request changes, make them and re-run self-review. Only proceed once the user approves.
-
-### Step 10 — Transition to `void-plan`
-
-The ONLY post-brainstorming transition. Invoke plan. Do not invoke any other skill (frontend-design, mcp-builder, etc.).
+Use `void-plan` when dependencies, multiple units or later-session continuity need a durable
+sequence. A bounded single unit with clear acceptance criteria goes to `void-implement`.
 
 ---
 
@@ -221,58 +223,35 @@ Smaller, well-bounded units are easier to work with — easier for the agent to 
 
 ---
 
-## Red Flags — thoughts that mean STOP
-
-| Thought | Reality |
-|---|---|
-| "This is too simple to need a design" | The gate applies to every project. Write the short version. |
-| "I need more context first" | Skill check comes BEFORE clarifying questions. |
-| "Let me explore the codebase first" | Sure, but the design discipline still applies. |
-| "I can check git/files quickly" | Files lack conversation context. Stay in the process. |
-| "Let me gather information first" | Process telling you HOW to gather information. |
-| "This doesn't need a formal skill" | If a skill exists, use it. |
-| "I'll just do this one thing first" | Check BEFORE doing anything. |
-| "This feels productive" | Undisciplined action wastes time. |
-
----
-
 ## Key principles
 
-- **One question at a time.** Never overwhelm with multiple.
-- **Multi-choice preferred.** Easier to answer than open-ended.
-- **YAGNI ruthlessly.** Remove unnecessary features from all designs.
-- **Explore alternatives.** Always propose 2–3 approaches before settling.
-- **Incremental validation.** Present design, get approval before moving on.
-- **Be flexible.** Go back and clarify when something doesn't make sense.
+- Read the actual contract before asking what it says.
+- Resolve a material ambiguity once; retain the answer through implementation.
+- Keep KISS, useful boundaries and the smallest sufficient scope.
+- Compare credible alternatives when they change the result, not for a fixed option count.
+- Document lasting structural decisions through `void-decide`.
+- Optional improvements do not reopen accepted scope or cause another review cycle.
 
 ---
 
 ## Composition with other skills
 
 - **Raw product idea** ("I have an idea..."): pressure-test it first via the upstream mode above (the vendored `/office-hours` diagnostic), then design. Broader product *roadmap / strategy* routes to `void-plan-review` (CEO lens — challenges a written plan's premise and ambition).
-- **Downstream — `void-plan`**: the ONLY post-brainstorming transition.
+- **Downstream**: `void-plan` for dependent work; `void-implement` for a bounded approved unit.
 - **With `void-tdd`**: the spec declares the TDD mode for each major implementation step. Plans then uses this.
 - **With `void-hexagonal-architecture` + `void-domain-driven-design`**: these skills inform the design's structure (bounded contexts, ports, aggregates). Brainstorming consumes their vocabulary; does not duplicate their decisions.
-- **With `void-code-review`**: a PR that introduces features without a linked spec gets flagged.
+- **With `void-code-review`**: review against the accepted behavior and constraints; an absent spec alone is not a defect.
 
 ---
 
 ## Anti-rules
 
-- MUST NOT skip the hard gate.
-- MUST NOT batch multiple questions in one message.
-- MUST NOT decide implementation details (those go to plans).
-- MUST NOT decide product roadmap / strategy (routes to `void-plan-review` CEO lens). It DOES pressure-test a raw idea's demand (the upstream mode) and push ambition on any subject (Step 4b) — both in scope, not delegated.
-- MUST NOT skip the spec-write step "because the conversation is clear."
-- MUST NOT transition to any skill other than `void-plan` post-approval.
-
----
+- Do not implement a consequential unresolved decision or infer external authorization.
+- Do not restart discovery or approvals already resolved by the user's request.
+- Do not widen product scope during implementation under the guise of ambition.
+- Do not hide material uncertainty behind a complete-looking template.
 
 ## Final rule
 
-```
-Idea → questions → 2–3 approaches → design in sections → spec written → self-review → user approves → plan.
-Otherwise → it is not voidcorp brainstorm.
-```
-
-The hard gate exists because LLM agents write very fast code for very wrong problems. The discipline pays for itself in the first project that does not have to be rewritten.
+Unresolved design → inspect → compare useful options → resolve consequential decisions →
+record → plan only as needed → implement the accepted scope.

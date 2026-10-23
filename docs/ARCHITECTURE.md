@@ -593,16 +593,23 @@ metadata are gitignored. Modes `shadow` and `warn` are advisory; `enforce` and
 
 ## Agent model tiers
 
-Authored legacy agents declare an explicit `model:` in their Claude frontmatter, chosen by the work's leverage, not by default. Canonical specialists deliberately omit a model: both compilers inherit the selected parent runtime model so the provider-neutral contract cannot pin a provider-specific tier. The tiering (distilled from `wshobson/agents`):
+`void-orchestrate` owns native model selection: explicit user choice, task risk, and supported
+runtime controls. `void-implement` composes that policy instead of pinning commercial names
+or reviving the retired `workerTier()` mechanism. No provider router or new configuration layer.
 
-| Tier | Use for |
-|---|---|
-| **opus** | Architecture, security, critical review, production-coding — high-leverage work where a wrong call cascades |
-| **sonnet** | Documentation, test authoring, debugging, codebase exploration — substantial but bounded reasoning |
-| **haiku** | Mechanical, fast ops — formatting, simple lookups, deterministic transforms |
-| **inherit** | Work whose complexity varies run to run; let the calling session's model carry through |
+Authored legacy Claude agents still carry native `model:` defaults such as `sonnet` or `opus`;
+these are runtime-specific defaults, not universal price/capability rankings. Never forward
+these aliases to another runtime or invent equivalents. A new authored
+runtime-specific agent declares a supported native default, including inheritance where suitable.
+Canonical cross-runtime specialists omit a model and retain canonical budgets; native dispatch
+uses only the current runtime's supported controls and precedence. A default never overrides
+an explicit user choice silently. Existing reviewer definitions and permissions stay unchanged.
 
-**Rule**: a new authored runtime-specific agent MUST declare an explicit `model:` per this tiering. A new cross-runtime specialist MUST instead inherit and put its hard limits in the canonical budget. The existing `doctrine-critic` is the authored-agent example; `solution-architect` is the canonical-specialist example.
+When selection is unsupported without a user override, inherit/default transparently. If an
+explicit choice cannot be honored, stop that dependent launch. Requested identity does not prove
+effective identity; absent runtime reporting stays unknown. Detailed model/version observation
+belongs to DEV-863, not a second registry. Application API budgets remain `void-llm-cost-discipline`'s
+separate concern. See the [native model choice decision](decisions-log/2026-10-23-native-model-choice--37476618-9e72-4199-ab31-853fde5548ff.md) for the retired workflow's supersession.
 
 ## Native specialist contracts
 
@@ -655,6 +662,39 @@ under `core/hooks/` are compatibility adapters for older installs; v3 manifests,
 receipts and health checks do not depend on them. `_hooklib.sh` and `_checks.sh`
 remain characterization inputs only and are not part of the active runtime.
 The local runtime therefore requires Node only, not `jq` or a POSIX shell.
+
+`outcome-meter` composes warning-only repeated-read advice in its existing
+`PostToolUse` process, with Claude's documented
+`PostToolUseFailure` used only to reset the stream. It compares exact `Read`, `Grep`
+and `Glob` calls within a runtime/session and project, using canonical object key
+order but preserving strings, paths, flags and array order. The fourth consecutive
+successful call with identical arguments and result emits one fixed `additionalContext`
+message; the counter saturates until new information, arguments or another observed
+activity resets it. Immediate duplicate tool-call IDs do not increment. It does not judge
+semantic progress, block tools, rewrite results, call an LLM or inspect shell commands.
+Interleaved loops are intentionally outside this last-call heuristic.
+
+The disposable `.void/machine/read-loop/state.json` cache retains only SHA-256
+digests, counts and timestamps: at most 32 sessions, 32 KiB and 24 hours. Digests are
+comparison keys, not encryption or authentication. JSON normalization is bounded
+at 32 levels, 4,096 nodes and 256 KiB per argument/result value, inside the runner's
+1 MiB input limit. Missing results, explicit error/interruption markers and
+uninspectable values reset rather than count. Missing session identity or unsafe
+cache access reports `READ_LOOP_UNAVAILABLE` without changing tool permission.
+The private cache refuses symlinks/nonregular or oversized state, uses atomic
+replacement and an exclusive no-wait lock. Contention skips advice. A crashed
+writer can leave the lock; with no hook process using it, remove this disposable
+`read-loop` cache directory to recover. There is no stale-lock takeover or retry loop.
+No raw arguments, results or session identifiers are written by this advice path.
+
+The existing `outcome-meter` wrapper remains the catalogue and cheat-sheet owner.
+There is no additional process on normal tool completions. One `hook.completed`
+receipt records the advice outcome, alongside the existing tool outcome event; a
+failure reset never manufactures a `runtime.tool.completed` receipt. Source: the
+[Claude hooks contract](https://code.claude.com/docs/en/hooks#posttooluse) and
+[Codex hooks contract](https://learn.chatgpt.com/docs/hooks#posttooluse).
+Slim's [tool-loop guard](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/hooks/tool-loop-guard/hook.ts)
+informed the identical-result check; its blocking and task/wait heuristics are not adopted.
 
 Context-sensitive focused-test checks reconstruct the complete proposed file
 before inspecting syntax. They use the official harness-owned TypeScript 6 API in a
@@ -731,8 +771,7 @@ repository slug, a former package and its last major). Nothing else spells them 
   identity of the release that built them and read no file at run time.
 - Plain-ESM scripts read `scripts/product-identity.mjs`, which resolves the JSON relative to its
   own file: a guard running from a trusted checkout reads that checkout's identity, never one a
-  pull request brought. A job that sparse-checks-out a script must list both files;
-  `test/workflows/sparse-checkout-closure.test.ts` proves it does.
+  pull request brought. Workflows check out the complete trusted control tree.
 - Files that cannot import (package and plugin manifests, workflows) repeat the values, and
   `test/identity/product-identity.test.ts` fails when one disagrees, when code spells a slug or
   package name, or when a former name survives outside the historical record.
@@ -848,6 +887,10 @@ textconv, repository clean/process filters, or ambient config. Git HEAD, changes
 report degradation separately. Validated `HEAD` reads bracket their complete collection; a mismatch
 degrades the whole Git snapshot rather than combining evidence from different repository states.
 Commands that depend on a commit use the initial object ID, which also closes `HEAD` ABA transitions.
+On macOS, fixed Homebrew locations precede the system Git fallback, avoiding Apple's Xcode
+launcher when a direct Git is installed. Absolute executable validation, the closed environment,
+and the five-second default process ceiling remain unchanged; repository `PATH` entries are ignored.
+Apple documents the system launchers in [TN2339](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
 SHA-256 extraction records plus an explicitly authoritative accepted change-journal generation make
 unchanged builds perform zero traversal, extraction reads, hashing, and AST passes without trusting
 mutable JSON. The default Node `fs.watch` journal is advisory, so default builds verify sources before
@@ -1667,7 +1710,9 @@ a GitHub-hosted runner. It consumes the same immutable archive as install
 conformance, verified against the checkout SHA and tarball digest. Playwright
 and axe are pinned QA tooling outside the shipped CLI and pnpm workspace; they
 do not add a consumer runtime dependency. The runner installs the archive
-offline, and browser contexts disable network access. No personal browser,
+offline, and browser contexts disable network access. The official Playwright image
+is derived from the pinned tooling manifest; npm ci and the setup-node npm cache
+reuse standard dependency installation without a browser or node_modules cache. No personal browser,
 developer export or home directory is an input.
 
 `browser conformance` retains SHA-bound reports, document digests, screenshots,

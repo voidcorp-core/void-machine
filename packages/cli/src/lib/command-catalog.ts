@@ -183,7 +183,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "mission <sub>",
-        "description": "Plan a deterministic DAG, then start, resume, verify, inspect, archive, or explicitly prune an auditable local mission run."
+        "description": "Plan a deterministic DAG, then start, resume, verify, inspect, archive, or explicitly prune an auditable local mission run. Inspect --usage adds local skill, hook and specialist counts."
       }
     ]
   },

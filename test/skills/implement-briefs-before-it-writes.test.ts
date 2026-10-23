@@ -7,9 +7,12 @@ const skill = readFileSync(
 const passes = skill.split('\n').filter(line => /^\d+\. \*\*/.test(line));
 
 describe('preparation advice in the implement cycle', () => {
-  it('keeps advice conditional and final review mandatory', () => {
+  it('uses the primary domain expert for coding work and keeps final review mandatory', () => {
     const advice = passes.find(line => line.includes('Targeted preparation advice')) ?? '';
-    expect(advice).toContain('(IF a concrete risk or unresolved question');
+    expect(advice).toContain('(IF production behavior, a coding contract or implementation structure changes)');
+    expect(advice).toContain('invoke the primary domain specialist before implementation');
+    expect(advice).toContain('reuse its advice');
+    expect(advice).toContain('distinct risk');
     expect(advice).toContain('not an automatic canonical gate');
     expect(advice).toContain('void-orchestrate');
     expect(skill).toContain('Normal\n   dispatch starts the writer without a compulsory preparation panel');

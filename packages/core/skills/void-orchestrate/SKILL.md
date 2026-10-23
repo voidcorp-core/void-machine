@@ -40,6 +40,36 @@ or act on an unrelated project. Native work independent of that action may conti
   mandatory independent review or required isolation remains a blocker; do not
   replace it with self-review or silently weaken its requirement.
 
+## Native model choice
+
+Use the current runtime's declared model/effort controls and project-configured identifiers.
+An explicit user choice wins; do not infer availability, price or capability from a product name.
+Without an explicit choice, match the bounded task to an available native configuration:
+
+| Work | Selection |
+| --- | --- |
+| Mechanical lookup, extraction, formatting | An economical model when supported and sufficient |
+| Domain advice or implementation | Enough capability for the actual contract and uncertainty |
+| Sensitive architecture/security, independent review, failed-proof adjudication | Retain judgment capability; never downgrade just for cost |
+
+Keep the assigned writer and reuse valid specialist advice. Do not restart a retained context
+merely to change its model; the writer's whole quality cycle stays intact. A cheaper explicit
+choice never waives acceptance or independent review: report insufficient capability as a
+conflict, rather than silently upgrading or claiming the quality requirement is met.
+
+- Discover supported identifiers and controls before dispatch; pass only supported options.
+  Respect native constraints between model overrides, effort and context/fork modes.
+- An unavailable explicit choice stops the dependent launch with its cause and next action.
+  If no explicit choice exists and selection is unsupported, inherit/default transparently;
+  do not claim that a particular model or lower price was selected.
+- Diagnose an unsupported optional setting instead of passing it anyway. Do not silently
+  change provider, credentials, permissions or the user's choice to make a launch work.
+- Reconcile an uncertain launch before retrying the same work. At most one retry for a
+  confirmed transient failure; otherwise report the limitation. Never cascade across models.
+- Requested and observed models differ: retain the requested option in the ordinary brief,
+  and report the effective model only when the runtime supplies it; otherwise it is unknown.
+  Use existing evidence/reporting, not a new registry. Report cost/time only when observed.
+
 ## First ticket and optional worker tabs
 
 SessionStart discovers Herdr even before central mission files exist. Its advice
@@ -96,6 +126,18 @@ runtime's actual persistence/recovery path; expose a lost session or unknown eff
 Never invent a durable inbox. Preserve formal receipts separately from working notes.
 
 ## Short native specialists
+
+`void-implement` owns domain detection and the required primary domain consultation before coding.
+Dispatch that smallest relevant expert set once, collect actual advice and reuse it while its
+inputs hold. This skill owns transport and provenance, not a second applicability policy or
+an all-specialist preparation quorum. Extra experts need a distinct uncovered risk.
+
+For a lightweight consultation outside formal dispatch, after the native call actually succeeds
+and returns a context ID, the coordinator may record `void-machine mission advisory-start --id
+<mission> --specialist core:<role> --runtime claude|codex --context <actual-native-context>`.
+This is a coordinator-observed usage receipt, not `specialist-event`, completion or review proof.
+Never record a planned/failed start, reconstruct past receipts, or block delivery on missing
+telemetry. Repeated submission of the same context is idempotent; a different role conflicts.
 
 Pass the returned specialist envelope unchanged: runtime, agentName, missionId,
 contextPack and, when present, reviewSubject and reviewScope. Invoke the runtime's

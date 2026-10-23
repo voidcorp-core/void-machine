@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:7a824dcd695bae061ba5ee2b9e797032682dd8ace6a2957015c8a1949248d5d7"
+    "rootHash": "sha256:20a8c98908b15da1b78aa60616bfa2ba65dbbeede02550ed24eb9af0c2b17ce4"
   },
   "nodes": [
     {
@@ -1108,11 +1108,11 @@
         "legacy": {
           "description": "",
           "id": "hook:outcome-meter",
-          "lines": 13,
+          "lines": 14,
           "name": "outcome-meter",
           "pack": null,
           "source": "packages/core/hooks/outcome-meter.sh",
-          "staticTokens": 104,
+          "staticTokens": 127,
           "type": "hook"
         }
       },
@@ -3560,7 +3560,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7051,
+          "staticTokens": 7033,
           "type": "skill"
         }
       },
@@ -3582,7 +3582,7 @@
       "label": "void-brainstorm",
       "data": {
         "legacy": {
-          "description": "Engage on a raw idea, or the moment an exchange settles a behaviour, boundary or trade-off: pressure-test, one question at a time, 2-3 approaches, spec written and approved before any code.",
+          "description": "Resolve a raw idea or consequential design ambiguity: inspect context, compare alternatives and record approved choices. Clear authorized implementation requests go directly to void-implement.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3599,7 +3599,7 @@
             }
           ],
           "id": "skill:void-brainstorm",
-          "lines": 278,
+          "lines": 257,
           "name": "void-brainstorm",
           "owner": "folpe",
           "pack": null,
@@ -3608,7 +3608,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-brainstorm/SKILL.md",
-          "staticTokens": 4226,
+          "staticTokens": 3930,
           "type": "skill"
         }
       },
@@ -3744,7 +3744,7 @@
             }
           ],
           "id": "skill:void-code-review",
-          "lines": 232,
+          "lines": 245,
           "name": "void-code-review",
           "owner": "folpe",
           "pack": null,
@@ -3753,7 +3753,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-code-review/SKILL.md",
-          "staticTokens": 3050,
+          "staticTokens": 3408,
           "type": "skill"
         }
       },
@@ -3793,7 +3793,7 @@
             }
           ],
           "id": "skill:void-commit-discipline",
-          "lines": 211,
+          "lines": 210,
           "name": "void-commit-discipline",
           "owner": "folpe",
           "pack": null,
@@ -3802,7 +3802,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-commit-discipline/SKILL.md",
-          "staticTokens": 1868,
+          "staticTokens": 1920,
           "type": "skill"
         }
       },
@@ -3872,7 +3872,7 @@
       "label": "void-debug",
       "data": {
         "legacy": {
-          "description": "Four phases (investigate, analyze, hypothesize, implement). Iron Law: no fix without a failing test reproducing the bug AND a root cause. Bug fix commit pairs. Use on bug or test failure.",
+          "description": "Four phases (investigate, analyze, hypothesize, implement). Iron Law: no fix without a failing test reproducing the bug AND a root cause. Observed RED/GREEN evidence. Use on bug or test failure.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3889,7 +3889,7 @@
             }
           ],
           "id": "skill:void-debug",
-          "lines": 211,
+          "lines": 210,
           "name": "void-debug",
           "owner": "folpe",
           "pack": null,
@@ -3898,7 +3898,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-debug/SKILL.md",
-          "staticTokens": 2325,
+          "staticTokens": 2383,
           "type": "skill"
         }
       },
@@ -4092,7 +4092,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-domain-driven-design/SKILL.md",
-          "staticTokens": 3159,
+          "staticTokens": 3182,
           "type": "skill"
         }
       },
@@ -4141,7 +4141,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-frontend-design/SKILL.md",
-          "staticTokens": 3590,
+          "staticTokens": 3604,
           "triggers": {
             "extensions": [
               "tsx"
@@ -4331,7 +4331,7 @@
             }
           ],
           "id": "skill:void-implement",
-          "lines": 193,
+          "lines": 230,
           "name": "void-implement",
           "owner": "folpe",
           "pack": null,
@@ -4340,7 +4340,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 5864,
+          "staticTokens": 6519,
           "type": "skill"
         }
       },
@@ -4428,7 +4428,7 @@
             }
           ],
           "id": "skill:void-llm-cost-discipline",
-          "lines": 299,
+          "lines": 302,
           "name": "void-llm-cost-discipline",
           "owner": "folpe",
           "pack": null,
@@ -4437,7 +4437,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-llm-cost-discipline/SKILL.md",
-          "staticTokens": 2519,
+          "staticTokens": 2554,
           "type": "skill"
         }
       },
@@ -4677,7 +4677,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 328,
+          "lines": 370,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4686,7 +4686,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 4684,
+          "staticTokens": 5446,
           "type": "skill"
         }
       },
@@ -4725,7 +4725,7 @@
             }
           ],
           "id": "skill:void-plan",
-          "lines": 246,
+          "lines": 241,
           "name": "void-plan",
           "owner": "folpe",
           "pack": null,
@@ -4734,7 +4734,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan/SKILL.md",
-          "staticTokens": 2706,
+          "staticTokens": 2797,
           "type": "skill"
         }
       },
@@ -4823,7 +4823,7 @@
             }
           ],
           "id": "skill:void-qa",
-          "lines": 103,
+          "lines": 104,
           "name": "void-qa",
           "owner": "folpe",
           "pack": null,
@@ -4832,7 +4832,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-qa/SKILL.md",
-          "staticTokens": 2613,
+          "staticTokens": 2907,
           "type": "skill"
         }
       },
@@ -5117,7 +5117,7 @@
             }
           ],
           "id": "skill:void-tdd",
-          "lines": 394,
+          "lines": 343,
           "name": "void-tdd",
           "owner": "folpe",
           "pack": null,
@@ -5126,7 +5126,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-tdd/SKILL.md",
-          "staticTokens": 3771,
+          "staticTokens": 3712,
           "type": "skill"
         }
       },
@@ -5175,7 +5175,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-testing/SKILL.md",
-          "staticTokens": 3073,
+          "staticTokens": 3078,
           "triggers": {
             "globs": [
               "**/*.test.ts",
@@ -5220,7 +5220,7 @@
             }
           ],
           "id": "skill:void-ticket",
-          "lines": 238,
+          "lines": 240,
           "name": "void-ticket",
           "owner": "folpe",
           "pack": null,
@@ -5229,7 +5229,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-ticket/SKILL.md",
-          "staticTokens": 3317,
+          "staticTokens": 3360,
           "type": "skill"
         }
       },
@@ -5278,7 +5278,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-typescript-strict/SKILL.md",
-          "staticTokens": 2681,
+          "staticTokens": 2733,
           "triggers": {
             "extensions": [
               "ts",
@@ -5356,7 +5356,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "Final pre-flight checklist. Twelve items observed (not assumed) — typecheck, tests, hooks, mobile+desktop, commit why, review evidence. Skipping requires reason. Use at end of every task.",
+          "description": "Verify acceptance with applicable tests, types, hooks and independent review; reuse unaffected proofs and report concrete limits. Use before claiming completion.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -5373,7 +5373,7 @@
             }
           ],
           "id": "skill:void-verify",
-          "lines": 203,
+          "lines": 101,
           "name": "void-verify",
           "owner": "folpe",
           "pack": null,
@@ -5382,7 +5382,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-verify/SKILL.md",
-          "staticTokens": 2552,
+          "staticTokens": 1551,
           "type": "skill"
         }
       },

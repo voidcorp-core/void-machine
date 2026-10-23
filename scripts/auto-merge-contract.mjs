@@ -2,8 +2,8 @@
 // that can arm or disarm it.
 //
 // Auto-merge is how a pull request lands on develop: native auto-merge waits
-// for branch protection and every required check, `independent-review`
-// included, so arming it early bypasses nothing. The one refusal is a pull
+// for branch protection and every required deterministic check. Autopilot
+// additionally requires its local review verdict. The one refusal is a pull
 // request into the forbidden base, main: promoting develop to main and merging
 // the release pull request are the two release actions a person takes
 // (docs/RELEASING.md), so no machine ever arms either.

@@ -257,6 +257,26 @@ describe('parseMissionArgs', () => {
     })).toMatchObject({ status: 'degraded' });
   });
 
+  it('accepts explicit usage linkage and native advisory commands without historical range arguments', () => {
+    const id = 'mis_target00000001'; const source = 'mis_source00000001';
+    expect(parseMissionArgs(['usage-bind', '--id', id, '--source', source, '--json']))
+      .toEqual({ kind: 'usage-bind', missionId: id, sourceMissionId: source, json: true });
+    expect(parseMissionArgs(['usage-unbind', '--id', id, '--source', source]).kind).toBe('usage-unbind');
+    expect(parseMissionArgs(['usage-bind', '--id', id, '--source', source, '--after', '0']).kind).toBe('invalid');
+    expect(parseMissionArgs(['usage-bind', '--id', id, '--source', source, '--source', source]).kind).toBe('invalid');
+    expect(parseMissionArgs(['advisory-start', '--id', id, '--specialist', 'core:security-engineer',
+      '--runtime', 'codex', '--context', '/root/expert']).kind).toBe('advisory-start');
+  });
+
+  it('accepts informational usage only on inspect without changing ordinary inspect arguments', () => {
+    const id = 'mis_0123456789abcdef';
+    expect(parseMissionArgs(['inspect', '--id', id, '--usage', '--json']))
+      .toEqual({ kind: 'inspect', missionId: id, json: true, usage: true });
+    expect(parseMissionArgs(['inspect', '--id', id]))
+      .toEqual({ kind: 'inspect', missionId: id, json: false });
+    expect(parseMissionArgs(['archive', '--id', id, '--usage']).kind).toBe('invalid');
+  });
+
   it('keeps command argv separate from mission options', () => {
     expect(
       parseMissionArgs([

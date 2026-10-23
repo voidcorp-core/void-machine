@@ -18,13 +18,13 @@ How work is framed before and after the code is written.
 
 | | |
 |---|---|
-| `void-brainstorm` | Engage on a raw idea, or the moment an exchange settles a behaviour, boundary or trade-off: pressure-test, one question at a time, 2-3 approaches, spec written and approved before… |
+| `void-brainstorm` | Resolve a raw idea or consequential design ambiguity: inspect context, compare alternatives and record approved choices. |
 | `void-plan` | Turn an approved spec into vertical slices with dependencies, TDD mode, verification gates, checkpoints, and a tracker handoff. |
 | `void-plan-review` | Critique a written plan (not a diff) via four lenses: CEO premise/ambition, Eng test-coverage, Design states/slop, DevEx time-to-first-value. |
 | `void-tdd` | TDD in three modes (strict/souple/exploratory) chosen by path. |
 | `void-debug` | Four phases (investigate, analyze, hypothesize, implement). Iron Law: no fix without a failing test reproducing the bug AND a root cause. |
 | `void-refactor` | Tidy-First. Tidyings commit separately from behavior changes (Two-Hat). |
-| `void-verify` | Final pre-flight checklist. Twelve items observed (not assumed) — typecheck, tests, hooks, mobile+desktop, commit why, review evidence. |
+| `void-verify` | Verify acceptance with applicable tests, types, hooks and independent review; reuse unaffected proofs and report concrete limits. |
 | `void-context` | Context is the agent's core constraint. Use when a task spans many files, a session mixes subjects, corrections loop, or replies forget earlier constraints. |
 | `void-checkpoint` | Write .void/machine/checkpoint.md before a clear, an interruption, or the end of a day, so the next session resumes without re-deriving anything. |
 

@@ -159,14 +159,13 @@ Commits produced in pair with an AI agent include `Co-Authored-By`. Authorship t
 
 ---
 
-## Bug fix commit pairs (composes with void-debug)
+## Bug fix evidence (composes with void-debug)
 
-A bug fix is TWO commits:
-
-1. `test: reproduce <bug summary>` — the failing test that demonstrates the bug
-2. `fix: <root cause description>` — the implementation that resolves it
-
-Combined into one commit = rejected. The pair makes the regression-prevention explicit in `git log`.
+Separate `test:` and `fix:` commits are optional. A regression test and its fix may share one
+logical, bisectable commit; unrelated changes still belong in separate commits.
+The proof is the observed RED result before the production fix, followed by GREEN on the
+candidate, as required by `void-tdd` and `void-debug`. A pair of commit messages alone cannot
+prove that chronology. Retain the actual test commands/results and explain the root cause.
 
 ---
 
@@ -182,7 +181,7 @@ Combined into one commit = rejected. The pair makes the regression-prevention ex
 ## Composition with other skills
 
 - **Runs AFTER `void-verify`** — the completion handoff produces the "what done"; this skill frames it for git.
-- **With `void-debug`** — bug fix commit pairs (`test:` then `fix:`).
+- **With `void-debug`** — observed RED/GREEN proof and root cause; phase commits are optional.
 - **With `void-refactor`** — Two-Hat principle, named Fowler refactors in subjects.
 - **With `void-brainstorm` + `void-plan`** — substantive commits link to their spec / plan in the body.
 - **With `void-code-review`** — review comments respect the commit boundaries (do not request mixing intent).
@@ -195,7 +194,7 @@ Combined into one commit = rejected. The pair makes the regression-prevention ex
 - MUST NOT permit vacuous subjects.
 - MUST NOT permit em dash / emoji / non-ASCII.
 - MUST NOT permit `feat:` / `fix:` / `refactor:` without a body why.
-- MUST NOT combine bug-fix `test:` and `fix:` commits.
+- MUST NOT substitute phase commit messages for observed RED/GREEN evidence.
 - MUST NOT silently allow invented commit types.
 
 ---

@@ -140,3 +140,8 @@ Left for sibling tickets (ticket-boundary discipline): `/benchmark` (perf, lines
 - **`doctrine-critic` agent trigger**: heuristic for "diff crosses architectural boundary" — file count > 5 in different packages? new export in a port file? Defer mechanics to Phase D.
 - **Solo-author reviewer**: how does this skill behave when the author IS the reviewer (solopreneur)? It still runs the dimensions + checks; the human-in-the-loop is the same human. Lean: no special-case, but the SKILL.md mentions that strict mode on your own PR is valuable precisely because the LLM reviewer is the "second pair of eyes."
 - **Review caching**: rerunning the review on the same SHA after no new commits — should it skip the analysis or re-confirm? Lean re-confirm with a fast path that checks if `gstack /code-review` cache is valid for the SHA. Defer mechanics.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

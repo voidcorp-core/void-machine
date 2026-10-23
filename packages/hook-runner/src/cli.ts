@@ -11,17 +11,19 @@ import {
 import { readFreshnessCache } from './freshness/cache.js';
 import { compareFreshness } from './freshness/compare.js';
 import { freshnessRelay, resolveFreshness } from './freshness/notice.js';
+import { PRODUCT_COMMAND } from './identity.js';
 import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js';
 import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
 import { sessionStartOutput } from './lifecycle/context.js';
 import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
-import { executeHerdrMetadata } from './lifecycle/herdr-metadata-executor.js';
-import { executeHerdrSession } from './lifecycle/herdr-session-executor.js';
-import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
+import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
 import { executeFormat } from './lifecycle/format-executor.js';
+import { executeHerdrMetadata } from './lifecycle/herdr-metadata-executor.js';
+import { executeHerdrSession } from './lifecycle/herdr-session-executor.js';
 import { executeLargeChange } from './lifecycle/large-change-executor.js';
+import { executeReadLoop } from './lifecycle/read-loop-executor.js';
 import { observeResume } from './lifecycle/resume-observer.js';
 import { checkpointReminderOutput } from './lifecycle/session-close-intent.js';
 import { executeTrim } from './lifecycle/trim-executor.js';
@@ -32,7 +34,6 @@ import {
   recordRuntimeEventFromCli,
 } from './record.js';
 import type { AgentRuntime } from './runtime-input.js';
-import { PRODUCT_COMMAND } from './identity.js';
 
 // One inventory of the rules, shared with the table that names each rule's
 // doctrine. A second list here would drift from that one, silently, and a rule
@@ -318,11 +319,20 @@ async function main(): Promise<void> {
   }
   if (process.argv[2] !== 'enforce' && process.argv[2] !== 'enforce-ci') {
     try {
-      await recordRuntimeEventFromCli(
-        parseHookPayload(input),
-        process.argv,
-        process.env,
-      );
+      const rawInput = parseHookPayload(input);
+      const event = record(rawInput)?.['hook_event_name'];
+      if (process.argv[2] === 'outcome'
+        && (event === 'PostToolUse' || event === 'PostToolUseFailure')) {
+        const agentRuntime = runtime(process.argv[3] ?? process.env['VOID_AGENT_RUNTIME']);
+        const root = projectRoot();
+        const advice = executeReadLoop(rawInput, root, agentRuntime);
+        if (advice.diagnostic !== undefined) process.stderr.write(advice.diagnostic);
+        if (advice.output !== undefined) process.stdout.write(`${JSON.stringify(advice.output)}\n`);
+        await observeHook('outcome-meter', advice, rawInput, agentRuntime, root);
+        // Failure is a reset observation, not a successful completion receipt.
+        if (event === 'PostToolUseFailure') return;
+      }
+      await recordRuntimeEventFromCli(rawInput, process.argv, process.env);
     } catch (error) {
       reportTelemetryFailure(error);
     }

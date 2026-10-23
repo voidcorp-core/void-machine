@@ -1,6 +1,6 @@
 ---
 name: void-debug
-description: "Four phases (investigate, analyze, hypothesize, implement). Iron Law: no fix without a failing test reproducing the bug AND a root cause. Bug fix commit pairs. Use on bug or test failure."
+description: "Four phases (investigate, analyze, hypothesize, implement). Iron Law: no fix without a failing test reproducing the bug AND a root cause. Observed RED/GREEN evidence. Use on bug or test failure."
 ---
 
 # debug — voidcorp craftsman edition
@@ -67,16 +67,15 @@ If the hypothesis does not predict a falsifiable behavior change, it is a guess.
 
 In this order:
 
-1. **Write the reproducing test** (in `strict` mode per `void-tdd`). It must fail on `main`.
-2. **Commit**: `test: reproduce <bug summary>`.
-3. **Implement the fix**. The test now passes; other tests still pass.
-4. **Commit**: `fix: <root cause description>`. Composes with `void-commit-discipline` (the "why" is the root cause).
-5. **Verify pristine output** — no warnings, no leaked logs.
-6. **Root-cause section in PR body** — see template below.
-
+1. **Write and run the reproducing test** (strict per `void-tdd`) against the unchanged base. Observe failure for the root cause, not an environment error.
+2. **Retain RED evidence**: command, relevant failure and tested source state, before implementation.
+3. **Implement the fix**, then observe the focused regression and affected tests passing.
+4. **Commit a logical, bisectable change** with its root cause; separate failing-test commits are optional.
+5. **Verify output** for actionable errors, leaks and unexplained warnings.
+6. **Explain the root cause briefly** in the PR, linking the actual RED/GREEN proof.
 ### Banned
 
-- Combining the reproducing test and the fix in one commit. Bug fix commit pairs are non-negotiable.
+- Treating a commit message or test file as proof that the regression actually failed before the fix.
 - Adding the test "later" after the fix.
 - Marking the bug closed without an explanation that survives scrutiny.
 
@@ -170,7 +169,7 @@ Retry-until-green is rejected.
 
 **3-strike rule.** Three failed hypotheses → stop treating it as a simple bug. It is likely architectural: instrument-and-wait, or escalate to a structural review (see "When the root cause is structural").
 
-**Blast-radius gate.** If the fix touches > 5 files, stop and ask: proceed / split / rethink. A wide fix for a narrow bug is usually the wrong layer.
+**Blast-radius check.** If the fix touches > 5 files, verify that every change is necessary to the root cause. Ask only when the required scope exceeds the mandate; file count alone does not require approval.
 
 **Recurring bug = architectural smell.** `git log` the affected files for prior fixes. The same file fixed three times is not coincidence — the root is structural, not the latest symptom.
 

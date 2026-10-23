@@ -18,7 +18,7 @@ reviewed pull request instead. Promotion to the branch that deploys stays human.
 ## What this skill does NOT do
 
 It owns no ticket cycle. Every worker runs the canonical `void-implement` skill, whole, once per
-ticket, specialist panel included. If you find yourself writing "then the worker runs the tests,
+ticket, with applicability owned there. If you find yourself writing "then the worker runs the tests,
 then reviews..." inside autopilot, stop: that behaviour has one owner, and two copies drift until
 a ticket gets a different standard depending on how it was started.
 
@@ -31,9 +31,9 @@ names none. When the person says they merge themselves, run `void-machine autopi
 Promotion from the integration branch to the one that deploys stays human.
 
 It never merges a change to the machinery that judges merges. A pull request touching
-`.github/**`, `scripts/independent-review-check.mjs`, `.void/program.md`, `packages/core/hooks/**`,
+`.github/**`, `.void/program.md`, `packages/core/hooks/**`,
 what a judging workflow runs from outside `.github`
-(`scripts/promotion-authority.mjs`, `scripts/auto-merge-contract.mjs`, `scripts/verify.mjs`,
+(`scripts/auto-merge-contract.mjs`, `scripts/verify.mjs`,
 `packages/core/enforce/**`), what judges a publication (`scripts/prepare-release-artifact.mjs`,
 `scripts/verify-release-publication.mjs` and the two release contracts they read), the loop code that believes a verdict and merges (`loop.ts`,
 `loop-observe.ts`, `branch-identity.ts`, `commands/autopilot-loop.ts`), the local chain of judgment

@@ -7,6 +7,9 @@ description: Sonnet default (Opus needs comment), prompt caching for >1024-token
 
 LLM costs scale with usage. A 1k-token system prompt re-billed on every call is 90% waste with caching. Opus everywhere is 5× Sonnet for marginal gains. Unbounded retries on a refusal burn tokens. This skill makes cost a first-class design concern at every LLM call site.
 
+This skill governs application LLM API call sites, not coding-agent runtime selection;
+`void-orchestrate` owns native agent model choices.
+
 **Attribution**: see `.source`. Composed with the `claude-api` skill (SDK mechanics). Foundation: Anthropic prompt caching docs + batch API + model card pricing.
 
 ---

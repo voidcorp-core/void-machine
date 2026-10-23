@@ -58,6 +58,7 @@ describe('delegation to implement', () => {
   it('names implement as the one owner of the per-ticket cycle', () => {
     expect(body(SKILL)).toMatch(/void-implement/);
     expect(body(SKILL)).toMatch(/owns no ticket cycle/i);
+    expect(flat(SKILL)).not.toContain('specialist panel included');
   });
 
   it('does not restate the quality passes implement owns', () => {

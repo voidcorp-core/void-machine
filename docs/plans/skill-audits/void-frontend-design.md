@@ -145,3 +145,8 @@ The discipline is uniform. Brand expression varies per project (DESIGN.md); the 
 ## impeccable build-craft vendoring (DEV-389, de-gstackification Vague 3)
 
 Enriched this skill (219 → 266 LOC) with impeccable's **build-time** craft that it lacked: the current-AI-tell absolute bans (side-stripe borders, gradient text, glassmorphism-as-default, hero-metric template, eyebrow/numbered-section-markers, cream/sand body background, breakpoint text-overflow); the color-strategy commitment axis (Restrained/Committed/Full/Drenched) + OKLCH + the physical-scene rule; typography specifics (65-75ch, contrast-axis pairing, clamp ≤6rem, letter-spacing floor, text-wrap); layout/interaction specifics (cards-are-lazy, flex-1D/grid-2D, auto-fit minmax, semantic z-index, dropdown clipping); motion specifics (ease-out exponential, reduced-motion alternative, reveal-must-enhance-visible); the `system-ui`-as-primary-font ban; and the Krug reading model from design-review. The audit/critique half of impeccable + design-review became the new `harness:ui-review` (the ceiling to this floor). Full distribution matrix + rejected/deferred pieces: see `plans/skill-audits/void-ui-review.md`. Composition/anti-rules repointed from the gstack design skills to `ui-review` + `forge` + the `DESIGN.md` contract.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

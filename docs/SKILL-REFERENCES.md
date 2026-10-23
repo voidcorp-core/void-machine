@@ -23,7 +23,7 @@ target of a redirection, and a sibling test already asserts each one still ships
 
 | skill | named in |
 | --- | --- |
-| `void-autopilot` | `packages/cli/scripts/conformance-autopilot.mjs`<br>`packages/cli/src/commands/autopilot-usage.ts`<br>`packages/cli/src/lib/autopilot/judgment-comment.ts`<br>`scripts/independent-review-run.mjs` |
+| `void-autopilot` | `packages/cli/scripts/conformance-autopilot.mjs`<br>`packages/cli/src/commands/autopilot-usage.ts`<br>`packages/cli/src/lib/autopilot/judgment-comment.ts` |
 | `void-checkpoint` | `packages/hook-runner/src/lifecycle/context-continuity-executor.ts`<br>`packages/hook-runner/src/lifecycle/session-close-intent.ts`<br>`packages/mission-engine/src/session/resume.ts` |
 | `void-frontend-design` | `packages/hook-runner/src/enforcement/governing-skill.ts` |
 | `void-functional` | `packages/hook-runner/src/enforcement/governing-skill.ts` |

@@ -54,8 +54,8 @@ Since DEV-927 there is one merge mode: the loop merges into `develop` on a
 local verdict bound to the head, unless a person holds the merges with
 `void-machine autopilot merges --by-human`; never into `main`, and never a pull
 request touching the machinery that judges merges, which goes to a person. This
-repository keeps its review App as a required check, which GitHub enforces at
-merge time. Promotion and release stay a person's.
+repository uses the same local independent review authority, with deterministic
+CI and the merge queue enforced by GitHub. Promotion and release stay a person's.
 
 Corrections stay in the artefact being worked on. A change contradicting an
 accepted decision requires supersession, never an in-place rewrite.
@@ -122,8 +122,8 @@ Checkpoint B was read on 2026-09-24 and is closed: the continuous loop merged DE
 DEV-860 (#402) into `develop` with nobody acting, then #404 and #405 went through the merge queue
 on signed verdicts. The cluster engine was removed after it, as the plan's step 7 required.
 
-The loop arms a merge into `develop` only on a head carrying the review App's check, through the
-merge queue, and never on a pull request that touches the machinery that judges merges: those go
+The loop arms a merge into `develop` only on a head carrying a clean local independent verdict,
+through the merge queue with required CI, and never on a pull request that touches the machinery that judges merges: those go
 to a person. Promotion to `main` remains human, and what a person judges there is the feature. The
 program descriptor does not create a headless backend and does not weaken single-writer rules for
 lockfiles, migrations, generated assets, or shared contracts.

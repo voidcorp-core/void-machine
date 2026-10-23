@@ -149,6 +149,10 @@ function executableCandidates(): readonly string[] {
 			join(programFiles, 'Git', 'bin', 'git.exe'),
 		];
 	}
+	// Apple /usr/bin tools can launch Xcode discovery; prefer a direct installed Git.
+	if (process.platform === 'darwin') {
+		return ['/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git', '/bin/git'];
+	}
 	return ['/usr/bin/git', '/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git'];
 }
 

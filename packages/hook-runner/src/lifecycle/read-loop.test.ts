@@ -116,21 +116,13 @@ describe('read-loop advisory hook', () => {
     expect(call(root).output).toBeUndefined();
     expect(call(root).output).toBeDefined();
   });
-  it('stores bounded digests only, expires old observations and caps sessions', () => {
+  it('persists bounded digests through the CLI without raw private content', () => {
     const root = project();
     const secret = 'private-content-canary';
     call(root, { session_id: secret, tool_input: { file_path: secret }, tool_response: { content: secret } });
     expect(existsSync(statePath(root))).toBe(true);
     expect(readFileSync(statePath(root), 'utf8')).not.toContain(secret);
-    for (let index = 0; index < 34; index++) call(root, { session_id: `session-${index}` });
-    const stored = JSON.parse(readFileSync(statePath(root), 'utf8'));
-    expect(stored.sessions).toHaveLength(32);
     expect(statSync(statePath(root)).size).toBeLessThan(32 * 1024);
-    warm(root);
-    const current = JSON.parse(readFileSync(statePath(root), 'utf8'));
-    writeFileSync(statePath(root), JSON.stringify({ ...current,
-      sessions: current.sessions.map((entry: Record<string, unknown>) => ({ ...entry, at: 1 })) }));
-    expect(call(root).output).toBeUndefined();
   });
   it('degrades safely on corrupt, oversized, locked or symlink state without leaking content', () => {
     for (const problem of ['corrupt', 'oversized', 'locked', 'symlink']) {

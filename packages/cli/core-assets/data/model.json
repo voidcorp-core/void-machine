@@ -1855,7 +1855,7 @@
         }
       ],
       "id": "skill:void-commit-discipline",
-      "lines": 211,
+      "lines": 210,
       "name": "void-commit-discipline",
       "owner": "folpe",
       "pack": null,
@@ -1864,7 +1864,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-commit-discipline/SKILL.md",
-      "staticTokens": 1868,
+      "staticTokens": 1920,
       "type": "skill"
     },
     {
@@ -2507,7 +2507,7 @@
         }
       ],
       "id": "skill:void-qa",
-      "lines": 103,
+      "lines": 104,
       "name": "void-qa",
       "owner": "folpe",
       "pack": null,
@@ -2516,7 +2516,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-qa/SKILL.md",
-      "staticTokens": 2613,
+      "staticTokens": 2907,
       "type": "skill"
     },
     {

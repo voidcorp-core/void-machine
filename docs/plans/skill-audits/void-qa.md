@@ -54,3 +54,8 @@ Ran the skill end-to-end via claude-in-chrome against a real running app (`sesam
 
 - Consider a devtools device-emulation path for reliable mobile-viewport captures if `resize_window` proves consistently unreliable — today the skill just flags the caveat.
 - `ui-review`'s live-audit note was repointed to this skill in the DEV-390 diff. `devex-audit` still carries the identical "deferred to Vague 4 (claude-in-chrome)" language (5 spots): its live-browser layer now has a home too, but un-deferring it means flipping its "MUST NOT drive a browser" anti-rule — a real change to a DEV-398 skill, deliberately left as a **fast-follow** rather than a contradictory partial edit inside this PR.
+
+## 2026-10-23: proportional delivery composition correction
+
+Keep diff-aware QA within the affected states/viewports and existing correction budget; broad scoring and visual audits stay explicit.
+See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

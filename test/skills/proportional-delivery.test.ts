@@ -58,4 +58,25 @@ describe('proportional delivery preserves quality without improvement loops', ()
     expect(implement).toMatch(/final.*security.*does not replace/i);
     expect(implement).toContain('Targeted preparation advice');
   });
+
+  it('does not reintroduce mandatory phase commits through the shipping skill', () => {
+    const commits = skill('void-commit-discipline');
+    expect(commits).not.toMatch(/bug fix is TWO commits|Combined into one commit = rejected/);
+    expect(commits).not.toContain('MUST NOT combine bug-fix');
+    expect(commits).toMatch(/Separate.*test.*fix.*commits.*optional/i);
+    expect(commits).toMatch(/observed RED.*before.*GREEN/i);
+    expect(commits).toMatch(/logical.*bisectable/i);
+  });
+
+  it('keeps diff-aware browser QA inside the affected contract through every composed pass', () => {
+    const qa = skill('void-qa');
+    expect(qa).toMatch(/Diff-aware.*affected.*states.*viewports/i);
+    expect(qa).toMatch(/homepage.*only.*affected/i);
+    expect(qa).toMatch(/Health score.*only.*full audit/i);
+    expect(qa).toMatch(/Visual pass.*only.*materially redesigned/i);
+    expect(qa).toMatch(/Diff-aware.*only.*in-scope.*blocking defects/i);
+    expect(qa).not.toContain('standard (default) +medium');
+    expect(qa).toMatch(/outside.*scope.*do not.*fix loop/i);
+  });
+
 });

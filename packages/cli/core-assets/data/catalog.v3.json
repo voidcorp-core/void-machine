@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:d6d8e0e2e52295be06034582be14659fe9c2aeaf1c7a8d39aac8e3dbb047c312"
+    "rootHash": "sha256:63e7199bb4c5b32ed3f8cff0e0bbe972d9765f797fc49197238760ce1537d99b"
   },
   "nodes": [
     {
@@ -3793,7 +3793,7 @@
             }
           ],
           "id": "skill:void-commit-discipline",
-          "lines": 211,
+          "lines": 210,
           "name": "void-commit-discipline",
           "owner": "folpe",
           "pack": null,
@@ -3802,7 +3802,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-commit-discipline/SKILL.md",
-          "staticTokens": 1868,
+          "staticTokens": 1920,
           "type": "skill"
         }
       },
@@ -4823,7 +4823,7 @@
             }
           ],
           "id": "skill:void-qa",
-          "lines": 103,
+          "lines": 104,
           "name": "void-qa",
           "owner": "folpe",
           "pack": null,
@@ -4832,7 +4832,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-qa/SKILL.md",
-          "staticTokens": 2613,
+          "staticTokens": 2907,
           "type": "skill"
         }
       },

@@ -35,6 +35,15 @@ Run `void-machine doctor` to verify the install.
 
 You are working inside the **void-machine** repo itself — the meta-repo that produces the harness (Codex + Claude Code) for every VoidCorp project. This file governs work **on the harness**, not work on projects that consume it.
 
+## Vocation and scope
+
+Read `docs/MACHINE-VOCATION.md` when changing cross-domain boundaries. Machine is
+Cortex's execution system; development is its first specialty. Keep user intent,
+durable personal memory, authorization and final acceptance with Cortex. Reuse
+existing mission primitives and proportionate delegation; do not build a competing
+global orchestrator or apply development-only controls to unrelated missions.
+The current harness and its safeguards remain operational within their scope.
+
 ## What this repo is
 
 A **public, MIT** harness installed free and account-free via `npx voidmachine` (the npm package is the primary channel; the voidcorp marketplace is self-hosted in this repo — `.claude-plugin/marketplace.json` lists every plugin as a local subdirectory — as an optional secondary channel; see `docs/DECISIONS.md`). It injects opinionated agent configuration into any project:

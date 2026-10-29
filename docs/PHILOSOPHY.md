@@ -2,11 +2,24 @@
 
 ## Stack assumption
 
-The harness assumes **TypeScript + web** as its baseline. The `core/` is *not* truly stack-agnostic: it imposes TS strict, Zod at boundaries, a React/Next mental model for UI concerns, `tsc`-style type checking, and TigerStyle naming adapted for typed languages.
+Void Machine is intended to be Cortex's action and execution system. Development
+is its first specialty. Cortex owns intent, durable personal context and memory,
+priorities, authorization and final acceptance; Machine plans, acts and verifies
+within the mandate. Mission journals support execution and recovery, not a second
+personal memory or global orchestrator. Knowledge is proposed to Cortex, never
+independently memorized by Machine. Direct harness use remains supported.
 
-Pretending universal agnosticism would dilute the design. A future Rust/Go/Python flavor of the harness would live in a sibling repo (`void-machine-rust`, etc.), reusing the *mechanics* but not the TS-specific skills.
+The shipped development harness assumes **TypeScript + web**. Its `core/` is not
+stack-agnostic: it carries TS strict, Zod, UI and code-quality conventions. The
+coding rules below govern that specialty; they do not make Git, TDD or a developer
+panel prerequisites for a non-code mission. Existing `packs/` specialize software
+stacks, not arbitrary professions. No general Cortex integration is implied.
 
-`packs/` specialize *within* the TypeScript/web universe (Next.js PWA, monorepo with Bun/Turbo, future mobile React Native, etc.).
+Prefer existing execution primitives and direct execution for simple capabilities.
+Delegate only for useful expertise, independence or parallelism. Other specialties
+can add their own capabilities and checks without rebuilding orchestration; a new
+repository, service or framework needs a demonstrated requirement. Permissions,
+security, honest evidence and bounded recovery remain applicable across domains.
 
 ## Three pillars
 

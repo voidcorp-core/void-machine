@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/hook-runner/src/rules/quality-rules.test.ts
 import type {
   NormalizedEdit,
   RuleVerdict,

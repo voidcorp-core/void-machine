@@ -198,3 +198,17 @@ Preuves locales : `published-update.log`, `published-doctrine-transaction.json`,
 `published-installation-inspection.json`, `published-status.log` et
 `published-targeted-tests.log`, dans le même dossier de mission. Le lot complémentaire
 fait l'objet d'une revue ciblée avant les opérations GitHub autorisées.
+
+## Correction ciblée après CI distante
+
+Sur la tête `1d863c56`, le gate `enforce` de la PR 525 a refusé
+`no-focused-test.ts` : son vrai test est agrégé dans `quality-rules.test.ts`, mais
+le module n'avait pas déclaré cette couverture. La commande exacte
+`bash packages/core/enforce/ci-enforce.sh --base 5309dda97a1f38283a12fae3f3f2a2ed704f1c97`
+reproduit `TDD_SIBLING_TEST_MISSING` avant correction. Une seule ligne
+`tdd-cover` au début du module référence le test existant, conformément à la
+convention déjà utilisée dans les modules voisins. Aucune exemption ni suite dupliquée.
+La même commande passe ensuite (exit 0), puis `quality-rules.test.ts` passe 8/8.
+Le build des hooks ne produit aucun changement dérivé; le floor publié conserve
+strictement son hash `224e41fe…e264`. Les journaux RED/GREEN correspondants sont
+conservés sous `ci-enforce-declaration-*.log` et `quality-rules-ci-green.log`.

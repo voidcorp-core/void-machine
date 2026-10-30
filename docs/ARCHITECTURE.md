@@ -1,5 +1,15 @@
 # Architecture
 
+## Product boundary
+
+[Machine vocation](MACHINE-VOCATION.md) owns the Cortex/Machine responsibility
+boundary and target mission-return contract. Cortex owns intent, durable personal
+memory, priorities, authorization and final acceptance. Machine owns bounded
+execution and its operational state. Development is its first specialty.
+The topology below describes implementation, not a claim that a general Cortex
+integration is delivered. `packages/core/` is the development harness's discipline;
+`packages/void-machine/src/core/` holds the bounded generic mission primitives.
+
 ## Topology
 
 ```
@@ -50,7 +60,7 @@ has three answers:
 |---|---|---|
 | the top of `.void/` | the project loses a decision | yes |
 | `installed/` | `void-machine install` restores it byte for byte | no |
-| `machine/` | nothing is lost | no |
+| `machine/` | local execution state, receipts and recovery evidence may be lost | no |
 
 **Everything at the top of `.void/` is committed; the two subdirectories are
 not.** That sentence is the whole rule, and it is checkable at a glance rather
@@ -189,7 +199,7 @@ storage dependency.
 
 ## Stack baseline
 
-The harness assumes **TypeScript + web**. The core is not framework-agnostic across language families. See `docs/PHILOSOPHY.md` § "Stack assumption".
+The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `docs/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
@@ -198,8 +208,8 @@ delegation capability reaches users, embedded in the published CLI as `void-mach
 ([decision](decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md));
 the package itself is never published. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
 and collision rules, the shared-state fingerprint and the merge refusals) lives in
-`packages/cli/src/lib/autopilot/`. A future independent Rust/Go/Python product could still live in
-a sibling repo, reusing mechanics not skills.
+`packages/cli/src/lib/autopilot/`. Other specialties do not require a sibling repository
+or another engine by default; any physical separation needs a demonstrated boundary.
 
 ## Delegated agent runs
 
@@ -636,6 +646,9 @@ useful; Codex orchestration may not claim enforced isolation until a runtime pro
 
 ### Core vs Packs
 
+This is the current development-harness layout, not the generic Machine kernel.
+Its stack rules must not automatically govern unrelated business missions.
+
 | Concern | Where |
 |---|---|
 | TypeScript + web craftsman discipline (universal within that stack) | `core/` |
@@ -750,15 +763,15 @@ One exception is allowed: an **explicit, documented `peerDependency` of composit
 
 ### CLI scope
 
-The CLI is the only entry point. It:
+The published CLI installs and maintains the development harness in project-local
+runtime files, adds selected stack packs, checks health and exposes the documented
+mission, delegation and delivery commands. See the README for the current install
+surface; it is not limited to Claude and is not a global-only installation.
 
-1. Installs core into `~/.claude/voidcorp/`
-2. Adds packs to the current project's `.claude/` (via symlink or copy)
-3. Updates both
-4. Runs `doctor` to detect drift / corruption / version mismatch
-5. Runs `init` to create `.void/config.json` in a new project
-
-The CLI does **not** edit the consumer's source code. The consumer's CLAUDE.md imports harness modules — the harness never writes business code.
+Installation and update do not edit the consumer's business code. An agent's
+authorized development mission can do so. This maintenance boundary does not
+prohibit Machine's wider action responsibility. A future Cortex entry point must
+reuse the appropriate existing capabilities; this document defines no new API.
 
 ### Product identity: one source
 

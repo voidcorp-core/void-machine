@@ -13544,6 +13544,9 @@ function executableCandidates() {
       join2(programFiles, "Git", "bin", "git.exe")
     ];
   }
+  if (process.platform === "darwin") {
+    return ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git", "/bin/git"];
+  }
   return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"];
 }
 async function trustedGitPath(explicit) {

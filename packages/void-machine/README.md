@@ -56,13 +56,16 @@ Source grounding:
 
 ## Toolchain floor
 
-This private package requires Node >=24.15.0. The foundation build, test typecheck,
+This private package requires Node >=26.12.1, the current runtime selected by
+[`.node-version`](../../.node-version). See the
+[current runtime decision](../../docs/decisions-log/2026-10-23-current-node-runtime-floor--e1c6d206-22e6-48e6-9836-aa9cc18db5ca.md). The historical foundation build, test typecheck,
 and 111 contracts passed under Node 24.15.0 and Node 26.8.2 on 2026-09-21.
-It uses TypeScript 7.0.2, Vitest 5.0.1, Zod 4.6.5, and Node 24 types.
+It uses TypeScript 7.0.2, Vitest 5.0.1, Zod 4.6.5, and conservative Node 24 type
+declarations. Those declarations do not imply Node 24 runtime support.
 Vitest 5's [migration guide](https://vitest.dev/guide/migration/) documents its
 Node/Vite prerequisites and changed defaults. The package test suite remains on
 its own runner; the repository-wide Vitest version is unchanged. The Node-floor
-choice and SQLite implication are recorded in the
+history and SQLite implication are recorded in the superseded
 [Node 24 decision](../../docs/decisions-log/2026-09-21-machine-node-24-lts-floor--89f1ec74-3cf3-492a-be98-2ec03c924508.md).
 
 The existing packed CLI budget is 2,000,000 bytes. Measure check:size before any CLI cutover;
@@ -228,9 +231,9 @@ durable wait for a clarification answer (plan B2) is outside it and will change 
 reducer. This split does not change stored note bytes; the [core decision](../../docs/decisions-log/2026-09-21-machine-generic-mission-core--b9347b31-9053-45e0-a153-0a7104c0191b.md)
 records its boundaries and reversal cost.
 
-The current private suite has 161 passing tests under Node 24.15.0 and Node
+The historical private-suite baseline had 161 passing tests under Node 24.15.0 and Node
 26.9.0, including frozen `/1` and `/2` journal fixtures read byte for byte and a
-three-step mission that resumes in a new context. Build and test typecheck pass on both runtimes.
+three-step mission that resumes in a new context. Build and test typecheck passed on both runtimes at that baseline.
 Admission is a parser: the vertical's `admit(step, raw, input, config)` returns
 `{ ok: true, value }` or `{ ok: false, reason }`. The codec decodes records into
 untrusted values and encodes only admitted ones. On every read, the driver parses each

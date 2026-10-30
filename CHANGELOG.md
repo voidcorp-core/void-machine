@@ -1,5 +1,43 @@
 # Changelog
 
+## [6.0.0](https://github.com/voidcorp-core/void-machine/compare/v5.0.8...v6.0.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **node:** all first-party packages now require Node >=26.12.1; Node 24 is no longer a supported consumer runtime.
+
+### Features
+
+* **cli:** show observed specialist activity in ticket usage ([552a68a](https://github.com/voidcorp-core/void-machine/commit/552a68abfe7392d5ceca83643589543a66df9179))
+* **hooks:** warn on repeated unchanged reads without extra processes ([2e655b7](https://github.com/voidcorp-core/void-machine/commit/2e655b78d9547347f4062ef4eb434e4b8b7afd37))
+* **hooks:** warn on unchanged repeated reads ([b3af4bd](https://github.com/voidcorp-core/void-machine/commit/b3af4bd917268726c79c2268828a8c175265ca47))
+* **mission:** bind prospective usage to real sessions ([b3291b6](https://github.com/voidcorp-core/void-machine/commit/b3291b6e1080af3c50135af70d4c2505b4274dc1))
+* **mission:** bind prospective usage to real sessions ([312fbac](https://github.com/voidcorp-core/void-machine/commit/312fbac0e6f68414a330348e64dac57fef54c682))
+* **mission:** report explicitly linked ticket usage ([f547a95](https://github.com/voidcorp-core/void-machine/commit/f547a95d8b3782d36cfb1e57c60dc295ca128da0))
+* **mission:** report explicitly linked ticket usage ([740df34](https://github.com/voidcorp-core/void-machine/commit/740df34461a2a2fadb7c17d1b63f2b1d753cefa0))
+* **mission:** show observed specialist activity in usage ([d3e5b6b](https://github.com/voidcorp-core/void-machine/commit/d3e5b6b426e7eb0b25080b1532e1362e45a5ceed))
+
+
+### Bug Fixes
+
+* **graph:** prefer direct Git installations on macOS ([3564b47](https://github.com/voidcorp-core/void-machine/commit/3564b47d501239a354d4ed383410020f646537b6))
+* **graph:** prefer direct Git on macOS before publication ([af90f1e](https://github.com/voidcorp-core/void-machine/commit/af90f1e46906f1157fd172ddba7b755ee7f2a357))
+* **mission:** preserve usage identity and bounded CI validation ([c5dae75](https://github.com/voidcorp-core/void-machine/commit/c5dae7545a547d869ea7b12a16ebdbf4d9e3657e))
+* **mission:** release excess usage bindings at capacity ([37057fb](https://github.com/voidcorp-core/void-machine/commit/37057fbe75396a3c25deaf247fe445f659c0b88c))
+* **skills:** choose agent models through native capabilities ([858c5c1](https://github.com/voidcorp-core/void-machine/commit/858c5c155d75d4b6c42de8024d30b06b4f4016b1))
+* **skills:** preserve proportional advice in autopilot ([1a94f67](https://github.com/voidcorp-core/void-machine/commit/1a94f6714110eca1b6120549d15342d2f69e33f8))
+* **skills:** preserve proportional specialist use in autopilot ([8ff46d4](https://github.com/voidcorp-core/void-machine/commit/8ff46d4835421bc8a55a3264c72d95ac5f2e80e8))
+* **skills:** select specialist models through native capabilities ([f71ce2e](https://github.com/voidcorp-core/void-machine/commit/f71ce2ed55b3ccc4ffe61ad42b008d76513e60af))
+* **workflow:** bound delivery effort to accepted behavior ([ccb5d22](https://github.com/voidcorp-core/void-machine/commit/ccb5d221ac8ab25fe9518704d87af9b12763564c))
+* **workflow:** bound delivery effort to accepted behavior ([9a55132](https://github.com/voidcorp-core/void-machine/commit/9a5513216a07501ce3affda98d5edc49d6a0c16d))
+* **workflow:** keep composed commit and QA checks proportional ([1006325](https://github.com/voidcorp-core/void-machine/commit/100632566dea8da8f70fe2a1b69483cf24369c0b))
+
+
+### Build System
+
+* **node:** require the current runtime across packages ([e36f3e3](https://github.com/voidcorp-core/void-machine/commit/e36f3e38049d2e9e79803912b5ac7219562d5886))
+
 ## [5.0.8](https://github.com/voidcorp-core/void-machine/compare/v5.0.7...v5.0.8) (2026-10-23)
 
 

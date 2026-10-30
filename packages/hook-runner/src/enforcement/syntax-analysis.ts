@@ -51,7 +51,7 @@ export function analyzeSyntax(input: SyntaxInput): { readonly lines: readonly nu
     if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
       const owner = node.expression.text;
       if ((['it', 'test', 'describe'].includes(owner) && node.name.text === 'only')
-        || (['it', 'test'].includes(owner) && node.name.text === 'skip')) {
+        || (['it', 'test', 'describe'].includes(owner) && node.name.text === 'skip')) {
         lines.add(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1);
       }
     }
@@ -67,7 +67,7 @@ export function analyzeSyntax(input: SyntaxInput): { readonly lines: readonly nu
         if (++visited > 20_000) throw new RangeError();
         target = target.expression;
       }
-      if (ts.isIdentifier(target) && ['xit', 'xdescribe'].includes(target.text)) {
+      if (ts.isIdentifier(target) && ['xit', 'xdescribe', 'fit', 'fdescribe'].includes(target.text)) {
         lines.add(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1);
       }
     }

@@ -52,15 +52,12 @@ service ─→ repository (port)   service ─→ helper   service ─→ types
 
 If your package needs `@repo/db` directly: stop. Move the DB-touching code into an adapter in the consuming app. The package owns the **port**, not the adapter.
 
-## Allowed imports (enforced by `boundary-direction-check`)
+## Allowed imports
 
-| This package | May import |
-|---|---|
-| `@repo/<name>` | `@repo/core` (logger, env, errors, Result/Option/pipe). Nothing else `@repo/*`. |
-
-If you find yourself needing to import another `@repo/*`, you are blurring layers. Two valid fixes:
-- Move the shared concept into `@repo/core`
-- Reshape the boundary so the consumer composes the two packages explicitly
+Follow `void-dependency-direction`: the package manifest declares dependencies;
+the project's architecture decides whether they belong. This service convention
+prefers domain-owned ports and app composition. It does not claim the shared hook
+forbids every dependency except `@repo/core`.
 
 ## `package.json` template
 

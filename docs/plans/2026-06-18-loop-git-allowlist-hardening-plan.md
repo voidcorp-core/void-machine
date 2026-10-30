@@ -7,6 +7,12 @@ author: Florent Pellegrin + Claude
 high_risk: true
 ---
 
+> Archive du moteur backlog-loop retiré au cutover du 24 septembre 2026.
+> Ce document conserve la décision et ses preuves historiques, pas une procédure active.
+> Le script secondaire `block-protected-push` et son override `AUTO_MERGE` ont été retirés.
+> Le contrat courant est `docs/specs/2026-09-22-autopilot-native-loop.md` et ses ADR.
+
+
 ## Goal
 
 Durcir les gates git/allowlist de `autonomous-backlog-loop` face aux conditions réelles

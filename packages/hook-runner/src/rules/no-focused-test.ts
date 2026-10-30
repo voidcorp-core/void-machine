@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/hook-runner/src/rules/quality-rules.test.ts
 import type {
   NormalizedEdit,
   RuleVerdict,
@@ -8,7 +9,7 @@ import {
   lineEvidence,
 } from './source-helpers.js';
 
-const FOCUSED = /\b(?:it|test|describe)\.only\b|\b(?:it|test)\.skip\b|\b(?:xit|xdescribe)\b/;
+const FOCUSED = /\b(?:it|test|describe)\.only\b|\b(?:it|test|describe)\.skip\b|\b(?:xit|xdescribe|fit|fdescribe)\b/;
 
 export function noFocusedTest(edits: readonly NormalizedEdit[]): RuleVerdict {
   return evidenceVerdict(

@@ -263,16 +263,6 @@
     },
     {
       "description": "",
-      "id": "hook:block-protected-push",
-      "lines": 81,
-      "name": "block-protected-push",
-      "pack": null,
-      "source": "packages/core/hooks/block-protected-push.sh",
-      "staticTokens": 971,
-      "type": "hook"
-    },
-    {
-      "description": "",
       "id": "hook:boundary-direction-check",
       "lines": 10,
       "name": "boundary-direction-check",
@@ -528,7 +518,7 @@
       "name": "viewport-screenshot-gate",
       "pack": null,
       "source": "packages/core/hooks/viewport-screenshot-gate.sh",
-      "staticTokens": 542,
+      "staticTokens": 570,
       "type": "hook"
     },
     {
@@ -822,7 +812,7 @@
       "type": "skill"
     },
     {
-      "description": "Enforce the @repo/* import direction in a Turborepo workspace. Concrete violations + fixes. Composes with core:hexagonal-architecture and the boundary-direction-check hook.",
+      "description": "Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or fixing boundary-direction-check.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -839,7 +829,7 @@
         }
       ],
       "id": "skill:pack-monorepo/void-dependency-direction",
-      "lines": 160,
+      "lines": 41,
       "name": "void-dependency-direction",
       "owner": "folpe",
       "pack": "pack-monorepo",
@@ -848,7 +838,7 @@
         "codex"
       ],
       "source": "packages/packs/pack-monorepo/skills/void-dependency-direction/SKILL.md",
-      "staticTokens": 1417,
+      "staticTokens": 535,
       "type": "skill"
     },
     {
@@ -899,7 +889,7 @@
         }
       ],
       "id": "skill:pack-monorepo/void-service-package",
-      "lines": 122,
+      "lines": 119,
       "name": "void-service-package",
       "owner": "folpe",
       "pack": "pack-monorepo",
@@ -908,7 +898,7 @@
         "codex"
       ],
       "source": "packages/packs/pack-monorepo/skills/void-service-package/SKILL.md",
-      "staticTokens": 1472,
+      "staticTokens": 1444,
       "type": "skill"
     },
     {
@@ -1512,7 +1502,7 @@
       "type": "skill"
     },
     {
-      "description": "Build a webhook handler with signature verification, idempotency, and dead-letter routing. Per-source patterns (Stripe, Resend, GitHub). Self-contained — no harness wrappers required.",
+      "description": "Build a webhook handler with signature verification, idempotency, and dead-letter routing. Per-source patterns (Stripe, Resend, GitHub). Uses the shared async-safety contract.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -1529,7 +1519,7 @@
         }
       ],
       "id": "skill:pack-server/void-webhook-handler-pattern",
-      "lines": 205,
+      "lines": 105,
       "name": "void-webhook-handler-pattern",
       "owner": "folpe",
       "pack": "pack-server",
@@ -1538,7 +1528,7 @@
         "codex"
       ],
       "source": "packages/packs/pack-server/skills/void-webhook-handler-pattern/SKILL.md",
-      "staticTokens": 2123,
+      "staticTokens": 1436,
       "type": "skill"
     },
     {
@@ -1569,7 +1559,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-accessibility/SKILL.md",
-      "staticTokens": 2209,
+      "staticTokens": 2247,
       "triggers": {
         "extensions": [
           "tsx"
@@ -1633,7 +1623,7 @@
         }
       ],
       "id": "skill:void-async-safety",
-      "lines": 287,
+      "lines": 300,
       "name": "void-async-safety",
       "owner": "folpe",
       "pack": null,
@@ -1642,7 +1632,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-async-safety/SKILL.md",
-      "staticTokens": 3048,
+      "staticTokens": 3424,
       "triggers": {
         "globs": [
           "**/webhooks/**",
@@ -1833,12 +1823,12 @@
         "codex"
       ],
       "source": "packages/core/skills/void-code-review/SKILL.md",
-      "staticTokens": 3408,
+      "staticTokens": 3443,
       "type": "skill"
     },
     {
       "activation": "always",
-      "description": "Conventional Commits + mandatory \"why\" in body + scope + breaking-change marking. ASCII-only (no em dash, no emoji). Co-author trailer for AI pair. The git log is documentation. Use at every commit.",
+      "description": "Conventional Commits + mandatory \"why\" in body + scope + breaking-change marking. Co-author trailer for AI pair. The git log is documentation. Use at every commit.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -1855,7 +1845,7 @@
         }
       ],
       "id": "skill:void-commit-discipline",
-      "lines": 210,
+      "lines": 204,
       "name": "void-commit-discipline",
       "owner": "folpe",
       "pack": null,
@@ -1864,7 +1854,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-commit-discipline/SKILL.md",
-      "staticTokens": 1920,
+      "staticTokens": 1830,
       "type": "skill"
     },
     {
@@ -2077,7 +2067,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-frontend-design/SKILL.md",
-      "staticTokens": 3604,
+      "staticTokens": 3622,
       "triggers": {
         "extensions": [
           "tsx"
@@ -2174,7 +2164,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-hexagonal-architecture/SKILL.md",
-      "staticTokens": 2734,
+      "staticTokens": 2797,
       "type": "skill"
     },
     {
@@ -2204,7 +2194,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 6597,
+      "staticTokens": 6632,
       "type": "skill"
     },
     {
@@ -2394,7 +2384,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-observability/SKILL.md",
-      "staticTokens": 2210,
+      "staticTokens": 2277,
       "type": "skill"
     },
     {
@@ -2733,7 +2723,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-testing/SKILL.md",
-      "staticTokens": 3078,
+      "staticTokens": 3097,
       "triggers": {
         "globs": [
           "**/*.test.ts",
@@ -2868,7 +2858,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-verify/SKILL.md",
-      "staticTokens": 1551,
+      "staticTokens": 1573,
       "type": "skill"
     }
   ],
@@ -2921,13 +2911,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "block-dangerous-bash blocks destructive shell — enforces security-guidance"
-    },
-    {
-      "from": "hook:block-protected-push",
-      "to": "skill:void-autopilot",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "block-protected-push guards protected-branch pushes for commit-only autopilot workers — enforces autopilot"
     },
     {
       "from": "hook:boundary-direction-check",
@@ -3103,13 +3086,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "ubiquitous-language-lint checks domain vocabulary — enforces domain-driven-design"
-    },
-    {
-      "from": "hook:viewport-screenshot-gate",
-      "to": "skill:void-accessibility",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "viewport-screenshot-gate gates mobile+desktop viewports — enforces accessibility"
     },
     {
       "from": "pack:pack-mobile",

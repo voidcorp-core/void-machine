@@ -23,7 +23,7 @@ Exactly-once delivery requires two-phase commits across systems — extreme effo
 
 Every webhook handler does FOUR things, IN THIS ORDER:
 
-1. **Verify signature** (HMAC + timestamp window)
+1. **Verify authenticity and replay policy** using the provider contract (authenticated timestamp when available)
 2. **Check idempotency key** (claim atomically; if already processed, return success without re-processing)
 3. **Handle the event** (business logic)
 4. **Mark idempotency key as completed** (or release on failure for retry)
@@ -31,55 +31,68 @@ Every webhook handler does FOUR things, IN THIS ORDER:
 The `pack-nextjs` provides a `withWebhookSafety()` wrapper:
 
 ```typescript
-import { withWebhookSafety } from '@repo/async';
+import { withWebhookSafety } from '@voidcorp/pack-nextjs/async';
 
-export const POST = withWebhookSafety({
+const handleWebhook = withWebhookSafety({
   verify: (req) => verifyStripeSignature(req, env.STRIPE_WEBHOOK_SECRET),
   dedupKey: (event) => event.id,                  // Stripe event ID
-  replayWindowMs: 5 * 60 * 1000,                  // 5 minutes
   store: stripeIdempotencyStore,                  // injected
   handler: async (event) => handleStripeEvent(deps, event),
 });
+
+export async function POST(req: Request): Promise<Response> {
+  const outcome = await handleWebhook(req);
+  return Response.json(outcome.body, { status: outcome.status });
+}
 ```
 
-The wrapper enforces the order. Business handler stays pure.
+The wrapper owns verify → claim → handle → mark and returns a typed outcome; the HTTP
+adapter maps its status and body. Verification and handling return `Result`, not an
+untyped event or success by absence of an exception. Signature verification belongs to
+the provider SDK adapter passed as `verify`; it runs before any claim or business effect.
 
 ### Replay window enforcement
 
-Reject events older than the configured window (default 5 minutes). Stripe and most webhook sources include a timestamp; the wrapper checks it. Composes with `void-security-guidance` (replay attack protection).
+The verifier must use the provider SDK's authenticated delivery metadata and freshness policy.
+For Stripe, check the signed delivery timestamp through its SDK; do not reject an old
+business event merely because its creation time is old. Retries are new signed deliveries.
+The wrapper has no `replayWindowMs` option and supplies no universal five-minute policy.
+A verifier failure is rejected before deduplication or business handling. Providers without
+a signed timestamp require their documented replay/deduplication policy, not a fabricated
+timestamp check. See the provider reference in this skill's `.source`.
 
 ### Banned
 
 - State mutation BEFORE signature verification.
 - Hand-rolled signature check (use the wrapper / the provider's official lib).
 - In-memory `Set` for dedup (lost on process restart).
-- No replay window (forever-replayable).
+- Ignoring the provider's authenticated freshness policy when one exists, or omitting durable event deduplication.
 
 ---
 
 ## Idempotency keys — port + store
 
-`IdempotencyStore` is a port (composes with `void-hexagonal-architecture`):
+The exported `IdempotencyStore` in `@voidcorp/pack-nextjs/async` owns this contract:
 
-```typescript
-interface IdempotencyStore {
-  tryClaim(key: string, ttl: Duration): Promise<Result<'claimed' | 'already-processed', StoreError>>;
-  markCompleted(key: string): Promise<Result<void, StoreError>>;
-  release(key: string): Promise<Result<void, StoreError>>;
-}
-```
+- `tryClaim` atomically claims a new key. `already-processed` means **completed**, never
+  merely received or in progress. A pending claim returns a retryable store error.
+- A failed handler releases its claim. A failed completion write returns non-success and
+  releases for retry. Release failure never turns the operation into success.
+- The consumer provides a durable adapter; the harness does not ship a Redis/Postgres store.
+  Tests may use an in-memory implementation of the same contract.
+- A claim cannot make an external effect atomic with its completion record. Use a shared
+  transaction/outbox where possible, or make the business effect idempotent by the stable
+  event key. After an uncertain completion, a retry may execute the handler again.
 
-Adapters (provided by packs):
+Do not implement deduplication as "inbox row exists → acknowledge": an unfinished row
+must remain retryable. This is the single safety contract used by the webhook handler skill.
 
-- **Redis adapter** — high volume, low latency
-- **Postgres adapter** — default for low-volume webhooks (uses `INSERT ... ON CONFLICT DO NOTHING` for atomic claim)
-- **In-memory adapter** — tests only (composes with `void-testing` nullable infrastructure)
+### Deduplication retention
 
-The store is the consumer dedup substrate. Process restart does not lose claims.
-
-### Default TTL: 7 days
-
-Long enough for most provider retry windows. Override per handler.
+Choose retention from the provider's automatic and manual redelivery windows and the
+business invariant. The wrapper passes `dedupTtlMs` (default seven days) to the
+store; the durable adapter must enforce that retention. Override it when the
+provider contract or business invariant requires a longer window.
 
 ---
 

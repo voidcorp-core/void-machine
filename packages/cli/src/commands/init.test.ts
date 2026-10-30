@@ -157,13 +157,25 @@ describe('installDoctrineFiles', () => {
     expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
   });
 
-  it('keeps the project philosophy when asked to preserve it', async () => {
+  it('refreshes the installed copy from canonical source doctrine without overwriting its owner', async () => {
     const stage = project();
     const installed = project();
     mkdirSync(join(installed, '.void/installed'), { recursive: true });
-    writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'CANONICAL PHILOSOPHY\n');
+    mkdirSync(join(installed, 'docs'), { recursive: true });
+    writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'STALE DERIVED PHILOSOPHY\n');
+    writeFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'CANONICAL SOURCE PHILOSOPHY\n');
     await installDoctrineFiles(stage, source(), { preserveFrom: installed });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toContain('CANONICAL');
+    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('CANONICAL SOURCE PHILOSOPHY\n');
+    expect(readFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'utf8')).toBe('CANONICAL SOURCE PHILOSOPHY\n');
+  });
+
+  it('preserves a legacy installed copy when no canonical source exists', async () => {
+    const stage = project();
+    const installed = project();
+    mkdirSync(join(installed, '.void/installed'), { recursive: true });
+    writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'LEGACY PHILOSOPHY\n');
+    await installDoctrineFiles(stage, source(), { preserveFrom: installed });
+    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('LEGACY PHILOSOPHY\n');
   });
 
   it('still writes the packaged one when preserving a project that has none, rather than leaving a hole', async () => {

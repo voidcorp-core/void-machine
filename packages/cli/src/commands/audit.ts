@@ -118,7 +118,7 @@ export async function audit(args: readonly string[]): Promise<void> {
     && usage.length === 0
   ) {
     line(
-      c.yellow('  no mission events yet - the activation hook populates .void/runs/*/events.jsonl.'),
+      c.yellow('  no mission events yet - the activation hook populates .void/machine/runs/*/events.jsonl.'),
     );
   }
   line(
@@ -132,9 +132,7 @@ export async function audit(args: readonly string[]): Promise<void> {
     report.stale,
   );
   reportSection(
-    synergy.retirementEvidenceSufficient
-      ? 'never fired (retirement review is evidence-eligible)'
-      : 'never observed (retirement evidence is insufficient)',
+    'not observed (absence alone does not establish non-use)',
     report.never,
   );
   blank();

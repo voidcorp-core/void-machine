@@ -85,7 +85,6 @@
       "blurb": "The floor that stops an action rather than reporting it afterwards.",
       "hooks": {
         "block-dangerous-bash": "Refuses destructive shell before it runs: recursive deletes, force pushes, history rewrites.",
-        "block-protected-push": "Refuses a push to a protected branch, so the remote is never the last line of defence.",
         "protect-sensitive-files": "Refuses edits to secrets, keys, lockfiles and other single-writer paths.",
         "control-character-grep": "Refuses an invisible control byte in a source file, which no diff shows and which drops the file out of the project graph entirely.",
         "secret-in-content": "Refuses a write whose content carries a credential, even into an unprotected file."
@@ -130,7 +129,7 @@
         "no-ai-design-slop": "Refuses the generated-UI tells: gradient hero, mid hierarchy, decorative motion.",
         "anti-ai-slop-grep": "The same judgement at the text level, on copy that reads as generated.",
         "axe-precommit": "Runs accessibility checks before the commit, not at review time.",
-        "viewport-screenshot-gate": "Requires both viewports to have been looked at before a UI change ships."
+        "viewport-screenshot-gate": "Optional PR-text heuristic for mobile/desktop references; not a native or CI gate and does not inspect images."
       }
     },
     {

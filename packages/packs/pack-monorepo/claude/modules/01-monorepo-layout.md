@@ -24,15 +24,12 @@ The split between `packages/` and `_modules/` is the load-bearing boundary: tier
 
 ## `@repo/*` package boundaries
 
-| Package | Imports allowed | Imports forbidden |
-|---|---|---|
-| `@repo/core` | nothing internal | any other `@repo/*` |
-| `@repo/auth` | `@repo/core` | `@repo/db` (auth defines its own port) |
-| `@repo/db` | `@repo/core` | `@repo/auth` |
-| `@repo/ui` | `@repo/core` | `@repo/db`, `@repo/auth` |
-| `apps/*` | any `@repo/*` | any other `apps/*` |
-
-The `boundary-direction-check` hook enforces these via tsconfig `paths` plus grep checks. Composes with the `void-hexagonal-architecture` skill: domain (`apps/*/src/domain/`, `apps/*/src/services/`) MUST NOT import from `apps/*/src/infrastructure/` or framework runtime modules.
+`void-dependency-direction` owns the package-boundary procedure: declare accepted
+dependencies in the consuming package manifest and follow the project's architecture.
+The hook checks detected undeclared scoped imports, not a universal `@repo/core`-only
+topology. TypeScript path aliases do not enforce layers. Domain code remains independent
+of concrete infrastructure; use domain-owned ports and compose adapters at the edge,
+as described by `void-hexagonal-architecture`.
 
 ## Service layout (`5+5` per service package)
 

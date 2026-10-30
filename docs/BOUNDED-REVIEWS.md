@@ -32,6 +32,12 @@ resolution action. Unresolved blocking defects never become a successful complet
 Incomplete panels, transport repair, agent restarts and task resumption do not spend or
 reset correction budget. A turn ending does not end a task.
 
+The autonomous `autopilot` loop has a deliberately tighter budget: two review rounds
+in total (initial review plus at most one corrected head), as specified by
+`docs/specs/2026-09-22-autopilot-native-loop.md` and enforced by its kernel.
+It does not inherit two additional correction batches. Exhaustion routes unresolved
+work to a human; neither mode resets the other's consumed budget.
+
 ## Preparation is advice
 
 Normal `mission dispatch` starts the lead writer without a compulsory preparation panel.

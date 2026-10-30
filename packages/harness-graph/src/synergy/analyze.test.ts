@@ -72,7 +72,7 @@ describe('analyzeSynergy', () => {
     };
     const activations = [
       ...sessions(25),
-      event(0, 'agent', 'test-qa-engineer'),
+      ...Array.from({ length: 25 }, (_, index) => event(index, 'agent', 'test-qa-engineer')),
     ];
 
     const report = analyzeSynergy(model, activations, [], {
@@ -88,6 +88,18 @@ describe('analyzeSynergy', () => {
     expect(report.proposals).not.toContainEqual(expect.objectContaining({
       kind: 'repair-telemetry',
     }));
+  });
+
+  it('does not treat tool-only sessions as evidence of agent non-use', () => {
+    const model: GraphModel = {
+      version: 1,
+      nodes: [node('agent:security-engineer'), node('agent:test-qa-engineer')],
+      edges: [],
+    };
+    const report = analyzeSynergy(model, [...sessions(25), event(0, 'agent', 'test-qa-engineer')], [], {
+      minSessions: 3, minEvents: 20, retirementMinSessions: 20,
+    });
+    expect(report.proposals).not.toContainEqual(expect.objectContaining({ kind: 'retirement-review' }));
   });
 
   it('proposes tuning for a costly component with little observed use', () => {

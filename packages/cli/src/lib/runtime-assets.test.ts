@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -88,4 +89,38 @@ describe('wireClaudeLocalAssets', () => {
     await expect(wireClaudeLocalAssets(project, source, [])).resolves.toMatchObject({ agents: 21 });
     expect(readFileSync(join(project, '.claude', 'agents', 'security-engineer.md'), 'utf8')).not.toContain('\r\n');
   });
+});
+
+
+describe('compiled shell-write protection', () => {
+  for (const [runtime, tool] of [['claude', 'Bash'], ['codex', 'Bash'], ['codex', 'shell']] as const) {
+    for (const [destination, blocked] of [['pnpm-lock.yaml', true], ['.env.production', true], ['notes.txt', false]] as const) {
+      it(`${runtime}/${tool} ${blocked ? 'refuses' : 'allows'} the recognized shell destination ${destination}`, () => {
+        const manifestPath = runtime === 'claude'
+          ? join(CORE_ROOT, '.claude-plugin/plugin.json')
+          : join(CORE_ROOT, 'codex/hooks.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        const hooks = runtime === 'claude' ? compileClaudeHooks(manifest.hooks) : manifest.hooks;
+        const commands: string[] = hooks.PreToolUse
+          .filter((entry: { matcher: string }) => entry.matcher === '*' || new RegExp(`^(?:${entry.matcher})$`).test(tool))
+          .flatMap((entry: { hooks: { command: string }[] }) => entry.hooks.map((hook) => hook.command))
+          .filter((command: string) => command.includes('enforce protected-file'));
+        expect(commands).toHaveLength(1);
+        // Execute the selected manifest command, not a second hand-authored route.
+        const command = commands[0]?.replace('$CLAUDE_PROJECT_DIR/.void/hooks', join(CORE_ROOT, 'hooks'))
+          .replace('$' + '{VOID_HOOKS_DIR}', join(CORE_ROOT, 'hooks'));
+        const parsed = /^node "([^"]+)" (.+)$/.exec(command ?? '');
+        expect(parsed).not.toBeNull();
+        const result = spawnSync(process.execPath, [parsed?.[1] ?? '', ...(parsed?.[2] ?? '').split(' ')], {
+          input: JSON.stringify({ tool_name: tool, tool_input: { command: `printf harmless > ${destination}` } }),
+          encoding: 'utf8',
+        });
+        if (runtime === 'claude') expect(result.status).toBe(blocked ? 2 : 0);
+        else {
+          expect(result.status).toBe(0);
+          expect(result.stdout.includes('"permissionDecision":"deny"')).toBe(blocked);
+        }
+      });
+    }
+  }
 });

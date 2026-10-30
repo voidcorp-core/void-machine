@@ -19,7 +19,7 @@ Every UI is designed mobile-first AND must reach first-class quality on both vie
 
 - **Layout starts at 360–390px** (iPhone 12 mini → 15 Pro range), progressively enhanced wider.
 - **Never the reverse.** No "desktop-first then squeeze for mobile."
-- **Both viewports screenshot-reviewed before merge** — `viewport-screenshot-gate` hook (shared with `void-accessibility`).
+- **Both viewports screenshot-reviewed before merge** — inspect actual captures; the optional `viewport-screenshot-gate` script only checks PR text.
 - **No mobile-only / desktop-only features** without an explicit decision recorded through the `void-decide` skill.
 - **Performance budget enforced for both**: LCP < 2.5s on slow 4G mobile AND on desktop fiber (measure with the project's perf tooling — Lighthouse CI, WebPageTest, bundlesize).
 
@@ -234,7 +234,7 @@ import { Button } from '@repo/ui';
 
 ## Companion hooks
 
-- `viewport-screenshot-gate` (pre-PR on UI changes, shared with `void-accessibility`) — fails PRs lacking both mobile and desktop screenshots.
+- `viewport-screenshot-gate` (pre-PR on UI changes, shared with `void-accessibility`) — optional PR-text heuristic, not a wired native/CI gate or image validation. Review actual captures.
 - `anti-ai-slop-grep` (pre-commit) — warns on banned copy patterns. Initial list of ~10; grows from `void-learn` harness-gap feedback.
 
 See `../../hooks/`.

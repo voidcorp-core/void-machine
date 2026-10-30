@@ -1,7 +1,8 @@
 # Correction de la cohérence des instructions
 
-Date : 30 octobre 2026. Mission autorisée : corrections locales, sans push, merge,
-modification de protections GitHub ou action sensible externe.
+Date : 30 octobre 2026. Mission initiale : corrections locales sans push ni merge.
+Extension ensuite autorisée : utiliser la version publiée courante, commit, push, PR
+et merge vers develop après CI verte. Les protections GitHub restent inchangées.
 
 ## Autorité et périmètre
 
@@ -98,7 +99,7 @@ La fraîcheur fournisseur porte sur la livraison signée et ses retries :
 
 ## Installation et limites de livraison
 
-Le coordinateur a réconcilié la racine historique avec sa propre source canonique,
+Lors du premier lot, le coordinateur a réconcilié la racine historique avec sa propre source canonique,
 par la transaction d'installation existante : seule la copie installée PHILOSOPHY,
 son hash dans install-manifest et son reçu ont changé. Le bundle de protection publié
 et les autres fichiers inventoriés sont conservés. Cela ne transforme pas le checkout
@@ -144,6 +145,56 @@ reste donc explicite. Cette compilation est isolée sous `.void/machine/generate
 
 Les journaux `verify.log`, `candidate-green.log`, `selfhost-sync.log` et
 `selfhost-doctor.log` sont conservés avec les RED/GREEN sous le dossier local de mission.
-La revue indépendante du commit candidat reste une étape distincte. La CI serveur
-sur la tête exacte sera requise avant toute intégration future; aucun push ou merge
-n'est effectué dans cette mission locale.
+La revue indépendante du premier commit `e929b2ae` a conclu PASS. La CI serveur
+sur la tête exacte reste requise avant intégration. Le lot publié ci-dessous relève
+de l'extension de mission autorisant au coordinateur push, PR et merge develop.
+
+## Lot complémentaire : version publiée courante
+
+Le 30 octobre, npm `latest` et le CLI sélectionné désignent **6.0.0**. Le develop
+intégré porte des sources 6.0.0 mais héritait encore d'un manifeste d'installation
+4.0.0. Le coordinateur a donc exécuté le CLI **publié** 6.0.0 : dry-run, puis
+`update`, avec transaction normale. Aucun bundle de développement n'a remplacé le
+plancher publié. AGENTS, CLAUDE, la doctrine source et PROJECT-DOCTRINE sont conservés.
+
+Une transaction bornée utilisant les propriétaires existants a ensuite matérialisé
+la doctrine canonique des sources, dont le hash est
+`b2c2d365ddaaa07275026a60427441a4c8b860126b2710f97fb55c173ec78b34`,
+et supprimé `core: ^3.5.0`, ancien pin marketplace sans objet pour cette installation
+locale. Le manifeste est régénéré depuis les fichiers matérialisés; ni sa version
+ni les manifests de packages n'ont été modifiés à la main. La transaction ne change
+que config, copie installée de PHILOSOPHY, manifeste et reçu : 141 autres fichiers
+inventoriés sont inchangés.
+
+L'inspection porte directement sur l'installation du worktree, sans redirection
+self-host :
+
+- CLI publié, manifeste et reçu : **6.0.0**; **142 fichiers**, aucune différence de hash.
+- Runner installé identique au paquet publié :
+  `224e41fe8ee390f3fb22622b6171ad78d3ff5f64706fd70ddb6d3fd82e3ee264`.
+- Worker syntaxique installé identique au paquet publié :
+  `12e6a141d5bda6486f285da9af96d09c638ceb26a321f1362a1df064b8eefea3`.
+- Les deux adapters constatent installed/wired/fired/observed vrais, zéro check en
+  échec. `fired` provient de l'invocation réelle du runner installé par le smoke,
+  pas d'une preuve d'appel outil émis par chaque CLI natif. `status` constate deux
+  runtimes installés et deux runners invoqués.
+- Huit suites existantes ciblées installation/config/manifest/hooks : **166/166 tests**.
+
+Le paquet publié 6.0.0 possède encore le matcher Claude antérieur à C01. La correction
+source de C01 et les autres corrections non publiées ne sont donc **pas** revendiquées
+comme actives dans ce floor 6.0.0. Un merge develop ne publie pas un nouveau paquet :
+il faudra sa publication puis l'update explicite pour activer ces corrections chez
+les consommateurs. Aucun patch local hybride ne maquille cette distinction.
+
+`docs/WORKTREES.md` possède désormais la procédure de début de travail et de maintien
+à jour : develop intégré actuel, release npm, CLI choisi, version/hashes installés,
+puis update publié explicite et commit du floor après publication. ARCHITECTURE y
+renvoie. Pas d'auto-updater, cron ou nouveau framework; une vérification manquante
+reste inconnue, jamais appelée « dernière version ». Le coordinateur a archivé le
+checkout historique et ses modifications avant de replacer le workspace principal
+sur les sources develop 6.0.0; les travaux locaux sont conservés.
+
+Preuves locales : `published-update.log`, `published-doctrine-transaction.json`,
+`published-installation-inspection.json`, `published-status.log` et
+`published-targeted-tests.log`, dans le même dossier de mission. Le lot complémentaire
+fait l'objet d'une revue ciblée avant les opérations GitHub autorisées.

@@ -349,6 +349,9 @@ Rules:
   See the ownership-is-union-of-receipt-and-manifest decision.
 - `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
 
+Current source and published-floor maintenance follows the coordinator procedure in
+[WORKTREES.md](WORKTREES.md#current-source-and-published-installation).
+
 ### Co-owned project files and pre-write protection
 
 `packages/hook-runner/src/co-owned.ts` owns the pure, exact co-owned path policy.

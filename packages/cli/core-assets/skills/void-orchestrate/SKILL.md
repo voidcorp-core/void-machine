@@ -1,6 +1,6 @@
 ---
 name: void-orchestrate
-description: Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.
+description: Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Publish observed worker lifecycle events.
 ---
 
 # Orchestrate
@@ -17,16 +17,10 @@ context, permissions, completion and resume capabilities. Use the best supported
 capabilities for the task in the current session; an installed executable or an
 environment hint alone does not validate a host, identity or permission.
 
-Herdr is optional for consumers, not discretionary inside a validated Herdr session.
-When fresh discovery validates the coordinator in Herdr, use its adapter below for
-durable terminal workers and mission visibility. Short agents remain native; never
-duplicate an agent to give it a pane. Outside Herdr, use the current supported host
-(such as tmux) when its required capabilities and ownership can be verified. This
-policy adds no tmux transport and never relaunches through the legacy kernel.
-Without supported presentation, retain native delegation and report the limitation;
-do not claim durability from a pane or unsupported API. Failed or ambiguous host
-discovery blocks the affected host action: diagnose it, never silently switch hosts
-or act on an unrelated project. Native work independent of that action may continue.
+Use native execution independently of presentation. The harness publishes worker
+observations; external plugins own windows, tabs and panes. Never discover or call
+a multiplexer to delegate, and never duplicate an agent to make it visible.
+An absent display cannot change execution permissions or invalidate real evidence.
 
 - Work directly for a tiny targeted change, a single tool call, mechanical processing,
   or tightly coupled work where delegation adds no useful separation.
@@ -70,22 +64,6 @@ conflict, rather than silently upgrading or claiming the quality requirement is 
   and report the effective model only when the runtime supplies it; otherwise it is unknown.
   Use existing evidence/reporting, not a new registry. Report cost/time only when observed.
 
-## First ticket and optional worker tabs
-
-SessionStart discovers Herdr even before central mission files exist. Its advice
-requires a fresh caller pane at the canonical checkout and process ownership;
-environment variables alone never authorize a host action. Revalidate before launch.
-On a new implementation ticket, reuse the assigned writer if one exists. Otherwise,
-in a validated Herdr session, register the mission and planned worker first, then
-create one background tab in the resolved coordinator workspace with the assigned
-worktree as cwd. Read the installed `herdr tab` schema, preserve focus with
-`--no-focus`, and use the returned root pane for the single agent start below.
-Reattach a matching existing worker instead of opening another tab. The coordinator
-stays in its existing pane. Hooks only discover and advise; they never create tabs,
-launch agents or write central files. Without Herdr, use native delegation normally.
-An invalid host or explicit mission selection refuses only that host action;
-independent native work may continue with the limitation stated.
-
 ## Brief and bound the delegation
 
 Use a fresh context by default. Choose a supported fork only when the task needs
@@ -98,7 +76,7 @@ Formal specialist envelopes and evidence follow the independent contract below.
 
 Count writer, research and review children together against observed available runtime slots
 and the coordinator's bounded dispatch; queue work when full. Preserve tighter caller
-limits, including Autopilot's ticket cap and the central schema's four-worker limit.
+limits, including Autopilot's ticket cap.
 This is no machine-wide quota. Do not create recursive child coordinators or redispatch
 the same complete workflow. Required formal specialists remain dispatched by their
 designated owner within the shared available capacity. Do not duplicate a child's work
@@ -150,206 +128,56 @@ Preserve the complete result; incomplete results go back to the same agent.
 With `panel.provider: orchestrator`, only ORCH launches and collects this panel.
 Missing required native capability is reported with cause and next action.
 
-## Herdr adapter: recovery
+## Publish worker observations
 
-The following Herdr sections apply when the session-host policy selects this adapter.
-Native delegation without it does not require these central files or pane discovery.
+For each mission worker or reviewer, keep one `run_<opaque-id>` for its assignment.
+Reuse the unit's open canonical mission; if it has none, create it with
+`void-machine mission start --title <unit> --json` and retain its returned ID.
+Do not recreate a mission to evade a refusal. This publication never substitutes
+for the mission's implementation, verification or independent review receipts.
 
-Read project instructions, the approved task and the current Git status. Preserve
-other writers' changes. Resolve the canonical Git common directory, SHA-256 its
-absolute real path as UTF-8, and inspect
-`~/.local/state/orchestra/<project>/<mission>/`. Never use an inherited workspace
-variable or a stale pane ID as authority. Read mission.md, the applicable
-workers/<label>/brief.md and report.md. Re-read `herdr pane list` before every
-identity decision. Match **label + worktree**, using the canonical worktree path.
-Refuse multiple matches, incomplete discovery, symlinks, traversal and invalid data.
-After reattachment/restart, ORCH atomically updates pane_id and coordinator.workspace
-from that validated fresh inventory. Hooks and workers never write these hints.
-A missing unrelated historical worktree does not invalidate a current identity.
-
-The coordinator is the existing ORCH session, never a second agent opened for display.
-Resolve its own label + worktree before selecting its workspace. Keep each writer
-in its assigned worktree. Do not affect any other project, workspace or pane.
-An uncertain launch or prompt acknowledgement requires reconciliation of that same
-worker before retrying. A timeout proves neither launch failure nor prompt loss.
-
-## Herdr adapter: explicit coordinator context
-
-If unique discovery refuses multiple compatible missions, ORCH reads the target
-mission and reports, then atomically replaces its local, unversioned
-`<canonical worktree>/.void/machine/orchestra-selection.json`. Schema 1 is strict
-JSON, at most 4096 UTF-8 bytes: `{ "schema": 1, "project": "<project-sha256>",
-"mission": "<existing-id>", "coordinator": { "label": "ORCH", "worktree":
-"/absolute/canonical/worktree" } }`. ORCH alone writes it; hooks never repair it.
-No unknown or duplicate keys, YAML, traversal, symlinks or partial writes.
-
-This selects context only, never execution state or permissions. Full bounded
-central discovery still runs; malformed unrelated missions or limits refuse.
-A stale/invalid binding never falls back. Verify selected coordinator label and
-canonical worktree against the current worktree and a fresh `herdr pane list`;
-missing or duplicate live matches refuse. Never prefer timestamps, running status
-or pane tokens to decide intent. Without a binding, preserve unique discovery.
-Clear/compact/resume re-read selection and central state without launching workers.
-Separate worker worktrees retain their own mission, attempt and report discovery.
-A selected terminal mission retains the guarded cleanup below: never clear tokens
-belonging to another mission. No binding belongs in the programme descriptor.
-
-## Herdr adapter: central files and ownership
-
-Use schema: 1 YAML frontmatter, strict string keys and one document, followed by
-Markdown. Reject duplicate keys, tags, anchors, aliases and unknown fields. Bound
-mission/report to 64 KiB, brief to 256 KiB, discovery to 64 entries and 1 MiB of
-mission bytes; exceeding a bound is incomplete, never a unique match.
-See the shipped technical contract `docs/ORCHESTRA.md` in the harness source for
-schemas; the operational fields are listed here so an installed skill is sufficient.
-
-- mission.md: schema, mission, project, status, updated_at
-  (ISO with `Z` or `+HH:MM`/`-HH:MM`; prefer UTC `Z`), repository
-  (canonical Git common path), coordinator {label, worktree, workspace?}, workers.
-- Worker entries: label, agent (codex or claude), worktree, branch, ticket, status,
-  attempt; optional pane_id and session are hints only. At most four workers.
-- Coordinator status and worker status: planned, running, blocked, done, failed.
-- report.md: schema, mission, attempt, worker, branch, status (running, blocked,
-  done, failed), commits (full SHAs), tests (passed, failed, not_run), updated_at.
-  Body: actual commands/results, proof locations, risks, questions and remaining work.
-- brief.md: absolute paths, exact base, footprint, acceptance criteria, ownership,
-  permissions, forbidden effects and current attempt. No secrets. Explicitly warn
-  that other writers exist and their changes must be preserved.
-
-ORCH alone writes mission and briefs; each worker alone writes its report. Use an
-atomic replacement: write an exclusive temporary sibling, then rename. Hooks never
-write these files. A new work turn gets a new attempt; resume keeps its attempt.
-A valid report for the current mission/attempt overrides workers[].status at every
-event. An absent report falls back to the manifest. Malformed, foreign, partial or
-unrecognized stale reports refuse usage; never turn a parse failure into absence.
-The files carry coordination state, not independent review proof.
-
-## Herdr adapter: copyable starting files
-
-Replace the example project hash with SHA-256 of the canonical common Git path.
-Replace every path, branch, ticket and timestamp from actual observations. These
-three files are authored by their owner, never by the hook.
-
-mission.md:
-
-```yaml
----
-schema: 1
-mission: dev-42
-project: "<project-sha256>"
-status: planned
-updated_at: "2026-10-08T10:00:00.000Z"
-repository: /absolute/repository/.git
-coordinator:
-  label: ORCH
-  worktree: /absolute/repository
-  workspace: wA
-workers:
-  - label: WORK-1
-    agent: codex
-    worktree: /absolute/worktrees/dev-42
-    branch: work/dev-42
-    ticket: DEV-42
-    status: planned
-    attempt: implementation-1
----
-# Mission
-Scope, acceptance criteria, canonical mission journal and proof locations.
-```
-
-workers/WORK-1/brief.md:
-
-```yaml
----
-schema: 1
-mission: dev-42
-attempt: implementation-1
-worker: WORK-1
----
-# Work
-Worktree: /absolute/worktrees/dev-42. Branch: work/dev-42.
-Base: <verified full commit SHA>. Ticket: DEV-42.
-Footprint: <exact owned files/directories>; preserve every other writer's edits.
-Acceptance: <complete observable criteria and verification commands>.
-Limits: <role permissions, forbidden effects, human gates>.
-Report: /absolute/mission/workers/WORK-1/report.md, owned only by this worker.
-Resume: <actual runtime session and the recipe from the table below>.
-```
-
-workers/WORK-1/report.md:
-
-```yaml
----
-schema: 1
-mission: dev-42
-attempt: implementation-1
-worker: WORK-1
-branch: work/dev-42
-status: running
-commits: []
-tests: not_run
-updated_at: "2026-10-08T10:00:00.000Z"
----
-# Checkpoint
-Completed: <actual changes>. Verification: <commands, results and proof paths>.
-Remaining: <work and exact next action>. Risks/questions: <observed limitations>.
-```
-
-## Herdr adapter: durable workers
-
-Read installed `herdr --help`, `herdr agent --help` and the live schema before
-issuing commands. Use structured argv, exact acknowledged identities and bounded
-waits/output. The launch recipes for the selected worktree are:
-
-| Kind | Launch argv | Resume argv | Short contexts | ctx capability |
-| --- | --- | --- | --- | --- |
-| codex | `--no-daemon --add-dir <absolute-mission>` | `resume <actual-session> --no-daemon --add-dir <absolute-mission>` | Native fresh context | Unmeasurable without a supported usage source |
-| claude | `--add-dir <absolute-mission>` | `--resume <actual-session> --add-dir <absolute-mission>` | Native Agent, no interception | Fresh transcript usage plus required context.windowTokens |
-
-Use the selected kind's executable and preserve these options on every launch/resume:
+After an actual successful native dispatch acknowledgement, publish:
 
 ```sh
-herdr agent start <unique-mission-worker-name> --kind <kind> --pane <resolved-pane> -- <argv-from-table>
+void-machine agents record --mission <mis_id> --event-file <observation.json>
 ```
 
-The arguments after `--` belong to the selected runtime. The name is unique within
-the mission; it is not an invented native session ID. Resolve the pane first and
-keep the session ID actually returned by the runtime.
+The file contains `observationId`, `kind` and `payload`. Use a stable observation ID
+and exactly the same content on a retry. The payload always carries `schemaVersion: 1`
+and `runId`. Publish these three kinds at their real boundaries:
 
-Apply the role's existing permission/read-only policy; `--add-dir` only grants the
-specified directory, never disables a sandbox or an approval. Unsupported kind or
-option: diagnose and stop that launch. Do not update or restart Herdr to make it fit.
-Register planned worker before creating its owned surface. Keep the returned pane
-ID as a hint, launch once, submit the brief once, then reconcile by label + worktree.
-Use `herdr agent wait` in bounded slices and read the report after every turn.
-Idle/done is a turn ending, never proof the task passed. Request a missing report
-from the same session. Follow up in that session; never create a duplicate worker.
-After /clear read the same mission; after a killed process resume its actual session
-in the same worktree. Missing session: retain the mission and expose the loss.
+- `worker.dispatched`: add `missionId`, `ticket` (or `unknown`), `role` (`work` or
+  `review`), `runtime` (`claude` or `codex`), the verified absolute `worktree`,
+  `branch` (`detached` requires `headSha`), and `attachCommand` (verified argv or
+  `unknown`). Never invent an attachment recipe or use presentation hints as identity.
+- `worker.state`: add `state` (`running`, `blocked`, `done`, `failed`) and the UTC
+  `observedAt`; optional `reason` explains a wait. Publish the initial running state
+  and subsequent observed changes. A turn ending while awaiting the coordinator
+  is blocked, not done. No observation means unknown, never inferred failure.
+- `worker.finished`: add `outcome` (`succeeded`, `failed`, `stopped`) after final
+  collection or confirmed terminal failure/stop, preceded by done for succeeded,
+  failed otherwise. Finish before closing the mission. It does not mean merged.
 
-`resume_argv` is absent from Herdr 0.9.0 and 0.9.1, present from 0.9.2. Publish it
-only after the installed schema proves support. Otherwise retain the complete resume
-recipe in the brief. Never claim restart restoration was tested without doing it.
+Keep the same assignment through corrections and resume. Repeated running states
+across distinct turns need distinct observation IDs. A finished assignment is closed;
+new work afterwards gets a new run ID. Keep real native identities in the existing
+brief/evidence; the observation ID is not a fabricated native receipt.
 
-## Herdr adapter: projection and closure
+A publication error is visible and retried with the same identity/content after its
+cause is resolved; it never authorizes another launch. No brief, transcript, secret
+or result content belongs in these metadata. Native calls outside this procedure are
+not automatically captured, including unsupported Codex observation paths.
 
-The hook publishes source void-machine on SessionStart startup/resume/clear/compact
-and Stop after re-reading central state and fresh Herdr identities. Pane tokens:
-mission, worker, ticket, wstatus; coordinator-only workspace: mission, wstatus, workers.
-These are file status, never agent state. ctx requires the selected kind's measured capability from the table; unavailable measurement stays unavailable. Clear
-removes ctx before fresh measurement. State TTL is 86400000 ms, ctx TTL 7200000 ms.
-Sequences are exact nanosecond decimal BigInts captured before discovery. Old or
-equal seq is ignored by Herdr. Tokens are global keys, not source namespaces: another
-source may overwrite them; null clears globally. Never reconfigure cockpit to win.
+`void-machine agents status --json` reads all project mission journals and reports
+active assignments, their last observed state and coverage issues. It does not poll
+runtimes or control presentation. Partial coverage is explicit and exits nonzero;
+never treat an unreadable history as no workers. External tools consume this public
+contract; the harness does not open or close their surfaces.
 
-Terminal mission cleanup explicitly clears keys on all still-resolved owned panes,
-only where the currently projected mission still matches. Only the resolved
-coordinator clears workspace keys, again after verifying the displayed mission.
-A late closure of A must not clear B. A worker SessionEnd never cleans the workspace.
-When no mission is active, recover the verified displayed terminal mission; do not
-choose arbitrary history. Discovery/transport errors never trigger a purge.
-After collection and acceptance ORCH may close its owned surfaces; retain worktrees,
-branches and evidence according to their own lifecycle. Do not close the coordinator.
+Existing legacy runs retain their session and journal. Their mutating CLI commands
+publish the same events; `void-machine agents publish <runId>` retries publication
+from saved transitions without re-executing or stopping the runtime. This does not
+make the legacy launcher mandatory for new work.
 
 ## Independent review
 

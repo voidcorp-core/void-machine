@@ -16,12 +16,17 @@ related:
 
 # Délégation supervisée d'agents
 
+Amendement approuvé le 30 octobre 2026 : la présentation intégrée est remplacée
+par le [contrat de publication worker](2026-10-30-worker-lifecycle-publication.md).
+Les faits datés ci-dessous restent des observations historiques, pas des instructions
+pour contrôler les outils d'affichage. Voir le [contrat public](../WORKER-LIFECYCLE.md).
+
 ## Résultat attendu
 
 Depuis une demande faite au coordinateur, quel que soit son runtime, la Machine lance un ou
 plusieurs agents (Claude, Codex, plus tard d'autres) pour traiter des tickets ou des tâches, les
-suit, relaie leurs questions et collecte leurs résultats. Quand un multiplexeur est présent
-(herdr aujourd'hui, tmux, cmux ou autre demain), chaque agent est visible dans son propre pane.
+suit, relaie leurs questions et collecte leurs résultats. Le cycle de vie des workers est
+publié pour des outils d'affichage externes ; Machine ne contrôle pas leurs surfaces.
 L'humain n'a qu'un point d'entrée : le coordinateur.
 
 Constat d'origine (DEV-902, 2026-09-24) : quatre revues et une recherche déléguées en sous-agents
@@ -79,13 +84,12 @@ Les rôles sont ceux de la spec du noyau (`2026-09-19-supervised-design-orchestr
 | Rôle | Responsabilité | Ne fait jamais |
 |---|---|---|
 | **Coordinateur** (LLM, n'importe quel runtime) | décide quoi déléguer, rédige le brief, juge un retour : résultat à accepter ou question à laquelle répondre, ou à remonter à l'humain | lancer un agent autrement que par le noyau ; approuver une permission |
-| **Noyau** (`@voidcorp/void-machine`, TypeScript, déterministe) | identité des runs, admission, transitions, liens run ↔ ticket ↔ session native ↔ surface, attente, réconciliation, clôture | raisonner ; recopier l'état que le runtime détient |
+| **Noyau** (`@voidcorp/void-machine`, TypeScript, déterministe) | identité des runs, admission, transitions, liens run ↔ ticket ↔ session native, publication des observations, attente, réconciliation, clôture | raisonner ; recopier l'état que le runtime détient |
 | **Adaptateur de runtime** (un par runtime) | traduit un run en session native, observe, transmet un message, arrête, fournit la commande d'affichage, déclare ses capacités | afficher ; choisir un modèle à la place de l'appelant |
-| **Adaptateur de présentation** (un par multiplexeur) | ouvre une surface qui exécute une commande, l'étiquette, la ferme | connaître les agents ; décider d'un état ; fermer autre chose que ce qu'il possède |
-| **Capture** (optionnelle, par runtime coordinateur) | redirige la délégation native du coordinateur vers le noyau quand une surface existe | porter une logique ; exister sans preuve de capacité |
+| **Consommateur externe** | lit les événements ou le snapshot, possède son affichage | transformer une observation en permission ou contrôler un worker par la fermeture de sa vue |
+| **Coordinateur publiant** | enregistre les faits après accusé, observation et collecte natifs | inventer un lancement ou relancer pour réparer une publication |
 
-Un seul chemin d'exécution : avec ou sans multiplexeur, un run est la même session native. Le
-multiplexeur ajoute une vue, jamais un mode d'exécution.
+Avec ou sans affichage externe, un run garde la même session native et les mêmes permissions.
 
 ## Contrat du noyau
 
@@ -112,7 +116,9 @@ interface AgentRunRequest {
 | `work` | `--permission-mode auto`, `cwd` = worktree du ticket | `sandbox: workspaceWrite`, `approvalPolicy: never` |
 | `review` | `--agent <type>` + `--permission-mode dontAsk` | `sandbox: readOnly`, `approvalPolicy: never` |
 
-### États
+### États du transport historique
+
+Les états publics worker sont une projection distincte, définie par l’amendement.
 
 ```text
 admitted -> dispatched -> working <-> turn-ended -> accepted -> retired
@@ -125,7 +131,7 @@ dispatched|working --(observation perdue)--> reconciling
   coordinateur répond (`send`, retour à `working`) ou accepte (`accept`).
 - `waiting-human` porte la cause (`waitingFor`) et l'action : trancher dans le pane de l'agent,
   car aucune autre session ne peut approuver à la place de l'humain.
-- `accepted` exige un résultat collecté durablement ; `retired` ferme la surface possédée.
+- `accepted` exige un résultat collecté durablement ; `retired` termine l’affectation sans contrôler sa présentation.
   La session native, la worktree et les preuves gardent leur propre cycle de vie.
 - `reconciling` : lancement ou observation ambigus. On interroge la session native par sa
   référence, on ne relance jamais à l'aveugle.
@@ -146,7 +152,10 @@ Point d'entrée unique, appelé par le coordinateur, autopilot, implement et la 
 void-machine agents dispatch --runtime claude|codex --role work|review [--type T] [--model M]
                              [--ticket DEV-123] [--cwd PATH] --brief-file F      -> runId
 void-machine agents wait <runId...> [--any] [--timeout S]  -> transitions (JSON)
-void-machine agents status [<runId>]                        -> état + cause + action
+void-machine agents status [<runId>]                        -> état historique
+void-machine agents status --json                           -> snapshot worker du projet
+void-machine agents record --mission ID --event-file F       -> publication native
+void-machine agents publish <runId>                          -> reprise de publication historique
 void-machine agents send <runId> --message-file F
 void-machine agents accept <runId>
 void-machine agents stop <runId>
@@ -226,107 +235,60 @@ Ajouter un runtime demande un adaptateur et ses tests de conformité, rien dans 
 
 ## Adaptateurs de présentation
 
-```ts
-interface Surface {
-  open(view: { command: readonly string[]; cwd: string; label: string;
-               role: 'work' | 'review'; ticket: string | undefined }): Promise<SurfaceRef>;
-  close(ref: SurfaceRef): Promise<void>;
-}
-```
+Le port Surface est remplacé par la publication agnostique définie dans
+[l'amendement approuvé](2026-10-30-worker-lifecycle-publication.md) et le
+[contrat public v1](../WORKER-LIFECYCLE.md). Le noyau publie worker.dispatched,
+worker.state et worker.finished dans le journal canonique ; agents status --json
+fournit une projection des affectations ouvertes dans toutes les missions du projet.
 
-Détection par l'environnement, dans cet ordre : `HERDR_ENV` donne herdr, la socket cmux donne
-cmux, `TMUX` donne tmux, sinon `none`. `none` n'ouvre rien : le run tourne à l'identique et
-reste visible par `void-machine agents status` ou `claude agents`.
+Les plugins externes gèrent leurs surfaces. Les chemins actifs de délégation,
+statut et collecte ne détectent et n'appellent aucun multiplexeur. Les anciennes
+surfaces restent intactes. Aucun nouvel ordonnanceur ou démon n'est ajouté.
+Le hook herdr-metadata reste une exception transitoire hors périmètre (DEV-1134).
 
-- **herdr** : onglet d'équipage, `pane run` de la commande d'affichage, libellé
-  `WORK-n`/`REVIEW-n`, ticket en métadonnée du pane (`report-metadata`).
-- **cmux** : porte la logique de `scripts/mission-presentation.mjs`, qui est supprimé.
-- **tmux** : `split-window` avec la commande, titre du pane.
+## Capture et appelants
 
-Fermer une surface ne touche jamais le run, la worktree ni les preuves.
+La délégation native reste celle de void-orchestrate. Après un accusé réel, le
+coordinateur publie via agents record ; après chaque observation puis collecte,
+il publie la transition correspondante. Ce raccordement couvre void-autopilot et
+les délégations de void-implement, pas uniquement l'ancien agents dispatch.
 
-*Correctif du 2026-09-28 (DEV-925)* : la revue d'avant implémentation a changé le port livré
-(`runtime/presentation.ts`, sans dépendance vers la délégation) :
-
-- le libellé `WORK-n`/`REVIEW-n` est choisi par l'adaptateur, seul à voir les libellés déjà
-  affichés ; la vue porte le `runId`, que l'adaptateur appose sur la surface comme marque ;
-- chaque réponse est une valeur (`open` → `ref` ou cause, `close` → `closed`,
-  `already-absent`, `skipped` ou `failed`), jamais une exception : un multiplexeur en panne
-  n'échoue jamais le run ;
-- `inspect(ref)` s'ajoute, pour que `status` dise qu'un humain a fermé le pane
-  (`closed` seulement si le multiplexeur a répondu sans la surface ; sans réponse : `unknown`) ;
-- la référence enregistre le serveur (socket) de la surface, et `close` n'agit qu'après avoir
-  relu le libellé et la marque du run sur ce serveur ; le pane de l'appelant n'est jamais fermé ;
-- la surface s'ouvre hors du verrou de mission, après un `opening` écrit sous verrou, et se
-  ferme à `retired` comme à `stopped` : un run arrêté n'atteint jamais `retired`, et sa surface
-  n'aurait sinon plus de propriétaire. Un run `failed` garde sa vue, qui montre l'échec.
-
-## Capture
-
-**Claude** : hook `PreToolUse` sur `Agent`, moins de 100 lignes, sans logique propre :
-
-- il laisse passer si aucune surface n'est détectée, si `subagent_type` vaut `fork`, ou si
-  l'appelant est lui-même un run délégué, reconnu par son `session_id` (réclamé par le registre,
-  ou lancé sous un handle qui en est le premier bloc) comme le hook `delegation-result`, et non
-  par l'environnement, qu'une session `--bg` hérite du superviseur ;
-- sinon il appelle `void-machine agents dispatch` avec `prompt`, `subagent_type` et `model`,
-  le rôle `review` pour un type en lecture seule et `work` sinon, et le ticket de la mission ;
-- il refuse l'appel natif avec un `permissionDecisionReason` qui donne le `runId` et la
-  commande `wait` ;
-- il n'élargit jamais l'autorité : un run `work` agissant en mode `auto`, un coordinateur dans un
-  autre mode que `auto` ou `bypassPermissions` garde son sous-agent natif, avec la cause signalée.
-
-**Codex** : même hook sur `spawn_agent`, livré seulement si la sonde prouve que le refus tient.
-Sinon, un coordinateur Codex appelle le CLI par l'instruction de son skill, et la capacité est
-déclarée non garantie.
-
-*Correctif du 2026-09-29 (DEV-926)* : sonde faite sur Codex 0.155.1. Le hook reçoit `tool_name:
-"collaborationspawn_agent"` (le matcher documenté `spawn_agent|Agent` ne se déclenche jamais) ;
-avec un matcher qui le couvre, le refus tient. Mais `tool_input.message` arrive chiffré : aucune
-capture ne peut transmettre le brief au noyau. Aucun hook n'est livré, la capacité est déclarée
-non disponible (provenance observée), et un coordinateur Codex délègue par le CLI.
-
-## Appelants migrés
-
-- **Coordinateur** : la capture, plus une consigne d'une ligne dans `CLAUDE.md` et `AGENTS.md`.
-- **`void-autopilot`** : le paragraphe « Spawning » appelle `agents dispatch` pour chaque worker
-  et chaque relecteur ; la prose conditionnelle sur le multiplexeur disparaît.
-- **`void-implement`** : chaque enveloppe `invoke-specialists` devient un `dispatch` de rôle
-  `review`, avec le type natif du spécialiste. Le contrat d'événements de
-  `2026-08-21-agent-dispatch-closure.md` ne change pas.
-- **`docs/NATIVE-SUPERVISION.md`** : réécrit ; l'étape 4 ne dépend plus d'une décision de l'agent.
+Aucune interception universelle des sous-agents Codex n'est revendiquée. Une
+capacité absente reste inconnue. La commande d'attachement demeure unknown tant
+qu'elle n'est pas établie pour la session ; aucun plugin n'est requis pour exécuter.
+Les reçus de spécialistes et de revue indépendante restent distincts et inchangés.
+Les instructions actives sont dans void-orchestrate et NATIVE-SUPERVISION.md.
 
 ## Erreurs et limites
 
 - Runtime absent ou version trop ancienne : `dispatch` refuse avec la cause et la commande de
   réparation. Pas de repli silencieux.
-- Présentation qui échoue : le run continue sans vue, l'échec est signalé ; permissions et
-  preuves ne changent pas.
+- Consommateur de présentation absent ou défaillant : le run continue ; permissions et
+  preuves ne changent pas. Échec de publication : erreur explicite, même identité à reprendre.
 - Accusé perdu : `reconciling`, interrogation par `--name vm-<runId>` ou identifiant de thread,
   jamais de relance aveugle.
 - Parallélisme : borné par l'appelant (autopilot : quatre) ; le noyau refuse au-delà d'un
   plafond de mission déclaré.
-- Nettoyage : la surface est fermée à `retired` ; la session native s'arrête sur `stop` ou à
-  l'acceptation d'un run `review` ; les worktrees suivent la règle universelle.
+- Nettoyage : aucun contrôle de surface. Le cycle historique de la session native reste
+  indépendant de la publication ; les worktrees suivent la règle universelle.
 
 ## Tests et preuves
 
-- **Strict** (`void-tdd`) : machine d'états, admission, liens du registre, choix de la surface,
-  construction des commandes et analyse des observations de chaque adaptateur. Fonctions pures.
-- **Conformité d'adaptateur** : exécutables factices qui rejouent les sorties réelles capturées
-  (`claude agents --json`, flux app-server), sur le modèle de
-  `packages/void-machine/test/claude-runtime-contract.test.ts`. Un seul jeu de tests par port.
-- **Preuves réelles** consignées dans la PR, faites sur un consommateur jetable installé depuis
-  `pnpm pack` : ce dépôt exécute le bundle de hooks publié (4.0.0) jusqu'à la 4.1.0, donc les
-  nouveaux hooks n'y tournent pas avant la release :
-  1. sous herdr et Ghostty, une délégation par l'outil `Agent` ouvre un pane rattaché au ticket,
-     et le coordinateur récupère le retour sans action humaine ;
-  2. sans multiplexeur, la même délégation reste un sous-agent natif ;
-  3. un relecteur délégué garde ses restrictions d'outils ;
-  4. un run Codex va jusqu'au résultat structuré ;
-  5. une worktree neuve démarre sans dialogue de confiance.
+TDD sur le schéma public et l'émission des trois événements via faux runtime,
+avec rejeu idempotent, ordre des transitions, erreurs et lecture partielle.
+La projection doit agréger les missions depuis toute worktree du même projet,
+sans appeler un runtime ni modifier les journaux. Les tests de permissions,
+collecte et reprise du transport historique restent applicables.
 
-## Tranches
+La preuve réelle utilise une phase worker d'Autopilot, un runtime natif et une
+worktree dédiée : événements présents et snapshot avec ticket/worktree pendant
+l'exécution, puis clôture observée. Aucun agent préexistant interrompu. Cette
+qualification reste locale avant push/PR et ne prétend pas prouver un merge.
+
+## Tranches historiques de la 4.1
+
+Ces tranches décrivent la livraison initiale. La présentation de la tranche 2
+est remplacée par l’amendement du 30 octobre ; ce n’est plus un travail à exécuter.
 
 1. **Contrat du noyau et adaptateur Claude** : run, états, registre, CLI `agents`, résultat par le
    hook Stop, présentation `none`. Déjà utilisable, visible dans `claude agents`.
@@ -347,8 +309,9 @@ Embarquer la capacité de délégation dans `voidmachine` demande une ADR
 Alternative écartée : implémenter la délégation dans le CLI actuel, ce qui recréerait un
 contrôleur que la vision retire.
 
-## Auto-relecture
+## Portée actuelle
 
-Pas de TBD. Hypothèses restantes, toutes avec leur preuve prévue : worktree neuve, vue Codex,
-refus de la capture Codex. Portée : une capacité du noyau, un port par axe (runtime,
-présentation), cinq tranches livrables séparément dans la même version.
+L'amendement remplace la responsabilité de présentation sans reconstruire les
+runtimes ni modifier les permissions, la sécurité ou les règles de merge.
+Les anciens runs restent collectables. La migration du hook et le plugin externe
+restent des travaux séparés.

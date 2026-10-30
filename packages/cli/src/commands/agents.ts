@@ -15,6 +15,8 @@ import {
 	waitAgents,
 } from '@voidcorp/void-machine/agents';
 import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
+import { publishLegacyWorkers } from '../lib/runs/legacy-workers.js';
+import { recordWorker, workersProject, workersStatus } from '../lib/runs/workers.js';
 
 /**
  * `void-machine agents`: dispatch, follow and close delegated agent runs through the Void
@@ -28,6 +30,9 @@ const USAGE = `usage: void-machine agents <command>
                                                                -> runId, at once
   wait <runId...> [--any] [--timeout S]                        -> next transitions (JSON)
   status [<runId>]                                             -> state, cause, action, result
+  status --json                                                -> active workers across project journals
+  record --mission ID --event-file F                          -> publish a native worker observation
+  publish <runId>                                              -> retry publication of recorded legacy transitions
   send <runId> --message-file F
   accept <runId>
   stop <runId>
@@ -38,6 +43,7 @@ const WAIT_MAX_S = 3_600;
 const MAX_FILE_BYTES = 1_048_576;
 
 export interface AgentsIo {
+	readonly context?: (cwd: string) => AgentsContext;
 	readonly cwd: string;
 	readonly env: NodeJS.ProcessEnv;
 	readonly home: string;
@@ -69,7 +75,7 @@ function parse(args: readonly string[]): Parsed | string {
 	const flags = new Set<string>();
 	for (let index = 0; index < args.length; index += 1) {
 		const arg = args[index] ?? '';
-		if (arg === '--any') flags.add(arg);
+		if (arg === '--any' || arg === '--json') flags.add(arg);
 		else if (arg.startsWith('--')) {
 			const value = args[index + 1];
 			if (value === undefined || value.startsWith('--')) return `${arg} needs a value`;
@@ -101,7 +107,7 @@ function readJson(path: string): unknown {
 }
 
 function context(io: AgentsIo, cwd = io.cwd): AgentsContext | AgentsOutcome {
-	const composed = agentsContext({ cwd, env: io.env, home: io.home,
+	const composed = io.context?.(cwd) ?? agentsContext({ cwd, env: io.env, home: io.home,
 		updateCommand: `npx ${PRODUCT_IDENTITY.packageName} update` });
 	return 'ok' in composed ? answer(composed) : composed;
 }
@@ -127,10 +133,11 @@ async function dispatch(parsed: Parsed, io: AgentsIo): Promise<AgentsOutcome> {
 	const cwd = resolve(io.cwd, parsed.options.get('--cwd') ?? '.');
 	const composed = context(io, cwd);
 	if (!('store' in composed)) return composed;
-	return answer(await dispatchAgent(composed, { runtime, role, cwd, brief, outputSchema,
+	const receipt = await dispatchAgent(composed, { runtime, role, cwd, brief, outputSchema,
 		agentType: parsed.options.get('--type'),
 		model: parsed.options.get('--model'), ticket: parsed.options.get('--ticket'),
-		missionId: parsed.options.get('--mission') ?? io.env['VOID_MISSION_ID'] }));
+		missionId: parsed.options.get('--mission') ?? io.env['VOID_MISSION_ID'] });
+	return receipt.ok ? published(answer(receipt), composed, cwd, [receipt.runId]) : answer(receipt);
 }
 
 async function wait(parsed: Parsed, composed: AgentsContext): Promise<AgentsOutcome> {
@@ -167,12 +174,54 @@ async function single(command: string, parsed: Parsed, io: AgentsIo, composed: A
 	return { code: code === 0 ? 0 : 1, stdout: '', stderr: '' };
 }
 
+async function published(outcome: AgentsOutcome, context: AgentsContext, cwd: string, runIds: readonly string[]): Promise<AgentsOutcome> {
+  if (outcome.code !== 0) return outcome;
+  try {
+    await publishLegacyWorkers(workersProject(cwd), context, runIds);
+    return outcome;
+  } catch (error) {
+    return answer({ ok: false, runIds, cause: error instanceof Error ? error.message : 'worker publication failed',
+      action: 'retain these runs; retry with void-machine agents publish <runId>, never dispatch again',
+      execution: outcome.stdout === '' ? undefined : JSON.parse(outcome.stdout) });
+  }
+}
+
+async function workerCommand(command: string, parsed: Parsed, io: AgentsIo): Promise<AgentsOutcome> {
+  try {
+    const root = workersProject(io.cwd);
+    if (command === 'status') {
+      if (parsed.positional.length > 0) return usage('status --json takes no runId');
+      const snapshot = await workersStatus(root);
+      return answer(snapshot, snapshot.complete);
+    }
+    const file = parsed.options.get('--event-file');
+    const mission = parsed.options.get('--mission');
+    if (file === undefined || mission === undefined || parsed.positional.length > 0) {
+      return usage('record needs --mission and --event-file');
+    }
+    const value = readJson(resolve(io.cwd, file));
+    if (typeof value !== 'object' || value === null || !('kind' in value) || !('payload' in value)
+      || !('observationId' in value) || typeof value.kind !== 'string' || typeof value.observationId !== 'string') {
+      return usage('event file needs kind, payload and a stable observationId');
+    }
+    const result = await recordWorker(root, mission, { kind: value.kind,
+      payload: value.payload, observationId: value.observationId });
+    return answer({ ok: true, eventId: result.event.eventId, appended: result.appended });
+  } catch (error) {
+    return answer({ ok: false, cause: error instanceof Error ? error.message : 'worker publication failed',
+      action: 'retain the acknowledged runId; correct or retry this observation, never relaunch the worker' });
+  }
+}
+
 export async function runAgents(args: readonly string[], io: AgentsIo): Promise<AgentsOutcome> {
 	const [command, ...rest] = args;
 	const parsed = parse(rest);
 	if (typeof parsed === 'string') return usage(parsed);
+	if (command === 'record' || (command === 'status' && parsed.flags.has('--json'))) {
+		return workerCommand(command, parsed, io);
+	}
 	if (command === 'dispatch') return dispatch(parsed, io);
-	if (!['wait', 'status', 'send', 'accept', 'stop', 'attach'].includes(command ?? '')) return usage();
+	if (!['wait', 'status', 'send', 'accept', 'stop', 'attach', 'publish'].includes(command ?? '')) return usage();
 	if (command === 'send' && !parsed.options.has('--message-file')) return usage('send needs --message-file');
 	if (command !== 'status' && command !== 'wait' && parsed.positional.length !== 1) {
 		return usage(`${String(command)} needs one runId`);
@@ -180,12 +229,14 @@ export async function runAgents(args: readonly string[], io: AgentsIo): Promise<
 	if (command === 'wait' && parsed.positional.length === 0) return usage('wait needs at least one runId');
 	const composed = context(io);
 	if (!('store' in composed)) return composed;
-	if (command === 'wait') return wait(parsed, composed);
+	if (command === 'wait') return published(await wait(parsed, composed), composed, io.cwd, parsed.positional);
+	if (command === 'publish') return published(answer({ ok: true }), composed, io.cwd, parsed.positional);
 	if (command === 'status') {
 		if (parsed.positional.length > 1) return usage('status takes at most one runId');
 		return answer(await agentStatus(composed, parsed.positional[0]));
 	}
-	return single(command ?? '', parsed, io, composed);
+	const result = await single(command ?? '', parsed, io, composed);
+	return command === 'attach' ? result : published(result, composed, io.cwd, parsed.positional);
 }
 
 function attachInTerminal(command: readonly string[]): Promise<number> {

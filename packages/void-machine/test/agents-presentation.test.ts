@@ -64,7 +64,7 @@ function scriptedSurface(kind: SurfaceKind, script: { open?: (view: SurfaceView)
   return { port, opened, closed };
 }
 
-function context(cwd: string, runtimePort: AgentRuntimePort, surface: SurfacePort): AgentsContext {
+function context(cwd: string, runtimePort: AgentRuntimePort, surface: SurfacePort): AgentsContext & { surfaces: { detected: SurfacePort; reach: () => SurfacePort } } {
   const root = resolveMachineRoot(cwd);
   if (!root.ok) throw new Error(root.cause);
   const now = { value: 10_000 };
@@ -117,81 +117,74 @@ async function acceptable(cwd: string, ctx: AgentsContext): Promise<void> {
 }
 
 describe('showing a delegated run', () => {
-  it('opens a surface running the display command at dispatch, and records it beside the run', async () => {
+  it('dispatches without opening or recording a presentation surface', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr');
-    const receipt = await dispatchAgent(context(cwd, runtime(), surface.port), input(cwd));
-    expect(receipt).toMatchObject({ ok: true, surface: { state: 'open', ref: { label: 'WORK-1', id: 'w1:p9' } } });
-    expect(surface.opened).toEqual([{ runId: RUN, role: 'work', ticket: 'DEV-925', cwd,
-      command: ['claude', 'attach', '6d5ea8bb'] }]);
-  });
-
-  it('keeps the run dispatched without a view when the multiplexer fails, and says why', async () => {
-    const cwd = repository();
-    const surface = scriptedSurface('herdr', { open: () => ({ ok: false,
-      cause: { code: 'unreachable', step: 'tab list' } }) });
     const ctx = context(cwd, runtime(), surface.port);
-    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, status: { state: 'dispatched' },
-      surface: { state: 'failed', cause: { code: 'unreachable' } } });
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ ok: true, runs: [{ status: { state: 'dispatched' },
-      surface: { state: 'failed', cause: { code: 'unreachable' } } }] });
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, status: { state: 'dispatched' } });
+    expect(surface.opened).toEqual([]);
+    expect(await ctx.store.readSurface(RUN)).toEqual({ kind: 'absent' });
   });
 
-  it('opens nothing for a runtime with no display command, and says so', async () => {
+  it('does not let an unavailable multiplexer affect the dispatched run', async () => {
     const cwd = repository();
-    const surface = scriptedSurface('herdr');
-    expect(await dispatchAgent(context(cwd, runtime({ attach: false }), surface.port), input(cwd)))
-      .toMatchObject({ ok: true, surface: { state: 'none', cause: { code: 'no-display-command' } } });
+    const surface = scriptedSurface('herdr', { open: () => ({ ok: false, cause: { code: 'unreachable' } }) });
+    const ctx = context(cwd, runtime(), surface.port);
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, status: { state: 'dispatched' } });
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'dispatched' } }] });
     expect(surface.opened).toEqual([]);
   });
 
-  it('opens nothing outside a multiplexer: the run is the same native session', async () => {
+  it('keeps a runtime without an attach command independent of presentation', async () => {
     const cwd = repository();
-    expect(await dispatchAgent(context(cwd, runtime(), createNoSurface()), input(cwd)))
-      .toMatchObject({ ok: true, surface: { state: 'none', cause: { code: 'not-detected' } } });
+    const surface = scriptedSurface('herdr');
+    const ctx = context(cwd, runtime({ attach: false }), surface.port);
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true });
+    expect(surface.opened).toEqual([]);
+    expect(await ctx.store.readSurface(RUN)).toEqual({ kind: 'absent' });
   });
 
-  it('opens the surface after the mission lock is released', async () => {
+  it('uses the same native dispatch outside a multiplexer', async () => {
     const cwd = repository();
-    let ctx: AgentsContext | undefined;
-    let lockFree = false;
-    const surface = scriptedSurface('herdr', { beforeOpen: async () => {
-      const lock = await ctx?.store.lock(MISSION, 'probe');
-      lockFree = lock !== undefined;
-      await lock?.release();
-    } });
-    ctx = context(cwd, runtime(), surface.port);
+    expect(await dispatchAgent(context(cwd, runtime(), createNoSurface()), input(cwd)))
+      .toMatchObject({ ok: true, status: { state: 'dispatched' } });
+  });
+
+  it('never acquires presentation resources and releases the mission lock after dispatch', async () => {
+    const cwd = repository();
+    let presentationReached = false;
+    const surface = scriptedSurface('herdr', { beforeOpen: async () => { presentationReached = true; } });
+    const ctx = context(cwd, runtime(), surface.port);
     await dispatchAgent(ctx, input(cwd));
-    expect(lockFree).toBe(true);
+    const lock = await ctx.store.lock(MISSION, 'probe');
+    expect(lock).toBeDefined();
+    await lock?.release();
+    expect(presentationReached).toBe(false);
   });
 });
 
 describe('closing the surface of a closed run', () => {
-  it('closes the surface once the run is retired, and leaves the run and its evidence untouched', async () => {
+  it('retires and preserves the result without owning presentation cleanup', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr');
     const ctx = context(cwd, runtime({ sessions: listed('done') }), surface.port);
     await dispatchAgent(ctx, input(cwd));
     await acceptable(cwd, ctx);
-    const accepted = await acceptAgent(ctx, RUN);
-    expect(accepted).toMatchObject({ ok: true, state: 'retired', surface: { outcome: 'closed' } });
-    expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
+    expect(await acceptAgent(ctx, RUN)).toMatchObject({ ok: true, state: 'retired', result: { text: 'Done.' } });
+    expect(surface.closed).toEqual([]);
     const before = evidence(cwd);
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'retired' },
-      surface: { state: 'closed' } }] });
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'retired' } }] });
     expect(evidence(cwd)).toEqual(before);
   });
 
-  it('retires the run even when the multiplexer fails to close the surface, and keeps the surface on record', async () => {
+  it('retires without attempting a failing multiplexer cleanup', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr', { closing: { outcome: 'failed', cause: { code: 'timeout' } } });
     const ctx = context(cwd, runtime({ sessions: listed('done') }), surface.port);
     await dispatchAgent(ctx, input(cwd));
     await acceptable(cwd, ctx);
-    expect(await acceptAgent(ctx, RUN)).toMatchObject({ ok: true, state: 'retired',
-      surface: { outcome: 'failed', cause: { code: 'timeout' } } });
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'retired' },
-      surface: { state: 'open', lastClose: { outcome: 'failed' } } }] });
+    expect(await acceptAgent(ctx, RUN)).toMatchObject({ ok: true, state: 'retired' });
+    expect(surface.closed).toEqual([]);
   });
 
   it('never closes the surface when the run cannot be retired', async () => {
@@ -203,97 +196,93 @@ describe('closing the surface of a closed run', () => {
     expect(surface.closed).toEqual([]);
   });
 
-  it('closes the surface of a stopped run, which never retires', async () => {
+  it('stops an owned run without closing presentation resources', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr');
     const ctx = context(cwd, runtime(), surface.port);
     await dispatchAgent(ctx, input(cwd));
-    expect(await stopAgent(ctx, RUN)).toMatchObject({ ok: true, status: { state: 'stopped' },
-      surface: { outcome: 'closed' } });
+    expect(await stopAgent(ctx, RUN)).toMatchObject({ ok: true, status: { state: 'stopped' } });
+    expect(surface.closed).toEqual([]);
   });
 
-  it('closes a surface whose open finished after the run was already stopped', async () => {
+  it('does not allow a presentation callback to stop the runtime during dispatch', async () => {
     const cwd = repository();
     let ctx: AgentsContext | undefined;
     const surface = scriptedSurface('herdr', { beforeOpen: async () => {
       if (ctx !== undefined) await stopAgent(ctx, RUN);
     } });
     ctx = context(cwd, runtime(), surface.port);
-    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, surface: { state: 'closed' } });
-    expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, status: { state: 'dispatched' } });
+    expect(surface.opened).toEqual([]);
+    expect(await stopAgent(ctx, RUN)).toMatchObject({ ok: true, status: { state: 'stopped' } });
   });
 
-  it('keeps open a surface whose run failed while it was opening: a failed run keeps its view', async () => {
+  it('reports a native failure without touching any presentation resource', async () => {
     const cwd = repository();
-    let ctx: AgentsContext | undefined;
     const failing = () => new Map([[`vm-${RUN}`, { observation: { kind: 'present' as const, state: 'failed' as const },
       binding: { handle: '6d5ea8bb', sessionId: SESSION } }]]);
-    const surface = scriptedSurface('herdr', { beforeOpen: async () => {
-      if (ctx !== undefined) await waitAgents(ctx, [RUN], { any: true, timeoutMs: 10_000 });
-    } });
-    ctx = context(cwd, runtime({ sessions: failing }), surface.port);
-    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, surface: { state: 'open' } });
-    expect(surface.closed).toEqual([]);
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'failed' },
-      surface: { state: 'open' } }] });
-  });
-
-  it('closes and records as failed a surface opened while the mission stayed busy', async () => {
-    const cwd = repository();
-    let ctx: AgentsContext | undefined;
-    let held: { release(): Promise<void> } | undefined;
-    const surface = scriptedSurface('herdr', { beforeOpen: async () => {
-      held = await ctx?.store.lock(MISSION, 'another-command');
-    } });
-    ctx = context(cwd, runtime(), surface.port);
-    const receipt = await dispatchAgent(ctx, input(cwd));
-    await held?.release();
-    expect(receipt).toMatchObject({ ok: true, surface: { state: 'failed', cause: { code: 'deadline' } } });
-    expect(surface.closed.map((ref) => ref.id)).toEqual(['w1:p9']);
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ surface: { state: 'failed' } }] });
-  });
-
-  it('keeps as orphan a surface it could neither record nor close', async () => {
-    const cwd = repository();
-    let ctx: AgentsContext | undefined;
-    let held: { release(): Promise<void> } | undefined;
-    const surface = scriptedSurface('herdr', { closing: { outcome: 'failed', cause: { code: 'timeout' } },
-      beforeOpen: async () => { held = await ctx?.store.lock(MISSION, 'another-command'); } });
-    ctx = context(cwd, runtime(), surface.port);
+    const surface = scriptedSurface('herdr');
+    const ctx = context(cwd, runtime({ sessions: failing }), surface.port);
     await dispatchAgent(ctx, input(cwd));
-    await held?.release();
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ surface: { state: 'failed',
-      orphan: { id: 'w1:p9' } } }] });
+    await waitAgents(ctx, [RUN], { any: true, timeoutMs: 10_000 });
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'failed' } }] });
+    expect(surface.opened).toEqual([]);
+    expect(surface.closed).toEqual([]);
+  });
+
+  it('does not create a presentation lock or failure when presentation would hold the mission', async () => {
+    const cwd = repository();
+    let ctx: AgentsContext | undefined;
+    let held: { release(): Promise<void> } | undefined;
+    const surface = scriptedSurface('herdr', { beforeOpen: async () => { held = await ctx?.store.lock(MISSION, 'other'); } });
+    ctx = context(cwd, runtime(), surface.port);
+    expect(await dispatchAgent(ctx, input(cwd))).toMatchObject({ ok: true, status: { state: 'dispatched' } });
+    expect(held).toBeUndefined();
+    expect(surface.closed).toEqual([]);
+  });
+
+  it('preserves a recorded historical orphan without trying to close it', async () => {
+    const cwd = repository();
+    const surface = scriptedSurface('herdr', { closing: { outcome: 'failed', cause: { code: 'timeout' } } });
+    const ctx = context(cwd, runtime(), surface.port);
+    await dispatchAgent(ctx, input(cwd));
+    const orphan = { state: 'failed' as const, cause: { code: 'timeout' as const },
+      orphan: { kind: 'herdr' as const, scope: '/tmp/mux.sock', id: 'w1:p9', label: 'WORK-1', runId: RUN } };
+    await ctx.store.writeSurface(RUN, orphan);
+    await agentStatus(ctx, RUN);
+    expect(await ctx.store.readSurface(RUN)).toEqual({ kind: 'recorded', record: orphan });
+    expect(surface.closed).toEqual([]);
   });
 });
 
 describe('what status says about the surface', () => {
-  it('says the pane was closed by a person while the run keeps working', async () => {
+  it('keeps the native worker running independently of a closed pane', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr', { presence: { state: 'closed' } });
     const ctx = context(cwd, runtime({ sessions: listed('working') }), surface.port);
     await dispatchAgent(ctx, input(cwd));
     await waitAgents(ctx, [RUN], { any: true, timeoutMs: 10_000 });
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'working' },
-      surface: { state: 'closed-outside', note: expect.stringContaining('the run continues') } }] });
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'working' } }] });
+    expect(surface.closed).toEqual([]);
   });
 
-  it('reads an unreachable multiplexer as unknown, never as closed', async () => {
+  it('reports the recorded run without inspecting an unreachable multiplexer', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr', { presence: { state: 'unknown', cause: { code: 'timeout' } } });
     const ctx = context(cwd, runtime(), surface.port);
     await dispatchAgent(ctx, input(cwd));
-    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ surface: { state: 'unknown',
-      cause: { code: 'timeout' } } }] });
+    const before = evidence(cwd);
+    expect(await agentStatus(ctx, RUN)).toMatchObject({ runs: [{ status: { state: 'dispatched' } }] });
+    expect(evidence(cwd)).toEqual(before);
   });
 
-  it('closes after a person closed the pane without an error', async () => {
+  it('collects after a person closed the pane without another close request', async () => {
     const cwd = repository();
     const surface = scriptedSurface('herdr', { presence: { state: 'closed' }, closing: { outcome: 'already-absent' } });
     const ctx = context(cwd, runtime({ sessions: listed('done') }), surface.port);
     await dispatchAgent(ctx, input(cwd));
     await acceptable(cwd, ctx);
-    expect(await acceptAgent(ctx, RUN)).toMatchObject({ ok: true, state: 'retired',
-      surface: { outcome: 'already-absent' } });
+    expect(await acceptAgent(ctx, RUN)).toMatchObject({ ok: true, state: 'retired' });
+    expect(surface.closed).toEqual([]);
   });
 });

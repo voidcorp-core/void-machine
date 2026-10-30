@@ -1703,7 +1703,7 @@
         }
       ],
       "id": "skill:void-autopilot",
-      "lines": 395,
+      "lines": 396,
       "name": "void-autopilot",
       "owner": "folpe",
       "pack": null,
@@ -1712,7 +1712,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 7033,
+      "staticTokens": 7059,
       "type": "skill"
     },
     {
@@ -2195,7 +2195,7 @@
         }
       ],
       "id": "skill:void-implement",
-      "lines": 230,
+      "lines": 234,
       "name": "void-implement",
       "owner": "folpe",
       "pack": null,
@@ -2204,7 +2204,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 6519,
+      "staticTokens": 6597,
       "type": "skill"
     },
     {
@@ -2398,7 +2398,7 @@
       "type": "skill"
     },
     {
-      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Use the supported session host.",
+      "description": "Delegate independent research and substantial implementation through native agents; choose context, isolation and bounded concurrency, collect results and preserve review evidence. Publish observed worker lifecycle events.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -2415,7 +2415,7 @@
         }
       ],
       "id": "skill:void-orchestrate",
-      "lines": 370,
+      "lines": 198,
       "name": "void-orchestrate",
       "owner": "folpe",
       "pack": null,
@@ -2424,7 +2424,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-orchestrate/SKILL.md",
-      "staticTokens": 5446,
+      "staticTokens": 3221,
       "type": "skill"
     },
     {

@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { createNoSurface } from '../src/adapters/presentation/none.js';
 import { createRunRegistry, resolveMachineRoot } from '../src/adapters/store/run-registry.js';
 import {
   type AgentsContext, acceptAgent, acceptReview, agentStatus, attachAgent, dispatchAgent, sendAgent, stopAgent,
@@ -61,7 +60,6 @@ function context(cwd: string, runtime: AgentRuntimePort, now = { value: 10_000 }
   return {
     store: createRunRegistry({ machineRoot: root.root, now: () => now.value }),
     runtimes: { claude: runtime, codex },
-    surfaces: { detected: createNoSurface(), reach: () => createNoSurface() },
     clock: { now: () => now.value, sleep: async (ms) => { now.value += ms; } },
     owner: 'test',
     newRunId: () => `run_00000000-0000-4000-8000-${String(++runs).padStart(12, '0')}`,
@@ -428,4 +426,23 @@ describe('a run delegated to Codex', () => {
     expect(await agentStatus(ctx, receipt.runId)).toMatchObject({ runs: [{ status: { state: 'failed',
       action: expect.stringContaining('inspect the runtime') } }] });
   });
+});
+
+
+it('does not open or inspect a multiplexer when publishing a delegated worker', async () => {
+  const cwd = repository();
+  const base = context(cwd, scriptedRuntime().runtime);
+  let presentationCalls = 0;
+  const surface = { kind: 'herdr' as const,
+    open: async () => { presentationCalls++; return { ok: false as const, cause: { code: 'unreachable' as const } }; },
+    inspect: async () => { presentationCalls++; return { state: 'unknown' as const, cause: { code: 'unreachable' as const } }; },
+    close: async () => { presentationCalls++; return { outcome: 'failed' as const, cause: { code: 'unreachable' as const } }; },
+  };
+  const ctx = { ...base, surfaces: { detected: surface, reach: () => surface } };
+  const launched = await dispatchAgent(ctx, { role: 'work', cwd, brief: 'Implement.', ticket: 'DEV-42' });
+  expect(launched.ok).toBe(true);
+  if (!launched.ok) return;
+  await agentStatus(ctx, launched.runId);
+  await stopAgent(ctx, launched.runId);
+  expect(presentationCalls).toBe(0);
 });

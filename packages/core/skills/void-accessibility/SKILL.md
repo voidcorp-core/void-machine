@@ -198,7 +198,7 @@ Every UI is designed mobile-first AND must reach first-class quality on both vie
 - No mobile-only nor desktop-only features without an explicit decision recorded through the `void-decide` skill.
 - Both viewports screenshot-reviewed before merge.
 
-The companion `viewport-screenshot-gate` hook (shared with `void-frontend-design`) fails PRs lacking both screenshots.
+The companion `viewport-screenshot-gate` hook (shared with `void-frontend-design`) is an optional PR-text heuristic; it does not validate images or enforce a native/CI gate. Review the actual mobile and desktop captures before merge.
 
 ---
 
@@ -229,7 +229,7 @@ The design system handles this by default in `pack-nextjs`. Specific animations 
 ## Companion hooks
 
 - `axe-precommit` (pre-commit on UI changes) — axe-core static analysis, blocks on AA violations. ≤ 80 LOC.
-- `viewport-screenshot-gate` (pre-PR on UI changes, shared with `void-frontend-design`) — fails PRs lacking both mobile and desktop screenshots. ≤ 60 LOC.
+- `viewport-screenshot-gate` (pre-PR on UI changes, shared with `void-frontend-design`) — optional PR-text heuristic, not a wired native/CI gate or image validation. Review actual captures.
 
 ---
 

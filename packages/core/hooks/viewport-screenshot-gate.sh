@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# viewport-screenshot-gate — pre-push hook
+# viewport-screenshot-gate — optional PR-text advisory (not installed in native manifests)
 #
-# Warns if a PR touching UI code lacks both mobile and desktop screenshots
+# Reports if PR text for UI changes lacks mobile and desktop capture references
 # in the PR body. Composed with the `accessibility` and
 # `frontend-design` skills (mobile-first dual-quality invariant).
 #
@@ -13,7 +13,7 @@
 # "no-ui-change: <reason>" in the body for non-UI PRs that happen to
 # touch tsx files.
 #
-# Exit codes: 0 allow, 2 warn.
+# No image validation. Missing PR/base is skipped. Exit 0 no finding, 2 advisory finding.
 
 set -euo pipefail
 

@@ -1,90 +1,47 @@
 # `tdd-guard` hook
 
-PreToolUse hook on `Edit` / `Write`. Materializes the `void-tdd` skill's Iron Law mechanically: blocks edits to production paths that add behavior without a corresponding test change in the same staged change set, unless a legitimate bypass applies.
+The native PreToolUse manifests invoke the shared Node `tdd-order` rule for
+supported structured writes. `tdd-guard.sh` is its compatibility adapter.
+`packages/hook-runner/src/rules/tdd-order.ts` owns the structural rule and
+`enforcement/runner.ts` resolves the proposed file and evidence.
 
-In `strict` mode: blocks (exit 1).
-In `souple` mode: warns (exit 2).
-In `exploratory` mode: no-op (exit 0).
+This floor checks that a governed production file has an existing sibling test,
+or a valid first-line `// tdd-cover: e2e <project-relative spec>` declaration pointing
+to an existing test inside the project. It does **not** run that test, require a
+staged test modification, assess behavior coverage, or prove an observed RED.
+`void-tdd` and `void-debug` own the observed RED-before-fix/GREEN evidence.
 
-See `docs/plans/skill-audits/void-tdd.md` for the Iron Law and the bypass rationale. See Section 0bis.3 of `docs/plans/2026-05-29-void-harness-design.md` for the list of legitimate bypasses.
+## Configuration and scope
 
-## Configuration
+The rule reads `.void/config.json`: `modes.tdd`, `paths.business` and `paths.spikes`.
+The default business glob is `apps/*/src/**`; the default spike glob is
+`apps/*/scripts/spike-*`. The first five existing lines may declare
+`// tdd-mode: strict`, `souple` or `exploratory`.
 
-Read from `.void/config.json` of the consumer project:
+- `auto` and `strict` refuse a governed write with no test evidence.
+- `souple` allows it with a warning.
+- `exploratory` allows it.
 
-```json
-{
-  "modes": { "tdd": "auto" },
-  "paths": {
-    "business": "apps/*/src/**",
-    "tests": "apps/*/src/**/*.test.{ts,tsx}",
-    "spikes": "apps/*/scripts/spike-*"
-  }
-}
-```
+Only the supported JS/TS production paths inside business globs are governed.
+The owning rule excludes test/declaration files, docs, fixtures, seeds, migrations,
+codemods, generated paths and configured spikes. This is a path floor, not a
+semantic classifier of all configuration or generated code.
 
-If `.void/config.json` is absent, sensible defaults are used (see hook source).
+A complete file deletion is exempt. A deletion-only edit to a surviving file is
+still checked. A module containing only re-exports is exempt only when both the
+original and complete proposed source meet that condition. Adding behavior removes
+the exemption. Unresolvable evidence on a governed file is refused, not guessed.
 
-## Bypasses applied (in order)
+## Runtime results
 
-1. Doc-only changes (`.md`, `.mdx`, `.txt`, files under `docs/`)
-2. Config and build files (`package.json`, `tsconfig.json`, `vitest.config.*`, `next.config.*`, `tailwind.config.*`, `drizzle.config.*`, `biome.json`, `eslint.config.*`)
-3. Test fixtures and seed data (`tests/fixtures/**`, `**/__tests__/fixtures/**`, `**/seed/**`)
-4. DB migrations (`**/migrations/**`, `drizzle/meta/**`) — covered by `void-migrations` skill
-5. Spike paths (consumer-defined; default `apps/*/scripts/spike-*`)
-6. Codemods (`**/codemods/**`)
-7. Type-only changes (`*.d.ts`)
-8. Generated code (`**/__generated__/**` or `@generated` marker in the first 3 lines)
-9. The test file itself (`*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`)
-10. Per-file exploratory marker (`// tdd-mode: exploratory` in the first 5 lines)
+The rule returns a verdict. Runtime adapters translate a refusal into Claude's
+blocking exit 2 or Codex's native deny response; warning and allow are successful
+responses. There are no `VOIDCORP_HOOK_FILE`, staged-diff or per-session TDD env
+inputs to this native contract. Configured does not mean invoked: the runtime must
+load and trust its hooks. Shell writes do not provide this test-content guarantee.
 
-## Content bypass: a module that only re-exports
+## Proof
 
-The ten bypasses above are properties of the **path**. One is a property of the **content**: a module whose every top-level statement is a re-export (`export … from`, `export *`, `export {}`) carries no behaviour, so the test one would write for it would assert that an export exists, which the compiler already proves. A comment, a `'use client'` directive and a type-only import do not break the detection; anything else does.
-
-Both the file as it stands and the fragment being written must hold, so a barrel that gains one line of logic is covered again on that same edit. Malformed content (an unterminated string or block comment) is undecidable and stays covered.
-
-Without it the hook blocked a one-line barrel in a consumer where 51 barrels out of 51 have no sibling test by convention, and the edit went out through `sed`, outside the traced tools: the guard did not protect, and it pushed the work out of its own field of vision.
-
-## Pure-deletion bypass
-
-If the staged diff for the file contains only deletions (no `+` non-marker lines), the hook allows. Pure deletion does not require a new failing test.
-
-## Override
-
-- Per-file: add `// tdd-mode: exploratory` (or `strict` / `souple`) at the top of the file.
-- Per-repo: set `.void/config.json` `modes.tdd` to `strict` / `souple` / `exploratory`.
-- Per-session: set env `VOIDCORP_MODE_TDD=souple` (not yet wired — open question).
-
-## Inputs (env vars set by the runner)
-
-- `VOIDCORP_HOOK_FILE` — absolute path of the file
-- `VOIDCORP_HOOK_TOOL` — `Edit` / `Write`
-- `VOIDCORP_HOOK_PHASE` — `pre` / `post` (this hook only runs on `pre`)
-- `VOIDCORP_HOOK_DIFF` — optional, the staged diff content
-- `VOIDCORP_CONFIG` — optional, defaults to `.void/config.json`
-
-## Exit codes
-
-- `0` — allow
-- `1` — block (message on stderr)
-- `2` — warn (allow, message on stderr)
-
-## Test fixtures (for `test/tdd-guard/`)
-
-The skill test suite must cover at least:
-
-- `strict` mode + production edit without sibling test → block
-- `strict` mode + production edit WITH sibling test in same staged set → allow
-- `souple` mode + production edit without sibling test → warn
-- `exploratory` mode + any edit → allow
-- Each of the 10 bypasses → allow
-- Pure deletion → allow
-- Override marker `// tdd-mode: exploratory` in file → allow
-
-## Open questions
-
-- Per-session env override (`VOIDCORP_MODE_TDD`) — wire it up in the hook or rely on `.void/config.json` only? Lean wire (faster iteration during work).
-- Glob matching for `paths.business` — current `case` statement is shell glob, fine for simple patterns but not full minimatch. Defer until a consumer needs `**` patterns more complex than `apps/*/src/**`.
-- Auto-detection of the test runner (vitest vs jest) for the sibling-test naming convention. Currently assumes `.test.ts(x)`. Make configurable in Phase D.
-- Performance — `git diff --cached --name-only` runs every edit. Cache for the duration of a session? Defer; measure first.
+The rule and enforcement tests cover sibling/declaration existence, modes,
+re-export detection, path escapes, deletion-only edits and unsupported evidence.
+Behavioral RED/GREEN for the changed application remains a separate required proof.

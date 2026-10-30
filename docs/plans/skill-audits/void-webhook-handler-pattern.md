@@ -18,3 +18,12 @@ audit_date: 2026-06-01
 **Composes with.** `harness:async-safety` (doctrine). `harness-server:server-action` (both cross trust boundary). `harness-server:drizzle-migration-safe` (inbox table migration). `harness-server:env-validation` (webhook secrets). `harness:observability` (trace context). `harness:security-guidance` (Zod re-validation).
 
 **Why not in core.** Webhook handling is a server concern with very specific per-source patterns. Stack-agnostic doctrine lives in `harness:async-safety`.
+
+## 2026-10-30 coherence correction
+
+Compose the existing tested wrapper rather than duplicate its verify/claim/handle/mark
+sequence. Provider verification owns authenticated delivery freshness; the wrapper
+owns ordering and typed failure propagation. Pending receipt is not completion and
+failed completion persistence must not return success. No provider crypto implementation
+or universal event-age/TTL policy is introduced. See the correction audit for RED/GREEN
+and the explicit limits of the in-memory store and verifier test doubles.

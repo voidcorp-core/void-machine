@@ -1,6 +1,6 @@
 ---
 name: void-commit-discipline
-description: Conventional Commits + mandatory "why" in body + scope + breaking-change marking. ASCII-only (no em dash, no emoji). Co-author trailer for AI pair. The git log is documentation. Use at every commit.
+description: Conventional Commits + mandatory "why" in body + scope + breaking-change marking. Co-author trailer for AI pair. The git log is documentation. Use at every commit.
 ---
 
 # commit-discipline — voidcorp craftsman edition
@@ -27,7 +27,7 @@ The git log is the project's living narrative. "fix stuff" / "wip" / "asdf" dest
 |---|---|
 | `feat` | New observable behavior (new feature, new endpoint, new component visible to users / consumers) |
 | `fix` | Bug fix. Composes with `void-debug` (the why = the root cause) |
-| `void-refactor` | Structural change without behavior change. Composes with `void-refactor` (named Fowler move) |
+| `refactor` | Structural change without behavior change. Composes with `void-refactor` (named Fowler move) |
 | `test` | Add / modify tests without changing production code. Includes `test: reproduce <bug>` from `void-debug` |
 | `docs` | Documentation only |
 | `chore` | Repo maintenance (config, scripts, tooling) without user-visible effect |
@@ -48,11 +48,11 @@ No invented types (`improve:`, `tweak:`, `cleanup:`). Reach for one of the above
 
 ### Body rules
 
-- Always present for `feat`, `fix`, `void-refactor`, `perf` commits. Optional for trivial `chore` / `style`.
+- Always present for `feat`, `fix`, `refactor`, `perf` commits. Optional for trivial `chore` / `style`.
 - Wrapped at ≤ 72 columns
 - Explains the WHY: rationale, constraint, spec link, root cause
 - Multi-line bullets fine
-- ASCII only — no em dash, no emoji (the harness invariant)
+- Follow the philosophy's prose rule: avoid decorative filler; meaningful punctuation and glyphs are allowed.
 
 ### Footers
 
@@ -145,10 +145,6 @@ The author cannot tell, the reviewer cannot tell, future maintainers cannot tell
 
 The companion hook `tidying-commit-prefix` (already shipped) flags `refactor:` with behavior-change keywords in body.
 
-### Em dash, emoji, non-ASCII
-
-The harness invariant: English ASCII commit messages. Hyphens (`-`) for ranges, hyphens for parenthetical, not em dash. The companion hook `no-emdash-no-emoji-in-commit-msg` blocks.
-
 ### Missing "why" for substantive commits
 
 `feat:` / `fix:` / `refactor:` / `perf:` without a body explaining why = rejected. The commit message is documentation.
@@ -174,7 +170,6 @@ prove that chronology. Retain the actual test commands/results and explain the r
 - `commitlint-precommit` (commit-msg, in `pack-monorepo`) — already in void-starter. Enforces conventional commits.
 - `tidying-commit-prefix` (commit-msg, already shipped in core/hooks) — warns on mixed-intent `refactor:` commits.
 - `refactor-named-grep` (commit-msg, already shipped) — warns on `refactor:` without a Fowler name.
-- `no-emdash-no-emoji-in-commit-msg` (commit-msg, in `pack-monorepo`) — blocks em dash and emoji.
 
 ---
 
@@ -192,7 +187,6 @@ prove that chronology. Retain the actual test commands/results and explain the r
 
 - MUST NOT decide whether the change itself is correct (that is the upstream skills' job).
 - MUST NOT permit vacuous subjects.
-- MUST NOT permit em dash / emoji / non-ASCII.
 - MUST NOT permit `feat:` / `fix:` / `refactor:` without a body why.
 - MUST NOT substitute phase commit messages for observed RED/GREEN evidence.
 - MUST NOT silently allow invented commit types.
@@ -202,7 +196,7 @@ prove that chronology. Retain the actual test commands/results and explain the r
 ## Final rule
 
 ```
-Every commit → conventional format + imperative subject ≤ 72 + body explains WHY + ASCII + AI co-author trailer.
+Every commit → conventional format + imperative subject ≤ 72 + body explains WHY + AI co-author trailer.
 Substantive (feat/fix/refactor/perf) → body mandatory.
 Otherwise → it is not voidcorp commit-discipline.
 ```

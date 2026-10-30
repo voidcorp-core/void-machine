@@ -39,7 +39,7 @@ describe('evidence-aware hooks', () => {
       .toBe('FOCUSED_OR_SKIPPED_TEST');
   });
 
-  it.each(['xit', 'xdescribe'].flatMap((alias) => [
+  it.each(['xit', 'xdescribe', 'fit', 'fdescribe'].flatMap((alias) => [
     `${alias}.each([1])("case %s", () => {});`,
     `${alias}.each\`value\n${1}\`("case", () => {});`,
     `(${alias}).each([1])("case", () => {});`,
@@ -51,7 +51,7 @@ describe('evidence-aware hooks', () => {
     } }, { root: project() }).code).toBe('FOCUSED_OR_SKIPPED_TEST');
   });
 
-  it.each(['// xit.each([1])', 'const prose = "xdescribe.each([1])";'])
+  it.each(['// xit.each([1])', 'const prose = "xdescribe.each([1])";', '// fit("case", () => {})', 'const prose = "fdescribe";'])
     ('accepts skipped-alias prose: %s', (content) => {
       expect(evaluateRule('no-focused-test', { tool_name: 'Write', tool_input: {
         file_path: 'page.test.ts', content,

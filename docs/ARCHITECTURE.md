@@ -383,6 +383,17 @@ apply_patch with explicit content instead. An explicitly empty edit is valid
 content and remains allowed. A patch and a shell redirection to the same target
 still refuse. This does not expand the shell extractor into an evaluator: paths
 computed by programs or unsupported shell syntax remain outside its coverage.
+Claude's protected-file matcher includes `Bash`; Codex's matcher also covers its
+canonical `Bash` shell/exec events. Both route recognized shell destinations to
+the same Node rule. This is a deterministic decision only for an invoked supported
+payload, not a complete mediation boundary for arbitrary commands. Native hook
+loading/trust and blocking responses must be verified separately from generated
+manifest tests. Codex continuation via `write_stdin` does not invoke PreToolUse
+again and some specialized tools opt out. See the official
+[Codex tool coverage](https://learn.chatgpt.com/docs/hooks#tool-coverage) and
+[Claude blocking exit codes](https://code.claude.com/docs/en/hooks#exit-code-2).
+An instruction to avoid shell writes is behavioral guidance, not deterministic protection.
+
 The existing `allow-secret-pattern:` marker exempts only the line containing it
 and should explain an intentional synthetic fixture. It is not proof that content
 is safe, nor authorization to edit real credentials. Detection inspects added
@@ -498,7 +509,7 @@ that surface is unavailable, the runtime stops the remote action instead of infe
 from local files. The semantic sections of `.void/machine/checkpoint.md` are replaced at a
 deliberate session close and stay readable offline; neither the checkpoint nor the programme stores
 a current or next unit.
-Human gates and merges remain human. A standalone ticket or sequential plan keeps using its normal
+Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch. A standalone ticket or sequential plan keeps using its normal
 ticket or resume-point flow and does not need a programme descriptor.
 
 ### Session update proposal
@@ -1041,7 +1052,7 @@ reaches consumers with zero npm publish. The `/void-graph` command runs it from
 
 On a consumer the CLI runs in **bundled mode**: it loads the baked model instead of scanning a
 source tree (no monorepo paths), filters it to the packs enabled in `.claude/settings.json`, and
-correlates it with local mission journals (`.void/runs/*/events.jsonl`, plus
+correlates it with local mission journals (`.void/machine/runs/*/events.jsonl`, plus
 read-only v2 import, and transcripts). `graph live` serves the inlined studio
 and a `/studio-data.json` endpoint on loopback - fully offline. Freshness
 is gated by `graph check-bundle` (the artifact's embedded compatibility model must match

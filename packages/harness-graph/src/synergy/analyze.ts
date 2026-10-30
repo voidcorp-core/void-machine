@@ -3,6 +3,8 @@ import {
   analyzeBehavior,
   activationNames,
   isSyntheticBehaviorSession,
+  FIRING_KIND,
+  within,
 } from '../behavior/index.js';
 import type { ActivationEvent } from '../behavior/types.js';
 import { analyzeCost } from '../cost/analyze.js';
@@ -189,14 +191,24 @@ export function analyzeSynergy(
   options: SynergyOptions = {},
 ): SynergyReport {
   const humanActivations = activations.filter((event) =>
-    !isSyntheticBehaviorSession(event.sessionId));
+    !isSyntheticBehaviorSession(event.sessionId) && within(event, options.sinceMs));
   const humanOutcomes = outcomes.filter((event) =>
     !isSyntheticBehaviorSession(event.sessionId));
   const behavior = analyzeBehavior(model, activations, options);
   const retirementMinSessions = options.retirementMinSessions
     ?? DEFAULT_RETIREMENT_MIN_SESSIONS;
+  // Tool activity cannot demonstrate that skill/agent instrumentation ran.
+  // Count only sessions with an observation in the component's own family.
+  const familySessions = new Map<ActivationEvent['kind'], Set<string>>();
+  for (const event of humanActivations) {
+    const sessions = familySessions.get(event.kind) ?? new Set<string>();
+    sessions.add(event.sessionId);
+    familySessions.set(event.kind, sessions);
+  }
+  const observedSessions = (kind: ActivationEvent['kind'] | undefined): number =>
+    kind === undefined ? 0 : (familySessions.get(kind)?.size ?? 0);
   const retirementEvidenceSufficient = behavior.sufficient
-    && behavior.stats.sessions >= retirementMinSessions;
+    && model.nodes.some((node) => observedSessions(FIRING_KIND[node.type]) >= retirementMinSessions);
   const proposals = new Map<string, SynergyProposal>();
   if (!behavior.sufficient) {
     return {
@@ -268,12 +280,14 @@ export function analyzeSynergy(
       continue;
     }
     if (deadNodes.has(row.nodeId) || row.flags.includes('dead-hook')) {
-      if (retirementEvidenceSufficient) {
+      const node = model.nodes.find((candidate) => candidate.id === row.nodeId);
+      const observedFamilySessions = observedSessions(node === undefined ? undefined : FIRING_KIND[node.type]);
+      if (retirementEvidenceSufficient && observedFamilySessions >= retirementMinSessions) {
         addBest(proposals, proposal(
           'retirement-review',
           row.nodeId,
-          `0 invocations across ${behavior.stats.sessions} human sessions and ${behavior.stats.events} events.`,
-          'A rare but critical capability may be absent from this window; inspect its trigger and purpose before removal.',
+          `0 observed invocations across ${observedFamilySessions} human sessions with observations in this component family.`,
+          'Family observations do not prove complete runtime coverage. Check missing instrumentation, the trigger and the purpose before proposing removal.',
         ));
       } else if (orphanNodes.has(row.nodeId)) {
         addBest(proposals, proposal(

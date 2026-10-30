@@ -38,6 +38,14 @@ describe('language and test hygiene rules', () => {
     expect(noConsole(edit('src/user.py', 'print("done")')).allow).toBe(true);
   });
 
+  it('refuses focused aliases and skipped suites without an undocumented path exemption', () => {
+    for (const call of ['fdescribe', 'fit', 'describe.skip', 'it.skip', 'test.only']) {
+      expect(noFocusedTest(edit('src/user.test.ts', `${call}("case", () => {});`)).allow).toBe(false);
+    }
+    expect(noFocusedTest(edit('test/__skip-on-purpose__/user.test.ts', 'test.skip("case", () => {});')).allow).toBe(false);
+    expect(noFocusedTest(edit('src/user.test.ts', 'it.todo("pending contract");')).allow).toBe(true);
+  });
+
   it('blocks focused/skipped JavaScript tests and generic test names', () => {
     expect(noFocusedTest(edit('src/user.test.tsx', 'it.only("renders", () => {});')).allow).toBe(false);
     expect(testName(edit('src/user.spec.js', 'test("should work", () => {});')).allow).toBe(false);

@@ -81,7 +81,7 @@ materializes its runtime-neutral specialist envelopes from the current plan.
    unaffected conclusions and proofs; invalidate only affected evidence. A new targeted blocker
    must demonstrate a regression from the correction or a defect within the original scope.
    Carry unresolved blockers until an explicit, evidenced resolution; silence is not resolution.
-7. Maximum two correction batches after the initial general review. A batch is submitted
+7. Maximum two correction batches after the initial general review. Under `void-autopilot`, its tighter two-total-review-round budget applies (initial plus one corrected head); see `docs/BOUNDED-REVIEWS.md`. A batch is submitted
    corrections awaiting targeted verification. Agent restart, incomplete review, transport repair
    and mission resumption neither consume a batch nor reset the budget. At the limit, stop
    automatic corrective dispatch, retain history and expose a cause, owner and next action.

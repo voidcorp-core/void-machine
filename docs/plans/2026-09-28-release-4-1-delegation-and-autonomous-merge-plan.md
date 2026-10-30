@@ -34,7 +34,7 @@ plan déplace l'autorité de merge.
   (`packages/void-machine/test/pure-layer-types.test.ts`, `layer-boundaries.test.ts`).
 - Sorties réelles capturées pour les tests de conformité : sous
   `packages/void-machine/test/fixtures/`, jamais inventées.
-- Une unité = une PR vers `develop`, auto-merge armée à l'ouverture sauf chemins protégés.
+- Une unité = une PR vers `develop`, auto-merge armée uniquement après admission de la tête exacte (revue, CI et protections vérifiées), jamais pour les chemins protégés.
 
 ## Steps
 

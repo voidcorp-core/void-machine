@@ -132,3 +132,12 @@ None directly. The discipline is encoded in `pack-monorepo` / `pack-nextjs-pwa` 
 ## Revision 2026-06-19 — fail-soft outbound HTTP (issue #17 cluster B, B1)
 
 The skill covered the outbox (a write that must eventually happen) and inbound webhook safety, but not the mirror case: a synchronous OUTBOUND call to a third party on the request path. Added a "Fail-soft outbound HTTP" section — bound the time (`AbortSignal.timeout`), retry only idempotent reads with a cap, and decide critical (surface) vs degradable (cached/default fallback + structured warn) up front. Composes with observability + functional (outcome as a value, not an escaping throw). Plus an anti-rule and a stuck-table row.
+
+## 2026-10-30 coherence correction
+
+Compose the existing tested wrapper rather than duplicate its verify/claim/handle/mark
+sequence. Provider verification owns authenticated delivery freshness; the wrapper
+owns ordering and typed failure propagation. Pending receipt is not completion and
+failed completion persistence must not return success. No provider crypto implementation
+or universal event-age/TTL policy is introduced. See the correction audit for RED/GREEN
+and the explicit limits of the in-memory store and verifier test doubles.

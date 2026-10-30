@@ -233,13 +233,15 @@ delegation-result` Stop hook, which follows a claim keyed by the native session 
 2.1.257, the workspace is not trusted, or that hook is not installed. These adapters
 remain available to finish legacy runs and read their journals.
 
-New orchestration composes `void-orchestrate`: native runtime contexts for short
-specialists, Herdr sessions for durable workers, no PreToolUse capture of Agent.
-The hook-runner owns strict bounded central-file reads and metadata projection,
-with YAML as a direct dependency. It never writes mission state in home. ORCH owns
-mission/brief writes; the worker owns its report. Identity is label plus canonical
-worktree, re-resolved from `herdr pane list`; remembered pane/workspace IDs are hints.
-See [central contract](ORCHESTRA.md) and [supervision](NATIVE-SUPERVISION.md).
+New orchestration composes `void-orchestrate` and native runtime capabilities.
+It publishes [worker lifecycle observations](WORKER-LIFECYCLE.md) in the canonical
+mission journal. External plugins own presentation; active delegation and status
+paths never discover or control a multiplexer. `agents status --json` projects
+journals without querying runtimes or altering mission state.
+Historical presentation adapters remain inert on these paths. Existing legacy
+sessions and transitions remain collectable. The existing Herdr metadata hook is
+an explicit migration exception tracked by DEV-1134, not the new presentation API.
+See [supervision](NATIVE-SUPERVISION.md).
 
 Mission Engine remains the policy authority. Native specialist request/start/completion
 receipts preserve actual opaque context IDs or digest-bound artifact provenance.

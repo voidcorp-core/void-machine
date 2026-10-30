@@ -28,6 +28,9 @@ executes it: never delegate this complete workflow again. Tiny direct work and
 capability fallbacks follow that policy without skipping triggered quality gates.
 Preserve one `leadWriterId` through corrections; the coordinator retains user intent
 and decisions. Pass any orchestrator-owned panel contract unchanged.
+For the writer and delegated reviewers, compose `void-orchestrate` to publish
+observed worker lifecycle events in the canonical mission. Display metadata never
+replaces the implementation or independent review receipts below.
 
 ## Optional usage linkage
 
@@ -92,8 +95,9 @@ materializes its runtime-neutral specialist envelopes from the current plan.
    prior reviews, resolutions, budgets and effects. Existing attestation-only stops need explicit
    validation of the original review's subject, available provenance and result before recovery;
    never promote a degraded historical result automatically or recreate the mission to bypass it.
-9. Collect the final result before closing an orchestrator-owned agent panel. Keep worktrees,
-   branches and useful proofs on their distinct lifecycle. Panel closure never deletes them.
+9. Collect the final result, then publish the worker terminal state and finished event
+   through `void-orchestrate`. Keep worktrees, branches and useful proofs on their distinct
+   lifecycle. External presentation tools own their surfaces; the harness does not close them.
 
 The CLI and existing Mission Engine implement this bounded cycle. A runtime certification is
 not an additional delivery gate. Concrete independence, permission, isolation, evidence and

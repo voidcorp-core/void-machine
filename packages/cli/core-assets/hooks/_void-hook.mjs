@@ -15099,6 +15099,8 @@ function replayEventLog(text3) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
+
 var MAX_EVENT_LOG_BYTES = 8 * 1024 * 1024;
 var MISSION_ID3 = /^mis_[A-Za-z0-9_-]{8,100}$/;
 var EVENT_ID2 = /^evt_[A-Za-z0-9_-]{8,100}$/;

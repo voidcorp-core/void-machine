@@ -168,6 +168,49 @@ it.each([true, false])('emits legacy runtime lifecycle without a surface (canoni
 });
 
 
+it.each([true, false])('distinguishes confirmed runtime failure from absence after reconciliation (confirmed: %s)', async confirmed => {
+  const f = await repository();
+  let clock = Date.parse(now);
+  let failedPresent = false;
+  const runId = 'run_00000000-0000-4000-8000-000000000002';
+  const capability = { available: true, provenance: 'verified' as const, note: 'test runtime' };
+  const runtime: AgentRuntimePort = {
+    capabilities: { view: capability, capture: capability, structuredOutput: capability },
+    preflight: async () => ({ ok: true }),
+    dispatch: async () => ({ kind: 'acknowledged', handle: '00000002' }),
+    send: async () => ({ kind: 'acknowledged', handle: '00000002' }),
+    stop: async () => ({ ok: true }), attachCommand: () => undefined,
+    observe: async () => ({ kind: 'read', sessions: new Map(failedPresent
+      ? [[`vm-${runId}`, { observation: { kind: 'present', state: 'failed' } }]] : []) }),
+  };
+  const base = agentsContext({ cwd: f.root, env: {}, home: '/nonexistent', updateCommand: 'update' });
+  if (!('store' in base)) throw Error(base.cause);
+  const context: AgentsContext = { store: base.store, runtimes: { claude: runtime, codex: runtime },
+    clock: { now: () => clock, sleep: async ms => { clock += ms; } },
+    owner: 'contract-test', newRunId: () => runId, newMissionId: () => mission };
+  const io = { ...f.io, context: () => context };
+  const brief = join(f.root, 'brief.md'); writeFileSync(brief, 'Implement the bounded task.');
+  expect((await runAgents(['dispatch', '--role', 'work', '--runtime', 'codex', '--ticket', 'DEV-42',
+    '--mission', mission, '--cwd', f.root, '--brief-file', brief], io)).code).toBe(0);
+  expect((await runAgents(['wait', runId, '--timeout', '1'], io)).code).toBe(0);
+  expect(JSON.parse((await runAgents(['status', '--json'], io)).stdout).workers).toMatchObject([
+    { runId, state: 'blocked' },
+  ]);
+  failedPresent = confirmed;
+  clock += 60_001;
+  expect((await runAgents(['wait', runId, '--timeout', '1'], io)).code).toBe(0);
+  const snapshot = JSON.parse((await runAgents(['status', '--json'], io)).stdout);
+  expect(snapshot.workers).toEqual(confirmed ? [] : [expect.objectContaining({ runId, state: 'blocked' })]);
+  const beforeReplay = readFileSync(f.log, 'utf8');
+  const events = beforeReplay.trim().split('\n').map(line => JSON.parse(line));
+  expect(events.filter(event => event.kind === 'worker.finished').map(event => event.payload.outcome))
+    .toEqual(confirmed ? ['failed'] : []);
+  expect(events.filter(event => event.kind === 'worker.state').at(-1).payload.state)
+    .toBe(confirmed ? 'failed' : 'blocked');
+  expect((await runAgents(['publish', runId], io)).code).toBe(0);
+  expect(readFileSync(f.log, 'utf8')).toBe(beforeReplay);
+});
+
 it.each([{ ...state('running'), state: ['running'] }, state('running', '2026-02-30T08:00:00.000Z')])('rejects malformed state observation %j', async payload => {
   const f = await repository();
   expect((await f.record('worker.dispatched', f.dispatched)).code).toBe(0);

@@ -68,7 +68,9 @@ export async function publishLegacyWorkers(root: string, context: AgentsContext,
           payload: { schemaVersion: 1, runId, outcome: 'succeeded' } });
         continue;
       }
-      const uncertain = step.to === 'reconciling' || (step.to === 'failed' && step.from === 'reconciling');
+      // Legacy observations share an event type; their persisted cause identifies confirmed runtime failure.
+      const uncertain = step.to === 'reconciling' || (step.to === 'failed' && step.from === 'reconciling'
+        && step.cause !== 'the session ended with an error');
       const state: WorkerState = step.to === 'accepted' ? 'done'
         : (step.to === 'failed' || step.to === 'stopped') && !uncertain ? 'failed'
           : step.to === 'dispatched' || step.to === 'working' ? 'running' : 'blocked';

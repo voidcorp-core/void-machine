@@ -24,7 +24,7 @@ import {
   selectMissionMode,
   validatedSpecialistContractMigrations,
 } from '@voidcorp/mission-engine';
-import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission } from '../lib/mission-inputs.js';
+import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission, validateMissionReviewBase } from '../lib/mission-inputs.js';
 
 export { captureMissionReviewSubject, normalizeControllerTicketPath, planMission } from '../lib/mission-inputs.js';
 
@@ -32,6 +32,9 @@ import { observeOrchestrationCapability } from '../lib/orchestration-capability.
 import { findCoreSource } from '../lib/paths.js';
 import { type ProjectRoots, resolveProjectRoots } from '../lib/project-roots.js';
 import { archiveMission, pruneMissions } from '../lib/runs/archive.js';
+import { parseUsageCommand, runUsageCommand, type UsageMissionArgs } from './mission-usage.js';
+import { loadMissionUsage } from '../lib/runs/usage-report.js';
+import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
 import { observedMissionLifecycle, requireOpenMission } from '../lib/runs/mission-lifecycle.js';
 import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
@@ -107,6 +110,7 @@ interface InvalidArgs {
 }
 
 export type MissionArgs =
+  | UsageMissionArgs
   | { readonly kind: 'evidence-request'; readonly missionId: string; readonly inputPath: string; readonly json: boolean }
   | { readonly kind: 'evidence-event'; readonly missionId: string; readonly inputPath: string;
       readonly status: 'started' | 'completed'; readonly json: boolean }
@@ -161,6 +165,7 @@ export type MissionArgs =
     }
   | {
       readonly kind: 'inspect';
+      readonly usage?: true;
       readonly missionId: string;
       readonly json: boolean;
     }
@@ -240,6 +245,9 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     return { kind: 'help' };
   }
   const command = divider === -1 ? [] : args.slice(divider + 1);
+  const usageCommand = parseUsageCommand({ subcommand, options, divider },
+    { invalid, valueAfter, missionIdFrom, validateOptions });
+  if (usageCommand !== undefined) return usageCommand;
   if (subcommand === 'evidence-request' || subcommand === 'evidence-event') {
     if (divider !== -1) return invalid('evidence commands do not accept a command', 'remove --');
     const names = options.filter(value => value.startsWith('--'));
@@ -483,7 +491,7 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
         `${PRODUCT_COMMAND} mission ${subcommand} --id <id>`,
       );
     }
-    const optionError = validateOptions(options, ['--id'], ['--json']);
+    const optionError = validateOptions(options, ['--id'], subcommand === 'inspect' ? ['--json', '--usage'] : ['--json']);
     if (optionError !== undefined) {
       return invalid(optionError, `${PRODUCT_COMMAND} mission ${subcommand} --help`);
     }
@@ -491,6 +499,7 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     if (typeof missionId !== 'string') return missionId;
     return {
       kind: subcommand,
+      ...(subcommand === 'inspect' && options.includes('--usage') ? { usage: true as const } : {}),
       missionId,
       json: options.includes('--json'),
     };
@@ -623,6 +632,8 @@ export async function recoverStoppedMission(
   const identity = missionRuntimeIdentity(inspected.stream.events);
   const coordinator = coordinatorRuntimeIdentity(process.env);
   const provenanceRecovery = request.disposition.kind === 'review-provenance';
+  const targetedContextRecovery = request.disposition.kind === 'controller-defect'
+    && request.disposition.defect === 'targeted-review-context';
   if (identity === undefined || (coordinator.attested && coordinator.runtime !== identity.runtime)
     || (!provenanceRecovery && (!identity.attested || !coordinator.attested))) {
     throw new Error('MISSION_RECOVERY_RUNTIME: observe the original native runtime before recovery');
@@ -678,14 +689,16 @@ export async function recoverStoppedMission(
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
-  const recoverySpecialists = opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
+  const recoverySpecialists = targetedContextRecovery
+    ? migration.plan.specialists.filter(value => value.specialistId === 'core:independent-code-reviewer')
+    : opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
     ? migration.plan.specialists.filter(value => value.state === 'applicable'
       && value.stages?.includes('pre-implementation'))
     : migration.plan.specialists;
   const observation: MissionRecoveryObservation = {
-    ...(provenance === undefined || subject?.baseCommit === undefined
+    ...((provenance === undefined && !targetedContextRecovery) || subject?.baseCommit === undefined
       || subject.reviewedCommit === undefined ? {} : {
-      reviewBindings: provenance.bindings,
+      ...(provenance === undefined ? {} : { reviewBindings: provenance.bindings }),
       reviewSubject: { taskId: missionId, baseCommit: subject.baseCommit,
         reviewedCommit: subject.reviewedCommit, acceptanceCriteriaHash: stored.ticket.contentHash },
     }),
@@ -776,6 +789,9 @@ export async function dispatchMissionSpecialists(
     event.kind === 'lead-writer.completed'
     && isUnknownRecord(event.payload)
     && event.payload.actionKind !== 'run-preparation-correction');
+  if (!implemented && stored.baseCommit !== undefined) {
+    await validateMissionReviewBase(workRoot, stored.baseCommit);
+  }
   const reviewSubject = implemented
     ? await captureControllerReviewSubject(workRoot, stored.baseCommit, inspected.stream.events)
     : undefined;
@@ -1222,7 +1238,10 @@ function usage(): string {
   mission close --id <id> --reason interrupted|abandoned [--json]
   mission verify --id <id> [--shell] [--json] -- <command...>
   mission resume --id <id> [--json]
-  mission inspect --id <id> [--json]
+  mission inspect --id <id> [--usage] [--json]
+  mission usage-bind --id <id> --source <session-journal-id> [--json]
+  mission usage-unbind --id <id> --source <session-journal-id> [--json]
+  mission advisory-start --id <id> --specialist core:<role> --runtime claude|codex --context <native-id> [--json]
   mission archive --id <id> [--json]
   mission prune --older-than <days> [--apply] [--json]
 
@@ -1287,6 +1306,10 @@ export async function mission(args: readonly string[]): Promise<void> {
   const root = roots.workRoot;
   const journal = roots.installRoot;
   try {
+    if (parsed.kind === 'usage-bind' || parsed.kind === 'usage-unbind' || parsed.kind === 'advisory-start') {
+      process.stdout.write(await runUsageCommand(parsed, journal));
+      return;
+    }
     if (parsed.kind === 'plan') {
       const plan = await planMission(root, parsed.ticketPath, undefined, 'project-v1');
       process.stdout.write(parsed.json ? `${JSON.stringify(plan)}\n` : `${renderPlan(plan)}\n`);
@@ -1476,11 +1499,16 @@ export async function mission(args: readonly string[]): Promise<void> {
         roots,
         parsed.missionId,
         collectKnownSecrets(),
+        parsed.usage ? { quarantine: false } : {},
       );
+      const usageReport = parsed.usage
+        ? await loadMissionUsage(roots.installRoot, parsed.missionId, inspected.stream) : undefined;
       process.stdout.write(
         parsed.json
-          ? `${JSON.stringify(inspected.verdict)}\n`
-          : `${renderInspection(inspected)}\n`,
+          ? `${JSON.stringify(usageReport === undefined ? inspected.verdict
+            : { ...inspected.verdict, usage: usageReport })}\n`
+          : `${renderInspection(inspected)}${usageReport === undefined ? ''
+            : `\n\n${renderMissionUsage(usageReport)}`}\n`,
       );
       process.exitCode = missionVerdictExitCode(inspected.verdict.status);
       return;

@@ -1,5 +1,39 @@
 # Changelog
 
+## [5.0.8](https://github.com/voidcorp-core/void-machine/compare/v5.0.7...v5.0.8) (2026-10-23)
+
+
+### Bug Fixes
+
+* **review:** preserve bounded native targeted review continuity ([98b58bf](https://github.com/voidcorp-core/void-machine/commit/98b58bfab868fc5f440609730699dd3d6b0bc0f3))
+* **review:** retain native reviewer for bound targeted corrections ([52a40fd](https://github.com/voidcorp-core/void-machine/commit/52a40fd7760b0dfa97bc68bf8ee4dd6efaebce60))
+* **review:** separate historical continuity from current proof freshness ([c819202](https://github.com/voidcorp-core/void-machine/commit/c81920281d629bcd1e723fa3925bab1aeebe45be))
+
+## [5.0.7](https://github.com/voidcorp-core/void-machine/compare/v5.0.6...v5.0.7) (2026-10-22)
+
+
+### Bug Fixes
+
+* **mission:** preserve original preparation invocation rounds ([56298e9](https://github.com/voidcorp-core/void-machine/commit/56298e9eaf07f4c0376869ab310320ce5282685b))
+* **mission:** remove compulsory preparation quorum ([1f0fcfe](https://github.com/voidcorp-core/void-machine/commit/1f0fcfe49a5f31f500f6679e747dbe75de80c1e2))
+* **mission:** remove compulsory preparation quorum ([8a3f70b](https://github.com/voidcorp-core/void-machine/commit/8a3f70bc1fc59fef588c6e8b668c665a4cf1d20c))
+
+## [5.0.6](https://github.com/voidcorp-core/void-machine/compare/v5.0.5...v5.0.6) (2026-10-22)
+
+
+### Bug Fixes
+
+* **hook-runner:** accept explicit timezone offsets in orchestra state ([849c905](https://github.com/voidcorp-core/void-machine/commit/849c90519eb6754c0ba6b5359d487f24043355a7))
+* **hook-runner:** accept explicit timezone offsets in Orchestra state ([99ec448](https://github.com/voidcorp-core/void-machine/commit/99ec448d8a2ac7de2d488cfd30eb49faa0027ea0))
+
+## [5.0.5](https://github.com/voidcorp-core/void-machine/compare/v5.0.4...v5.0.5) (2026-10-21)
+
+
+### Bug Fixes
+
+* **mission:** recover authentic author evidence after controller stops ([6ebb045](https://github.com/voidcorp-core/void-machine/commit/6ebb0456a7d8204055f61975a3d09157024f439d))
+* **mission:** retain actionable author evidence across stops ([d334b42](https://github.com/voidcorp-core/void-machine/commit/d334b424f9441dcd428e923d7ec53a0ae3566b05))
+
 ## [5.0.4](https://github.com/voidcorp-core/void-machine/compare/v5.0.3...v5.0.4) (2026-10-21)
 
 

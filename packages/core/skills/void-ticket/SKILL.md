@@ -20,6 +20,8 @@ A ticket an implementation agent can execute with zero follow-up questions. It d
 - Always writes to the project's tracker (Linear / Jira / GitHub / ...). On a project with a fixed tracker, team, and label conventions, use them and do not re-ask.
 
 Do NOT use this to execute a ticket (`void-implement`) or to sequence many steps (`void-plan`).
+This skill is not a prerequisite for an explicit user request with clear acceptance criteria;
+create tracker work only when requested or required by the declared programme.
 
 ---
 

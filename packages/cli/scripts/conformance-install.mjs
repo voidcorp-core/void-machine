@@ -100,8 +100,9 @@ export async function installPackage(temporary, tarball) {
 // `npx <package>` resolves the command from the package manifest, not from a
 // path: with several bin files, npm runs only the one named after the package.
 // Every other step here calls the installed bin directly and cannot see that.
-async function execByPackageName(temporary, tarball) {
-  const fixture = join(temporary, 'exec');
+// Keep the file spec for manifest inference, but reuse the installed tree/cache.
+export async function execByPackageName(temporary, tarball) {
+  const fixture = join(temporary, 'package');
   await mkdir(join(fixture, 'tmp'), { recursive: true });
   const npm = packageManagerCommand('npm');
   const result = await run(

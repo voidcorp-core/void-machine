@@ -271,7 +271,7 @@ See `../../hooks/`.
 ## Anti-rules
 
 - MUST NOT decide WHETHER a test exists. That is `void-tdd`'s Iron Law.
-- MUST NOT decide coverage thresholds. That is `void-tdd`'s 100%-on-business-layer default + documented exceptions.
+- MUST NOT decide coverage thresholds. That is the project's configured policy, applied by `void-tdd` alongside behavior/risk coverage.
 - MUST NOT decide architecture (what is a port, what is an adapter). Hexagonal owns that.
 - MUST NOT decide framework specifics (which Vitest reporter, Playwright trace mode). Pack-level config.
 - MUST NOT silently allow snapshot creep.

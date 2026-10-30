@@ -70,8 +70,15 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
     const defect = disposition['defect'];
     if (!exact(disposition, ['kind', 'defect'])
       || (defect !== 'partial-fanout-round' && defect !== 'stale-input-dispatch'
-        && defect !== 'opaque-native-context')) invalid();
+        && defect !== 'opaque-native-context' && defect !== 'targeted-review-context')) invalid();
     return { ...base, disposition: { kind: 'controller-defect', defect } };
+  }
+  if (disposition['kind'] === 'evidence-disposition') {
+    const ids = disposition['responseEventIds'];
+    if (!exact(disposition, ['kind', 'responseEventIds']) || !Array.isArray(ids)
+      || ids.length < 1 || ids.length > 64 || !ids.every(eventId)
+      || new Set(ids).size !== ids.length) invalid();
+    return { ...base, disposition: { kind: 'evidence-disposition', responseEventIds: ids } };
   }
   const commandCorrection = disposition['kind'] === 'command-correction';
   const ids = disposition['completionEventIds'];

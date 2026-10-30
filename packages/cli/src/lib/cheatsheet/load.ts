@@ -13,9 +13,14 @@ const manifestSchema = z.object({ hooks: z.record(z.string().max(100), z.array(z
   hooks: z.array(z.object({ type: z.string(), command: z.string().max(2000) })).max(100),
 })).max(100)) });
 
+/** The same wrapper command owns catalogue wiring and emitted hook subject aliases. */
+export function hookRunnerCommand(wrapper: string): string | undefined {
+  return /^\s*(?:exec "\$NODE_BIN"|node) "(?:\$HOOK_DIR\/_void-hook\.mjs|\$RUNNER)" ((?:enforce|lifecycle) [a-z-]+|activation|outcome)(?:\s|$)/m.exec(wrapper)?.[1];
+}
+
 /** Read wiring declarations as data. Never execute a hook to discover its trigger. */
 export function hookWiring(name: string, wrapper: string, manifests: readonly { runtime: 'claude' | 'codex'; value: unknown }[]): HookWiring[] {
-  const runner = /^\s*(?:exec "\$NODE_BIN"|node) "(?:\$HOOK_DIR\/_void-hook\.mjs|\$RUNNER)" ((?:enforce|lifecycle) [a-z-]+|activation|outcome)(?:\s|$)/m.exec(wrapper)?.[1];
+  const runner = hookRunnerCommand(wrapper);
   return manifests.flatMap(({ runtime, value }) => Object.entries(manifestSchema.parse(value).hooks)
     .flatMap(([event, groups]) => groups.filter(group => group.hooks.some(hook => {
       if (hook.type !== 'command') return false;

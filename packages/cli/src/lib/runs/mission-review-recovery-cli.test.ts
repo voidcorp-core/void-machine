@@ -18,10 +18,12 @@ const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
 const ID = 'mis_review_recovery_cli_12345678';
 const REVIEWER = 'core:independent-code-reviewer';
 
-async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1') {
+async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targeted = false) {
   const root = await mkdtemp(join(tmpdir(), 'void-review-recovery-cli-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-review-recovery');
-  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8',
+    env: { ...process.env, GIT_AUTHOR_DATE: '2026-10-23T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-10-23T00:00:00Z' } }).trim();
   const commit = () => git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
     'commit', '--quiet', '-m', 'test: commit review subject']);
   git(['init', '--quiet']);
@@ -47,29 +49,50 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1') {
   await writeMissionControllerPlan(root, ID, plan, ticket, baseCommit, inputRecipe);
   const roots = resolveProjectRoots(root);
   const dispatch = () => dispatchMissionSpecialists(roots, { kind: 'dispatch', missionId: ID, json: true });
+  let correctionProofIds: readonly string[] = [];
   async function complete(envelope: SpecialistDispatchEnvelope, contextId: string) {
     await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
     await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
       completion: { schemaVersion: 1, specialistId: envelope.specialistId,
-        contractVersion: envelope.contractVersion, completionId: `completion_${contextId}`,
-        verdict: 'pass', findings: [], evidenceRequests: [], limitations: [],
+        contractVersion: envelope.contractVersion, completionId: `completion_${contextId}_${envelope.reviewRound}`,
+        verdict: targeted && envelope.reviewScope?.kind === 'general' ? 'changes-requested' : 'pass',
+        findings: targeted && envelope.reviewScope?.kind === 'general' ? [{ id: 'readiness-unverified',
+          severity: 'high', classification: 'blocking', basis: 'initial-scope-defect',
+          criterion: 'The readiness tag is verified', consequence: 'Unverified readiness is rendered',
+          resolutionCondition: 'The command checks the verified tag', summary: 'Readiness lacks verification',
+          evidence: [{ path: 'runtime.ts', line: 1, detail: 'Ready is only a boolean' }],
+          recommendation: 'Return the verified tag' }] : [], evidenceRequests: [], limitations: [],
         ...(envelope.reviewSubject === undefined ? {} : { review: { ...envelope.reviewSubject,
-          reviewerId: 'reviewer:independent', writerId: '/root/original_writer', readOnly: true,
-          scope: { kind: 'general' as const }, proofIds: [], resolutions: [],
+          reviewerId: 'reviewer:independent', writerId: targeted ? 'writer:primary' : '/root/original_writer', readOnly: true,
+          scope: envelope.reviewScope ?? { kind: 'general' as const }, proofIds: correctionProofIds,
+          resolutions: envelope.reviewScope?.kind === 'targeted' ? [{ findingId: 'readiness-unverified',
+            status: 'resolved' as const, proofIds: correctionProofIds }] : [],
           provenance: { kind: 'native-context' as const, contextId } } }) } });
   }
-  const preparation = await dispatch();
-  expect(preparation.action.kind).toBe('invoke-specialists');
-  for (const [index, envelope] of preparation.envelopes.entries()) await complete(envelope, `preparation_${index}`);
   expect((await dispatch()).action.kind).toBe('run-lead-writer');
   await writeFile(join(root, 'runtime.ts'), 'export const ready = true;\n');
   git(['add', 'runtime.ts']);
   commit();
-  const reviewedCommit = git(['rev-parse', 'HEAD']);
+  let reviewedCommit = git(['rev-parse', 'HEAD']);
   await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId: ID, json: true });
   const review = await dispatch();
   expect(review.action).toMatchObject({ kind: 'invoke-specialists', stage: 'post-implementation' });
   for (const [index, envelope] of review.envelopes.entries()) await complete(envelope, `review_${index}`);
+  if (targeted) {
+    expect((await dispatch()).action.kind).toBe('run-correction');
+    await writeFile(join(root, 'runtime.ts'), "export const ready = 'verified';\n");
+    git(['add', 'runtime.ts']);
+    commit();
+    reviewedCommit = git(['rev-parse', 'HEAD']);
+    const proof = await verifyMissionCommand({ roots, missionId: ID, shell: false, echo: false,
+      command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('runtime.ts','utf8'), /verified/)"] });
+    expect(proof.exitCode).toBe(0);
+    correctionProofIds = [proof.evidenceId];
+    await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId: ID, json: true });
+    const correction = await dispatch();
+    expect(correction.action).toMatchObject({ kind: 'invoke-specialists', reviewScope: { kind: 'targeted' } });
+    for (const [index, envelope] of correction.envelopes.entries()) await complete(envelope, `review_${index}`);
+  }
   await recordMissionClosure(root, ID, 'controller-stop', 'void-harness:mission.dispatch');
   const events = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
   const original = events.find(event => event.kind === 'specialist.completed' && event.subject === REVIEWER);
@@ -91,7 +114,9 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1') {
   const request = { schemaVersion: 1 as const, closureEventId: closure.eventId,
     expectedJournalHash: canonicalJsonHash(events), disposition: { kind: 'review-provenance' as const,
       completionEventIds: [original.eventId], resolutionArtifact: { path, sha256: canonicalBody(artifact) } } };
-  return { root, roots, dispatch, request, events, reviewedCommit, git };
+  const targetedRequest = { schemaVersion: 1 as const, closureEventId: closure.eventId,
+    expectedJournalHash: canonicalJsonHash(events), disposition: { kind: 'controller-defect' as const, defect: 'targeted-review-context' as const } };
+  return { root, roots, dispatch, request, targetedRequest, events, reviewedCommit, git };
 }
 
 function canonicalBody(body: string) {
@@ -178,4 +203,70 @@ it.each([undefined, 'project-v1'] as const)('uses its durable recipe after a CLI
     Object.defineProperty(process.versions, 'node', version);
     vi.unstubAllEnvs();
   }
+});
+
+it('observes the committed CLI subject and recovers a synthetic retained-reviewer correction', async () => {
+  try {
+    const fixture = await stoppedReview(true, 'project-v1', true);
+    const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
+    const before = await readFile(log, 'utf8');
+    expect(await recoverStoppedMission(fixture.roots, ID, fixture.targetedRequest)).toMatchObject({ recorded: true });
+    const after = await readFile(log, 'utf8');
+    expect(after.startsWith(before)).toBe(true);
+    const next = await fixture.dispatch();
+    expect(next.action.kind).toBe('complete');
+    expect(next.envelopes).toEqual([]);
+    expect(fixture.git(['rev-parse', 'HEAD'])).toBe(fixture.reviewedCommit);
+    const events = (await inspectMission(fixture.root, ID, { dependencies: {} })).stream.events;
+    expect(events.filter(event => event.kind === 'specialist.requested')).toHaveLength(2);
+    expect(events.find(event => event.kind === 'mission.recovered')?.payload).toMatchObject({
+      consumedCorrectionBatches: 1, remainingCorrectionBatches: 1, consumedRounds: 2, nextAction: 'verification',
+      invalidatedCompletionEventIds: [], inadmissibleCompletionEventIds: [] });
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it.each(['wrong worktree', 'changed commit', 'dirty subject', 'changed journal'] as const)(
+  'refuses targeted-context recovery with %s without appending an event', async mismatch => {
+    try {
+      const fixture = await stoppedReview(true, 'project-v1', true);
+      const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
+      const before = await readFile(log, 'utf8');
+      let roots = fixture.roots;
+      if (mismatch === 'wrong worktree') {
+        const unrelated = await stoppedReview(true, 'project-v1', true);
+        expect(unrelated.reviewedCommit).toBe(fixture.reviewedCommit);
+        unrelated.git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+          'commit', '--allow-empty', '--quiet', '-m', 'test: distinct unrelated checkout']);
+        expect(unrelated.git(['rev-parse', 'HEAD'])).not.toBe(fixture.reviewedCommit);
+        expect(unrelated.git(['status', '--porcelain'])).toBe('');
+        roots = { ...roots, workRoot: unrelated.root };
+      }
+      if (mismatch === 'changed commit' || mismatch === 'dirty subject') {
+        await writeFile(join(fixture.root, 'runtime.ts'), 'export const ready = false;\n');
+        if (mismatch === 'changed commit') {
+          fixture.git(['add', 'runtime.ts']);
+          fixture.git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+            'commit', '--quiet', '-m', 'test: change reviewed subject']);
+        }
+      }
+      const request = mismatch === 'changed journal'
+        ? { ...fixture.targetedRequest, expectedJournalHash: `sha256:${'e'.repeat(64)}` }
+        : fixture.targetedRequest;
+      await expect(recoverStoppedMission(roots, ID, request)).rejects.toThrow();
+      expect(await readFile(log, 'utf8')).toBe(before);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+
+it('accepts an isolated equivalent checkout of the exact same reviewed commit', async () => {
+  try {
+    const fixture = await stoppedReview(true, 'project-v1', true);
+    const equivalent = await stoppedReview(true, 'project-v1', true);
+    expect(equivalent.reviewedCommit).toBe(fixture.reviewedCommit);
+    const log = join(fixture.root, '.void/machine/runs', ID, 'events.jsonl');
+    const before = await readFile(log, 'utf8');
+    expect(await recoverStoppedMission({ ...fixture.roots, workRoot: equivalent.root }, ID,
+      fixture.targetedRequest)).toMatchObject({ recorded: true });
+    expect((await readFile(log, 'utf8')).startsWith(before)).toBe(true);
+  } finally { vi.unstubAllEnvs(); }
 });

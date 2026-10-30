@@ -51,3 +51,20 @@ completed turn as proof of task acceptance. Retain mandatory review/security
 isolation as blockers. This slice has no global scheduler, durable inbox or claimed
 speedup. Contract tests verify instructions and distribution; actual native probes
 are separately reported and do not establish universal execution or crash recovery.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).
+
+
+## Explicit prospective usage (2026-10-23)
+
+Coordinator-owned start/end linkage uses known source journals only. Lightweight native advice
+may retain a distinct observed-start receipt after actual success; formal review stays separate.
+No per-edit call, guessed identity, retrospective receipt or delivery gate. See `docs/TICKET-USAGE.md`.
+
+
+## Native model choice (DEV-1110, 2026-10-23)
+
+Native model selection follows current declared controls and user precedence. Keep task risk and context reuse, reject fixed commercial rankings, silent fallback and provider routing. Requested model is not observed model. Primary API advice and actual native probes validate this policy; no new selector logic or version registry.

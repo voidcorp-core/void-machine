@@ -62,3 +62,8 @@ Without `commit-discipline`, commit messages drift to "fix stuff" / "wip". Git l
 ## Open questions
 
 - Co-author trailer: hard-required or recommended? Lean recommended (user may pair-program with humans too)
+
+## 2026-10-23: proportional delivery composition correction
+
+Remove mandatory phase commits that contradicted the observed RED/GREEN evidence contract.
+See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

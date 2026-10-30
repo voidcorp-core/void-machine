@@ -7,7 +7,14 @@ description: Use when taking a single ticket from ready through shipped at exper
 
 One ticket, taken from ready to shipped, with the coverage a senior expert team would give it: architecture, tests, end-to-end, UX, security, review. This is the single canonical definition of "execute one ticket well." Both interactive work and `void-autopilot` delegate here, so the cycle is defined once and improving it improves both.
 
-**Core principle:** Speed comes from skipping ceremony on trivial work, never from skipping a pass whose trigger fired. The triage is keyed to observable predicates (does it touch a boundary, a UI, a trust edge), not to a feeling that the change "looks simple."
+**Core principle:** keep the senior engineering floor, scale the work to the actual change.
+This skill owns applicability across the cycle: inspect the affected behavior, boundary and risk
+once; load the relevant standards and consult the primary domain specialist before coding.
+An explicit user request with clear scope and acceptance criteria is an executable unit; a
+tracker ticket, separate spec or plan is not required merely to begin authorized work.
+Stop when acceptance criteria, applicable proofs and independent review are satisfied.
+Preferences and optional improvements never start another correction cycle. TDD before new
+behavior, security, KISS and SOLID remain requirements; ceremony is not a substitute for them.
 
 **Attribution**: see `.source`.
 
@@ -21,6 +28,16 @@ executes it: never delegate this complete workflow again. Tiny direct work and
 capability fallbacks follow that policy without skipping triggered quality gates.
 Preserve one `leadWriterId` through corrections; the coordinator retains user intent
 and decisions. Pass any orchestrator-owned panel contract unchanged.
+
+## Optional usage linkage
+
+At work start, when both the existing mission ID and exact native session journal ID are known,
+the coordinator runs `void-machine mission usage-bind --id <mission> --source <session-journal>`.
+This begins prospective counting without changing installed hooks. Never guess a journal from
+recent activity, timestamps or an inherited thread/session variable; a shared session is not
+worker isolation. If identification is unavailable, report unknown and continue the authorized
+work. The coordinator owns this action, not an ID reconstruction task for the user. `void-verify`
+closes the interval and reports once at the end; no per-edit command or extra delivery gate.
 
 ## Canonical team orchestration
 
@@ -36,11 +53,12 @@ materializes its runtime-neutral specialist envelopes from the current plan.
 1. Keep one `leadWriterId` for implementation and every correction. The implementer owns
    the worktree and code; specialists and the independent reviewer never edit.
 2. Start with `mission start --ticket <ticket>` and follow `mission dispatch --id <mission>
-   --json`. The frozen task and controller own routing, state and correction budget. Before
-   implementation, launch only the risk-relevant preparation specialists returned by dispatch,
-   each envelope through `void-orchestrate` using the native runtime (pass 5). Collect each result without
-   inventing a completion. Record each actual start and completion with `mission specialist-event
-   --id <mission>`. A missing response resumes the run it already has, never another cycle.
+   --json`. The frozen task and controller own routing, state and correction budget. Normal
+   dispatch starts the writer without a compulsory preparation panel. The writer still obtains
+   the primary domain specialist advice required by pass 5 before production edits.
+   For canonical `invoke-specialists` actions, pass each envelope unchanged through
+   `void-orchestrate` and record actual starts/results with `mission specialist-event --id <mission>`.
+   Reconcile any existing invocation; a missing response resumes its run, never another cycle.
 3. The implementer implements and verifies, then commits the candidate. Record the pending
    writer receipt with `mission writer-event --id <mission>`. Review must bind an exact
    `reviewedCommit`, `baseCommit` and `acceptanceCriteriaHash`; a mutable worktree is insufficient.
@@ -97,24 +115,24 @@ Do NOT use this to plan several tickets (that is `void-plan`) or to author the t
 
 Run in order. Each pass names the skill it composes and the predicate that fires it. `ALWAYS` passes never skip; conditional passes skip only when their predicate is false. You ALWAYS evaluate every predicate yourself against the actual change: a ticket declaration may ADD a pass, never cancel one whose predicate fired.
 
-1. **Ingest + completeness gate** (ALWAYS). Fetch the complete ticket, including native relations: scope, AC, DoD, edge cases, declared passes, blockers. If `.void/program.md` scopes the unit, also read its global plan and spec. Confirm the unit is ready and nothing is missing or ambiguous. If a gap or uncovered angle exists, loop back to `void-ticket` to complete it before coding, do not paper over it. For a provider-backed unit, move it to the declared started state and assign it to the current maintainer before the first implementation edit. Load or compile the canonical mission plan and verify its hash before any specialist invocation; missing or conflicting plan data is degraded, not guessed.
-2. **Architecture pass** (IF it touches structure, a module boundary, the data model, or public types). Compose `void-hexagonal-architecture`, `void-domain-driven-design`, agents `type-design-analyzer` + `doctrine-critic`. Confirm the applicable ADR is honored.
+1. **Ingest + completeness gate** (ALWAYS). Read the complete explicit request or ticket, available acceptance criteria, affected contracts and real blockers. Reuse decisions already authorized in the conversation. Resolve only ambiguities that change the result, safety or scope; missing labels or a prose template do not block implementation. Use `void-brainstorm` for an unresolved structural choice and `void-plan` for dependent steps that need durable coordination, not for routine edits. For provider-backed work, read native relations and claim it before edits. A scoped programme still supplies its linked plan/spec; canonical specialist requests still require the authenticated mission plan.
+2. **Architecture pass** (IF structure, a module boundary, data model or public contract changes). Apply `void-hexagonal-architecture` and `void-domain-driven-design` to the affected boundary. Keep KISS and SOLID: a layer or branded type earns its place through an invariant, responsibility or substitution contract, not its name. Consult `type-design-analyzer` or `doctrine-critic` when a concrete design question needs that expertise. Honor applicable ADRs; use `void-decide` only for a lasting structural choice.
 3. **Source grounding** (ALWAYS; the source depends on what the change touches). Read the relevant sources before the first line, per the Anti-rustine section of `PHILOSOPHY.md`. For a third-party configuration, schema or call signature, compose `void-source-driven-development`: official documentation **of the installed version**, never an upgrade by default. For internal code, read the owning contract, types, source and project docs of what you are about to change. Assumed semantics produce bugs that cost hours to find, and the assumption is invisible in the diff — which is why this runs before the writing rather than at review. Cite a source briefly when it helps understand or record a choice; a missing citation never blocks on its own.
 4. **Migration safety** (IF it changes a DB schema or ships a migration). Compose `void-migrations` (and `void-drizzle-migration-safe` on a Drizzle/Postgres stack): zero-downtime, two-phase, batched backfill, locking analysis. **Once the migration is generated and safety-reviewed, apply it to the dev/local database before the TDD and E2E passes run** — otherwise those tests execute against a stale schema and prove nothing about the new shape. **This cycle only ever applies to dev/local; production migrations run through CI / GitHub Actions on merge, never from a worker or this session** (see the `void-migrations` anti-rule). A schema change must never reach the rest of the cycle without this pass.
-5. **Convene the panel** (ALWAYS once, in `team` mode). With `panel.provider: orchestrator`, consume ORCH's supplied panel and never launch another. Otherwise call `mission dispatch --json`: its first `invoke-specialists` action is at `stage: 'pre-implementation'`, before code. Compose `void-orchestrate` for native invocation. Pass the envelope's runtime, agentName, missionId, contextPack, reviewSubject and reviewScope unchanged; record actual starts and complete results using `mission specialist-event`. Reconcile an existing invocation before dispatch; uncertain identity means no launch. Keep at most four simultaneous agents, wait in bounded slices, and never fail an agent merely because a wait timed out. Findings brief the single writer; a concrete blocked verdict is resolved before implementation. Later controller stages reuse this transport and never replay preparation. Missing required capability is diagnosed, never fabricated.
+5. **Targeted preparation advice** (IF production behavior, a coding contract or implementation structure changes). Detect the affected domains and invoke the primary domain specialist before implementation through `void-orchestrate`; reuse its advice through corrections unless its actual inputs change. Add an expert only for a distinct risk the primary cannot cover. Give the accepted brief, affected contract and bounded question; collect its actual response before code. Documentation-only, generated-only or mechanical changes with no behavioral/contract effect need no coding specialist. This advice is not an automatic canonical gate or a quorum of every applicable profile. With `panel.provider: orchestrator`, consume its supplied advice without duplication. For canonical `invoke-specialists`, preserve runtime, agentName, missionId, contextPack, reviewSubject and reviewScope; record actual starts/results. Reconcile uncertain invocations, keep at most four simultaneous agents, and never treat a wait timeout as failure. Preserve real unresolved findings and author-owned evidence obligations; advice never substitutes for final independent review.
 6. **TDD implementation** (ALWAYS). During development, the coordinator may create or reuse a draft pull request for the branch. Keep work-in-progress PRs in draft and run focused local checks; do not wait for full remote CI per iteration. `void-verify` owns the transition to complete integration checks and its portable CI template. The single lead writer composes `void-tdd` + `void-testing`. Red, green, refactor. Unit tests for the behavior, green before moving on. Review specialists remain read-only.
 7. **Async + idempotency** (IF it sends email, calls an external side-effecting API, enqueues a job, or mints a single-use token). Compose `void-async-safety`: idempotency keys, replay/dedup window, bounded retries, single-use enforcement.
-8. **End-to-end tests** (IF it touches a user-facing flow). Write/extend the E2E suite (Playwright). The path a user actually walks, not just the unit.
-9. **UX/UI pass** (IF it touches a UI surface). The interface is held to production craft, not just "it renders". Compose `void-frontend-design` (build-time craft) + `void-ui-review` (the audit/critique ceiling: AI-slop test, squint test, interaction-state coverage, technical audit) + `void-accessibility`, across the baseline (BACK+FRONT parity, mobile and desktop, and the states a user actually hits — loading / error / empty). Browser-verified QA (live screenshots) runs via `void-qa` (the claude-in-chrome MCP). A UI ticket is not shippable until this pass is **verified, not assumed**.
-10. **Security pass** (ALWAYS a quick scan; DEEP if it touches a trust boundary: external input, auth, RLS/tenancy, untrusted content, secrets, or a side-effecting action). Compose `void-security-guidance` + `void-security-audit`.
+8. **End-to-end tests** (IF changed user behavior crosses integration boundaries that focused tests cannot prove). Extend the relevant journey in the configured E2E suite. Reuse an existing current proof that already covers the changed contract; do not add a duplicate journey for a local presentation edit.
+9. **UX/UI pass** (IF a UI contract changes). Apply `void-frontend-design` and `void-accessibility` to affected controls, states and viewports. Verify keyboard/touch parity and mobile/desktop behavior for the changed surface through focused tests and `void-qa`. Use `void-ui-review` for a new or materially redesigned journey, or a specific unresolved usability defect; a local edit does not trigger a full application audit. Existing design standards remain binding.
+10. **Security pass** (ALWAYS inspect the change; focused analysis IF a trust boundary changes). Apply `void-security-guidance` to external input, auth, tenancy, untrusted content, secrets and side effects as they are designed and implemented. A final security review does not replace safe boundaries during development. `void-security-audit` is a deliberately requested deep audit, not an automatic second full review of every ticket.
 11. **Review** (ALWAYS). Run the single independent general review in the bounded cycle above. Compose `void-code-review` for that pass. Relevant preparation specialists advise before implementation; they are not a mandatory repeated post-implementation panel. After corrections, inspect only the affected findings and behavior. Findings are judged by demonstrated consequence, not reviewer majority.
    **Judge the change against the economy-of-means section of `PHILOSOPHY.md`**: a judgment, not a score, explained briefly only when that helps record a choice. It blocks only on a demonstrated defect (security, broken behavior, or a boundary or contract violated with a real consequence); anything else is advisory.
    **Review the draft against the anti-patch rule.** The review is real; no verbal ritual is required. The first implementation that comes to mind is often a patch at the wrong level of abstraction: tokenising a string where the API takes a typed schema, mocking a field the real adapter never returns, disabling a flag instead of understanding what it blocks. A V0 mock mirrors the real adapter's signature, never a convenience one. It is judged **here**, on the first draft, because before the writing there is nothing to judge — and it does not belong to the Architecture pass, since a patch slips in precisely through the changes that touch no structure at all.
-12. **Verification before completion** (ALWAYS). Compose `void-verify`: typecheck, tests, hooks, both viewports, all observed not assumed. **A red suite is adjudicated before proceeding** (from gstack `/ship`): each failure is *in-branch* (you touched the test/code, or it traces to the diff → it is yours, fix it) or *pre-existing* (neither touched → offer fix / TODO / skip); ambiguous defaults to in-branch. Test on the **merged base**, not the stale branch. Completion requires the independent review, resolution of blocking defects, and fresh applicable verification proofs; native runtime attestation alone is not a delivery prerequisite.
+12. **Verification before completion** (ALWAYS). Compose `void-verify`, which owns the single informational ticket-end usage recap: applicable typecheck, tests, hooks and affected viewports, all observed not assumed. Reuse proofs whose declared inputs are unchanged; re-run affected proofs, plus required integration checks on the candidate. **A red suite is adjudicated before proceeding** (from gstack `/ship`): each failure is *in-branch* (you touched the test/code, or it traces to the diff → it is yours, fix it) or *pre-existing* (neither touched → offer fix / TODO / skip); ambiguous defaults to in-branch. Test on the **merged base**, not the stale branch. Completion requires the independent review, resolution of blocking defects, and fresh applicable verification proofs; native runtime attestation alone is not a delivery prerequisite.
 13. **Dogfood the shipped surface** (IF the ticket adds or changes a CLI command, a hook, an executable skill, or any output a person will read). Run the thing, on the **real repository**, and quote what came back in the evidence.
     This exists because the passes above have a measured hit rate of zero on a whole class of defect. Six shipped on 2026-08-06 with typecheck, lint, 2,700 tests and five CI checks green: five were caught by using the thing on the real tree, one by the harness itself, none by CI and none by the human merge gate. One of them reported "5 path(s) not extracted" about files it had read, parsed and indexed — the exact lie the feature existed to prevent — and it surfaced by running the command on the repo, after merge. Under autopilot nobody comes back to the previous ticket, so a defect found that way is a defect not found at all.
     **A fixture is not a dogfood.** The fixture is the shortcut that would have missed every one of the six: the two oversized generated artifacts that exposed the false count existed only in the real tree. **And "the command did not crash" is not an observation** — the output has to be read, and quoted rather than summarised as "works". A surface that genuinely cannot run here (a deploy, a remote service) has its limitation named, never worked around in silence. Keep the run read-only or reversible.
-14. **Dispose of what you found** (ALWAYS). A cycle surfaces defects that are not this ticket: an incoherent skill, a stale doc, a contract that lies. Do not file them on their merits. Compare each against the unit you are building, judged against the program objective: it either blocks this unit and is fixed here, or it beats this unit and becomes the next one, or it is **dropped**. Write one recap line per finding naming what it lost to. Record only evidence that cannot be reconstructed — a failure seen once, a measurement — with the command that replays it. The admission rules are `void-ticket`'s; this pass is where they fire.
+14. **Dispose of what you found** (ALWAYS). A cycle surfaces defects that are not this ticket: an incoherent skill, a stale doc, a contract that lies. Do not file them on their merits. Compare each against the unit you are building, judged against the program objective: it either blocks this unit and is fixed here, or it beats this unit and becomes the next one, or it is **dropped**. Report only findings that affect delivery, a human decision or unreconstructable evidence; do not produce a dropped-findings ledger. Record only evidence that cannot be reconstructed — a failure seen once, a measurement — with the command that replays it. The admission rules are `void-ticket`'s; this pass is where they fire.
 15. **Ship** (ALWAYS). Compose `void-commit-discipline`, reuse the existing PR for the branch (create one only if absent), attach verification evidence, and mark the same pull request ready when the candidate meets the review handoff requirements. Then move a tracker-backed ticket to **In Review**. Move it to **Done** only after merge and final verification of the merged state. Commits are **bisectable** — one logical change each, dependency-ordered (infra → domain + tests → edge/UI + tests), each independently valid. Under `void-autopilot` the worker is commit-only: it returns the commit and proof references to the coordinator, who owns pushes, PR creation/readiness and tracker updates. The worker never enables auto-merge, merges, posts the review status or moves the ticket to Done; the loop's reviewer performs the independent review of step 11 on the PR head SHA.
 
 ---
@@ -134,6 +152,28 @@ Never place secrets, full prompts, full model responses, or private source in tr
 
 ---
 
+## Primary domain advice
+
+Select the smallest useful expertise from the actual changed contract, not every touched filename.
+
+| Main change | Primary specialist |
+| --- | --- |
+| UI interaction / rendering | `frontend-engineer`; `experience-designer` for unresolved journey design |
+| Business invariants / domain model | `domain-architect` |
+| Public API / integration contract | `api-integration-engineer` |
+| Persistent schema / backfill | `data-migration-engineer` |
+| Security / auth / tenancy | `security-engineer` |
+| Runtime reliability / async operations | `observability-sre-engineer` |
+| Measured performance bottleneck | `performance-engineer` |
+| CLI / SDK / developer workflow | `devex-docs-engineer` |
+| Cross-module structure | `solution-architect` |
+
+If several domains change, the primary covers the dominant contract and requests only missing
+expertise for a distinct risk. Record the selection and actual result in existing task evidence.
+If the required capability is unavailable, state that limit and its delivery consequence; never
+invent consultation or start another preparation loop. Runtime-native advice is sufficient;
+creating an extra mission ledger solely to count the consultation is not required.
+
 ## Triage: what "fast" means
 
 Evaluate every predicate against the actual change. Never let an upstream declaration suppress a pass whose predicate is true.
@@ -144,11 +184,12 @@ Evaluate every predicate against the actual change. Never let an upstream declar
 | Architecture | structure / boundary / data model / public type | yes |
 | Source grounding | always (official docs if third-party, project contracts if internal) | no (source varies) |
 | Migration safety | DB schema change or migration | yes |
-| TDD implementation | always | no |
+| Domain advice | behavior, coding contract or implementation structure changes | yes |
+| TDD implementation | new or changed behavior; preserve existing proof for mechanical work | no when applicable |
 | Async + idempotency | email / external side effect / job / single-use token | yes |
-| End-to-end tests | user-facing flow touched | yes |
-| UX/UI | UI surface touched | yes |
-| Security | always (deep if trust boundary) | no (depth varies) |
+| End-to-end tests | changed journey needs integration proof | yes |
+| UX/UI | affected UI contract; full audit only for a material journey change | yes |
+| Security | inspect every change; focused analysis of changed trust boundaries | no (scope varies) |
 | Review | always | no |
 | Verification | always | no |
 | Dogfood | CLI command / hook / executable skill / output a person reads | yes |
@@ -165,7 +206,7 @@ Evaluate every predicate against the actual change. Never let an upstream declar
 | "One-line change, skip the review" | Review is ALWAYS. One-liners ship the worst regressions. |
 | "No UI here, skip security" | Security quick-scan is ALWAYS; a backend input is a bigger injection surface than a button. |
 | "Tests after, ship now, it works" | TDD is ALWAYS. Tests written after green prove nothing about intent. |
-| "It hits a trust boundary but it is internal" | Internal still gets the DEEP security pass. Tenancy leaks are internal. |
+| "It hits a trust boundary but it is internal" | Internal trust boundaries still need focused security analysis. Tenancy leaks are internal. |
 | "Going fast means skipping E2E" | Fast skips passes whose PREDICATE is false, not the ones that fired. |
 | "The ticket looked complete, skip the gate" | The gate is one read. A missing edge case found now is hours saved later. |
 | "It works, I'll clean it up after" / "I'll mock that field to unblock the test" | That IS the patch, and it sits at the wrong level. The test going green is not the evidence — refactor the approach, do not paper over it. |
@@ -178,14 +219,11 @@ Violating the letter of the triage is violating its spirit: the predicate decide
 
 ---
 
-## Model tier by pass (frugality, no quality loss)
+## Native model choice
 
-Tokens follow stakes: mechanical work runs cheap, judgment runs at full strength. This never cheapens a judgment pass — the predicate that fires a pass also sets its tier.
-
-- **Mechanical (may run a cheaper model)**: the ingest read, artifact/mirror regeneration, a trivial edit whose predicate fired nothing else.
-- **Judgment (stay top-tier)**: architecture, DEEP security, the review adversarial pass, verification adjudication of a red suite, and any brainstorm/design step.
-- **Subagents carry their own tier**: `doctrine-critic` / `silent-failure-hunter` / `code-explorer` run sonnet; `type-design-analyzer` runs sonnet, `migration-planner` opus (see the agent frontmatter). This skill composes them; it does not override their tier.
-- **Interactive vs worker**: run interactively, the cycle uses the session model (the human's choice); the tiering above is realized when the cycle runs as a `void-autopilot` **worker**, where the worker's model is set from the ticket's stakes (`workerTier`, top-tier by default). A light ticket's whole cycle runs cheaper; a high-stakes one stays full-strength.
+`void-orchestrate` owns model selection from the task's risk, explicit user choice and actual
+native controls. Use that policy for specialists and writers; keep the assigned writer's full
+quality cycle. This workflow adds no model names, worker-tier field or second selection rule.
 
 ## Composition
 

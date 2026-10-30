@@ -138,3 +138,27 @@ specialist lifecycle events keep their shape; `contextId` is the run's id. The k
 four open runs per mission is met by dispatching in waves, never by dropping a specialist, and a
 refused dispatch stops the cycle: a native subagent in its place would be the silent subset the
 dispatch contract forbids.
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.
+
+
+## Ticket usage recap (2026-10-23)
+
+Reuse one informational mission usage recap at ticket end, owned by verify. Unknown telemetry
+is explicit and never adds a delivery gate or per-edit loop. See `docs/TICKET-USAGE.md`.
+
+
+## Explicit prospective usage (2026-10-23)
+
+Coordinator-owned start/end linkage uses known source journals only. Lightweight native advice
+may retain a distinct observed-start receipt after actual success; formal review stays separate.
+No per-edit call, guessed identity, retrospective receipt or delivery gate. See `docs/TICKET-USAGE.md`.
+
+
+## Native model choice (DEV-1110, 2026-10-23)
+
+Replace the retired workerTier and fixed per-agent commercial names with the single native model policy owned by void-orchestrate. Preserve the whole assigned writer cycle and applicable quality gates.

@@ -5,7 +5,7 @@ description: Pre-PR critical pass. Six dimensions (correctness, tests, security,
 
 # code-review — voidcorp craftsman edition
 
-A review without a framework is "the first ten things I noticed." This skill provides the framework: six dimensions in order, blocker vs nit, evidence block in the PR body, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
+A review examines the accepted behavior and the consequences of shipping the change. This skill provides the framework: six dimensions in order, blocker vs nit, evidence block in the PR body, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
 
 **Attribution**: see `.source` in this directory.
 
@@ -41,9 +41,9 @@ Every comment is explicitly prefixed:
 - **`QUESTION:`** — clarification request. May escalate to BLOCKER if answer reveals a defect.
 - **`PRAISE:`** — explicit acknowledgement of good code (rare, but valued).
 
-Style / naming / minor structure: `NIT:`. Correctness / missing test / security / boundary violation: `BLOCKER:`.
+Style, naming and optional refactoring are advisory. Correctness, security or a broken boundary blocks only with a concrete consequence. A missing test blocks when a demonstrated behavior or regression risk lacks an adequate proof, not because a checklist asks for another test.
 
-A review that does not use the prefixes is incomplete. The companion hook `blocker-prefix-grep` produces the BLOCKER/NIT count for the evidence block.
+Use these prefixes to make decisions legible; formatting alone never creates a blocking defect. The companion hook `blocker-prefix-grep` produces the BLOCKER/NIT count for the evidence block.
 
 ---
 
@@ -57,7 +57,7 @@ Every PR in strict mode includes a Review Evidence block:
 - **Mode**: strict
 - **Reviewer runtime**: native independent reviewer or codex CLI (one general pass)
 - **Dimensions covered**:
-  - [x] Correctness — tdd evidence verified (RED commit c925187, GREEN 5e0055b)
+  - [x] Correctness — actual RED command/result before implementation, then GREEN on candidate
   - [x] Tests — 4/4 passing, mutation score 94%, no business mocks
   - [x] Security — trust boundary validated via Zod at /api/checkout
   - [x] Structure — services do not touch DB (repository pattern verified)
@@ -117,9 +117,20 @@ The skill is the orchestration. Specialized agents and the native `/void-code-re
 
 - The PR's HEAD has been built and tested locally / in CI. No build errors or failing required tests. Lint findings block only for a demonstrated consequence.
 - Inspect output for leaked data and actionable errors; advisory diagnostics do not reopen review.
-- The PR description includes a clear "what" and "why."
+- Recover the accepted behavior and rationale from the task, request or PR; ask only if a missing decision changes correctness or scope.
 
-If any pre-condition fails, the review pauses — fix the pre-condition first.
+A failing required proof or invalid subject prevents acceptance. Missing prose or advisory output does not prevent the reviewer from inspecting the candidate.
+
+### Reviewer runtime
+
+Prefer an available supported runtime different from the writer for the one independent general
+review. Verify its real invocation and read-only permissions; never relabel a same-runtime session.
+A canonical mission's authenticated envelope remains authoritative: current canonical dispatch
+binds its runtime to the coordinator. This preference does not add cross-runtime routing or allow
+foreign receipts into that journal. Use the supported independent path and state the limitation;
+no repeated probe or extra general review is required merely to obtain a different brand.
+Retain the actual reviewer for targeted corrections. Runtime diversity complements independence
+and consequence-based findings; it is not proof of correctness by itself.
 
 ### Pass
 
@@ -139,6 +150,8 @@ If any pre-condition fails, the review pauses — fix the pre-condition first.
 5. Follow `void-implement`'s maximum two correction batches. Incomplete review, resumption and
    transport repair do not consume or reset that budget. Advisory findings never request a
    correction cycle. At the limit, report unresolved defects with cause and next action.
+Advisory findings never start a correction cycle; stop after acceptance, required proofs and independent review hold.
+
 6. The orchestrator may request one independent opinion on a disputed point and retain it
    as evidence for targeted verification, without reopening general review or resetting the
    budget. No separate automatic arbitration command is provided. Escalate beyond-mandate
@@ -149,7 +162,7 @@ If any pre-condition fails, the review pauses — fix the pre-condition first.
 ### Author response (Google practices)
 
 - Address every BLOCKER (fix or reasoned pushback).
-- Read every NIT. Address those you agree with; ignore the rest.
+- Read NITs as optional advice. Once acceptance and proofs hold, leave them out; they never reopen the completed work or trigger another cycle.
 - Treat QUESTION as a thinking prompt — answer or escalate.
 - Push back when you disagree. Reviewer may hold ground with a clear "why."
 
@@ -159,7 +172,7 @@ If any pre-condition fails, the review pauses — fix the pre-condition first.
 
 ### "LGTM" reviews
 
-A review that does not list the dimensions checked is not a review. Even "everything looks fine" requires the evidence block in strict mode.
+A bare verdict with no examined subject or evidence is insufficient. State the dimensions actually checked and concrete findings briefly; repeated checklist prose adds no proof.
 
 ### File-by-file linear walk
 
@@ -214,11 +227,11 @@ See `../../hooks/`.
 | Problem | Solution |
 |---|---|
 | Review feels shallow | You skipped a dimension. Walk all six in order. |
-| Cannot tell BLOCKER from NIT | Correctness / security / missing test / boundary violation = BLOCKER. Everything else = NIT. |
+| Cannot tell BLOCKER from NIT | A demonstrated defect or missing proof of a concrete risk blocks; optional improvement is advisory. |
 | Diff is too large to review | Ask the author to split, or invoke `large-cl-justification:` if truly atomic. |
 | Found a structural rot beyond the diff | `QUESTION:` + suggest follow-up issue. Do not block this PR on it. |
 | Claude and Codex disagree | Surface the delta. Let the author/user decide. |
-| Cannot reach pristine output | Pre-condition failed. Pause the review until fixed. |
+| Diagnostics remain | Resolve actionable defects; name unrelated warnings without restarting review. |
 
 ---
 

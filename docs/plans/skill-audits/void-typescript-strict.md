@@ -119,3 +119,8 @@ Within the TS/web baseline, these rules apply uniformly. There is no `strict` / 
 - **`exactOptionalPropertyTypes` known incompatibilities**: some popular libraries (older React types, some form libraries) misbehave. Document the workaround pattern (avoid spreading `undefined` properties) in SKILL.md.
 - **Biome vs ESLint for the exhaustiveness check**: void-starter uses Biome by default. Biome may not have the switch-exhaustiveness rule yet — pack-monorepo may need to mix Biome + ESLint just for this rule. Confirm before publishing.
 - **Migration path for projects already on a looser tsconfig**: a one-shot codemod that lists every `any` / `as` / non-exhaustive switch, suggests fixes, but does not auto-apply (HITL principle). Defer to Phase E.
+
+## 2026-10-23: proportional delivery
+
+Align the existing standard with the owning workflow, preserving its technical protection while
+removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).

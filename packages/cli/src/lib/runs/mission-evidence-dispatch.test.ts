@@ -1,3 +1,4 @@
+import { historicalPreparation } from './__fixtures__/preparation.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -5,10 +6,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it, vi } from 'vitest';
-import { reduceEvidenceObligations, sealEvidence, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
+import { canonicalJsonHash, reduceEvidenceObligations, sealEvidence, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
 import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
-import { dispatchMissionSpecialists, planMission } from '../../commands/mission.js';
+import { dispatchMissionSpecialists, planMission, recordLeadWriterCompletion } from '../../commands/mission.js';
 import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
 import { createMission, inspectMission, missionControllerRoutingHash, recordMissionEvidence, writeMissionControllerPlan } from './store.js';
 
@@ -18,18 +19,21 @@ import { requestSpecialistEvidence, recordSpecialistEvidence } from './specialis
 const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core');
 const ID = 'mis_0123456789abcdef0123456789abcdef';
 
-it('dispatches after a fresh author discharge and blocks again when its Git proof becomes stale', async () => {
+it.each(['pre-implementation', 'post-implementation'] as const)(
+  'keeps %s proof actionable and refuses stale discharge after Git changes', async phase => {
   const root = await mkdtemp(join(tmpdir(), 'void-evidence-dispatch-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-routing-session');
   try {
     execFileSync('git', ['init', '--quiet'], { cwd: root });
     await wireCodexAgents(root, CORE);
+    await writeFile(join(root, '.git/info/exclude'), '/.codex/\n');
     const body = '# Review CLI API\n\nReview the CLI API boundary and its implementation.\n';
     await writeFile(join(root, 'DEV-TEST.md'), body);
     await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'routing-fixture', scripts: { test: 'vitest run' } }));
     execFileSync('git', ['add', 'DEV-TEST.md', 'package.json'], { cwd: root });
     execFileSync('git', ['-c', 'user.name=Void Test', '-c', 'user.email=void@example.test',
       'commit', '--quiet', '-m', 'test: seed routing fixture'], { cwd: root });
+    const baseCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     await writeFile(join(root, 'runtime.ts'), 'export const ready = true;\n');
     execFileSync('git', ['add', 'runtime.ts'], { cwd: root });
     const initial = await planMission(root, 'DEV-TEST.md');
@@ -40,33 +44,47 @@ it('dispatches after a fresh author discharge and blocks again when its Git proo
         state: value.state, stages: value.stages })) };
     const ticket = { path: 'DEV-TEST.md', contentHash: `sha256:${createHash('sha256').update(body).digest('hex')}` };
     await createMission(root, { missionId: ID, title: 'Recovery routing', mode: 'team',
-      teamController: { planHash: plan.planHash, routingHash: missionControllerRoutingHash(plan, ticket),
+      teamController: { planHash: plan.planHash, routingHash: missionControllerRoutingHash(plan, ticket, baseCommit),
         leadWriterId: 'writer:primary', runtime: 'codex', runtimeAttested: true } });
-    await writeMissionControllerPlan(root, ID, plan, ticket);
+    await writeMissionControllerPlan(root, ID, plan, ticket, baseCommit);
     const roots = resolveProjectRoots(root);
     const input = { kind: 'dispatch' as const, missionId: ID, json: true };
-    const dispatched = await dispatchMissionSpecialists(roots, input);
+    const dispatched = await historicalPreparation(root, ID, plan, { path: ticket.path, text: body });
     expect(dispatched.action).toMatchObject({ kind: 'invoke-specialists' });
     expect(dispatched.envelopes.length).toBeGreaterThan(1);
-    for (const [index, envelope] of dispatched.envelopes.entries()) {
-      const contextId = `context_routing_${index}`;
-      await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
-      await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
-        completion: { schemaVersion: 1, specialistId: envelope.specialistId,
-          contractVersion: envelope.contractVersion, completionId: `completion_routing_${index}`,
-          verdict: 'pass', findings: [], evidenceRequests: index === 0 ? ['Prove the current implementation.'] : [], limitations: [] } });
-    }
+    const envelope = dispatched.envelopes[0];
+    if (envelope === undefined) throw new Error('Expected the preparation evidence author.');
+    const contextId = 'context_routing_0';
+    await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
+    await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
+      completion: { schemaVersion: 1, specialistId: envelope.specialistId,
+        contractVersion: envelope.contractVersion, completionId: 'completion_routing_0',
+        verdict: 'pass', findings: [], evidenceRequests: ['Prove the current implementation.'], limitations: [] } });
     const events = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
     const obligation = reduceEvidenceObligations({ events, expectedSource: 'runtime:codex',
       phase: 'pre-implementation', proofs: [], evidenceContext: { dependencies: {} } }).obligations[0];
     if (!obligation) throw new Error('Expected original author obligation.');
+    if (phase === 'post-implementation') {
+      const classification = await requestSpecialistEvidence(roots, ID, { operation: 'classification',
+        completionEventId: obligation.completionEventId, contextId: 'context_future_proof' });
+      const response = { requestEventId: classification.eventId, contextId: 'context_future_proof' };
+      await recordSpecialistEvidence(roots, ID, 'started', response);
+      await recordSpecialistEvidence(roots, ID, 'completed', { ...response, items: [{
+        requestIndex: obligation.requestIndex, requestText: obligation.requestText,
+        requestTextHash: canonicalJsonHash(obligation.requestText), due: 'post-implementation',
+        reason: 'This proof needs an implemented subject.',
+      }] });
+      expect((await dispatchMissionSpecialists(roots, input)).action.kind).toBe('run-lead-writer');
+      await recordLeadWriterCompletion(root, { kind: 'writer-event', missionId: ID, json: true });
+    }
+    const beforeWaiting = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
     // A dispatch before the author response must not make evidence-request impossible.
     const pending = await dispatchMissionSpecialists(roots, input);
     expect(pending.action).toMatchObject({ kind: 'await-evidence' });
     expect(pending.envelopes).toHaveLength(0);
     expect(await dispatchMissionSpecialists(roots, input)).toEqual(pending);
     const waiting = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
-    expect(waiting).toEqual(events);
+    expect(waiting).toEqual(beforeWaiting);
     expect(waiting.some(value => value.kind === 'mission.closed')).toBe(false);
     const project = await computeProjectState(root);
     const proof = sealEvidence({ schemaVersion: 1,
@@ -93,7 +111,7 @@ it('dispatches after a fresh author discharge and blocks again when its Git proo
     }] });
     expect((await computeProjectState(root)).diffHash).toBe(project.diffHash);
     const fresh = await dispatchMissionSpecialists(roots, input);
-    expect(fresh.action).toMatchObject({ kind: 'run-lead-writer' });
+    expect(fresh.action).toMatchObject({ kind: phase === 'pre-implementation' ? 'run-lead-writer' : 'invoke-specialists' });
     await writeFile(join(root, 'runtime.ts'), 'export const ready = false;\n');
     expect((await computeProjectState(root)).diffHash).not.toBe(project.diffHash);
     const stale = await dispatchMissionSpecialists(roots, input);

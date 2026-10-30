@@ -20,7 +20,7 @@ const declaration = { id: 'visual-craft-director-v2-v3', specialistId: VISUAL,
 const stream = (events: readonly CanonicalEvent[]) => replayEventLog(events.map(serializeEvent).join('\n'));
 function fixture(completed = false) {
   const events = [event({ kind: 'mission.started', subject: 'mission', payload: {
-    mode: 'team', planHash: HASH, leadWriterId: 'writer:primary', runtime: 'codex' } }),
+    title: 'Historical migration', mode: 'team', planHash: HASH, leadWriterId: 'writer:primary', runtime: 'codex' } }),
   event({ seq: 2, eventId: 'evt_initial_writer', kind: 'lead-writer.completed', subject: 'writer:primary',
     payload: { writerId: 'writer:primary', planHash: HASH, actionKind: 'run-lead-writer' } }),
   event({ seq: 3, eventId: 'evt_old_visual_request', kind: 'specialist.requested',
@@ -198,7 +198,8 @@ describe('open specialist contract migration', () => {
       kind: 'specialist.failed', subject: VISUAL, payload: { stage: 'post-implementation',
         reviewRound: 2, inputHash: NEXT, contractVersion: 3, contextId: 'context_fresh_visual',
         reason: 'Review failed' } });
-    expect(decide([...migrated, failed]).action.kind).toBe('stop');
+    expect(decide([...migrated, failed])).toMatchObject({ action: { kind: 'stop' },
+      review: { status: 'blocked' } });
     const altered = migrated.map(item => item.kind === 'specialist.contract-migrated'
       ? { ...item, source: 'runtime:codex' } : item);
     expect(validatedSpecialistContractMigrations(altered, plan).ok).toBe(false);

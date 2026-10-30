@@ -11,7 +11,7 @@ const selectionSchema = z.strictObject({
   coordinator: z.strictObject({ label: identifier, worktree: path }),
 });
 export type OrchestraSelection = z.infer<typeof selectionSchema>;
-const instant = z.iso.datetime();
+const instant = z.iso.datetime({ offset: true });
 const status = z.enum(['planned', 'running', 'blocked', 'done', 'failed']);
 const workerSchema = z.strictObject({
   label: identifier, pane_id: z.optional(text), agent: z.enum(['claude', 'codex']),

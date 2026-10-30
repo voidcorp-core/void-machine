@@ -68,6 +68,10 @@ describe('Git extractor commands', () => {
 
 	it('ignores a repository-local Git shim even when PATH points at it first', async () => {
 		const root = await isolatedProjectRoot('void-project-git-path-');
+		await run('git', ['init', '--quiet'], { cwd: root });
+		await run('git', ['config', 'user.name', 'Fixture Owner'], { cwd: root });
+		await run('git', ['config', 'user.email', 'fixture@example.invalid'], { cwd: root });
+		await run('git', ['commit', '--quiet', '--allow-empty', '-m', 'fixture'], { cwd: root });
 		const shimDirectory = join(root, 'node_modules', '.bin');
 		const marker = join(root, 'shim-ran');
 		await mkdir(shimDirectory, { recursive: true });
@@ -80,7 +84,9 @@ describe('Git extractor commands', () => {
 		process.env['PATH'] = `${shimDirectory}:${previousPath ?? ''}`;
 		try {
 			const identity = await createNodeProjectRootPort().open(root);
-			await createNodeGitPort().inspect(identity.path, identity, []);
+			const snapshot = await createNodeGitPort().inspect(identity.path, identity, []);
+			expect(snapshot.issues).toEqual([]);
+			expect(snapshot.head).toMatch(/^[a-f0-9]{40}$/);
 		} finally {
 			if (previousPath === undefined) delete process.env['PATH'];
 			else process.env['PATH'] = previousPath;

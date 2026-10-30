@@ -49,7 +49,7 @@ function admission(eventName: string, event: object) {
 describe('development feedback and integration admission', () => {
   it('does not schedule heavy work for drafts, and restores it for the same ready head', () => {
     const ci = workflow('.github/workflows/ci.yml');
-    for (const job of ['consumer-artifact', 'project-graph-conformance', 'node-current']) {
+    for (const job of ['consumer-artifact', 'project-graph-conformance']) {
       const condition = ci.getIn(['jobs', job, 'if']);
       expect(evaluate(condition, contexts.draft), job).toBe('false');
       for (const context of [contexts.ready, contexts.queue, contexts.manual, contexts.push]) {

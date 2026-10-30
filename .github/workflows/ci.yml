@@ -32,6 +32,8 @@ jobs:
   consumer-artifact:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: packed consumer artifact
+    outputs:
+      playwright-version: ${{ steps.browser-version.outputs.version }}
     runs-on: ubuntu-latest
     env:
       GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -42,8 +44,21 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
+      - name: Resolve the matching browser image version
+        id: browser-version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync('test/browser/package.json', 'utf8'));
+          const version = manifest.dependencies['@playwright/test'];
+          if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version) ||
+              manifest.overrides['playwright-core'] !== version) {
+            throw new Error('Playwright must have an exact version and matching core override');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          NODE
       - run: pnpm install --frozen-lockfile
       - name: Pack the exact checked-out consumer artifact once
         env:
@@ -65,6 +80,9 @@ jobs:
     name: browser conformance
     needs: consumer-artifact
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.consumer-artifact.outputs.playwright-version }}-noble
+      options: --ipc=host
     timeout-minutes: 15
     permissions:
       contents: read
@@ -77,27 +95,31 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: test/browser/package-lock.json
+      - name: Resolve paths inside the browser container
+        id: browser-paths
+        run: echo "temp=$RUNNER_TEMP" >> "$GITHUB_OUTPUT"
       - name: Download the exact packed consumer artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/void-consumer-artifact
+          path: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact
       - name: Generate synthetic documents from the verified offline installation
         env:
-          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
+          VOID_CONFORMANCE_TARBALL: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact/consumer.tgz
         run: node test/browser/prepare.mjs
       - name: Install source-only browser QA tooling in runner temporary storage
         # Sources: test/browser/README.md; no dependency or lockfile in the consumer package.
         run: |
           mkdir "$RUNNER_TEMP/browser-qa"
-          cp test/browser/package.json test/browser/*.mjs "$RUNNER_TEMP/browser-qa/"
+          cp test/browser/package.json test/browser/package-lock.json test/browser/*.mjs "$RUNNER_TEMP/browser-qa/"
           cd "$RUNNER_TEMP/browser-qa"
-          npm install --ignore-scripts --no-audit --no-fund --package-lock=false --omit=optional
+          npm ci --ignore-scripts --no-audit --no-fund --omit=optional
           npm ls --all --json > tooling-tree.json
-          node node_modules/@playwright/test/cli.js install --with-deps chromium
       - name: Exercise the regenerated offline documents
-        working-directory: ${{ runner.temp }}/browser-qa
+        working-directory: ${{ steps.browser-paths.outputs.temp }}/browser-qa
         run: node node_modules/@playwright/test/cli.js test
       - name: Preserve browser evidence for the tested source SHA
         if: ${{ !cancelled() }}
@@ -105,10 +127,10 @@ jobs:
         with:
           name: browser-evidence-${{ env.GATE_SHA }}
           path: |
-            ${{ runner.temp }}/browser-qa/playwright-report/
-            ${{ runner.temp }}/browser-qa/test-results/
-            ${{ runner.temp }}/browser-qa/tooling-tree.json
-            ${{ runner.temp }}/cheatsheet-fixture/evidence.json
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/playwright-report/
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/test-results/
+            ${{ steps.browser-paths.outputs.temp }}/browser-qa/tooling-tree.json
+            ${{ steps.browser-paths.outputs.temp }}/cheatsheet-fixture/evidence.json
           if-no-files-found: error
           retention-days: 14
 
@@ -129,7 +151,7 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: .node-version
       - name: Download the exact packed consumer artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -163,7 +185,7 @@ jobs:
       - if: steps.areas.outputs.graph == 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
       - if: steps.areas.outputs.graph == 'true'
         run: pnpm install --frozen-lockfile
@@ -179,33 +201,6 @@ jobs:
       - name: Deterministic packed ProjectGraph subpath conformance
         if: steps.areas.outputs.graph == 'true'
         run: pnpm conformance:project-graph
-
-  # The engines floor is Node 24 and `validate` proves it. Node 26 is the next
-  # LTS line: this job runs the same build, type check and suites on it, once,
-  # instead of doubling every OS-bound conformance job. It is a separate job so
-  # the required `validate` check keeps its name.
-  node-current:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: tests (node 26)
-    runs-on: ubuntu-latest
-    # `validate` runs the same build, type check and suites in 4 to 5 minutes;
-    # three times that bounds a hang without cutting a slow but healthy run.
-    timeout-minutes: 15
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ env.GATE_SHA }}
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm typecheck
-      - run: pnpm test
 
   validate:
     runs-on: ubuntu-latest
@@ -234,7 +229,7 @@ jobs:
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install

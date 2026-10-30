@@ -123,3 +123,9 @@ None directly. The discipline is enforced via:
 ## gstack /investigate vendoring (DEV-388, de-gstackification Vague 2)
 
 /investigate shares this skill's superpowers lineage — it was **~85-90% already covered** (the four phases, root-cause-first Iron Law, regression-test-fails-without/passes-with, minimal diff, fresh verification). This is a documented-rejection case: the bulk was **deliberately NOT re-vendored** (cited as such, not duplicated). **Integrated** only the surgical deltas the skill lacked: the Pattern-Analysis lookup table (race/nil/state-corruption/integration/config-drift, each with signature + where-to-look), the 3-strike rule (3 failed hypotheses → treat as architectural), the blast-radius gate (>5 files → stop and ask), instrument-to-confirm-before-editing, recurring-bug-is-an-architectural-smell (`git log` the file for prior fixes), and the red-flags list. **Attribution corrected**: /investigate moves from "composed with" to "fully vendored".
+
+## 2026-10-23: proportional delivery
+
+Preserve the source principles while removing repeated approvals, proof duplication and optional
+improvement loops; the owning boundaries and retained safeguards are recorded in
+[Proportional delivery](../../PROPORTIONAL-DELIVERY.md). Actual TDD and required checks remain.

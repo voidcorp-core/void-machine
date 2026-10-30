@@ -5,6 +5,13 @@
 [![provenance](https://img.shields.io/badge/npm-provenance%20signed-0b7285)](https://www.npmjs.com/package/voidmachine)
 [![license](https://img.shields.io/badge/license-MIT-0b7285)](./LICENSE)
 
+Void Machine's architectural vocation is to be **Void Cortex's action and execution
+system**. Software development is its first specialty; the product shipped today
+is the development harness described below. Cortex owns intent, durable context,
+authorization and final acceptance; Machine executes within that mandate.
+See [vocation, boundaries and progressive evolution](docs/MACHINE-VOCATION.md).
+This direction does not claim a general-purpose Cortex integration is available.
+
 Coding agents forget your standards between sessions. You explain the testing
 discipline, the architecture boundaries, the naming, and the next session starts
 from nothing. Repos drift one helpful suggestion at a time.
@@ -85,6 +92,10 @@ To explore that catalogue alongside your project's installation evidence, run
 search by intention, filter by runtime, pack or type, and copy invocations.
 `--format markdown` and `--format json` export the same information. Inspection
 writes only to stdout; creating the file is your shell redirection.
+
+At ticket end, `void-machine mission inspect --id <mission> --usage` adds observed skill,
+hook and specialist counts. Unlinked telemetry stays unknown; counts do not certify quality.
+See [the usage recap contract](docs/TICKET-USAGE.md).
 
 For your own project rather than the catalogue, `npx voidmachine status` reports
 what is installed, active and actually used.

@@ -1073,7 +1073,6 @@ describe('protected paths', () => {
     for (const file of [
       '.github/workflows/ci.yml',
       '.github/actions/void-enforce/action.yml',
-      'scripts/independent-review-check.mjs',
       '.void/program.md',
       'packages/core/hooks/_void-hook.mjs',
       // What actually runs here: the installed runner, and the files that wire
@@ -1098,13 +1097,11 @@ describe('protected paths', () => {
   });
 
   it('holds back the files a judging workflow runs from outside .github', () => {
-    // promotion.yml audits a promotion with the script develop carries, and
     // void-enforce replays the auto-merge contract and the enforcement floor
     // from the pull request itself; ci.yml's required verdict is aggregated by
     // verify.mjs. Merged by the loop, a weakened copy of any of them would
     // judge every later merge or promotion.
     for (const file of [
-      'scripts/promotion-authority.mjs',
       'scripts/auto-merge-contract.mjs',
       'scripts/verify.mjs',
       'packages/core/enforce/ci-enforce.sh',
@@ -1133,9 +1130,6 @@ describe('protected paths', () => {
       'packages/cli/src/lib/autopilot/loop.ts',
       'packages/cli/src/lib/autopilot/loop-observe.ts',
       'packages/cli/src/commands/autopilot-loop.ts',
-      'scripts/independent-review-run.mjs',
-      '.github/review/prompt.md',
-      '.github/workflows/independent-review.yml',
     ]) {
       const action = actionFor(decide({ tickets }, { pulls: [touching(['docs/a.md', file])] }), 'DEV-1');
       expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
@@ -1194,13 +1188,13 @@ describe('protected paths', () => {
   });
 
   it('holds back a rename that moves a protected file away, by its source', () => {
-    // gh reports only where a renamed file lands; the verdict check leaving
-    // `scripts/` would break every later review job on the base.
-    const moved = 'scripts/ci/independent-review-check.mjs';
-    const renamed = { [moved]: 'scripts/independent-review-check.mjs' };
+    // gh reports only where a renamed file lands; moving the contract
+    // must still send the change to a person.
+    const moved = 'scripts/ci/auto-merge-contract.mjs';
+    const renamed = { [moved]: 'scripts/auto-merge-contract.mjs' };
     const action = actionFor(decide({ tickets }, { pulls: [touching([moved], { renamed })] }), 'DEV-1');
     expect(action).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
-    expect(action).toMatchObject({ detail: expect.stringContaining('scripts/independent-review-check.mjs') });
+    expect(action).toMatchObject({ detail: expect.stringContaining('scripts/auto-merge-contract.mjs') });
   });
 
   it('holds back a rename that moves a file onto protected ground, by its destination', () => {

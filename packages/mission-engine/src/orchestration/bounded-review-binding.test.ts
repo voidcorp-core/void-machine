@@ -102,6 +102,23 @@ describe('bounded receipt subject and invocation', () => {
     expect(decide(missing).action.kind).toBe('stop');
     expect(decide(history({ ...receipt, reviewedCommit: 'c'.repeat(40) })).action.kind).toBe('stop');
   });
+  it.each([
+    { baseCommit: 'c'.repeat(40) },
+    { reviewedCommit: 'd'.repeat(40) },
+    { acceptanceCriteriaHash: `sha256:${'b'.repeat(64)}` },
+  ])('does not retain a final PASS for changed subject %j', changed => {
+    expect(decide([...history(), commandProof()]).action.kind).toBe('complete');
+    const result = decide([...history({ ...receipt, ...changed }), commandProof()]);
+    expect(result.action.kind).toBe('stop');
+    expect(result.verdict.status).not.toBe('verified');
+  });
+
+  it('does not retain a final PASS under a changed specialist contract', () => {
+    const result = decide([...history(), commandProof()], 'available', [{ ...reviewer, contractVersion: 2 }]);
+    expect(result.action.kind).toBe('stop');
+    expect(result.verdict.status).not.toBe('verified');
+  });
+
   it('does not accept a declared reviewer without its real invocation', () => {
     expect(decide(history().filter(item => item.kind !== 'specialist.started')).action.kind).toBe('stop');
   });

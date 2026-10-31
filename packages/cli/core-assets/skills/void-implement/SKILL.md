@@ -28,6 +28,9 @@ executes it: never delegate this complete workflow again. Tiny direct work and
 capability fallbacks follow that policy without skipping triggered quality gates.
 Preserve one `leadWriterId` through corrections; the coordinator retains user intent
 and decisions. Pass any orchestrator-owned panel contract unchanged.
+For the writer and delegated reviewers, compose `void-orchestrate` to publish
+observed worker lifecycle events in the canonical mission. Display metadata never
+replaces the implementation or independent review receipts below.
 
 ## Optional usage linkage
 
@@ -78,7 +81,7 @@ materializes its runtime-neutral specialist envelopes from the current plan.
    unaffected conclusions and proofs; invalidate only affected evidence. A new targeted blocker
    must demonstrate a regression from the correction or a defect within the original scope.
    Carry unresolved blockers until an explicit, evidenced resolution; silence is not resolution.
-7. Maximum two correction batches after the initial general review. A batch is submitted
+7. Maximum two correction batches after the initial general review. Under `void-autopilot`, its tighter two-total-review-round budget applies (initial plus one corrected head); see `docs/BOUNDED-REVIEWS.md`. A batch is submitted
    corrections awaiting targeted verification. Agent restart, incomplete review, transport repair
    and mission resumption neither consume a batch nor reset the budget. At the limit, stop
    automatic corrective dispatch, retain history and expose a cause, owner and next action.
@@ -92,8 +95,9 @@ materializes its runtime-neutral specialist envelopes from the current plan.
    prior reviews, resolutions, budgets and effects. Existing attestation-only stops need explicit
    validation of the original review's subject, available provenance and result before recovery;
    never promote a degraded historical result automatically or recreate the mission to bypass it.
-9. Collect the final result before closing an orchestrator-owned agent panel. Keep worktrees,
-   branches and useful proofs on their distinct lifecycle. Panel closure never deletes them.
+9. Collect the final result, then publish the worker terminal state and finished event
+   through `void-orchestrate`. Keep worktrees, branches and useful proofs on their distinct
+   lifecycle. External presentation tools own their surfaces; the harness does not close them.
 
 The CLI and existing Mission Engine implement this bounded cycle. A runtime certification is
 not an additional delivery gate. Concrete independence, permission, isolation, evidence and

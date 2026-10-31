@@ -31,9 +31,9 @@ The domain decides; the world translates. Ports are interfaces the domain owns. 
                      infrastructure (Drizzle, fetch, Resend SDK, ...)
 ```
 
-Read it: the domain depends on its own port interfaces. Adapters depend on the port interfaces and on infrastructure. **Infrastructure NEVER depends on the domain.** Reversing this direction is a Red Flag.
+Read it: the domain depends on its own port interfaces. Adapters depend on the port interfaces and on infrastructure. The domain never imports concrete infrastructure. Adapters may depend on domain-owned ports.
 
-The companion hook `boundary-direction-check` enforces this on every commit.
+Review enforces this architectural direction. The `boundary-direction-check` hook checks declared package dependencies; it does not infer domain/adapters layers from paths.
 
 ---
 
@@ -124,7 +124,7 @@ export function createDrizzleOrdersAdapter(db: Database): OrdersPort {
 
 - Business decisions ("if order total > $1000, set priority")
 - Cross-port coordination ("save to DB AND emit event in one method")
-- Validation beyond type translation (Zod for trust-boundary input lives in use-cases or boundary, not in adapters)
+- Business invariants belong in the domain. Validate untrusted external data at adapter ingress (for example with Zod), before passing typed input to a use-case.
 
 ### The "fat port" smell
 
@@ -231,13 +231,13 @@ Replayable event log is an audit / temporal tool, not a default persistence stra
 
 ### Domain → infrastructure imports
 
-The companion hook blocks. There is no legitimate exception.
+Review rejects this dependency direction; a package-manifest check alone cannot prove internal layer isolation.
 
 ---
 
 ## Companion hooks
 
-- **`boundary-direction-check`** (pre-commit) — greps cross-layer imports forbidden by the architecture (domain → infrastructure / adapters). See `../../hooks/`.
+- **`boundary-direction-check`** (PreToolUse) checks scoped package imports against the nearest package manifest. It does not validate internal layer imports. See `void-dependency-direction` for the pack convention.
 
 ---
 

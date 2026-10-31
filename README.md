@@ -5,6 +5,13 @@
 [![provenance](https://img.shields.io/badge/npm-provenance%20signed-0b7285)](https://www.npmjs.com/package/voidmachine)
 [![license](https://img.shields.io/badge/license-MIT-0b7285)](./LICENSE)
 
+Void Machine's architectural vocation is to be **Void Cortex's action and execution
+system**. Software development is its first specialty; the product shipped today
+is the development harness described below. Cortex owns intent, durable context,
+authorization and final acceptance; Machine executes within that mandate.
+See [vocation, boundaries and progressive evolution](docs/MACHINE-VOCATION.md).
+This direction does not claim a general-purpose Cortex integration is available.
+
 Coding agents forget your standards between sessions. You explain the testing
 discipline, the architecture boundaries, the naming, and the next session starts
 from nothing. Repos drift one helpful suggestion at a time.
@@ -66,7 +73,7 @@ What is installed, in numbers:
 |---|---|---|
 | Core skills | 42 | Automatically, when what you are doing matches |
 | Stack pack skills | 28 | Same, for the packs you activated |
-| Hooks | 32 | On the tool call, before the write lands |
+| Hooks | 31 | Native tool guards and optional diagnostics; see the runtime manifests |
 | Agents | 21 | Delegated by a skill, or invoked by name |
 | Specialists | 16 | Invoked in their own fresh context during review |
 

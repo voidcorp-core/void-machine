@@ -1,7 +1,9 @@
 Sources for `void-webhook-handler-pattern` skill (see `docs/plans/skill-audits/void-webhook-handler-pattern.md` for the full audit):
 
-- No external source audited — native distillation of canonical per-source webhook patterns.
-- Per-source patterns referenced (not vendored): Stripe, Resend, GitHub signature/idempotency/retry semantics.
+- Official provider contracts checked for the 2026-10-30 coherence correction:
+- Stripe: https://docs.stripe.com/webhooks#preventing-replay-attacks
+- GitHub: https://docs.github.com/en/webhooks/using-webhooks/handling-failed-webhook-deliveries
+- Provider code is not vendored; verifier and durable store remain consumer-owned.
 - Doctrine referenced: `void-async-safety` (stack-agnostic retry/idempotency/dead-letter).
 
 Strategy: distill. Per-source handler patterns distilled into the 5 non-negotiable layers; no upstream skill was copied.

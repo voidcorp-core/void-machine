@@ -4,7 +4,7 @@
  *
  * Composes with the `async-safety` and `security-guidance` skills.
  *
- * Order is enforced by the wrapper. The business handler stays pure.
+ * Order is enforced by the wrapper. The consumer owns idempotence of business effects.
  */
 
 import type { Result } from '@voidcorp/pack-monorepo/result';
@@ -13,7 +13,8 @@ import { ok, err } from '@voidcorp/pack-monorepo/result';
 export interface IdempotencyStore {
   /**
    * Atomic claim: returns 'claimed' if the key is new, 'already-processed' if
-   * a previous run already marked it complete. The TTL bounds the dedup window.
+   * a previous run already marked it complete. A pending claim returns a store
+   * error (retryable), never 'already-processed'. The TTL bounds the dedup window.
    */
   tryClaim(key: string, ttlMs: number): Promise<Result<'claimed' | 'already-processed', StoreError>>;
   markCompleted(key: string): Promise<Result<void, StoreError>>;
@@ -23,7 +24,8 @@ export interface IdempotencyStore {
 export type StoreError = { readonly kind: 'store-error'; readonly cause: unknown };
 
 export interface WebhookSafetyOptions<TEvent> {
-  /** Verify the request signature; return ok(event) or err on bad signature / replay. */
+  /** Verify signature and provider-defined freshness of the delivery, before admission.
+   * This callback owns replay policy; the wrapper invents no event-age limit. */
   readonly verify: (req: Request) => Promise<Result<TEvent, VerifyError>>;
   /** Compute the dedup key from the verified event (Stripe event.id, GitHub delivery ID, etc.). */
   readonly dedupKey: (event: TEvent) => string;
@@ -31,7 +33,7 @@ export interface WebhookSafetyOptions<TEvent> {
   readonly dedupTtlMs?: number;
   /** The IdempotencyStore adapter. */
   readonly store: IdempotencyStore;
-  /** The business handler. Stays pure; receives the verified event. */
+  /** Receives the verified event; business effects must tolerate retry. */
   readonly handler: (event: TEvent) => Promise<Result<void, HandlerError>>;
 }
 
@@ -80,7 +82,11 @@ export function withWebhookSafety<TEvent>(
         return { status: 500, body: { kind: 'internal-error' } };
       }
       // 4. Mark
-      await opts.store.markCompleted(key);
+      const completed = await opts.store.markCompleted(key);
+      if (!completed.ok) {
+        await opts.store.release(key);
+        return { status: 500, body: { kind: 'internal-error' } };
+      }
       return { status: 200, body: { kind: 'ok' } };
     } catch {
       await opts.store.release(key);

@@ -463,7 +463,6 @@ edges:
   - { from: hook:no-ai-design-slop, to: skill:void-frontend-design, kind: enforces, evidence: "no-ai-design-slop blocks AI-slop UI patterns — enforces frontend-design" }
   - { from: hook:anti-ai-slop-grep, to: skill:void-frontend-design, kind: enforces, evidence: "anti-ai-slop-grep flags generic AI aesthetics — enforces frontend-design" }
   - { from: hook:axe-precommit, to: skill:void-accessibility, kind: enforces, evidence: "axe-precommit runs axe a11y checks — enforces accessibility" }
-  - { from: hook:viewport-screenshot-gate, to: skill:void-accessibility, kind: enforces, evidence: "viewport-screenshot-gate gates mobile+desktop viewports — enforces accessibility" }
   - { from: hook:protect-sensitive-files, to: skill:void-security-guidance, kind: enforces, evidence: "protect-sensitive-files blocks secrets/keys edits — enforces security-guidance" }
   - { from: hook:secret-in-content, to: skill:void-security-guidance, kind: enforces, evidence: "secret-in-content refuses writes that carry credentials — enforces security-guidance's no-secret boundary" }
   - { from: hook:block-dangerous-bash, to: skill:void-security-guidance, kind: enforces, evidence: "block-dangerous-bash blocks destructive shell — enforces security-guidance" }
@@ -473,4 +472,3 @@ edges:
   - { from: hook:large-cl-grep, to: skill:void-commit-discipline, kind: enforces, evidence: "large-cl-grep warns on oversized changelists — enforces commit-discipline (small commits)" }
   - { from: hook:boundary-direction-check, to: skill:void-hexagonal-architecture, kind: enforces, evidence: "boundary-direction-check enforces the import direction — enforces hexagonal-architecture" }
   - { from: hook:stop-typecheck, to: skill:void-typescript-strict, kind: enforces, evidence: "stop-typecheck typechecks the touched TypeScript surface before session end — enforces typescript-strict" }
-  - { from: hook:block-protected-push, to: skill:void-autopilot, kind: enforces, evidence: "block-protected-push guards protected-branch pushes for commit-only autopilot workers — enforces autopilot" }

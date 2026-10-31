@@ -128,7 +128,7 @@ Describe the behavior. Imperative. Specific.
 - `it should retry` (the "should" is fluff)
 </Bad>
 
-The companion hook `test-name-lint` warns on weak patterns (`test`, `works`, `should` as the entire name).
+The `test-name-lint` write hook blocks detected generic names: exactly `test`, or names starting with `should `, `work` or `works`. The owning rule defines the lexical scope.
 
 ---
 
@@ -231,7 +231,7 @@ Each snapshot has a reason. No `.toMatchSnapshot()` outside the whitelist withou
 
 Banned in committed code. They mean "I will not run this." If you mean "this case is intentionally not yet tested," write a `it.todo('description')` — the test runner reports todos.
 
-The companion hook `no-only-no-skip` blocks commits with `.only` / `fdescribe` / `xit` in the staged diff (allowed in `**/__skip-on-purpose__/**` whitelist with justifying comment).
+The `no-only-no-skip` write hook rejects focused and skipped calls in proposed test files, including `fit`, `fdescribe`, `xit`, `xdescribe` and suite `.skip`. There is no path whitelist; use an explicit `todo` for pending coverage.
 
 ### Implementation spies as primary assertion
 
@@ -259,8 +259,8 @@ Use pglite or dev branch. Mocking Drizzle breaks at every schema change while pr
 
 ## Companion hooks
 
-- **`no-only-no-skip`** — block on `.only` / `fdescribe` / `xit` / `.skip` in staged diff (whitelist: `**/__skip-on-purpose__/**`)
-- **`test-name-lint`** — warn on weak test names matching `/^\s*(test|works|should)\s*$/i`
+- **`no-only-no-skip`** — blocks focused/skipped calls on supported test writes; no path exemption
+- **`test-name-lint`** — blocks the generic test-name patterns described above
 - **`no-business-mock`** — warn on `vi.mock\('@/(services|domain)/...'\)` patterns
 - **`no-snapshot-default`** — warn on new `.toMatchSnapshot()` outside `**/__visual__/**` whitelist
 

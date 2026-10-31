@@ -12,30 +12,25 @@ import {
 } from '../core/delegation.js';
 import { type Conformance, outputSchemaRefusal } from '../core/output-conformance.js';
 import {
-  type AgentRuntimePort, type Capability, type DelegationClock, type DelegationStore, type LaunchOutcome,
+  type AgentRuntimePort, type Capability, type DelegationClock, type DelegationStore,
   type LaunchPlan, type RunRecord, type RuntimePorts, type SessionBinding, type WaitOutcome, currentResult, refOf,
   statusOf, waitForTransitions,
 } from '../runtime/delegation.js';
-import type { SurfaceClosing, SurfaceRecord } from '../runtime/presentation.js';
-import {
-  type SurfaceContext, type SurfaceSummary, type Surfaces, closeRunSurface, plannedSurface, showRun,
-  surfaceSummaries, surfacesFor,
-} from './surfaces.js';
 
 /** The ports a caller composes a context from, for a runtime of its own or a test double. */
+export { resolveMachineRoot } from '../adapters/store/run-registry.js';
+export type { RunRecord } from '../runtime/delegation.js';
 export type { AgentRuntimePort, LaunchPlan, RuntimePorts } from '../runtime/delegation.js';
 
 /**
  * `void-machine agents`: the one path by which a coordinator launches, follows and closes a
- * delegated agent. When a multiplexer hosts the caller, each run is also shown in a surface of
- * its own, opened at dispatch and closed when the run retires or stops; the surface is only a view.
+ * delegated agent. Presentation is owned by external consumers of the worker journal.
  */
 
 export interface AgentsContext {
   readonly store: DelegationStore;
   /** One port per runtime; each run is always served by the one it was dispatched to. */
   readonly runtimes: RuntimePorts;
-  readonly surfaces: Surfaces;
   readonly clock: DelegationClock;
   /** Identifies this process in mission locks. */
   readonly owner: string;
@@ -56,7 +51,6 @@ export interface RunSummary {
   readonly attach?: string;
   /** Why the run has no view, when its runtime cannot show it. */
   readonly view?: Capability;
-  readonly surface?: SurfaceSummary;
 }
 
 const AGENT_TYPE = /^[A-Za-z0-9][A-Za-z0-9_:.-]{0,99}$/;
@@ -150,14 +144,8 @@ function bindingOf(launch: { readonly handle: string; readonly sessionId?: strin
 const portOf = (context: AgentsContext, run: Pick<RunRecord, 'runtime'>): AgentRuntimePort =>
   context.runtimes[run.runtime];
 
-function surfaceContext(context: AgentsContext): SurfaceContext {
-  return { store: context.store, surfaces: context.surfaces, clock: context.clock,
-    locked: (missionId, action) => withMissionLock(context, missionId, action) };
-}
-
 export type DispatchReceipt =
-  | { readonly ok: true; readonly runId: string; readonly missionId: string; readonly status: RunStatus;
-    readonly surface: SurfaceRecord }
+  | { readonly ok: true; readonly runId: string; readonly missionId: string; readonly status: RunStatus }
   | Refusal;
 
 export async function dispatchAgent(context: AgentsContext, input: DispatchInput): Promise<DispatchReceipt> {
@@ -173,17 +161,12 @@ export async function dispatchAgent(context: AgentsContext, input: DispatchInput
   const run = { runId, missionId, name: `vm-${runId}`, role: input.role, runtime, cwd,
     agentType: input.agentType, ticket: input.ticket, model: input.model };
   const schema = isSchema(input.outputSchema) ? input.outputSchema : undefined;
-  let launched: LaunchOutcome | undefined;
-  // The runtime's display command exists once the launch is acknowledged with a handle.
-  const display = (launch: LaunchOutcome | undefined) => launch?.kind === 'acknowledged'
-    ? port.attachCommand({ name: run.name, ...bindingOf(launch) }) : undefined;
   const outcome = await withMissionLock(context, missionId, async (): Promise<DispatchReceipt> => {
     const open = (await context.store.list(missionId)).filter((known) => isOpen(runView(known.transitions).state));
     const admission = admitRun(open.length, context.clock.now());
     if (!admission.ok) return refusal(admission.cause, admission.action);
     const brief = await context.store.create(run, admission.transition, input.brief, schema);
     const launch = await port.dispatch(plan(run, brief, schema));
-    launched = launch;
     if (launch.kind === 'acknowledged') await context.store.bind(runId, bindingOf(launch));
     else if (launch.kind === 'refused' && launch.handle !== undefined) {
       await context.store.bind(runId, { handle: launch.handle });
@@ -196,17 +179,11 @@ export async function dispatchAgent(context: AgentsContext, input: DispatchInput
       if (launch.handle !== undefined) await port.stop({ name: run.name, handle: launch.handle });
       return refusal(launch.cause, launch.action);
     }
-    const surface = plannedSurface(context.surfaces, display(launch), context.clock.now());
-    await context.store.writeSurface(runId, surface);
     const latest = await context.store.read(runId);
     return latest === undefined ? refusal('the run record could not be read back', 'inspect .void/machine/runs')
-      : { ok: true, runId, missionId, status: statusOf(latest, undefined), surface };
+      : { ok: true, runId, missionId, status: statusOf(latest, undefined) };
   });
-  const command = outcome.ok ? display(launched) : undefined;
-  if (!outcome.ok || outcome.surface.state !== 'opening' || command === undefined) return outcome;
-  // A slow multiplexer never holds the mission: the surface opens once the lock is released.
-  return { ...outcome, surface: await showRun(surfaceContext(context), { runId, missionId, role: input.role,
-    ticket: input.ticket, cwd }, command) };
+  return outcome;
 }
 
 async function readRun(context: AgentsContext, runId: string): Promise<RunRecord | Refusal> {
@@ -221,7 +198,7 @@ export async function waitAgents(context: AgentsContext, runIds: readonly string
     clock: context.clock, owner: context.owner });
 }
 
-async function summary(context: AgentsContext, run: RunRecord, surface: SurfaceSummary | undefined)
+async function summary(context: AgentsContext, run: RunRecord)
   : Promise<RunSummary> {
   const result = currentResult(run, await context.store.result(run.runId));
   const port = portOf(context, run);
@@ -233,8 +210,7 @@ async function summary(context: AgentsContext, run: RunRecord, surface: SurfaceS
     ...(result === undefined ? {} : { result: { text: result.text, truncated: result.truncated,
       ...(result.conformance === undefined ? {} : { conformance: result.conformance }) } }),
     ...(attach === undefined ? {} : { attach: attach.join(' ') }),
-    ...(attach === undefined && !port.capabilities.view.available ? { view: port.capabilities.view } : {}),
-    ...(surface === undefined ? {} : { surface }) };
+    ...(attach === undefined && !port.capabilities.view.available ? { view: port.capabilities.view } : {}) };
 }
 
 export async function agentStatus(context: AgentsContext, runId?: string)
@@ -249,14 +225,12 @@ export async function agentStatus(context: AgentsContext, runId?: string)
     }
     records.push(run);
   }
-  const surfaces = await surfaceSummaries(surfaceContext(context), records.map((run) => run.runId));
   const runs: RunSummary[] = [];
-  for (const run of records) runs.push(await summary(context, run, surfaces.get(run.runId)));
+  for (const run of records) runs.push(await summary(context, run));
   return { ok: true, runs };
 }
 
-export type CommandReceipt = { readonly ok: true; readonly runId: string; readonly status: RunStatus;
-  readonly surface?: SurfaceClosing } | Refusal;
+export type CommandReceipt = { readonly ok: true; readonly runId: string; readonly status: RunStatus } | Refusal;
 
 export async function sendAgent(context: AgentsContext, runId: string, message: string): Promise<CommandReceipt> {
   if (message.length === 0 || Buffer.byteLength(message, 'utf8') > MAX_BRIEF_BYTES) {
@@ -288,16 +262,8 @@ export async function sendAgent(context: AgentsContext, runId: string, message: 
 }
 
 export type AcceptReceipt = { readonly ok: true; readonly runId: string; readonly state: 'retired';
-  readonly result: { readonly text: string; readonly truncated: boolean }; readonly surface?: SurfaceClosing }
+  readonly result: { readonly text: string; readonly truncated: boolean } }
   | Refusal;
-
-/** Closes what a closed run still shows, once its transition is recorded and the lock released. */
-async function withSurfaceClosed<T extends { readonly ok: boolean }>(context: AgentsContext, runId: string,
-  receipt: T): Promise<T | (T & { readonly surface: SurfaceClosing })> {
-  if (!receipt.ok) return receipt;
-  const closing = await closeRunSurface(surfaceContext(context), runId);
-  return closing === undefined ? receipt : { ...receipt, surface: closing };
-}
 
 /** Checks a run's record against what the runtime lists, before its result is taken. */
 type TakeGuard = (run: RunRecord) => Promise<Refusal | undefined>;
@@ -311,7 +277,7 @@ export async function acceptAgent(context: AgentsContext, runId: string): Promis
 async function takeResult(context: AgentsContext, runId: string, guard: TakeGuard): Promise<AcceptReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;
-  return withSurfaceClosed(context, runId, await withMissionLock(context, known.missionId, async (): Promise<AcceptReceipt> => {
+  return withMissionLock(context, known.missionId, async (): Promise<AcceptReceipt> => {
     const run = await readRun(context, runId);
     if ('ok' in run) return run;
     const result = currentResult(run, await context.store.result(runId));
@@ -332,7 +298,7 @@ async function takeResult(context: AgentsContext, runId: string, guard: TakeGuar
     // A review session has nothing left to do once its verdict is taken.
     if (run.role === 'review') await portOf(context, run).stop(refOf(run));
     return { ok: true, runId, state: 'retired', result: { text: result.text, truncated: result.truncated } };
-  }));
+  });
 }
 
 export type ReviewReceipt = { readonly ok: true; readonly runId: string; readonly sessionId: string;
@@ -387,7 +353,7 @@ export async function acceptReview(context: AgentsContext, runId: string): Promi
 export async function stopAgent(context: AgentsContext, runId: string): Promise<CommandReceipt> {
   const known = await readRun(context, runId);
   if ('ok' in known) return known;
-  return withSurfaceClosed(context, runId, await withMissionLock(context, known.missionId, async (): Promise<CommandReceipt> => {
+  return withMissionLock(context, known.missionId, async (): Promise<CommandReceipt> => {
     const run = await readRun(context, runId);
     if ('ok' in run) return run;
     const decision = stopRun(runView(run.transitions), context.clock.now());
@@ -407,7 +373,7 @@ export async function stopAgent(context: AgentsContext, runId: string): Promise<
     if (failed !== undefined) return failed;
     const latest = await readRun(context, runId);
     return 'ok' in latest ? latest : { ok: true, runId, status: statusOf(latest, undefined) };
-  }));
+  });
 }
 
 export async function attachAgent(context: AgentsContext, runId: string)
@@ -437,7 +403,6 @@ export function agentsContext(options: { readonly cwd: string; readonly env: Nod
       codex: createCodexDaemonRuntime({ command: ['codex'], env: options.env,
         socketPath: controlSocketPath(options.env, options.home) }),
     },
-    surfaces: surfacesFor(options.env),
     clock: { now: Date.now, sleep: (ms) => new Promise((done) => { setTimeout(done, ms); }) },
     owner: `agents-${String(process.pid)}-${randomUUID()}`,
     newRunId: () => `run_${randomUUID()}`,

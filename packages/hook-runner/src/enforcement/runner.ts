@@ -253,10 +253,10 @@ function focusedVerdict(root: string, edits: readonly NormalizedEdit[], raw: unk
       'provide an exact supported Edit/patch or a complete Write within 64 KiB');
     // Absence can be proven cheaply; whitespace/comments may separate property
     // tokens, so looking only for the old contiguous test.only string is unsafe.
-    if (!/\b(?:only|skip|xit|xdescribe)\b|\\u/.test(proposed.content)) continue;
+    if (!/\b(?:only|skip|xit|xdescribe|fit|fdescribe)\b|\\u/.test(proposed.content)) continue;
     // A call at the start of the complete file is certainly code. Preserve the
     // dependency-free refusal for this common case; uncertainty needs the parser.
-    if (/^[ \t]*(?:(?:it|test|describe)\.only|(?:it|test)\.skip|xit|xdescribe)[ \t]*\(/.test(proposed.content)) {
+    if (/^[ \t]*(?:(?:it|test|describe)\.only|(?:it|test|describe)\.skip|xit|xdescribe|fit|fdescribe)[ \t]*\(/.test(proposed.content)) {
       return noFocusedTest([{ path: edit.path, addedContent: proposed.content.split('\n')[0] ?? '' }]);
     }
     const verdict = syntaxInspector(root, edit.path, proposed.content, deadline - performance.now());

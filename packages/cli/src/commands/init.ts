@@ -775,12 +775,20 @@ export async function installDoctrineFiles(
   // a glance.
   const philosophyDst = join(voidDir, 'installed', 'PHILOSOPHY.md');
   await mkdir(join(voidDir, 'installed'), { recursive: true });
+  // Source repositories own docs/PHILOSOPHY.md. The installed copy is derived,
+  // not an authority that may freeze a stale doctrine across updates.
   const canonical = preserveFrom === undefined
+    ? undefined
+    : join(preserveFrom, 'docs', 'PHILOSOPHY.md');
+  const previous = preserveFrom === undefined
     ? undefined
     : join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md');
   if (canonical !== undefined && existsSync(canonical)) {
     await cp(canonical, philosophyDst);
     line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical here)')}`);
+  } else if (previous !== undefined && existsSync(previous)) {
+    await cp(previous, philosophyDst);
+    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical source unavailable)')}`);
   } else if (existsSync(philosophySrc)) {
     await cp(philosophySrc, philosophyDst);
     line(`${c.green(glyph.check)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}written (managed)`);

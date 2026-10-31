@@ -147,7 +147,7 @@ and consequence-based findings; it is not proof of correctness by itself.
    verify only the corrections and affected behavior. Reuse unaffected conclusions and proofs;
    never restart the general review. Newly raised blockers must demonstrate a correction
    regression or a concrete defect within the original scope.
-5. Follow `void-implement`'s maximum two correction batches. Incomplete review, resumption and
+5. Follow `void-implement`'s maximum two correction batches. Under `void-autopilot`, its tighter two-total-review-round budget applies (initial plus one corrected head); see `docs/BOUNDED-REVIEWS.md`. Incomplete review, resumption and
    transport repair do not consume or reset that budget. Advisory findings never request a
    correction cycle. At the limit, report unresolved defects with cause and next action.
 Advisory findings never start a correction cycle; stop after acceptance, required proofs and independent review hold.

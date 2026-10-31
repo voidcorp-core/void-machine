@@ -172,8 +172,8 @@ send each back to the agent that produced it.
 **Spawning.** Every worker gets its worktree before it starts, at the durable location the
 doctrine's worktree rule names, reused when its branch already has one. A worker never chooses its
 own checkout and never works in the main one. Compose `void-orchestrate` to choose supported
-native delegation, including the session-host selection policy and the Herdr adapter
-with its central files when applicable. Count writers,
+native delegation and publish its observed worker lifecycle through `agents record`
+under the canonical mission, as `void-orchestrate` defines. Count writers,
 researchers and reviewers against available dispatch capacity; the ticket cap is unchanged.
 An assigned worker executes the unit once, without recursively delegating the complete cycle.
 `liveWorkers` reflects reconciled actual sessions and current evidence, never stale pane hints.
@@ -181,7 +181,8 @@ No permission is widened. Collect results before closure; uncertainty requires r
 
 **Respawning.** A hand-back goes to the same native session that holds the ticket, with the
 reason and pull request as data. Re-read mission, Git and actual session evidence; consult central
-brief/report and fresh Herdr identities only when that adapter is selected. Never a second run
+brief/report and actual native identities. Keep the worker runId until its assignment
+closes, publishing each observed transition through `void-orchestrate`. Never a second run
 beside an existing or uncertain invocation. A missing session is reported; retain its evidence.
 
 A respawned worker resumes; it never starts the ticket again. Its code is in its

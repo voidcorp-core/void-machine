@@ -21,11 +21,11 @@ Every skill is invoked by its name: `$void-implement`, `$void-tdd`. A skill that
 
 ### Program — when present
 
-If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human gates and merges remain human. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
+If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human holds, protected-path changes and deployment promotion remain human; an explicitly enabled autopilot may merge an admissible exact head into its integration branch. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
-Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Use the supported session host per that policy: Herdr when the current session is validated there, native delegation without it elsewhere. Preserve existing permissions, independent review and real invocation evidence.
+Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Publish observed worker lifecycle events for external presentation tools. Preserve existing permissions, independent review and real invocation evidence.
 
 Run `void-machine doctor` to verify the install.
 
@@ -34,6 +34,15 @@ Run `void-machine doctor` to verify the install.
 > **Sister doc**: `CLAUDE.md` is the Claude Code-flavored mirror of this file. The two are maintained in sync — any change to one MUST be reflected in the other in the same commit. CI enforces this on every push (`pnpm sync:docs`, which compares section headings after terminology normalization); the pre-commit hook in `.githooks/` refuses a commit that stages one sister doc without the other, and `pnpm install` wires it through the root `prepare` script so a fresh clone inherits the check instead of having to opt in. Adapted terminology only (Codex/tools ↔ Claude/Skill tool); the doctrine is identical.
 
 You are working inside the **void-machine** repo itself — the meta-repo that produces the harness (Codex + Claude Code) for every VoidCorp project. This file governs work **on the harness**, not work on projects that consume it.
+
+## Vocation and scope
+
+Read `docs/MACHINE-VOCATION.md` when changing cross-domain boundaries. Machine is
+Cortex's execution system; development is its first specialty. Keep user intent,
+durable personal memory, authorization and final acceptance with Cortex. Reuse
+existing mission primitives and proportionate delegation; do not build a competing
+global orchestrator or apply development-only controls to unrelated missions.
+The current harness and its safeguards remain operational within their scope.
 
 ## What this repo is
 
@@ -67,18 +76,15 @@ If the user asks to continue, start, or resume without naming a work unit:
 The declared provider owns mutable progress. The programme and checkpoint never store a current or
 next unit. If no provider is declared, require a specific unit; if a required capability is
 unavailable, stop that action rather than infer remote progress. A specific user request overrides
-automatic selection. Human gates and merges remain human.
+automatic selection. Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch.
 
 ## Visible mission workspace
 
 For delegated work, follow `void-orchestrate` and `docs/NATIVE-SUPERVISION.md`.
-The coordinator keeps intent and decisions; native research and workers use the
-available runtime capabilities. Use Herdr for durable workers and mission visibility
-when it hosts the validated current session; elsewhere use supported native tools.
-Before acting through the Herdr adapter,
-resolve its central mission and existing coordinator by label plus canonical
-worktree, re-reading pane identity before acting. Preserve reports, real review
-receipts, permissions and merge gates; no Agent capture or duplicate coordinator.
+Publish actual worker observations using the contract in `docs/WORKER-LIFECYCLE.md`.
+Native runtimes own execution; external plugins own presentation. Preserve real
+identities, reports, review receipts, permissions and merge gates. Never duplicate
+an agent for display or control an existing surface from the harness.
 
 ## Anti-bloat discipline
 

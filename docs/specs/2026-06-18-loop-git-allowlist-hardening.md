@@ -10,6 +10,12 @@ related:
   - docs/specs/2026-06-18-backlog-batch-parallel.md
 ---
 
+> Archive du moteur backlog-loop retiré au cutover du 24 septembre 2026.
+> Ce document conserve la décision et ses preuves historiques, pas une procédure active.
+> Le script secondaire `block-protected-push` et son override `AUTO_MERGE` ont été retirés.
+> Le contrat courant est `docs/specs/2026-09-22-autopilot-native-loop.md` et ses ADR.
+
+
 ## Problème
 
 Issue #17, **Cluster A** : quatre runs réels de `autonomous-backlog-loop` (projet

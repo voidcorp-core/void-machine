@@ -5,6 +5,29 @@ where a working worktree lives, when it is reused, and that it belongs to the ti
 run. This document describes how the autopilot loop applies it. No terminal, editor or
 presentation adapter chooses a worktree location or authorizes removal.
 
+## Current source and published installation
+
+Before assigning implementation, the coordinator checks the fetched `origin/develop`
+and uses its current integrated source as the base, preserving existing ticket work.
+A historical checkout is reference material, not the active implementation workspace.
+A dirty or divergent base is archived or reconciled deliberately, never overwritten.
+
+Check three independent facts: the current npm `latest` release, the selected CLI's
+`--version`, and `.void/install-manifest.json`'s version and file hashes. Source package
+versions describe the checkout; they do not upgrade its installed floor. If the
+published release is newer, the coordinator updates the CLI and runs that published
+CLI's `update --dry-run`, then `update`, reviews and commits the installed floor.
+Repeat this maintenance after a new publication before beginning work with that
+release. A missing registry/version check is reported as unknown, never called latest.
+
+Use the published package for `.void/hooks/`; current-source `self-host sync` remains
+isolated. Preserve source-owned AGENTS/CLAUDE and canonical `docs/PHILOSOPHY.md`, and
+verify the installed copy against that canonical doctrine. Check the actual installed
+runtime adapters and hashes separately from self-host. Workers remain commit-only:
+CLI installation and updates that touch shared Git state belong to the coordinator.
+This is an explicit maintenance procedure, not an automatic updater or a claim that
+existing runtime sessions reload instructions without restart.
+
 ## One worktree per ticket
 
 When `autopilot next` answers `assign`, the orchestrator creates the ticket's worktree at the

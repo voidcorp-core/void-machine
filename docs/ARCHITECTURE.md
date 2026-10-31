@@ -1,5 +1,15 @@
 # Architecture
 
+## Product boundary
+
+[Machine vocation](MACHINE-VOCATION.md) owns the Cortex/Machine responsibility
+boundary and target mission-return contract. Cortex owns intent, durable personal
+memory, priorities, authorization and final acceptance. Machine owns bounded
+execution and its operational state. Development is its first specialty.
+The topology below describes implementation, not a claim that a general Cortex
+integration is delivered. `packages/core/` is the development harness's discipline;
+`packages/void-machine/src/core/` holds the bounded generic mission primitives.
+
 ## Topology
 
 ```
@@ -50,7 +60,7 @@ has three answers:
 |---|---|---|
 | the top of `.void/` | the project loses a decision | yes |
 | `installed/` | `void-machine install` restores it byte for byte | no |
-| `machine/` | nothing is lost | no |
+| `machine/` | local execution state, receipts and recovery evidence may be lost | no |
 
 **Everything at the top of `.void/` is committed; the two subdirectories are
 not.** That sentence is the whole rule, and it is checkable at a glance rather
@@ -189,7 +199,7 @@ storage dependency.
 
 ## Stack baseline
 
-The harness assumes **TypeScript + web**. The core is not framework-agnostic across language families. See `docs/PHILOSOPHY.md` § "Stack assumption".
+The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `docs/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
@@ -198,8 +208,8 @@ delegation capability reaches users, embedded in the published CLI as `void-mach
 ([decision](decisions-log/2026-09-28-kernel-delegation-ships-in-published-cli--0cfd77e6-1e8e-43e7-9d07-be5f1691b9c7.md));
 the package itself is never published. The autopilot loop's kernel (state rebuilt from the tracker, GitHub and git, the slot
 and collision rules, the shared-state fingerprint and the merge refusals) lives in
-`packages/cli/src/lib/autopilot/`. A future independent Rust/Go/Python product could still live in
-a sibling repo, reusing mechanics not skills.
+`packages/cli/src/lib/autopilot/`. Other specialties do not require a sibling repository
+or another engine by default; any physical separation needs a demonstrated boundary.
 
 ## Delegated agent runs
 
@@ -223,13 +233,15 @@ delegation-result` Stop hook, which follows a claim keyed by the native session 
 2.1.257, the workspace is not trusted, or that hook is not installed. These adapters
 remain available to finish legacy runs and read their journals.
 
-New orchestration composes `void-orchestrate`: native runtime contexts for short
-specialists, Herdr sessions for durable workers, no PreToolUse capture of Agent.
-The hook-runner owns strict bounded central-file reads and metadata projection,
-with YAML as a direct dependency. It never writes mission state in home. ORCH owns
-mission/brief writes; the worker owns its report. Identity is label plus canonical
-worktree, re-resolved from `herdr pane list`; remembered pane/workspace IDs are hints.
-See [central contract](ORCHESTRA.md) and [supervision](NATIVE-SUPERVISION.md).
+New orchestration composes `void-orchestrate` and native runtime capabilities.
+It publishes [worker lifecycle observations](WORKER-LIFECYCLE.md) in the canonical
+mission journal. External plugins own presentation; active delegation and status
+paths never discover or control a multiplexer. `agents status --json` projects
+journals without querying runtimes or altering mission state.
+Historical presentation adapters remain inert on these paths. Existing legacy
+sessions and transitions remain collectable. The existing Herdr metadata hook is
+an explicit migration exception tracked by DEV-1134, not the new presentation API.
+See [supervision](NATIVE-SUPERVISION.md).
 
 Mission Engine remains the policy authority. Native specialist request/start/completion
 receipts preserve actual opaque context IDs or digest-bound artifact provenance.
@@ -337,6 +349,9 @@ Rules:
   See the ownership-is-union-of-receipt-and-manifest decision.
 - `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
 
+Current source and published-floor maintenance follows the coordinator procedure in
+[WORKTREES.md](WORKTREES.md#current-source-and-published-installation).
+
 ### Co-owned project files and pre-write protection
 
 `packages/hook-runner/src/co-owned.ts` owns the pure, exact co-owned path policy.
@@ -371,6 +386,17 @@ apply_patch with explicit content instead. An explicitly empty edit is valid
 content and remains allowed. A patch and a shell redirection to the same target
 still refuse. This does not expand the shell extractor into an evaluator: paths
 computed by programs or unsupported shell syntax remain outside its coverage.
+Claude's protected-file matcher includes `Bash`; Codex's matcher also covers its
+canonical `Bash` shell/exec events. Both route recognized shell destinations to
+the same Node rule. This is a deterministic decision only for an invoked supported
+payload, not a complete mediation boundary for arbitrary commands. Native hook
+loading/trust and blocking responses must be verified separately from generated
+manifest tests. Codex continuation via `write_stdin` does not invoke PreToolUse
+again and some specialized tools opt out. See the official
+[Codex tool coverage](https://learn.chatgpt.com/docs/hooks#tool-coverage) and
+[Claude blocking exit codes](https://code.claude.com/docs/en/hooks#exit-code-2).
+An instruction to avoid shell writes is behavioral guidance, not deterministic protection.
+
 The existing `allow-secret-pattern:` marker exempts only the line containing it
 and should explain an intentional synthetic fixture. It is not proof that content
 is safe, nor authorization to edit real credentials. Detection inspects added
@@ -486,7 +512,7 @@ that surface is unavailable, the runtime stops the remote action instead of infe
 from local files. The semantic sections of `.void/machine/checkpoint.md` are replaced at a
 deliberate session close and stay readable offline; neither the checkpoint nor the programme stores
 a current or next unit.
-Human gates and merges remain human. A standalone ticket or sequential plan keeps using its normal
+Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch. A standalone ticket or sequential plan keeps using its normal
 ticket or resume-point flow and does not need a programme descriptor.
 
 ### Session update proposal
@@ -636,6 +662,9 @@ useful; Codex orchestration may not claim enforced isolation until a runtime pro
 
 ### Core vs Packs
 
+This is the current development-harness layout, not the generic Machine kernel.
+Its stack rules must not automatically govern unrelated business missions.
+
 | Concern | Where |
 |---|---|
 | TypeScript + web craftsman discipline (universal within that stack) | `core/` |
@@ -750,15 +779,15 @@ One exception is allowed: an **explicit, documented `peerDependency` of composit
 
 ### CLI scope
 
-The CLI is the only entry point. It:
+The published CLI installs and maintains the development harness in project-local
+runtime files, adds selected stack packs, checks health and exposes the documented
+mission, delegation and delivery commands. See the README for the current install
+surface; it is not limited to Claude and is not a global-only installation.
 
-1. Installs core into `~/.claude/voidcorp/`
-2. Adds packs to the current project's `.claude/` (via symlink or copy)
-3. Updates both
-4. Runs `doctor` to detect drift / corruption / version mismatch
-5. Runs `init` to create `.void/config.json` in a new project
-
-The CLI does **not** edit the consumer's source code. The consumer's CLAUDE.md imports harness modules — the harness never writes business code.
+Installation and update do not edit the consumer's business code. An agent's
+authorized development mission can do so. This maintenance boundary does not
+prohibit Machine's wider action responsibility. A future Cortex entry point must
+reuse the appropriate existing capabilities; this document defines no new API.
 
 ### Product identity: one source
 
@@ -1026,7 +1055,7 @@ reaches consumers with zero npm publish. The `/void-graph` command runs it from
 
 On a consumer the CLI runs in **bundled mode**: it loads the baked model instead of scanning a
 source tree (no monorepo paths), filters it to the packs enabled in `.claude/settings.json`, and
-correlates it with local mission journals (`.void/runs/*/events.jsonl`, plus
+correlates it with local mission journals (`.void/machine/runs/*/events.jsonl`, plus
 read-only v2 import, and transcripts). `graph live` serves the inlined studio
 and a `/studio-data.json` endpoint on loopback - fully offline. Freshness
 is gated by `graph check-bundle` (the artifact's embedded compatibility model must match

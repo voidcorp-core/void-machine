@@ -45,7 +45,7 @@ logger.error({ err, orderId }, 'payment_failed');
 | `error` | Operation failed; user impact |
 | `warn` | Unexpected but handled |
 | `info` | Significant business event |
-| `void-debug` | Developer-time signal |
+| `debug` | Developer-time signal |
 | `trace` | Very granular (rarely committed) |
 
 ---
@@ -110,7 +110,7 @@ The adapter (per `void-hexagonal-architecture`) is where the catch lives. The er
 try { await doSomething(); } catch (e) { /* swallow */ }
 ```
 
-Either log it, or rethrow, or both. `catch (e) {}` is rejected.
+Logging alone does not recover a failed operation. Propagate a typed failure or rethrow; explicit recovery must preserve the caller's contract. Log at the boundary that owns the diagnosis, without duplicating the same failure at every layer.
 
 ---
 
@@ -121,7 +121,7 @@ Majors' rule. Log:
 - User ID (anonymized — `userId: hash(realId)` for Sentry; raw in internal logs only if compliance allows)
 - Org / tenant ID
 - Feature flags active
-- Session ID
+- Non-secret correlation ID (generated for tracing, never an authentication credential)
 - Browser / device / region
 - Business-meaningful tags (plan tier, signup source, conversion path)
 
@@ -184,7 +184,7 @@ Defense in depth. The discipline says "don't log it." The config says "even if y
 ## What NOT to log
 
 - Full request bodies (PII / secrets / massive payloads). Log specific fields with explicit allowlist.
-- Passwords, tokens, API keys, session IDs, JWTs (composes with `void-security-guidance`)
+- Passwords, tokens, API keys, authentication session IDs/cookies, JWTs (composes with `void-security-guidance`)
 - Email addresses unredacted in production logs (consider hashing or partial redaction depending on compliance)
 - Full database rows (PII risk)
 - LLM full prompts / responses (PII + cost) — log token counts and structural metadata, not content

@@ -136,19 +136,17 @@ describe('remote effects stay with the roles that own them', () => {
     const spawning = flat(body(SKILL)).match(/\*\*Spawning\.\*\*.*?(?=\*\*Respawning\.\*\*)/)?.[0] ?? '';
     expect(spawning).toMatch(/void-orchestrate/);
     expect(spawning).toMatch(/supported native delegation/);
-    expect(spawning).toMatch(/session-host selection policy/);
+    expect(spawning).toMatch(/publish its observed worker lifecycle through `agents record`/);
     expect(spawning).toMatch(/ticket cap is unchanged/);
     expect(spawning).not.toMatch(/cockpit presentation|agents dispatch/i);
-    // Identity checks belong to the selected adapter, not every native agent.
-    const orchestration = readFileSync(
+    // The shared policy publishes actual observations; presentation grants no authority.
+    const orchestration = flat(readFileSync(
       new URL('../../packages/core/skills/void-orchestrate/SKILL.md', import.meta.url), 'utf8',
-    );
-    const recovery = flat(body(orchestration)).match(
-      /## Herdr adapter: recovery.*?(?=## Herdr adapter: explicit coordinator context)/,
-    )?.[0] ?? '';
-    expect(recovery).toMatch(/when the session-host policy selects this adapter/);
-    expect(recovery).toMatch(/label \+ worktree/);
-    expect(recovery).toMatch(/Re-read `herdr pane list` before every identity decision/);
+    ));
+    expect(orchestration).toMatch(/After an actual successful native dispatch acknowledgement/);
+    expect(orchestration).toMatch(/same assignment through corrections and resume/);
+    expect(orchestration).toMatch(/Neither a pane nor a report grants merge permission/);
+    expect(orchestration).not.toMatch(/herdr pane list|herdr agent start/);
   });
 
   it('hands a ticket back to the run that holds it, and never seats a second one', () => {

@@ -177,6 +177,14 @@
             "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle context-continuity codex"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle herdr-metadata codex"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -205,6 +213,14 @@
             "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle checkpoint-audit codex"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle herdr-metadata codex"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -221,6 +237,14 @@
           {
             "type": "command",
             "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle typecheck codex"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('fs'),p=require('path'),u=require('url'),m=process.argv[1],l=String.fromCharCode(10),x=function(r,t){process.stderr.write(r+t+l);if(m==='enforce')process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:r}})+l)};let d=process.cwd(),h='',i=64;while(i--){const c=p.join(d,'.void','hooks','_void-hook.mjs');if(f.existsSync(c)){h=c;break}const n=p.dirname(d);if(n===d)break;d=n}if(h){process.argv.splice(1,0,h);import(u.pathToFileURL(h).href).catch(function(e){x('HOOK_RUNNER_FAILED: cannot load .void/hooks/_void-hook.mjs',': '+String(e))})}else{x('HOOK_RUNNER_MISSING: .void/hooks/_void-hook.mjs not found above the session directory',' '+process.cwd())}\" lifecycle herdr-metadata codex"
           }
         ]
       }

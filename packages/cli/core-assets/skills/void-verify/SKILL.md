@@ -77,7 +77,7 @@ Remove unrelated scope unless the requested behavior requires it.
 Give the result, relevant commands/results, independent review outcome and material limits.
 Do not print a twelve-item checklist with irrelevant N/A rows. Keep applicability reasoning in
 the existing task/review evidence; summarize it when it explains a real omission or decision.
-For a plan, update its existing resume point; the tracker owns mutable programme progress.
+For a standalone sequential plan, update its existing resume point. For a programme, the declared tracker alone owns mutable progress; do not add a current/next unit to the plan.
 The PR evidence and final report reuse the same observed results rather than duplicate work.
 
 Once at ticket end, the coordinator closes each explicitly bound source with

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "harnessVersion": "6.0.0",
+  "harnessVersion": "7.0.0",
   "capabilities": [
     {
       "id": "skill:pack-mobile/void-eas-build-profile",

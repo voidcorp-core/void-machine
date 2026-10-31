@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.0.0](https://github.com/voidcorp-core/void-machine/compare/v6.0.0...v7.0.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **agents:** automatic worker surfaces are replaced by the versioned worker journal contract; external display plugins own presentation.
+
+### Features
+
+* **agents:** publish presentation-neutral worker lifecycle ([13a88e1](https://github.com/voidcorp-core/void-machine/commit/13a88e18b7b5fe784a78abe937fc5d27becd452e))
+
+
+### Bug Fixes
+
+* **agents:** finish confirmed failures after reconciliation ([1326d34](https://github.com/voidcorp-core/void-machine/commit/1326d3446fe983f2edd6e48dc8f8f50518a223f1))
+* **browser:** align overrides with dependency updates ([0c0e571](https://github.com/voidcorp-core/void-machine/commit/0c0e571d8e73b66a7ac0fa110170a93c3da4c319))
+* **harness:** align instructions with executed safety contracts ([e929b2a](https://github.com/voidcorp-core/void-machine/commit/e929b2ae53071a06a8bccb40946c0199f0c0f38b))
+* **harness:** align safety contracts and refresh the published 6.0.0 floor ([2940177](https://github.com/voidcorp-core/void-machine/commit/294017743cfe3ab9b58af211c517e35de1a7b141))
+* **hooks:** declare existing focused-test coverage for CI ([9d0b543](https://github.com/voidcorp-core/void-machine/commit/9d0b5431ef86bc19d3b5883c87ab91e7f114e98e))
+
 ## [6.0.0](https://github.com/voidcorp-core/void-machine/compare/v5.0.8...v6.0.0) (2026-10-23)
 
 

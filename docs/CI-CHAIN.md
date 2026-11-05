@@ -81,8 +81,12 @@ and rename coverage in DEV-1144 before allocation can safely be optimized.
 
 ```mermaid
 flowchart LR
-  Schedule[Sunday 03:23 UTC or manual dispatch] --> Stress[stress: install, twenty fast, ten complete attempts]
-  Stress --> Reports[Exact-SHA reports retained even after failure]
+  Schedule[Sunday 03:23 UTC or manual dispatch] --> Install[Install locked dependencies]
+  Install --> Build[Build workspace once]
+  Build --> Fast[Twenty seeded fast attempts]
+  Fast --> Complete[Ten seeded complete attempts]
+  Fast --> Reports
+  Complete --> Reports[Exact-SHA reports retained even after failure]
   RP[release-please] --> VR[validate-release]
   RP --> P[publish]
   VR --> P
@@ -92,9 +96,32 @@ flowchart LR
 ```
 
 Certification is an independent reliability workflow, not a PR status dependency.
-At the audited source it installs dependencies but omits compiled prerequisite
-preparation; DEV-1141 repairs that before interpreting stress results. The release
-DAG additionally has event/result conditions: a normal promotion push proposes a
+The current workflow builds the workspace once after installation, before either
+campaign. A failed build stops test execution in its own step; it does not count
+as an attempted test or a successful certification. Reports from attempted
+campaigns are retained after failure; missing reports are never green evidence.
+The 5 November audit snapshot predates this repair: its four failed weekly runs
+were missing compiled prerequisites and do not measure test reliability.
+
+Each attempt passes shuffle and its recorded seed to Vitest 5.0.1. The pnpm script
+arguments contain no extra `--` separator, which Vitest would treat as the end of
+options. The network wrapper forwards only shuffle and a positive 32-bit seed;
+its loopback probe, fixed project, thread pool, one worker and 120-second bound
+remain unchanged. Unknown arguments refuse execution. See the
+[Vitest sequence contract](https://vitest.dev/config/sequence).
+
+To reproduce on a fresh checkout, run `pnpm install --frozen-lockfile` and
+`pnpm build` once, then `node scripts/stress-proof.mjs fast 20 10401` and
+`node scripts/stress-proof.mjs complete 10 20401`. Set `VOID_STRESS_REPORT_PATH`
+per command to retain the JSON reports; defaults live under
+`.void/machine/proofs/test-certification/`. Inspect `sourceSha`, requested and
+completed attempts, every seed and the first failing command. The first failure,
+unavailable process or timeout stops the campaign without retry. A small preflight
+is not the twenty-plus-ten certification. The existing five-minute command and
+ninety-minute job budgets remain; an environment exceeding either cannot certify.
+Repairing collection increases real executed work and is not a claimed saving.
+
+The release DAG additionally has event/result conditions: a normal promotion push proposes a
 release PR, while a created release (or supported manual recovery) admits release
 validation. See [release policy](RELEASING.md) for the full authority contract.
 

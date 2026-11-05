@@ -502,7 +502,11 @@ protection is changed. Work on merge-control paths still requires human integrat
 Consumers receive the same executable guard and workflow template beside installed
 `void-verify` skills. See [the adoption procedure](../packages/core/skills/void-verify/references/ci-feedback.md).
 Adoption is explicit and preserves each project's real validation commands, review
-and enforcement. Rollback restores prior workflow triggers and removes admission
+and enforcement. The reusable enforcement caller declares ready/draft transitions
+and merge-group events, and alone owns PR cancellation; the callee uses an immutable
+admission guard inside its bounded required job. Preserve existing check names.
+The optional [Bun audit](DEPENDENCY-AUDIT.md) remains independent of quality;
+its schedule refreshes advisories without replacing required candidate evidence. Rollback restores prior workflow triggers and removes admission
 steps together; it restores draft CI cost without altering mission history or budgets.
 
 Draft creation is permitted throughout development. Reuse the branch's existing PR

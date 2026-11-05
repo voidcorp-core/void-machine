@@ -2,7 +2,7 @@ name: promotion
 
 # Keep a promotion pull request standing whenever develop is ahead of main.
 #
-# It opens one and never merges it. That is the whole point: merging it is the
+# It opens a draft and never merges it. That is the whole point: merging it is the
 # human gate, the moment someone says "what is on develop is ready to ship", and
 # it is the only decision in the release cycle that is about content rather than
 # mechanics. Everything after it, the release pull request and the back-merge,
@@ -13,8 +13,8 @@ name: promotion
 # stale develop when you do not.
 #
 # No temporary branch: the promotion is develop into main, so develop is the
-# head. The pull request updates itself as develop moves, which is why an
-# existing one is left alone rather than recreated.
+# head. The pull request updates itself as develop moves. Its existing
+# readiness is preserved while its body is refreshed.
 
 on:
   push:
@@ -85,8 +85,9 @@ jobs:
             fi
           fi
 
-          body='Merging this is release action 1: develop is ready to enter main.
-          Review the complete change and required CI before merging by hand.
+          body='New promotions start as drafts while develop accumulates changes.
+          Mark this pull request ready for review when prepared; this starts required CI.
+          Review the complete change and required CI before merging by hand into main.
           Nothing publishes yet; release-please proposes the version and changelog afterwards.'
 
           # Assignment preserves API failures; process substitution would hide them.
@@ -119,7 +120,7 @@ jobs:
             echo "promotion PR #$pr_number updated for human review."
           else
             gh pr create --repo "$EXPECTED_REPOSITORY" \
-              --base "$EXPECTED_BASE" --head "$EXPECTED_HEAD" \
+              --base "$EXPECTED_BASE" --head "$EXPECTED_HEAD" --draft \
               --title 'chore: promote develop to main' --body "$body" >/dev/null
-            echo "promotion pull request opened for human review."
+            echo "draft promotion pull request opened for human preparation."
           fi

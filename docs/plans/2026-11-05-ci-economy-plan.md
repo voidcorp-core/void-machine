@@ -179,9 +179,10 @@ PR publication and any authorized local synchronization.
 The native tracker records, estimates and blocker relations are authoritative;
 this table declares intent, never current/next status. Before claiming a unit,
 fetch its complete record and relations, including relevant completed predecessors
-DEV-821, DEV-824, DEV-844 and DEV-606. The proposed programme is
-[prepared separately](2026-11-05-ci-economy-program.md); the coordinator activates
-it only after the old programme is reconciled and native relations are complete.
+DEV-821, DEV-824, DEV-844 and DEV-606. The
+[active programme](../../.void/program.md) carries the bounded pool and explicit
+autopilot consent after the coordinator reconciled the previous programme. Its
+protected change requires independent review and human merge.
 
 Read official GitHub Actions event, job-condition, concurrency, REST pull-request
 file and merge-queue documentation before changing those interfaces. The current

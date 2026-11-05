@@ -41,7 +41,10 @@ This plan is authorized; routine sequencing needs no renewed approval.
 - **Depends on:** none; follows 1 by the requested order. **TDD mode:** souple for guidance/config; strict for new behavior.
 - **Ownership:** `packages/core/skills/void-verify/references/{ci-feedback.md,quality.yml}`,
   `packages/cli/src/lib/ci-feedback.test.ts`, relevant verification contracts and
-  generated `packages/cli/core-assets/` mirrors, `docs/RELEASING.md`.
+  generated `packages/cli/core-assets/` mirrors, `README.md`,
+  `.github/workflows/enforce.yml`,
+  `packages/core/templates/github/void-dependency-audit.yml`,
+  `docs/DEPENDENCY-AUDIT.md` and `docs/RELEASING.md`.
 - **Implementation:** cover draft/ready/merge-group behavior, immutable install,
   existing required names, package-manager and Node ownership, and dependency
   audit as an explicit project-owned check. State severity policy, lockfile scope,
@@ -59,11 +62,14 @@ This plan is authorized; routine sequencing needs no renewed approval.
 - **Goal:** make seeded stress results judge tests instead of missing build output.
 - **Depends on:** none; follows 2 by the requested order. **TDD mode:** strict for the reproduced preparation defect.
 - **Ownership:** `.github/workflows/test-certification.yml`,
-  `scripts/stress-proof.mjs`, `test/verify/stress-proof{,-workflow}.test.ts`,
+  `scripts/stress-proof.mjs`, `scripts/test-network.mjs`,
+  `test/verify/stress-proof{,-workflow}.test.ts`, `test/verify/network-lane.test.ts`,
   existing build script owner if needed, corresponding test documentation.
 - **Implementation:** reproduce the missing compiled mission-engine failure from
   a clean tree. Prepare the actual dependency graph once before the loop. Keep
   build failure distinguishable from test failure and retain reports on failure.
+  Forward shuffle and seed options through the network-lane wrapper to the actual
+  Vitest invocation so its reported deterministic seeds affect test execution.
 - **Verification gate:** RED proves the missing prerequisite; GREEN proves a
   clean-checkout fast and complete invocation. Then run the intended twenty fast
   and ten complete seeded attempts in the appropriate certification environment;

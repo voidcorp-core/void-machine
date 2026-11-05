@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'activation-meter.sh');
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// Resolve before the no-jq fixtures restrict PATH; login-shell state is irrelevant.
+const BASH = execFileSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).trim();
 
 interface HookResult {
   readonly dir: string;

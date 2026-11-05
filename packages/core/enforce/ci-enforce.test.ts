@@ -26,7 +26,8 @@ const repositoryAllowlist = join(
   '.github',
   'void-enforce-allow',
 );
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 
 const AWS_KEY = 'AKIA' + 'IOSFODNN7EXAMPLE1'; // split so the driver's own repo never trips the secret hook
 

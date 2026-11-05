@@ -1,7 +1,8 @@
 # CI chain
 
-Source snapshot: `08e75a8c`, 5 November 2026. The diagrams describe checked-in
-workflow behavior, not live protection settings. The [CI economy programme](plans/2026-11-05-ci-economy-plan.md)
+Source baseline: `08e75a8c`, 5 November 2026, updated here for DEV-1139 promotion
+drafts. The diagrams describe checked-in workflow behavior, not deployed workflow
+or live protection settings. The [CI economy programme](plans/2026-11-05-ci-economy-plan.md)
 changes this chain incrementally; update this page with each relevant change.
 
 ## From local work to publication
@@ -17,8 +18,10 @@ flowchart TD
   Person --> Queue
   Queue --> Group[merge_group: ci and void-enforce]
   Group --> Develop[Merge into develop]
-  Develop --> Promotion[promotion workflow maintains develop-to-main PR]
-  Promotion --> PromotionCI[Promotion PR: ci and void-enforce]
+  Develop --> Promotion[promotion: new draft or existing PR with readiness preserved]
+  Promotion -->|Draft| Prepare[Human marks promotion ready for review]
+  Prepare --> PromotionCI[Promotion PR: ci and void-enforce]
+  Promotion -->|Already ready| PromotionCI
   PromotionCI --> Human[Human promotion merge]
   Human --> Main[Push main]
   Main --> MainCI[ci on main]
@@ -111,7 +114,8 @@ These arrows show the requested execution order. Linear owns real blockers;
 DEV-1142 depends on DEV-1141's reliability prerequisite. One worker preserves
 ordering across shared files. Protected PRs wait for a person's merge after
 review; other admissible PRs use the existing autopilot path. New promotion PRs
-will be drafts, while an existing ready promotion keeps its human-selected state.
+are drafts in the DEV-1139 source change, while an existing ready promotion keeps
+its human-selected state. Hosted rollout still follows the protected merge.
 The full [baseline and limits](specs/2026-11-05-ci-economy.md) distinguish total
 job-minutes from latency and potential avoidance from demonstrated savings.
 

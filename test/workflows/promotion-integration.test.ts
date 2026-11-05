@@ -61,17 +61,18 @@ describe('human promotion maintenance', () => {
     expect(result.status, result.stderr).toBe(0);
     expect(result.calls).toBe('');
   });
-  it('creates the promotion without inspecting historical review checks', () => {
+  it('creates a draft promotion without inspecting historical review checks', () => {
     const result = run();
     expect(result.status, result.stderr).toBe(0);
     expect(result.calls).toContain(`pr create --repo ${repositorySlug} --base main --head develop`);
+    expect(result.calls).toMatch(/pr create [^\n]*--draft(?: |$)/);
     expect(result.calls).not.toMatch(/graphql|merge/);
   });
-  it('updates the unique same-repository promotion', () => {
-    const result = run({ pulls: [{ number: 7 }] });
+  it.each([true, false])('preserves existing promotion readiness (draft=%s)', isDraft => {
+    const result = run({ pulls: [{ number: 7 }], identity: { ...identity, isDraft } });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.calls).toContain(`pr edit 7 --repo ${repositorySlug}`);
-    expect(result.calls).not.toContain('pr create');
+    expect(result.calls).toContain(`pr edit 7 --repo ${repositorySlug} --body`);
+    expect(result.calls).not.toMatch(/pr (create|ready|merge)|--draft/);
   });
   it('refuses duplicate promotions without a write', () => {
     const result = run({ pulls: [{ number: 7 }, { number: 8 }] });

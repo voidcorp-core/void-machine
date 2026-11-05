@@ -102,17 +102,26 @@ ships.
 
 `promotion.yml` runs on every push to `develop` and keeps a `develop` to `main`
 pull request standing whenever `develop` holds something `main` does not. It
-opens one and never merges it, which is the whole point: merging it is the gate,
+opens a draft and never merges it, which is the whole point: merging it is the gate,
 and it is the only decision in the cycle that is about content rather than
 mechanics. What is automated is the typing, not the judgement.
 
-Its body points to the human decision and required CI; the complete PR diff is
-the change to read. An existing promotion body is refreshed without a merge.
+Its body points to preparation, the human decision and required CI; the complete
+PR diff is the change to read. When the promotion is prepared, a person marks it
+ready for review. The `ready_for_review` event starts complete required CI even
+without another commit. Draft admission remains non-success, so a draft cannot
+merge on skipped checks. `main` keeps its existing checks and protections.
 
-So a release costs exactly two human actions: merge the promotion, then merge
-the release pull request that release-please proposes on `main`. The first says
-what ships, the second sends it to npm. The back-merge below closes the loop
-without asking.
+An existing promotion receives only a body refresh: a draft stays draft and a
+ready PR stays ready as `develop` moves. The workflow never changes readiness or
+merges on behalf of a person. Repeated pushes therefore reuse the same PR without
+resetting a human choice.
+
+After preparing the promotion, two human merges release it: merge the promotion,
+then merge the release pull request that release-please proposes on `main`. The
+first says what ships, the second sends it to npm. The back-merge below closes
+the loop without asking. See the [CI chain](CI-CHAIN.md) for the complete path and
+the audit baseline; deferred job-minutes are not measured billing savings.
 
 ### The back-merge is automatic, because the divergence is structural
 
@@ -184,22 +193,18 @@ Releasing is driven by **release-please** from the Conventional Commits already
 enforced here. No one edits a version, dispatches a workflow or approves a job in
 Actions on the routine path.
 
-1. `promotion.yml` maintains one `develop -> main` PR and records every promoted
-   commit, its first entry on develop's first-parent history, and the merged PR
-   whose `mergeCommit` exactly matches that entry, including nested branch PRs.
-   A later containing merge cannot authorize an earlier direct commit. Each pull
-   request must hold one of the three merge authorities above (a success verdict
-   on its head, the named human by hand, or the back-merge proved by
-   construction), with fail-closed pagination checks. **Release
-   action 1:** merge that promotion PR after its five current checks pass and the
-   complete accounting is explainable.
+1. `promotion.yml` maintains one `develop -> main` PR, creating a draft when
+   none exists and preserving an existing PR's readiness. When the promotion is
+   prepared, a person marks it ready for review to start complete required CI.
+   **Release action 1:** merge that promotion PR by hand after its required checks
+   pass and the complete change is accepted. There is no retrospective review
+   certification of the commits already integrated into `develop`.
 2. On `main`, release-please maintains one version/changelog PR. It changes every
    versioned manifest in lockstep and is opened with the bounded Release App, so
    normal branch-protection checks run. `feat:` gives a minor bump, `fix:` a patch,
    and a breaking change a minor bump before 1.0.
 3. **Release action 2:** merge the release-please PR after reading the version and
-   changelog and after `validate`, `enforce`, and the three install-conformance
-   checks pass. This merge creates `vX.Y.Z` and the GitHub Release. It is the npm
+   changelog and after all required checks pass. This merge creates `vX.Y.Z` and the GitHub Release. It is the npm
    publication authorization.
 4. `validate-release`, with `contents: read` and no OIDC, resolves the immutable
    tag, proves its commit is on protected `main`, validates the exact tree, and

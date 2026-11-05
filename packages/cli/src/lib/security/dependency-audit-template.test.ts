@@ -3,14 +3,21 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { expect, it } from 'vitest';
-import { parseDocument } from 'yaml';
+import { isSeq, parseDocument } from 'yaml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const CORE = join(ROOT, 'packages/core/templates/github');
 const SCRIPT = join(CORE, 'dependency-audit.mjs');
 const advisory = { example: [{ id: 123, url: 'https://github.com/advisories/GHSA-example',
   title: 'Example vulnerability', severity: 'high', vulnerable_versions: '<2.0.0' }] };
+
+function sequence(document: ReturnType<typeof parseDocument>, path: readonly string[]): unknown[] {
+  const node = document.getIn(path, true);
+  if (!isSeq(node)) throw new Error(`Missing workflow sequence: ${path.join('.')}`);
+  return node.toJSON() as unknown[];
+}
 
 it.each([
   ['clean', 0, '{}', 0],
@@ -48,7 +55,22 @@ it('ships a bounded dependency-audit job independently from quality, preserving 
   expect(document.getIn(['jobs', 'dependency-audit', 'continue-on-error'])).toBeUndefined();
   expect(document.getIn(['jobs', 'dependency-audit', 'timeout-minutes'])).toBeLessThanOrEqual(10);
   expect(source).toContain('dependency-audit.mjs');
-  expect(source).toContain('if: always()');
+  const steps = sequence(document, ['jobs', 'dependency-audit', 'steps']) as {
+    id?: string; run?: string; uses?: string; if?: string;
+  }[];
+  const admissionIndex = steps.findIndex(step => step.id === 'admission');
+  expect(admissionIndex).toBeGreaterThanOrEqual(0);
+  expect(steps[admissionIndex]?.run).toBe('node .github/scripts/ci-admission.mjs');
+  expect(steps.findIndex(step => step.uses?.startsWith('oven-sh/setup-bun@')))
+    .toBeGreaterThan(admissionIndex);
+  const condition = steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))?.if;
+  expect(condition).toBeDefined();
+  for (const outcome of ['success', 'failure', 'skipped']) {
+    const admitted = runInNewContext(condition?.slice(3, -2) ?? '', {
+      always: () => true, steps: { admission: { outcome } },
+    }, { timeout: 100 });
+    expect(admitted, outcome).toBe(outcome === 'success');
+  }
   expect(source).toMatch(/actions\/upload-artifact@[a-f0-9]{40}/);
   expect(source).not.toMatch(/bun (?:run audit|install)|\|\| true/);
   for (const line of source.split('\n').filter(line => line.includes('uses:'))) {
@@ -75,4 +97,17 @@ it('distributes the exact workflow and wrapper through the existing core-assets 
   } finally {
     rmSync(dirname(target), { recursive: true, force: true });
   }
+});
+
+it('audits new advisories periodically without depending on a lockfile change', () => {
+  const document = parseDocument(readFileSync(join(CORE, 'void-dependency-audit.yml'), 'utf8'));
+  expect(sequence(document, ['on', 'schedule'])).toEqual([{ cron: '17 4 * * 1' }]);
+  expect(document.getIn(['on', 'pull_request', 'paths'])).toBeUndefined();
+  expect(document.getIn(['on', 'pull_request', 'paths-ignore'])).toBeUndefined();
+  expect(sequence(document, ['on', 'pull_request', 'types']))
+    .toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft']));
+  expect(sequence(document, ['on', 'merge_group', 'types'])).toEqual(['checks_requested']);
+  expect(document.getIn(['jobs', 'dependency-audit', 'if'])).toBeUndefined();
+  expect(document.getIn(['jobs', 'dependency-audit', 'steps', 0, 'with', 'ref']))
+    .toBe(`\${{ github.event.pull_request.head.sha || github.sha }}`);
 });

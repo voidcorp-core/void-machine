@@ -1,3 +1,4 @@
+import { currentChecksFixture, noWorkflowRuns } from '../lib/autopilot/loop-checks.fixture.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -125,6 +126,8 @@ function answer(args: readonly string[], view: string = reviewedPull()): string 
   if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
   if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
   if (line.includes('pr view 11')) return view;
+  if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
+  if (line.includes('/actions/runs?')) return noWorkflowRuns;
   if (line.includes('pulls/11/files')) return pullFiles();
   if (line.includes('isInMergeQueue')) return membership(false);
   if (line.includes('timelineItems')) return fixture('timeline-commit-then-ejection.json').replace(
@@ -313,11 +316,15 @@ describe('autopilot arm and disarm', () => {
   function sequence(views: readonly string[], queued: readonly boolean[] = []) {
     const calls: string[][] = [];
     const [pending, memberships] = [[...views], [...queued]];
+    let currentView = reviewedPull();
     const isRead = (args: readonly string[]) =>
-      (args[0] === 'pr' && args[1] === 'view') || args.some((arg) => arg.includes('isInMergeQueue'));
+      (args[0] === 'pr' && args[1] === 'view') || args.some((arg) =>
+        arg.includes('isInMergeQueue') || arg.includes('CurrentPullRequestChecks') || arg.includes('/actions/runs?'));
     const run = (args: readonly string[]): string => {
       calls.push([...args]);
-      if (args[0] === 'pr' && args[1] === 'view') return pending.shift() ?? '';
+      if (args[0] === 'pr' && args[1] === 'view') { currentView = pending.shift() ?? ''; return currentView; }
+      if (args.join(' ').includes('CurrentPullRequestChecks')) return currentChecksFixture(currentView);
+      if (args.join(' ').includes('/actions/runs?')) return noWorkflowRuns;
       if (isRead(args)) return membership(memberships.shift() ?? false);
       return '';
     };
@@ -476,7 +483,7 @@ describe('autopilot arm and disarm', () => {
     const moved = (args: readonly string[]): string =>
       args.join(' ').includes('pr view 11')
         ? reviewedPull({ armed: true, head: 'b'.repeat(40) })
-        : answer(args);
+        : answer(args, reviewedPull({ head: 'b'.repeat(40), armed: true }));
     const { decision } = next(root, trackerJson([heldTicket], []), moved);
     expect(decision.actions.slice(0, 2)).toEqual([
       { kind: 'disable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: 'b'.repeat(40), armedSha: HEAD },
@@ -571,11 +578,14 @@ describe('autopilot merge', () => {
   }) {
     const calls: string[][] = [];
     const views = [...options.views];
+    let currentView = reviewedPull();
     const memberships = [...(options.queued ?? [])];
     const run = (args: readonly string[]): string => {
       calls.push([...args]);
       const line = args.join(' ');
-      if (args[0] === 'pr' && args[1] === 'view') return views.shift() ?? '';
+      if (args[0] === 'pr' && args[1] === 'view') { currentView = views.shift() ?? ''; return currentView; }
+      if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(currentView);
+      if (line.includes('/actions/runs?')) return noWorkflowRuns;
       if (line.includes('isInMergeQueue')) return membership(memberships.shift() ?? false);
       if (line.includes('/compare/')) return fixture(options.compare ?? 'compare-ahead.json');
       if (line.includes('mergeCommitAllowed')) return fixture('repo-view-merge-methods.json');

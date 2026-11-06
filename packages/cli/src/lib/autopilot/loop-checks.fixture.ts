@@ -1,3 +1,4 @@
+// tdd-cover: e2e packages/cli/src/lib/autopilot/loop-observe.test.ts
 import { readFileSync } from 'node:fs';
 
 type Raw = Record<string, unknown>;

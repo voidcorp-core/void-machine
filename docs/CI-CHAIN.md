@@ -80,6 +80,9 @@ association, including repository IDs and SHAs. It never selects by conclusion,
 completion time or display workflow name. Separate producers, other events,
 missing associations and ambiguous same-suite reruns retain their outcomes.
 Current pending or failed workflows also block before replacement jobs appear.
+A same-head, same-branch PR workflow with absent or ambiguous PR association stays
+non-success even without jobs; an explicit association only to other PRs remains
+unrelated. Uncertain association cannot supersede another run's result.
 
 Both API surfaces are bounded to ten pages of 100; missing fields, duplicate IDs,
 count/cursor gaps, GraphQL errors or a changed head refuse observation. Classic

@@ -181,7 +181,19 @@ export function readCurrentChecks(run: GhRunner, subject: CheckSubject): Current
   // A newer workflow may still be queued before it has registered any jobs.
   for (const current of workflows) {
     const key = workflowKey(current, subject);
-    if (key === undefined || workflows.some((other) =>
+    if (key === undefined) {
+      // An absent or ambiguous association is not proof that this run is unrelated.
+      const possiblyCurrent = current.event === 'pull_request' &&
+        current.head_sha === subject.headSha && current.head_branch === subject.headRef &&
+        (current.pull_requests.length === 0 ||
+          current.pull_requests.some((pull) => pull.number === subject.number));
+      if (possiblyCurrent) {
+        const state = stateOf(current.status.toUpperCase(), current.conclusion?.toUpperCase());
+        states.push(state === 'passing' ? 'pending' : state);
+      }
+      continue;
+    }
+    if (workflows.some((other) =>
       workflowKey(other, subject) === key && other.run_number > current.run_number)) continue;
     states.push(stateOf(current.status.toUpperCase(), current.conclusion?.toUpperCase()));
   }

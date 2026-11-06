@@ -51,6 +51,36 @@ describe('readCurrentChecks', () => {
     contexts.totalCount = contexts.nodes.length;
     expect(read(data, runs)).not.toBe('passing');
   });
+  it.each(['successful', 'empty'])('blocks an unassociated queued workflow with %s contexts', (prior) => {
+    const data = capture(); const runs = workflows(); const seed = present(runs.workflow_runs[0]);
+    const queued = { ...seed, id: seed.id + 1, run_number: seed.run_number + 1,
+      check_suite_node_id: 'new-suite-without-jobs', status: 'queued', conclusion: null,
+      pull_requests: [] }; // allow-null: the new workflow has no conclusion yet
+    if (prior === 'empty') {
+      present(data.data.repository.pullRequest.commits.nodes[0]).commit.statusCheckRollup = null;
+      runs.workflow_runs = [];
+    }
+    runs.workflow_runs.push(queued); runs.total_count = runs.workflow_runs.length;
+    expect(read(data, runs)).toBe('pending');
+  });
+  it.each([['failure', 'failing'], ['success', 'pending']])('keeps an unassociated %s workflow non-success', (conclusion, expected) => {
+    const runs = workflows(); const seed = present(runs.workflow_runs[0]);
+    runs.workflow_runs.push({ ...seed, id: seed.id + 1, run_number: seed.run_number + 1,
+      check_suite_node_id: 'new-suite-without-jobs', status: 'completed',
+      conclusion: present(conclusion), pull_requests: [] });
+    runs.total_count += 1;
+    expect(read(capture(), runs)).toBe(expected);
+  });
+  it.each(['ambiguous', 'unrelated'])('distinguishes %s workflow associations before jobs appear', (association) => {
+    const runs = workflows(); const seed = present(runs.workflow_runs[0]);
+    const other = { ...present(seed.pull_requests[0]), number: 534 };
+    const associations = association === 'ambiguous' ? [...seed.pull_requests, other] : [other];
+    runs.workflow_runs.push({ ...seed, id: seed.id + 1, run_number: seed.run_number + 1,
+      check_suite_node_id: 'new-suite-without-jobs', status: 'queued', conclusion: null,
+      pull_requests: associations }); // allow-null: no conclusion before execution
+    runs.total_count += 1;
+    expect(read(capture(), runs)).toBe(association === 'ambiguous' ? 'pending' : 'passing');
+  });
   it.each(['app', 'workflow', 'event', 'branch', 'pr', 'base'])('keeps independent %s identities', (field) => {
     const data = capture(); const runs = workflows(); const check = latestValidate(data);
     const run = present(runs.workflow_runs.find((run) => run.check_suite_node_id === check.checkSuite.id));
@@ -116,7 +146,8 @@ describe('readCurrentChecks', () => {
     const runs = workflows();
     const seed = present(runs.workflow_runs[0]);
     const additional = Array.from({ length: 97 }, (_, index) => ({
-      ...seed, id: 1000 + index, check_suite_node_id: `extra-suite-${index}`, pull_requests: [],
+      ...seed, id: 1000 + index, check_suite_node_id: `extra-suite-${index}`,
+      pull_requests: [{ ...present(seed.pull_requests[0]), number: 534 }],
     }));
     const all = [...runs.workflow_runs, ...additional]; let pages = 0;
     const run = (args: readonly string[]): string => {

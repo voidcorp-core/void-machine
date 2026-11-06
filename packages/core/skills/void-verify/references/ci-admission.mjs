@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 
 try {
   const name = process.env.GITHUB_EVENT_NAME;
-  if (!['pull_request', 'merge_group', 'push', 'workflow_dispatch'].includes(name)) {
+  if (!['pull_request', 'merge_group', 'push', 'workflow_dispatch', 'schedule'].includes(name)) {
     throw new Error('CI_INVALID_EVENT: unsupported or missing GitHub event.');
   }
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));

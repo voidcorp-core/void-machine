@@ -1,3 +1,4 @@
+import { currentChecksFixture, noWorkflowRuns } from '../../test/fixtures/loop-checks.js';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -315,11 +316,45 @@ describe('observeGithub', () => {
     const run = (args: readonly string[]): string => {
       calls.push([...args]);
       const key = Object.keys(answers).find((prefix) => args.join(' ').includes(prefix));
+      if (key === undefined && args.join(' ').includes('CurrentPullRequestChecks')) {
+        const viewKey = Object.keys(answers).find((key) => key.startsWith('pr view'));
+        const capturedView = viewKey === undefined ? undefined : answers[viewKey];
+        if (capturedView === undefined) throw new Error('view fixture missing');
+        return currentChecksFixture(capturedView);
+      }
+      if (key === undefined && args.join(' ').includes('/actions/runs?')) return noWorkflowRuns;
       if (key === undefined) throw new Error(`unexpected gh call: ${args.join(' ')}`);
       return answers[key] as string;
     };
     return { run, calls };
   }
+
+  it('uses the ready successes after draft failures on the same head', () => {
+    const captured = JSON.parse(fixture('pr-current-checks.json')) as {
+      data: { repository: { pullRequest: { headRefOid: string; commits: { nodes: {
+        commit: { statusCheckRollup: { contexts: { nodes: Raw[] } } };
+      }[] } } } };
+    };
+    const pull = captured.data.repository.pullRequest;
+    const contexts = pull.commits.nodes[0]?.commit.statusCheckRollup.contexts.nodes;
+    if (contexts === undefined) throw new Error('captured contexts missing');
+    const metadata = JSON.stringify({
+      ...openView(), number: 533, headRefOid: pull.headRefOid,
+      headRefName: 'fix/dev-1141-certification', baseRefName: 'develop',
+      statusCheckRollup: contexts,
+    });
+    const { run } = runner({
+      'mergeQueue(branch': fixture('queue-present.json'),
+      'pr view 533': metadata,
+      'CurrentPullRequestChecks': fixture('pr-current-checks.json'),
+      '/actions/runs?': fixture('pr-workflow-runs.json'),
+      'timelineItems': fixture('timeline-requeued-after-ejections.json'),
+      'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
+      'pulls/533/files': fixture('pulls-files-rest.json'),
+    });
+    expect(observeGithub(run, { base: 'develop', pullRequests: [533], defaultBranch: false })
+      .pullRequests.get(533)?.checks).toBe('passing');
+  });
 
   it('reads the queue once and each pull request with its queue event', () => {
     const { run, calls } = runner({
@@ -406,6 +441,8 @@ describe('observeGithub', () => {
         if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
         if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
         if (line.includes('pr view 381')) return JSON.stringify({ ...openView(), changedFiles });
+        if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(viewText('pr-view-open.json'));
+        if (line.includes('/actions/runs?')) return noWorkflowRuns;
         if (line.includes('timelineItems')) return fixture('timeline-requeued-after-ejections.json');
         if (line.includes('isInMergeQueue')) return fixture('pr-queue-membership-absent.json');
         if (line.includes('pulls/381/files')) return page();

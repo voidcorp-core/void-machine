@@ -12,6 +12,15 @@ describe('scheduled stress proof workflow', () => {
     );
 
     expect(source).toContain('schedule:');
+    const commands = [...source.matchAll(/^\s+(?:- )?run: (.+)$/gm)].map((match) => match[1]);
+    expect(commands).toEqual([
+      'pnpm install --frozen-lockfile',
+      'pnpm build',
+      'node scripts/stress-proof.mjs fast 20 10401',
+      'node scripts/stress-proof.mjs complete 10 20401',
+    ]);
+    expect(source).not.toContain('continue-on-error:');
+    expect(source).toContain('name: Build certification prerequisites');
     expect(source).toContain('scripts/stress-proof.mjs fast 20 10401');
     expect(source).toContain('scripts/stress-proof.mjs complete 10 20401');
     expect(source).toContain('actions/upload-artifact@');

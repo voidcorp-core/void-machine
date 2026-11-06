@@ -1,9 +1,8 @@
-// tdd-cover: e2e packages/cli/src/lib/autopilot/loop-observe.test.ts
 import { readFileSync } from 'node:fs';
 
 type Raw = Record<string, unknown>;
 const captured = JSON.parse(readFileSync(
-  new URL('./__fixtures__/gh/pr-current-checks.json', import.meta.url), 'utf8',
+  new URL('../../lib/autopilot/__fixtures__/gh/pr-current-checks.json', import.meta.url), 'utf8',
 )) as { data: { repository: { pullRequest: { commits: { nodes: {
   commit: { statusCheckRollup: { contexts: { nodes: Raw[] } } };
 }[] } } } } };

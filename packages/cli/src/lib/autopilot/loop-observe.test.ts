@@ -1,4 +1,4 @@
-import { currentChecksFixture, noWorkflowRuns } from './loop-checks.fixture.js';
+import { currentChecksFixture, noWorkflowRuns } from '../../test/fixtures/loop-checks.js';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

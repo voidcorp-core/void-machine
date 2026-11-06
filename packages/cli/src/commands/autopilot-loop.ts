@@ -62,8 +62,9 @@ import {
   type GitRunner,
   observeGithub,
   type MergeMethodFlag,
-  PULL_REQUEST_FIELDS,
+  readPullRequest,
   parsePullRequestView,
+  PULL_REQUEST_FIELDS,
   readBehind,
   readDefaultBranch,
   readMergeMethod,
@@ -667,7 +668,7 @@ function guardedMerge(target: MergeTarget, context: LoopRunners) {
     );
   }
   const gh = runner(context.gh, 'gh');
-  const view = viewOf(gh, number);
+  const view = readPullRequest(gh, number);
   if (view.state !== 'open' || view.headSha !== head) {
     throw autopilotFailure(
       'AUTOPILOT_CONTRACT',

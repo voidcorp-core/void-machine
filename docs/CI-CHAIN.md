@@ -71,6 +71,26 @@ complete checks without needing another commit. A conversion back to draft
 invalidates obsolete PR work. Distinct merge groups, dispatches and release runs
 have isolated concurrency keys. Unknown graph relevance currently runs tests.
 
+Autopilot reads current checks through one adapter for both its tick and the
+merge/arm guard. GitHub's rollup can retain a draft failure alongside the ready
+success on the same SHA. The adapter reads all context pages and joins Actions
+runs by check-suite identity. A higher `run_number` replaces a same-name job only
+for the same application, workflow, `pull_request` event and exact PR/head/base
+association, including repository IDs and SHAs. It never selects by conclusion,
+completion time or display workflow name. Separate producers, other events,
+missing associations and ambiguous same-suite reruns retain their outcomes.
+Current pending or failed workflows also block before replacement jobs appear.
+A same-head, same-branch PR workflow with absent or ambiguous PR association stays
+non-success even without jobs; an explicit association only to other PRs remains
+unrelated. Uncertain association cannot supersede another run's result.
+
+Both API surfaces are bounded to ten pages of 100; missing fields, duplicate IDs,
+count/cursor gaps, GraphQL errors or a changed head refuse observation. Classic
+status contexts remain checks; a confirmed empty repository still reports none.
+This requires read access to the Actions API as well as checks; an access failure
+is explicit, never a green fallback. Queue proof semantics and GitHub protection
+are unchanged. See the [current-check decision](decisions-log/2026-11-06-current-pull-request-checks--40cc09ad-6073-4521-aa02-f034818028e0.md).
+
 The PR proof subject is its head SHA; merge-group checks prove the group SHA.
 The immutable consumer tarball and source manifest are produced once, then used
 by browser and three OS installation jobs. Graph conformance is a separate path.

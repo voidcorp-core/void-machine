@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest';
 // execute in the shared Node bundle; these prove stdin, overrides and exit-code
 // mapping stay stable for existing shell integrations.
 const here = dirname(fileURLToPath(import.meta.url));
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 
 function runHook(
   name: string,

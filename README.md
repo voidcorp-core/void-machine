@@ -220,23 +220,55 @@ npx voidmachine runtime add codex
 
 ## Enforce the floor on every pull request
 
-Local hooks protect the machine that has them. To make the same floor
-unavoidable server-side, add the reusable workflow. Five lines in
-`.github/workflows/void-enforce.yml`:
+Local hooks protect the machine that has them. Adopt the reusable enforcement
+workflow into your existing caller, preserving its job/check names and branch
+filters. For a new caller, `.github/workflows/void-enforce.yml` can contain:
 
 ```yaml
 name: void-enforce
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  merge_group:
+    types: [checks_requested]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   enforce:
-    uses: voidcorp-core/void-machine/.github/workflows/enforce.yml@main
+    uses: voidcorp-core/void-machine/.github/workflows/enforce.yml@<full-sha>
 ```
 
-It runs protected-path, secret-content, TDD and boundary checks through the same
-portable Node bundle used inline, annotates the offending lines, and fails
-closed: a missing dependency or an unresolvable base is a red check, never a
-silent pass. Pin `@main` to a release tag for a stable floor. It enforces the
-doctrine floor only; keep your own lint and test CI.
+Replace `<full-sha>` with a reviewed immutable version containing the admission
+behavior below. The placeholder is not an executable version pin. Keep concurrency
+in the caller only: the reusable workflow inherits the caller's `github.workflow`,
+so duplicating its group in the callee can cancel its own invocation.
+
+A draft stops inside the required `enforce` job with `CI_DEFERRED_DRAFT` before
+setup and floor execution. This means preparation is deferred, not that tests
+failed or passed; agents continue focused local work rather than retrying it.
+Marking the same head ready runs the complete floor, and `merge_group` proves the
+queued integration. Only obsolete PR runs share cancellation groups; queue runs
+remain distinct. Do not replace admission with a skipped required job.
+
+The floor checks protected paths, secret content, TDD and boundaries through the
+portable Node bundle, failing closed on missing dependencies or an unresolved
+base. It complements your existing quality workflow. Keep the project's package
+manager, lockfile and Node version owner when adopting the installed `void-verify`
+[quality example](packages/core/skills/void-verify/references/ci-feedback.md).
+For Bun projects, the optional [dependency audit](docs/DEPENDENCY-AUDIT.md) keeps
+required candidate checks and periodic advisory surveillance independent of quality.
+Do not install Bun just to add this example to an npm or pnpm project.
+
+Adoption is explicit: neither installation nor update overwrites your workflows
+or changes branch protection. Check the actual required names before rollout.
+GitHub-hosted runner usage for this public reusable workflow is billed to the
+caller, including a private caller; reuse does not transfer billing to this repo.
+See GitHub's [reusable workflow contract](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
+Measure elapsed feedback time and summed job-minutes separately; this example
+makes no claim about a consumer's invoice savings.
 
 ## Going further
 

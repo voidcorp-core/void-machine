@@ -201,13 +201,13 @@ the local config and the files it includes, the stash, tags, notes, remotes, the
 deploy branches, replace refs, `hooks/` and `info/` are one set for every worktree. The upstream
 (`remote`, `merge`) of every branch but the bases and the one that deploys is left out, since units
 in flight set it when they create or push their branch and drop it with a merged one; the bases'
-own settings still count. So start each worktree from
+own settings still count; only regular root `info/refs`, Git’s generated transport cache, is exempt. Start each worktree from
 `origin/<base>` and never move a local base branch while units are in flight. The baseline
 recorded at `assign` is written once: a second `--before` for the same ticket is refused, so a unit
-cannot re-record the state it left as the state it found. It is compared by the coordinator before it
-publishes, with `autopilot fingerprint --after <ticket>`, and again by the kernel before it arms a
-merge. A changed or missing baseline sends the ticket to a human, unpublished; only that person
-deletes the record.
+cannot re-record the state it left as the state it found. `autopilot fingerprint --after <ticket>`
+checks it; the coordinator publishes only through `autopilot publish --ticket <ticket> --head <sha>
+--remote <remote> --branch <branch>`, which couples that guard to the literal SHA push. Never follow
+refusal with direct Git. Human renewal retains evidence; see [publication and recovery](references/publication.md).
 
 **Disarming.** Armed means GitHub merges without anyone acting again: an auto-merge request, or,
 once the checks pass on a base with a merge queue, an entry in that queue and no request at all.
@@ -276,8 +276,8 @@ through `mission verify`, a committed candidate through `mission writer-event`. 
 only these typed events, no free note; what is not yet one of them does not survive a respawn, and
 uncommitted edits survive only in the worktree. During development, the coordinator may create or reuse a draft pull request
 for the branch; drafts are permitted for development, never for merge admission. After the worker
-returns its commit and green proofs, the coordinator runs `autopilot fingerprint --after <ticket>`,
-pushes, and must mark the same pull request ready (create one only if absent), then move the ticket
+returns its commit and green proofs, the coordinator runs the guarded `autopilot publish` command
+and must mark the same pull request ready (create one only if absent), then move the ticket
 to In Review. The independent reviewer examines ready pull requests only; an unfinished draft waits.
 Blocking findings come back as a hand-back and are corrected as a batch, per `void-implement`.
 

@@ -1,6 +1,6 @@
 import { currentChecksFixture, noWorkflowRuns } from '../../test/fixtures/loop-checks.js';
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, symlinkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -595,6 +595,36 @@ describe('readSharedState', () => {
     fingerprintOf(readSharedState(gitIn(root), { bases: ['develop'] }), ['develop']);
   const git = (root: string, ...args: string[]) =>
     spawnSync('git', ['-c', 'user.email=a@b', '-c', 'user.name=t', ...args], { cwd: root });
+
+  it('ignores only generated regular info/refs through creation, update and removal', () => {
+    const root = repository();
+    const before = fingerprint(root);
+    expect(git(root, 'update-server-info').status).toBe(0);
+    expect(readFileSync(join(root, '.git/info/refs'), 'utf8')).toContain('refs/heads/');
+    expect(changedParts(before, fingerprint(root))).toEqual([]);
+    git(root, 'commit', '-q', '--allow-empty', '-m', 'second');
+    expect(git(root, 'update-server-info').status).toBe(0);
+    expect(changedParts(before, fingerprint(root))).toEqual([]);
+    rmSync(join(root, '.git/info/refs'));
+    expect(changedParts(before, fingerprint(root))).toEqual([]);
+  });
+
+  it.each(['info/exclude', 'info/attributes', 'info/packs', 'info/nested/refs', 'hooks/checksum', 'hooks/refs'])(
+    'still detects %s', (path) => {
+      const root = repository();
+      const before = fingerprint(root);
+      mkdirSync(join(root, '.git', path, '..'), { recursive: true });
+      writeFileSync(join(root, '.git', path), 'changed');
+      expect(changedParts(before, fingerprint(root))).toEqual([path.split('/')[0]]);
+    },
+  );
+
+  it('does not exempt an info/refs symlink', () => {
+    const root = repository();
+    const before = fingerprint(root);
+    symlinkSync('exclude', join(root, '.git/info/refs'));
+    expect(changedParts(before, fingerprint(root))).toEqual(['info']);
+  });
 
   it('sees every shared part a unit can change', () => {
     const root = repository();

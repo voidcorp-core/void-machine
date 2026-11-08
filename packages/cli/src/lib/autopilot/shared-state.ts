@@ -37,8 +37,8 @@ const digest = z.string().regex(/^[0-9a-f]{64}$/, { error: 'must be a sha256 dig
 /** The loop's bases and the branch that deploys: two or three names. */
 const PROTECTED_BRANCHES_MAX = 8;
 
-const fingerprintSchema = z.strictObject({
-  schemaVersion: z.literal(3),
+export const fingerprintSchema = z.strictObject({
+  schemaVersion: z.literal(4),
   /** The branches whose settings the digest keeps whole; every other upstream is left out. */
   protectedBranches: z.array(z.string().min(1).max(255)).min(1).max(PROTECTED_BRANCHES_MAX),
   digests: z.strictObject({
@@ -88,7 +88,7 @@ export function fingerprintOf(
   protectedBranches: readonly string[],
 ): SharedFingerprint {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     protectedBranches: [...protectedBranches],
     digests: {
       config: sha256(sharedConfig(reading.config, protectedBranches)),

@@ -7,13 +7,13 @@ spec: docs/specs/2026-11-05-ci-economy.md
 progress:
   provider: linear
   scope: voidcorp/DEV/void machine
-  order: [DEV-1139, DEV-1140, DEV-1141, DEV-1142, DEV-1143, DEV-1144, DEV-1145]
+  order: [DEV-1204, DEV-1139, DEV-1140, DEV-1141, DEV-1142, DEV-1143, DEV-1144, DEV-1145]
   states:
     ready: [Backlog, Todo]
     started: [In Progress]
     review: [In Review]
     done: [Done, Canceled]
-humanGates: [DEV-1139, DEV-1141, DEV-1144]
+humanGates: [DEV-1204, DEV-1139, DEV-1141, DEV-1144]
 autopilot:
   schemaVersion: 2
   enabled: true
@@ -42,7 +42,11 @@ to independent review and human merge; it does not alter another checkout.
 
 Folpe explicitly requested applying the 5 November CI audit in its recommended
 order with `void-autopilot`. That request supplies the `enabled: true` consent.
-The scope is parent DEV-1138 and the ordered child pool above. One worker preserves
+The scope includes parent DEV-1138 and its ordered child pool, plus DEV-1204.
+On 8 November Folpe explicitly requested correcting the audited consumer issues
+through autopilot. DEV-1204 is admitted first under that extension; the existing
+CI programme and remaining pool are preserved. GitHub #535 and #536 remain
+subsequent requested work, not automatically admitted by this descriptor. One worker preserves
 the requested order and prevents collisions on CI configuration and generated
 assets. Work outside this bounded pool is not admitted by this programme.
 
@@ -77,3 +81,14 @@ Complete this programme through an explicit descriptor change; never repoint it
 silently to another work pool. Completion follows verified native
 closure of the agreed units, with a measurement-only conclusion allowed where the
 spec makes optimization conditional.
+
+## Consumer reliability extension (8 November)
+
+DEV-1204 repairs the confirmed generated Git cache false positive and makes the
+supported publication path stop on guard refusal. Its full Linear acceptance
+criteria govern scope, including auditable human renewal with preserved proof.
+Use strict TDD for the publication boundary and independent exact-head review.
+Keep sensitive Git state guarded; no baseline reset, direct-Git security claim,
+consumer edits, release or deployment is authorized. The protected diff needs
+human merge after the candidate and CI are ready. This is a scoped extension
+explicitly requested by the maintainer, not completion of the existing CI pool.

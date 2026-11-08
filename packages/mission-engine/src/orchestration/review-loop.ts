@@ -245,9 +245,13 @@ function authorizedTargetedRequest(
     || reviewField(writer, 'implementationRound') !== count + 1
     || !['actionKind', 'planHash', 'writerId', 'implementationRound'].every(key =>
       reviewField(writer, key) === reviewField(correction, key))) return false;
-  const open = reconcileReviewFindings(history, freshReviewProofIds(events.filter(event => event.seq < correction.seq), { dependencies: {} }))
-    .filter(finding => finding.classification === 'blocking');
-  return open.length > 0 && sameMembers(reviewField(correction, 'findingIds'), open.map(finding => finding.findingId));
+  // The authenticated dispatch records which blockers required correction at that time.
+  // Without historical Git observations, proof integrity cannot reconstruct that open set.
+  const knownBlockers = mergeFindings(history).filter(finding => finding.classification === 'blocking');
+  const requestedIds = reviewField(correction, 'findingIds');
+  return Array.isArray(requestedIds) && requestedIds.length > 0
+    && new Set(requestedIds).size === requestedIds.length
+    && requestedIds.every(id => knownBlockers.some(finding => finding.findingId === id));
 }
 
 /** Retained native reviewer may start a targeted correction, including after recovery. */

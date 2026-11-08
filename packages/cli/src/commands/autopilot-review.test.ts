@@ -1,6 +1,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import filesystem from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -15,7 +17,7 @@ import {
   type AgentRuntimePort,
   type LaunchPlan,
 } from '@voidcorp/void-machine/agents';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { compileContextPack, sealEvidence, type MissionSpecialistPlan } from '@voidcorp/mission-engine';
 import { createMission, recordMissionEvidence, missionControllerRoutingHash, writeMissionControllerPlan } from '../lib/runs/store.js';
 import { parseSpecialistLifecycleInput, recordSpecialistLifecycle, recordSpecialistRequests } from '../lib/runs/specialist-lifecycle.js';
@@ -226,6 +228,21 @@ function missionCli(cwd: string, args: readonly string[]) {
   { cwd, env: { ...process.env, CODEX_CI: '1' }, encoding: 'utf8', timeout: 15000 });
 }
 
+async function boundNativeMission(repo: Repository, mission: string): Promise<void> {
+  const body = '# DEV-1\nAcceptance: slots are five.\n';
+  const hash = `sha256:${createHash('sha256').update(body).digest('hex')}`;
+  const plan: MissionSpecialistPlan = { planHash: hash, context: { status: 'complete', issues: [] },
+    specialists: [{ specialistId: 'core:independent-code-reviewer', contractVersion: 1,
+      inputHash: hash, state: 'applicable', stages: ['post-implementation'] }] };
+  const ticket = { path: 'tickets/DEV-1.md', contentHash: hash };
+  mkdirSync(join(repo.root, 'tickets'), { recursive: true });
+  writeFileSync(join(repo.root, ticket.path), body);
+  await createMission(repo.root, { missionId: mission, title: 'Review DEV-1', mode: 'team',
+    teamController: { planHash: hash, routingHash: missionControllerRoutingHash(plan, ticket, repo.base),
+      leadWriterId: 'writer:primary', runtime: 'codex' } });
+  await writeMissionControllerPlan(repo.root, mission, plan, ticket, repo.base);
+}
+
 /** Exercise the CLI process, scripting only its external GitHub transport. */
 function reviewCli(cwd: string, args: readonly string[], repo: Repository) {
   const entry = pathToFileURL(resolve('packages/cli/src/commands/autopilot.ts')).href;
@@ -242,6 +259,79 @@ function reviewCli(cwd: string, args: readonly string[], repo: Repository) {
 }
 
 describe('native review routing', () => {
+  it.each(['pending', 'failed', 'subject', 'verdict'] as const)
+  ('retains an intervening %s record when an overlapping preflight resumes', async mode => {
+    const repo = repository();
+    git(repo.root, 'checkout', '-q', '--detach', repo.head);
+    const mission = 'mis_overlapping_primary';
+    const otherMission = 'mis_overlapping_other';
+    await boundNativeMission(repo, mission);
+    if (mode === 'subject') await boundNativeMission(repo, otherMission);
+    const { runners: built, clock } = runners(repo);
+    const args = [...argv(repo.head), '--mission', mission];
+    let enter: () => void = () => undefined;
+    let release: () => void = () => undefined;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const resumed = new Promise<void>(resolve => { release = resolve; });
+    const originalOpen = filesystem.open;
+    let delayed = false;
+    const opening = vi.spyOn(filesystem, 'open').mockImplementation(async (...args) => {
+      if (!delayed && args[0] === join(repo.root, '.void/machine/runs', mission, 'controller-plan.json')) {
+        delayed = true;
+        enter();
+        await resumed;
+      }
+      return originalOpen(...args);
+    });
+    syncBuiltinESMExports();
+    const overlapping = nativeReviewCommand(args, built).then(
+      value => ({ ok: true as const, value }), error => ({ ok: false as const, error: String(error) }));
+    try {
+      await entered;
+      if (mode === 'failed') {
+        git(repo.root, 'worktree', 'add', '-q', '--detach', worktreeOf(repo), repo.base);
+      }
+      const intervening = mode === 'verdict'
+        ? await reviewCommand(argv(repo.head), built)
+        : await nativeReviewCommand([...argv(repo.head), '--mission', mode === 'subject' ? otherMission : mission], built);
+      const current = recorded(repo);
+      if (mode === 'failed') {
+        expect(intervening.value).toMatchObject({ outcome: 'failed' });
+        git(worktreeOf(repo), 'checkout', '-q', '--detach', repo.head);
+      } else if (mode !== 'verdict') {
+        expect(intervening.value).toMatchObject({ outcome: 'awaiting-native-review' });
+      }
+      clock.value += 1000;
+      release();
+      const result = await overlapping;
+      if (mode === 'subject') {
+        expect(result).toMatchObject({ ok: false, error: expect.stringContaining('subject changed') });
+        expect(recorded(repo)).toEqual(current);
+      } else if (mode === 'verdict') {
+        expect(result).toMatchObject({ ok: true, value: { value: current, human: expect.stringContaining('already reviewed') } });
+        expect(recorded(repo)).toEqual(current);
+      } else {
+        expect(result).toMatchObject({ ok: true, value: { value: { outcome: 'awaiting-native-review' } } });
+        const attempts = recorded(repo).attempts;
+        if (mode === 'failed') {
+          expect(attempts).toHaveLength(2);
+          expect(attempts[0]).toEqual(current.attempts[0]);
+        } else {
+          expect(attempts).toEqual(current.attempts);
+          clock.value = (current.attempts[0]?.startedAt ?? 0) + 30 * 60_000;
+          expect((await nativeReviewCommand(args, built)).value).toMatchObject({ outcome: 'failed',
+            cause: expect.stringContaining('ran out of time') });
+          expect(recorded(repo).attempts).toHaveLength(1);
+        }
+      }
+    } finally {
+      release();
+      await overlapping;
+      opening.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
+
   it('keeps title-only missions usable but refuses controlled dispatch and review before an attempt', async () => {
     const repo = repository();
     git(repo.root, 'checkout', '-q', '--detach', repo.head);

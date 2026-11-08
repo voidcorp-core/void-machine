@@ -629,25 +629,36 @@ async function executeReviewCommand(
   if (existing?.verdict !== undefined) {
     return { value: existing, human: `${target.ticket} at ${target.head} is already reviewed\n` };
   }
-  const counted = countedRound(runners.root, target);
-  if (counted !== target.round) {
-    throw autopilotFailure(
-      'AUTOPILOT_CONTRACT',
-      `#${target.pullRequest} is in round ${counted}, not round ${target.round}`,
-      'the round narrows what the reviewer reads, so it is counted from the records, never taken on trust',
-      'copy the round from the `review` action `autopilot next` just returned',
-    );
-  }
   const last = existing?.attempts.at(-1);
   const legacyOpen = last?.runId !== undefined && last.endedAt === undefined;
   const native = !legacy && !legacyOpen
-    ? await prepareNativeMission(argv, runners, target, existing, view.baseRef) : undefined;
+    ? await prepareNativeMission(argv, runners, target, view.baseRef) : undefined;
   const release = lockHead(path, runners.now());
   try {
-    if (native !== undefined) {
-      return await reviewNativeHead(runners, target, path, existing, view.baseRef, native);
+    // Preflight yields to other invocations. Only the locked record owns the attempt and routing.
+    const current = recordedReview(path, target);
+    if (current?.verdict !== undefined) {
+      return { value: current, human: `${target.ticket} at ${target.head} is already reviewed\n` };
     }
-    return await reviewHead(runners, target, path, existing, view.baseRef);
+    const counted = countedRound(runners.root, target);
+    if (counted !== target.round) {
+      throw autopilotFailure(
+        'AUTOPILOT_CONTRACT',
+        `#${target.pullRequest} is in round ${counted}, not round ${target.round}`,
+        'the round narrows what the reviewer reads, so it is counted from the records, never taken on trust',
+        'copy the round from the `review` action `autopilot next` just returned',
+      );
+    }
+    const currentLast = current?.attempts.at(-1);
+    const currentLegacyOpen = currentLast?.runId !== undefined && currentLast.endedAt === undefined;
+    if (!legacy && !currentLegacyOpen) {
+      const prepared = native ?? await prepareNativeMission(argv, runners, target, view.baseRef);
+      if (current?.subject !== undefined && !sameReviewSubject(current.subject, prepared.subject)) {
+        throw Error('native review subject changed during the attempt');
+      }
+      return await reviewNativeHead(runners, target, path, current, view.baseRef, prepared);
+    }
+    return await reviewHead(runners, target, path, current, view.baseRef);
   } finally {
     release();
   }
@@ -665,7 +676,7 @@ function payloadField(payload: unknown, key: string): unknown {
 /** Bind the assigned checkout before consuming an attempt or creating its review checkout. */
 async function prepareNativeMission(
   argv: readonly string[], runners: ReviewRunners, target: ReviewTarget,
-  existing: LocalReview | undefined, base: string,
+  base: string,
 ) {
   const mission = flagValue(argv, '--mission');
   if (mission === undefined) throw Error('NATIVE_REVIEW_REQUIRED: pass --mission with the canonical review mission; use void-orchestrate for the actual native reviewer');
@@ -697,9 +708,6 @@ async function prepareNativeMission(
   if (stored.baseCommit !== change.mergeBase) throw Error('native review base differs from the frozen mission base');
   const subject: ReviewSubject = { taskId: mission, reviewedCommit: target.head,
     baseCommit: change.mergeBase, acceptanceCriteriaHash: stored.ticket.contentHash };
-  if (existing?.subject !== undefined && !sameReviewSubject(existing.subject, subject)) {
-    throw Error('native review subject changed during the attempt');
-  }
   return { mission, roots, stored, writer, change, subject };
 }
 

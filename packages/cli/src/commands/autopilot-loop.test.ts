@@ -921,6 +921,43 @@ describe('guarded publication and human fingerprint renewal', () => {
     expect(spy.pushes).toEqual([['push', '--', 'origin', `${head(root)}:refs/heads/work/DEV-1`]]);
   });
 
+  it.each(['default-target', 'absent-default', 'unreadable', 'malformed', 'missing-runner'])(
+    'does not push when deployment protection is %s', (failure) => {
+      const root = candidate();
+      writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+      git(root, 'branch', 'main');
+      runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+      const spy = publication(root);
+      const { gh: _gh, ...withoutGh } = spy.context;
+      const readDefault = (args: readonly string[]) => {
+        expect(args).toEqual(['repo', 'view', '--json', 'defaultBranchRef']);
+        if (failure === 'unreadable') throw new Error('repository unavailable');
+        if (failure === 'malformed') return '{}';
+        return JSON.stringify({ defaultBranchRef: { name: failure === 'absent-default' ? '' : 'main' } });
+      };
+      const args = publishArgs(root);
+      if (failure === 'default-target') args[args.length - 1] = 'main';
+      const observed = failure === 'missing-runner' ? withoutGh : { ...spy.context, gh: readDefault };
+      expect(runAutopilotCommand(args, '', observed).exitCode).toBe(2);
+      expect(spy.pushes).toEqual([]);
+    },
+  );
+
+  it('allows an ordinary candidate after resolving an undeclared deployment branch', () => {
+    const root = candidate();
+    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const spy = publication(root);
+    const calls: string[][] = [];
+    const result = runAutopilotCommand(publishArgs(root), '', { ...spy.context, gh: (args) => {
+      calls.push([...args]);
+      return JSON.stringify({ defaultBranchRef: { name: 'main' } });
+    } });
+    expect(result.exitCode).toBe(0);
+    expect(calls).toEqual([['repo', 'view', '--json', 'defaultBranchRef']]);
+    expect(spy.pushes).toEqual([['push', '--', 'origin', `${head(root)}:refs/heads/work/DEV-1`]]);
+  });
+
   it.each(['missing', 'invalid', 'legacy', 'changed', 'unreadable', 'head'])(
     'never calls push after a %s guard', (failure) => {
       const root = candidate();

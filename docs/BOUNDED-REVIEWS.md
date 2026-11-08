@@ -83,6 +83,14 @@ resolve every blocking finding against the currently observed proof set, includi
 partially resolved in an earlier correction. Missing, forged or out-of-window historical
 proofs still invalidate native continuity; no historical Git observation is invented.
 
+A controller correction request may reopen even the sole previously resolved blocker when
+its proof becomes stale. Continuation authenticates the recorded request and linked writer
+completion, then requires nonempty, unique finding IDs from the authenticated prior blockers.
+It cannot reconstruct the exact historical open set without the Git observations from that
+time: treating every intact historical proof as fresh would erase a legitimate reopening.
+A request for a subset never resolves the other blockers; current reconciliation still
+requires fresh proofs for every blocking finding before completion or recovery.
+
 For a bounded mission stopped solely by the former `reused-context` false positive after a
 valid targeted PASS, use this explicit disposition on the existing recovery command:
 

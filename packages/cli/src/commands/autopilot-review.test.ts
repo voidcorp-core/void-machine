@@ -1,8 +1,13 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { currentChecksFixture, noWorkflowRuns } from '../test/fixtures/loop-checks.js';
+import { runAutopilotCommand } from './autopilot.js';
+import { mergeCommand } from './autopilot-loop.js';
+import { adapterFor } from '../lib/runtime-adapters.js';
 import {
   type AgentsContext,
   agentsContext,
@@ -85,6 +90,7 @@ function repository(): Repository {
   git(home, 'clone', '-q', origin, root);
   writeFileSync(join(root, '.gitignore'), '.void/machine/\n');
   writeFileSync(join(root, 'loop.ts'), 'export const slots = 4;\n');
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.34.5' }));
   mkdirSync(join(root, '.void'));
   writeFileSync(join(root, '.void', 'program.md'), PROGRAM);
   git(root, 'add', '.');
@@ -213,10 +219,174 @@ const recorded = (repo: Repository, ticket = 'DEV-1', head = repo.head) => {
   return admission.value;
 };
 
+function missionCli(cwd: string, args: readonly string[]) {
+  const entry = pathToFileURL(resolve('packages/cli/src/commands/mission.ts')).href;
+  return spawnSync(process.execPath, ['--import', resolve('packages/cli/node_modules/tsx/dist/loader.mjs'),
+    '-e', `import(${JSON.stringify(entry)}).then(module => module.mission(${JSON.stringify(args)}))`],
+  { cwd, env: { ...process.env, CODEX_CI: '1' }, encoding: 'utf8', timeout: 15000 });
+}
+
+/** Exercise the CLI process, scripting only its external GitHub transport. */
+function reviewCli(cwd: string, args: readonly string[], repo: Repository) {
+  const entry = pathToFileURL(resolve('packages/cli/src/commands/autopilot.ts')).href;
+  const view = github([repo.head]).run(['pr', 'view', '11']);
+  const script = `const cp = require('node:child_process');
+    const original = cp.execFileSync;
+    cp.execFileSync = (command, argv, options) => command === 'gh'
+      ? (argv[1] === 'view' ? ${JSON.stringify(view)} : '')
+      : original(command, argv, options);
+    require('node:module').syncBuiltinESMExports();
+    import(${JSON.stringify(entry)}).then(module => module.autopilot(${JSON.stringify([...args, '--json'])}));`;
+  return spawnSync(process.execPath, ['--import', resolve('packages/cli/node_modules/tsx/dist/loader.mjs'), '-e', script],
+    { cwd, env: { ...process.env, VOID_WORKTREES: repo.worktrees }, encoding: 'utf8', timeout: 15000 });
+}
+
 describe('native review routing', () => {
+  it('keeps title-only missions usable but refuses controlled dispatch and review before an attempt', async () => {
+    const repo = repository();
+    git(repo.root, 'checkout', '-q', '--detach', repo.head);
+    const started = missionCli(repo.root, ['start', '--title', 'Simple task', '--json']);
+    expect(started.status, started.stderr).toBe(0);
+    const { missionId } = JSON.parse(started.stdout);
+    const journalPath = join(repo.root, '.void/machine/runs', missionId, 'events.jsonl');
+    const before = readFileSync(journalPath, 'utf8');
+    const dispatch = missionCli(repo.root, ['dispatch', '--id', missionId, '--json']);
+    expect(dispatch.status).toBe(1);
+    expect(dispatch.stderr).toContain('MISSION_CONTROLLER_PLAN_MISSING');
+    expect(dispatch.stderr).toContain('--ticket');
+    const { runners: built, launches } = runners(repo);
+    await expect(nativeReviewCommand([...argv(repo.head), '--mission', missionId], built))
+      .rejects.toThrow(/MISSION_CONTROLLER_PLAN_MISSING.*--ticket/);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(worktreeOf(repo))).toBe(false);
+    expect(launches).toEqual([]);
+    expect(readFileSync(journalPath, 'utf8')).toBe(before);
+    const resumed = missionCli(repo.root, ['resume', '--id', missionId, '--json']);
+    expect(resumed.stderr).toBe('');
+    expect(JSON.parse(resumed.stdout).recorded).toBe(true);
+  });
+
+  it('starts, dispatches and collects one mission across assigned, installation and coordinator roots', async () => {
+    const repo = repository();
+    const coordinator = join(repo.worktrees, 'coordinator');
+    const assigned = join(repo.worktrees, 'assigned');
+    git(repo.root, 'worktree', 'add', '-q', '--detach', coordinator, repo.base);
+    git(repo.root, 'worktree', 'add', '-q', '--detach', assigned, repo.base);
+    await adapterFor('codex').wire({ stageRoot: repo.root, installRoot: repo.root,
+      sourceRoot: resolve('packages/core'), enabledPlugins: ['harness'], enabledPacks: [],
+      source: 'local', marketplaceRepo: 'acme/harness', pinVersion: '7.0.0' });
+    writeFileSync(join(repo.root, '.void', 'program.md'), 'unreadable installation programme');
+    writeFileSync(join(coordinator, '.void', 'program.md'), PROGRAM.replace('program: loop', 'program: coordinator'));
+    writeFileSync(join(repo.root, 'unrelated.txt'), 'installation dirt');
+    writeFileSync(join(coordinator, 'unrelated.txt'), 'coordinator dirt');
+    const ticket = '.void/machine/tickets/DEV-1.md';
+    mkdirSync(join(assigned, '.void/machine/tickets'), { recursive: true });
+    const body = '# DEV-1\nAcceptance: slots are five.\n';
+    writeFileSync(join(assigned, ticket), body);
+    const started = missionCli(assigned, ['start', '--title', 'DEV-1', '--ticket', ticket, '--json']);
+    expect(started.status, started.stderr + started.stdout).toBe(0);
+    const { missionId } = JSON.parse(started.stdout);
+    const first = missionCli(assigned, ['dispatch', '--id', missionId, '--json']);
+    expect(first.status, first.stderr + first.stdout).toBe(0);
+    expect(JSON.parse(first.stdout).action.kind, first.stdout).toBe('run-lead-writer');
+    git(assigned, 'checkout', '-q', '--detach', repo.head);
+    expect(missionCli(assigned, ['writer-event', '--id', missionId, '--json']).status).toBe(0);
+    const dispatch = missionCli(assigned, ['dispatch', '--id', missionId, '--json']);
+    expect(dispatch.status, dispatch.stderr + dispatch.stdout).toBe(0);
+    const envelope = JSON.parse(dispatch.stdout).envelopes[0];
+    expect(envelope.reviewSubject.reviewedCommit).toBe(repo.head);
+    const native = { ...runners(repo).runners, root: coordinator, now: Date.now };
+    const args = [...argv(repo.head), '--mission', missionId, '--worktree', '../assigned'];
+    // Preflight must neither create the review checkout nor spend a deadline.
+    await expect(nativeReviewCommand([...argv(repo.head), '--mission', missionId], native))
+      .rejects.toThrow(/worktree.*HEAD/);
+    const foreign = repository();
+    await expect(nativeReviewCommand([...args.slice(0, -1), foreign.root], native))
+      .rejects.toThrow(/same Git repository/);
+    writeFileSync(join(assigned, ticket), `${body}Changed criteria.`);
+    await expect(nativeReviewCommand(args, native)).rejects.toThrow(/ticket binding/);
+    writeFileSync(join(assigned, ticket), body);
+    expect(existsSync(reviewPath(coordinator, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(worktreeOf(repo))).toBe(false);
+    const planPath = join(repo.root, '.void/machine/runs', missionId, 'controller-plan.json');
+    const frozenPlan = readFileSync(planPath, 'utf8');
+    writeFileSync(planPath, '{}');
+    await expect(nativeReviewCommand(args, native)).rejects.toThrow(/MISSION_CONTROLLER_PLAN_INVALID/);
+    writeFileSync(planPath, frozenPlan);
+    const prepared = reviewCli(coordinator, args, repo);
+    expect(prepared.status, prepared.stderr + prepared.stdout).toBe(0);
+    expect(JSON.parse(prepared.stdout)).toMatchObject({ outcome: 'awaiting-native-review', subject: envelope.reviewSubject });
+    const pending = recorded({ ...repo, root: coordinator });
+    git(assigned, 'checkout', '-q', '--detach', repo.base);
+    await expect(nativeReviewCommand(args, native)).rejects.toThrow(/worktree HEAD/);
+    expect(recorded({ ...repo, root: coordinator }).attempts).toEqual(pending.attempts);
+    git(assigned, 'checkout', '-q', '--detach', repo.head);
+    const resumed = missionCli(assigned, ['resume', '--id', missionId, '--json']);
+    expect(resumed.stderr).toBe('');
+    expect(JSON.parse(resumed.stdout).recorded).toBe(true);
+    await nativeReviewCommand(args, { ...native, now: () => native.now() + 1000 });
+    expect(recorded({ ...repo, root: coordinator }).attempts).toEqual(pending.attempts);
+    const contextId = '/root/review/linked';
+    for (const status of ['started', 'completed'] as const) {
+      const input = { envelope, contextId, ...(status === 'started' ? {} : {
+        completion: { ...clean, contractVersion: envelope.contractVersion,
+          review: { ...envelope.reviewSubject, writerId: 'writer:primary', reviewerId: 'reviewer:linked',
+            readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
+            provenance: { kind: 'native-context', contextId } } },
+      }) };
+      const inputPath = '.void/machine/review-input.json';
+      writeFileSync(join(assigned, inputPath), JSON.stringify(input));
+      const result = missionCli(assigned, ['specialist-event', '--id', missionId, '--status', status,
+        '--input', inputPath, '--json']);
+      expect(result.status, result.stderr + result.stdout).toBe(0);
+    }
+    const result = reviewCli(coordinator, args, repo);
+    expect(result.status, result.stderr + result.stdout).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ verdict: { receipt: envelope.reviewSubject, verdict: { blocking: [] } } });
+    const record = recorded({ ...repo, root: coordinator });
+    expect(readLocalReviews(coordinator, ['DEV-1']).get('DEV-1')?.get(repo.head)).toEqual(record);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(reviewPath(assigned, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(join(repo.root, ticket))).toBe(false);
+    expect(existsSync(join(coordinator, ticket))).toBe(false);
+    expect(existsSync(join(repo.root, '.void/machine/runs', missionId, 'controller-plan.json'))).toBe(true);
+    expect(existsSync(join(assigned, '.void/machine/runs', missionId))).toBe(false);
+    const view = native.gh(['pr', 'view', '11']);
+    const observedGh = (args: readonly string[]) => {
+      const line = args.join(' ');
+      if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
+      if (line.includes('/actions/runs?')) return noWorkflowRuns;
+      if (line.includes('mergeQueue(branch')) return readFileSync(new URL('queue-present.json', FIXTURES), 'utf8');
+      if (line.includes('isInMergeQueue')) return readFileSync(new URL('pr-queue-membership-absent.json', FIXTURES), 'utf8');
+      if (line.includes('timelineItems')) return JSON.stringify({ data: { repository: { pullRequest: {
+        timelineItems: { nodes: [] },
+      } } } });
+      if (line.includes('pulls/11/files')) return JSON.stringify([{ filename: 'loop.ts', status: 'modified' }]);
+      return native.gh(args);
+    };
+    const context = { root: coordinator, gh: observedGh, git: gitIn(coordinator), now: new Date().toISOString() };
+    expect(runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context).exitCode).toBe(0);
+    const tracker = JSON.stringify({ schemaVersion: 1, queue: { entries: [] }, tickets: [{
+      id: 'DEV-1', status: 'In Review', humanWait: false, pullRequest: 11,
+      branch: 'work/DEV-1', footprint: ['loop.ts'],
+    }], recent: [], liveWorkers: [], quota: 'ok' });
+    const next = runAutopilotCommand(['next', '--json'], tracker, context);
+    expect(next.exitCode, next.stderr).toBe(0);
+    expect(JSON.parse(next.stdout).actions).toContainEqual({ kind: 'enable-auto-merge',
+      ticketId: 'DEV-1', pullRequest: 11, headSha: repo.head });
+    // Merge reaches the current-check guard only after reading the coordinator's clean record.
+    const pendingView = JSON.stringify({ ...JSON.parse(view),
+      statusCheckRollup: [{ __typename: 'StatusContext', context: 'ci', state: 'PENDING' }] });
+    const pendingGh = (args: readonly string[]) => args.join(' ').includes('CurrentPullRequestChecks')
+      ? currentChecksFixture(pendingView) : observedGh(args);
+    expect(() => mergeCommand(['merge', '--ticket', 'DEV-1', '--pr', '11', '--head', repo.head],
+      { ...context, gh: pendingGh })).toThrow(/pending check/);
+  });
+
   it.each(['clean', 'unresolved', 'stale', 'fresh'] as const)
   ('collects %s canonical native history and binds ticket identity and bytes', async mode => {
     const repo = repository();
+    git(repo.root, 'checkout', '-q', '--detach', repo.head);
     const { runners: built, launches } = runners(repo);
     const { agents: _agents, ...nativeRunners } = built;
     const mission = 'mis_native_autopilot_1234';
@@ -240,12 +410,10 @@ describe('native review routing', () => {
     if (mode === 'clean') {
       expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({ outcome: 'awaiting-native-review' });
       expect(recorded(repo).attempts).toHaveLength(1);
-      const wrong = await nativeReviewCommand([...argv(repo.head, 'DEV-2'), '--mission', mission], nativeRunners);
-      expect(wrong.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('ticket binding') });
+      await expect(nativeReviewCommand([...argv(repo.head, 'DEV-2'), '--mission', mission], nativeRunners))
+        .rejects.toThrow(/ticket binding/);
       writeFileSync(join(repo.root, ticket.path), `${ticketBody}Changed criteria.\n`);
-      expect((await nativeReviewCommand(args, nativeRunners)).value).toMatchObject({
-        outcome: 'failed', cause: expect.stringContaining('ticket binding'),
-      });
+      await expect(nativeReviewCommand(args, nativeRunners)).rejects.toThrow(/ticket binding/);
       writeFileSync(join(repo.root, ticket.path), ticketBody);
     }
     const subject = { taskId: mission, reviewedCommit: repo.head, baseCommit: repo.base, acceptanceCriteriaHash: hash };
@@ -315,9 +483,9 @@ describe('native review routing', () => {
     mkdirSync(join(path, '..'), { recursive: true });
     git(repo.root, 'worktree', 'add', '-q', '--detach', path, repo.base);
     const { runners: built, launches } = runners(repo);
-    const output = await nativeReviewCommand([...argv(repo.head), '--mission', 'mis_unknown_12345678'], built);
-    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining(`not ${repo.head}`) });
-    expect(recorded(repo).verdict).toBeUndefined();
+    await expect(nativeReviewCommand([...argv(repo.head), '--mission', 'mis_unknown_12345678'], built))
+      .rejects.toThrow(/worktree HEAD/);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
     expect(launches).toEqual([]);
   });
 });

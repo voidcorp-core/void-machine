@@ -131,8 +131,11 @@ Missing required native capability is reported with cause and next action.
 ## Publish worker observations
 
 For each mission worker or reviewer, keep one `run_<opaque-id>` for its assignment.
-Reuse the unit's open canonical mission; if it has none, create it with
-`void-machine mission start --title <unit> --json` and retain its returned ID.
+The coordinator reuses the unit's open canonical mission. If none exists for controlled
+implementation, it creates one from the assigned worktree with `void-machine mission start --title <unit>
+--ticket <full-frozen-ticket> --json` and hands the returned ID to the writer.
+The writer reuses that ID and runs `mission dispatch` from the assigned worktree.
+Title-only missions remain valid for simple work without controlled dispatch or review.
 Do not recreate a mission to evade a refusal. This publication never substitutes
 for the mission's implementation, verification or independent review receipts.
 
@@ -189,8 +192,10 @@ stays within the existing project boundary and must match its digest and invocat
 A central report marked done is never a review receipt. Preserve limitations honestly.
 
 For autopilot, `autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>
---mission <canonical-id>` checks the target ticket against the existing bounded ticket reader (filename identity
-and frozen content hash), then prepares the exact review subject/worktree and, when
+--mission <canonical-id> --worktree <assigned-path>` runs from the coordinator checkout,
+retains its programme and local verdicts there, and checks the target ticket against the existing bounded ticket reader (filename identity
+and frozen content hash) in the assigned checkout, reading the journal from its resolved
+installation root. Missing plans and mismatched subjects refuse before spending an attempt. It then prepares the exact review subject/worktree and, when
 pending, returns awaiting-native-review. ORCH performs the native invocation and
 records its real receipts, then repeats the same command to collect. Do not start a
 new mission to repair a pending attempt. Budgets, protected paths, HEAD drift checks,

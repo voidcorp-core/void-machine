@@ -15,7 +15,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   type AgentsContext,
   acceptReview,
@@ -42,6 +42,7 @@ import { readProgramDescriptor } from '../lib/autopilot/program.js';
 import { flagValue } from './autopilot-usage.js';
 import { collectNativeReview } from '../lib/autopilot/native-review.js';
 import { inspectMission, loadMissionControllerPlan } from '../lib/runs/store.js';
+import { resolveProjectRoots } from '../lib/project-roots.js';
 import { readTicket } from '../lib/mission-inputs.js';
 import { computeProjectState } from '../lib/runs/project-state.js';
 
@@ -69,7 +70,7 @@ export interface ReviewCommandOutput {
 }
 
 export interface ReviewRunners {
-  /** The main checkout, under which `.void/machine/autopilot` lives. */
+  /** The coordinator checkout, which owns the programme and `.void/machine/autopilot`. */
   readonly root: string;
   readonly gh: GhRunner;
   /** git with argv in one directory, never through a shell. */
@@ -637,14 +638,14 @@ async function executeReviewCommand(
       'copy the round from the `review` action `autopilot next` just returned',
     );
   }
+  const last = existing?.attempts.at(-1);
+  const legacyOpen = last?.runId !== undefined && last.endedAt === undefined;
+  const native = !legacy && !legacyOpen
+    ? await prepareNativeMission(argv, runners, target, existing, view.baseRef) : undefined;
   const release = lockHead(path, runners.now());
   try {
-    const last = existing?.attempts.at(-1);
-    const legacyOpen = last?.runId !== undefined && last.endedAt === undefined;
-    if (!legacy && !legacyOpen) {
-      const mission = flagValue(argv, '--mission');
-      if (mission === undefined) throw Error('NATIVE_REVIEW_REQUIRED: pass --mission with the canonical review mission; use void-orchestrate for the actual native reviewer');
-      return await reviewNativeHead(runners, target, path, existing, view.baseRef, mission);
+    if (native !== undefined) {
+      return await reviewNativeHead(runners, target, path, existing, view.baseRef, native);
     }
     return await reviewHead(runners, target, path, existing, view.baseRef);
   } finally {
@@ -661,10 +662,52 @@ function payloadField(payload: unknown, key: string): unknown {
   return typeof payload === 'object' && payload && key in payload ? Reflect.get(payload, key) : undefined;
 }
 
+/** Bind the assigned checkout before consuming an attempt or creating its review checkout. */
+async function prepareNativeMission(
+  argv: readonly string[], runners: ReviewRunners, target: ReviewTarget,
+  existing: LocalReview | undefined, base: string,
+) {
+  const mission = flagValue(argv, '--mission');
+  if (mission === undefined) throw Error('NATIVE_REVIEW_REQUIRED: pass --mission with the canonical review mission; use void-orchestrate for the actual native reviewer');
+  const roots = resolveProjectRoots(resolve(runners.root, flagValue(argv, '--worktree') ?? '.'));
+  const common = (root: string) => realpathSync(runners.git(root)([
+    'rev-parse', '--path-format=absolute', '--git-common-dir',
+  ]).trim());
+  if (common(roots.workRoot) !== common(runners.root)) {
+    throw Error('NATIVE_REVIEW_WORKTREE_INVALID: --worktree must belong to the same Git repository as the coordinator');
+  }
+  if (runners.git(roots.workRoot)(['rev-parse', 'HEAD']).trim() !== target.head) {
+    throw Error('NATIVE_REVIEW_WORKTREE_INVALID: assigned worktree HEAD differs from --head; pass --worktree with the assigned checkout at the exact candidate');
+  }
+  const stored = await loadMissionControllerPlan(roots.installRoot, mission);
+  const ticket = await readTicket(roots.workRoot, stored.ticket.path);
+  if (ticket.id !== target.ticket || ticket.path !== stored.ticket.path
+    || `sha256:${createHash('sha256').update(ticket.body).digest('hex')}` !== stored.ticket.contentHash) {
+    throw Error('native review ticket binding differs from the target ticket or frozen criteria');
+  }
+  const inspection = await inspectMission(roots.installRoot, mission, { dependencies: {} }, { quarantine: false });
+  if (inspection.stream.issues.length > 0) throw Error('native mission journal is incomplete or invalid');
+  const start = inspection.stream.events.find(event => event.kind === 'mission.started');
+  if (payloadField(start?.payload, 'routingHash') !== stored.routingHash) {
+    throw Error('native review routing binding differs from the canonical mission');
+  }
+  const writer = payloadField(start?.payload, 'leadWriterId');
+  if (typeof writer !== 'string') throw Error('native mission has no canonical lead writer identity');
+  const change = changeOf(runners, roots.workRoot, base);
+  if (stored.baseCommit !== change.mergeBase) throw Error('native review base differs from the frozen mission base');
+  const subject: ReviewSubject = { taskId: mission, reviewedCommit: target.head,
+    baseCommit: change.mergeBase, acceptanceCriteriaHash: stored.ticket.contentHash };
+  if (existing?.subject !== undefined && !sameReviewSubject(existing.subject, subject)) {
+    throw Error('native review subject changed during the attempt');
+  }
+  return { mission, roots, stored, writer, change, subject };
+}
+
 async function reviewNativeHead(
   runners: ReviewRunners, target: ReviewTarget, path: string, existing: LocalReview | undefined,
-  base: string, mission: string,
+  base: string, native: Awaited<ReturnType<typeof prepareNativeMission>>,
 ): Promise<ReviewCommandOutput> {
+  const { mission, roots, stored, writer, change, subject } = native;
   let record: LocalReview = existing ?? { schemaVersion: 1, ticketId: target.ticket,
     pullRequest: target.pullRequest, headSha: target.head, attempts: [] };
   const previous = record.attempts.at(-1);
@@ -682,34 +725,19 @@ async function reviewNativeHead(
     ensureWorktree(runners, worktree, target);
     const drift = worktreeDrift(runners, worktree, target.head);
     if (drift !== undefined) throw Error(drift);
-    const change = changeOf(runners, worktree, base);
     const guarded = protectedPathOf(runners.root, change.paths);
     if (guarded !== undefined) throw Error(`the change touches ${guarded}, which only a person reviews and merges`);
-    const stored = await loadMissionControllerPlan(runners.root, mission);
-    const ticket = await readTicket(runners.root, stored.ticket.path);
-    if (ticket.id !== target.ticket || ticket.path !== stored.ticket.path
-      || `sha256:${createHash('sha256').update(ticket.body).digest('hex')}` !== stored.ticket.contentHash) {
-      throw Error('native review ticket binding differs from the target ticket or frozen criteria');
-    }
-    if (stored.baseCommit !== change.mergeBase) throw Error('native review base differs from the frozen mission base');
-    const subject: ReviewSubject = { taskId: mission, reviewedCommit: target.head,
-      baseCommit: change.mergeBase, acceptanceCriteriaHash: stored.ticket.contentHash };
-    if (record.subject !== undefined && !sameReviewSubject(record.subject, subject)) {
-      throw Error('native review subject changed during the attempt');
-    }
     record = { ...record, subject };
     writeRecord(path, record);
     const project = await computeProjectState(worktree);
     const evidenceContext = { dependencies: { 'git:working-tree': project.diffHash } };
-    const inspection = await inspectMission(runners.root, mission, evidenceContext);
+    const inspection = await inspectMission(roots.installRoot, mission, evidenceContext);
     if (inspection.stream.issues.length > 0) throw Error('native mission journal is incomplete or invalid');
     const events = inspection.stream.events;
     const start = events.find(event => event.kind === 'mission.started');
     if (payloadField(start?.payload, 'routingHash') !== stored.routingHash) {
       throw Error('native review routing binding differs from the canonical mission');
     }
-    const writer = payloadField(start?.payload, 'leadWriterId');
-    if (typeof writer !== 'string') throw Error('native mission has no canonical lead writer identity');
     const writerSeq = events.filter(event => event.kind === 'lead-writer.completed').at(-1)?.seq ?? 0;
     const completed = events.some(event => event.kind === 'specialist.completed'
       && event.subject === REVIEWER_SPECIALIST && event.seq > writerSeq
@@ -720,7 +748,7 @@ async function reviewNativeHead(
           previous: target.round === 1 ? [] : previousBlocking(runners.root, target) }) },
         human: `Native independent review required for ${target.ticket} at ${target.head}; preserve this attempt and record the actual invocation in ${mission}\n` };
     }
-    const native = await collectNativeReview(runners.root, events, subject, writer, target.round, evidenceContext);
+    const native = await collectNativeReview(roots.installRoot, events, subject, writer, target.round, evidenceContext);
     const after = worktreeDrift(runners, worktree, target.head);
     if (after !== undefined) throw Error(after);
     const verdict = admitReviewCompletion(JSON.stringify(native.completion), target.head, target.round);

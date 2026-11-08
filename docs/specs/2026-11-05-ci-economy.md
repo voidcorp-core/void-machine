@@ -102,3 +102,15 @@ sample size. A live protected workflow result may require a human merge; report
 that limit instead of claiming a local contract test proves hosted execution.
 No numeric savings target is invented from the audit. A measurement-only outcome
 is acceptable for units 4 and 7 when a proposed optimization fails the value bar.
+
+
+## Consumer reliability extension (8 November)
+
+Folpe explicitly requested correcting the audited consumer issues through autopilot.
+DEV-1204 precedes the existing CI pool and repairs the confirmed `info/refs` false
+positive, couples publication to its guard, and retains explicit human renewal
+proof. Its complete Linear acceptance criteria govern this bounded extension;
+GitHub #535 and #536 remain subsequent work. The existing CI units and invariants
+remain in scope. Strict publication TDD, independent exact-head review and human
+merge of the protected programme change apply. No external consumer mutation,
+release, deployment or silent baseline renewal is authorized.

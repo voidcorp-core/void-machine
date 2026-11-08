@@ -193,3 +193,15 @@ protected change requires independent review and human merge.
 Read official GitHub Actions event, job-condition, concurrency, REST pull-request
 file and merge-queue documentation before changing those interfaces. The current
 [visual chain](../CI-CHAIN.md) links the job graphs and official graph guide.
+
+
+## Consumer reliability extension (8 November)
+
+Folpe explicitly requested correcting the audited consumer issues through autopilot.
+DEV-1204 precedes the existing CI pool and repairs the confirmed `info/refs` false
+positive, couples publication to its guard, and retains explicit human renewal
+proof. Its complete Linear acceptance criteria govern this bounded extension;
+GitHub #535 and #536 remain subsequent work. The existing CI units and invariants
+remain in scope. Strict publication TDD, independent exact-head review and human
+merge of the protected programme change apply. No external consumer mutation,
+release, deployment or silent baseline renewal is authorized.

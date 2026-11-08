@@ -562,7 +562,7 @@ const SHARED_FILES_MAX = 512;
  * One line per file, `<sha256> <path>`, sorted: the content is hashed here and
  * never leaves this function. A symbolic link is read as its target, not followed.
  */
-function directoryDigests(directory: string): string {
+function directoryDigests(directory: string, omitServerRefs = false): string {
   if (!existsSync(directory)) return '';
   const entries = readdirSync(directory, { recursive: true, encoding: 'utf8' });
   if (entries.length > SHARED_FILES_MAX) {
@@ -573,6 +573,8 @@ function directoryDigests(directory: string): string {
       const path = join(directory, entry);
       const stat = lstatSync(path);
       if (stat.isDirectory()) return [];
+      // Git rebuilds this transport cache; only this regular root file is exempt.
+      if (omitServerRefs && entry === 'refs' && stat.isFile()) return [];
       const content = stat.isSymbolicLink() ? `link:${readlinkSync(path)}` : readFileSync(path);
       const hash = createHash('sha256').update(content).digest('hex');
       return [`${hash} ${relative(directory, path)}`];
@@ -628,7 +630,7 @@ export function readSharedState(run: GitRunner, request: SharedStateRequest): Sh
     bases: read('bases'),
     replace: read('replace'),
     hooks: attempt('reading hooks/', () => directoryDigests(join(common, 'hooks'))),
-    info: attempt('reading info/', () => directoryDigests(join(common, 'info'))),
+    info: attempt('reading info/', () => directoryDigests(join(common, 'info'), true)),
   };
 }
 

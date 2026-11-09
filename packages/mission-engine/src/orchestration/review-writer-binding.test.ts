@@ -70,7 +70,7 @@ it('requires an actual retained-author response before admitting a writer-only a
       expectedJournalHash: canonicalJsonHash(history), disposition: { kind: 'review-writer-binding' as const, responseEventId: response.eventId } },
     observation: { stage: 'post-implementation' as const, reviewPolicy: 'bounded-corrections-v1' as const,
       reviewSubject: { ...subject, reviewedCommit: 'c'.repeat(40) }, expectedSource: 'runtime:codex' as const,
-      maxRounds: 2, contractVersions: { [specialist]: 1 }, currentInputHashes: { [specialist]: hash } } };
+      maxRounds: 2, contractVersions: { [specialist]: 1 }, currentInputHashes: { [specialist]: `sha256:${'b'.repeat(64)}` } } };
   const decision = planStoppedMissionRecovery(input);
   expect(decision).toMatchObject({ kind: 'recover', receipt: { nextAction: 'correction', consumedRounds: 1, remainingRounds: 2 } });
   if (decision.kind !== 'recover') throw Error('Recovery expected');
@@ -86,7 +86,7 @@ it('requires an actual retained-author response before admitting a writer-only a
       stages: ['post-implementation' as const] }] },
     stream: replayEventLog([...history, recovered].map(serializeEvent).join('\n')),
     reviewSubject: input.observation.reviewSubject, evidenceContext: { dependencies: {} }, maxReviewRounds: 2,
-    currentInputHashesByStage: { 'pre-implementation': {}, 'post-implementation': { [specialist]: hash } },
+    currentInputHashesByStage: { 'pre-implementation': {}, 'post-implementation': input.observation.currentInputHashes },
     specialistRuntime: { status: 'available' as const, limitations: [] } };
   const correctedDecision = orchestrateMissionTeam(controllerInput);
   expect(correctedDecision.action.kind, correctedDecision.reasons.join('; ')).toBe('run-correction');
@@ -94,6 +94,7 @@ it('requires an actual retained-author response before admitting a writer-only a
   const parsedCompletion = parseSpecialistCompletionValue(completion);
   if (!parsedCompletion || !projected.ok) throw Error('Expected validated fixture');
   const findingIds = reconcileReviewFindings([{ event: events[4]!, completion: parsedCompletion }], []).map(item => item.findingId);
+  expect(correctedDecision.action).toMatchObject({ findingIds });
   const correction = event({ seq: 13, eventId: 'evt_correction_request_12345678', kind: 'lead-writer.requested',
     subject: 'writer:primary', source: 'void-harness:mission.dispatch', payload: { actionKind: 'run-correction',
       planHash: hash, writerId: 'writer:primary', implementationRound: 2, findingIds } });
@@ -107,6 +108,23 @@ it('requires an actual retained-author response before admitting a writer-only a
       reviewScope: { kind: 'targeted', findingIds: ['finding-blocker'], affectedPaths: ['source.ts'] } } });
   const continuation = [...projected.events, correction, corrected, targeted];
   expect(canContinueNativeReview(continuation, targeted, reviewer)).toBe(true);
+  // Historical fixture: preserve the defective empty request, deriving no replacement journal event.
+  const empty = { ...correction, payload: { ...correction.payload as object, findingIds: [] } };
+  const retainedEmpty = [...projected.events, empty, corrected, targeted];
+  expect(canContinueNativeReview(retainedEmpty, targeted, reviewer)).toBe(true);
+  expect(canContinueNativeReview(retainedEmpty, targeted, reviewer)).toBe(true);
+  expect(empty.payload.findingIds).toEqual([]);
+  for (const invalid of [
+    [...projected.events, { ...empty, payload: { ...empty.payload, findingIds: ['fnd_unrelated'] } }, corrected, targeted],
+    [...projected.events, empty, { ...corrected, causationId: 'evt_unrelated_12345678' }, targeted],
+    [...projected.events, empty, { ...corrected, payload: { ...corrected.payload as object, planHash: 'wrong' } }, targeted],
+    [...projected.events, empty, { ...empty, eventId: 'evt_extra_correction_12345678' }, corrected, targeted],
+    [...projected.events.filter(item => item.eventId !== recovered.eventId), empty, corrected, targeted],
+  ]) expect(canContinueNativeReview(invalid, targeted, reviewer)).toBe(false);
+  const wrongScope = { ...targeted, payload: { ...targeted.payload as object,
+    reviewScope: { kind: 'targeted', findingIds: ['other'], affectedPaths: ['source.ts'] } } };
+  expect(canContinueNativeReview([...projected.events, empty, corrected, wrongScope], wrongScope, reviewer)).toBe(false);
+
   expect(canContinueNativeReview([...history, recovered, correction, corrected, targeted], targeted, reviewer)).toBe(false);
   expect(canContinueNativeReview(continuation, targeted, '/root/replacement-reviewer')).toBe(false);
   const proof = sealEvidence(evidenceDraft());
@@ -123,6 +141,7 @@ it('requires an actual retained-author response before admitting a writer-only a
           proofIds: [proof.evidenceId], resolutions: [{ findingId: 'finding-blocker', status: 'resolved', proofIds: [proof.evidenceId] }] } } } });
   const freshHistory = [...projected.events, correction, corrected, proofEvent, targetedRequest, targetedStarted, targetedCompletion];
   expect(validNativeReviewContinuation(freshHistory, targetedCompletion)).toBe(true);
+  expect(validNativeReviewContinuation(freshHistory.map(item => item === correction ? empty : item), targetedCompletion)).toBe(true);
   const staleProofHistory = [...projected.events, proofEvent, correction, corrected, targetedRequest, targetedStarted, targetedCompletion]
     .map((item, index) => ({ ...item, seq: index + 1 }));
   expect(validNativeReviewContinuation(staleProofHistory, staleProofHistory.at(-1)!)).toBe(false);

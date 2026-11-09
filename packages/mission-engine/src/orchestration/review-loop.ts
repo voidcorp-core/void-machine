@@ -215,6 +215,17 @@ function sameMembers(actual: unknown, expected: readonly string[]): boolean {
     && new Set(actual).size === actual.length && actual.every(value => expected.includes(value));
 }
 
+/** Read only from recovery-validated events; stale input hashes do not erase the bound review's blockers. */
+export function writerBindingCorrectionFindings(events: readonly CanonicalEvent[]): readonly NormalizedReviewFinding[] {
+  const recovery = writerBindingRecovery(events);
+  const binding = recovery && reviewField(recovery, 'writerBinding');
+  if (!binding || typeof binding !== 'object' || !('completionEventId' in binding)) return [];
+  const original = events.find(event => event.eventId === binding.completionEventId);
+  const envelope = original && parseEnvelope(original);
+  if (!envelope || !recovery || original.seq >= recovery.seq) return [];
+  return reconcileReviewFindings([envelope], []).filter(finding => finding.classification === 'blocking');
+}
+
 function authorizedTargetedRequest(
   events: readonly CanonicalEvent[], request: CanonicalEvent, history: readonly CompletionEnvelope[],
 ): boolean {
@@ -246,13 +257,26 @@ function authorizedTargetedRequest(
     || reviewField(writer, 'implementationRound') !== count + 1
     || !['actionKind', 'planHash', 'writerId', 'implementationRound'].every(key =>
       reviewField(writer, key) === reviewField(correction, key))) return false;
-  // The authenticated dispatch records which blockers required correction at that time.
-  // Without historical Git observations, proof integrity cannot reconstruct that open set.
   const knownBlockers = mergeFindings(history).filter(finding => finding.classification === 'blocking');
   const requestedIds = reviewField(correction, 'findingIds');
-  return Array.isArray(requestedIds) && requestedIds.length > 0
-    && new Set(requestedIds).size === requestedIds.length
+  if (!Array.isArray(requestedIds)) return false;
+  if (requestedIds.length > 0) return new Set(requestedIds).size === requestedIds.length
     && requestedIds.every(id => knownBlockers.some(finding => finding.findingId === id));
+  // Compatibility for the sole empty dispatch emitted by the writer-binding recovery defect.
+  // Its immutable original review, exact writer completion and targeted scope still own the obligation.
+  const recovery = writerBindingRecovery(events);
+  const binding = recovery && reviewField(recovery, 'writerBinding');
+  const recoveredBlockers = writerBindingCorrectionFindings(events);
+  return recovery !== undefined && correction.seq > recovery.seq && count === 1
+    && reviewField(writer, 'writerId') === original.writerId
+    && binding !== undefined && typeof binding === 'object' && binding !== null
+    && 'completionEventId' in binding && binding.completionEventId === previous.event.eventId
+    && history.length === 1 && recoveredBlockers.length > 0
+    && sameMembers(recoveredBlockers.map(finding => finding.findingId), knownBlockers.map(finding => finding.findingId))
+    && events.filter(event => event.kind === 'lead-writer.requested'
+      && reviewField(event, 'actionKind') === 'run-correction').length === 1
+    && events.filter(event => event.kind === 'specialist.requested' && event.subject === request.subject
+      && event.seq > recovery.seq && event.seq <= request.seq).length === 1;
 }
 
 /** Retained native reviewer may start a targeted correction, including after recovery. */

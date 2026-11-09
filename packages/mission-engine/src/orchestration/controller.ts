@@ -24,6 +24,7 @@ import { validatedRecoveredReviewEvents } from './mission-recovery.js';
 import {
   BOUNDED_REVIEW_BUDGET,
   freshReviewProofIds,
+  writerBindingCorrectionFindings,
   type ReviewLoopState,
   reduceReviewLoop,
 } from './review-loop.js';
@@ -791,7 +792,7 @@ export function orchestrateMissionTeam(
     }
     const reasons = ['Author-confirmed writer binding permits one correction and one targeted continuation; original review remains degraded'];
     return applyRuntimeCertification({ phase: 'correction', action: { kind: 'run-correction', writerId: start.leadWriterId,
-      findingIds: postReview.findings.filter(finding => finding.classification === 'blocking').map(finding => finding.findingId) },
+      findingIds: writerBindingCorrectionFindings(reviewEvents).map(finding => finding.findingId) },
       review: postReview, verdict: overrideVerdict(baseVerdict, 'blocked', reasons), reasons }, input.specialistRuntime);
   }
   if (bindingRecovery && postReview && input.stream.events.some(event => event.seq > bindingRecovery.seq

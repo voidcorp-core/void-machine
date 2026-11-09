@@ -493,6 +493,17 @@ pending and the mission closed.
    fresh or rerun SQL merely to obtain a new timestamp. Existing evidence obligations
    and their discharge checks still apply.
 
+A changed current head does not erase the original blockers: correction dispatch
+normalizes findings from the exact completion named by the validated writer-binding
+recovery. A historical empty `findingIds` request from this defect is interpreted
+only for that recovery's sole round-two correction, with the canonical writer and
+plan, exact completed request/causation, and matching original targeted scope.
+Nonempty incorrect IDs, unrelated recoveries and extra correction requests refuse.
+The raw request remains unchanged. Resume the existing targeted request with the
+actual retained invocation and returned result through ordinary `specialist-event`
+`started` and `completed`; do not dispatch another review or writer completion.
+Fresh proof and all existing continuation checks still apply.
+
 The original degraded verdict, historical subject, findings, proof references,
 limitations and resolutions remain unchanged. Effective history substitutes only
 the canonical writer. Recovery grants correction, never PASS. There is no new general

@@ -15,7 +15,6 @@ import {
   type MissionVerdictStatus,
   type OrchestrationCapability,
   orchestrateMissionTeam,
-  parseRecoveredReviewBindings,
   planLensExecution,
   type RecoveryDecision,
   type SpecialistDispatchEnvelope,
@@ -23,7 +22,6 @@ import {
   type SpecialistRuntimeCapability,
   selectMissionMode,
   validatedSpecialistContractMigrations,
-  validatedReviewWriterBindingResponse,
 } from '@voidcorp/mission-engine';
 import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission, validateMissionReviewBase } from '../lib/mission-inputs.js';
 
@@ -38,7 +36,7 @@ import { loadMissionUsage } from '../lib/runs/usage-report.js';
 import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
 import { observedMissionLifecycle, requireOpenMission } from '../lib/runs/mission-lifecycle.js';
-import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
+import { observeRecoveryArtifacts, parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
 import { recordReviewWriterBindingLifecycle, type ReviewAmendmentStatus } from '../lib/runs/review-writer-binding.js';
 import { collectKnownSecrets } from '../lib/runs/redact.js';
 import { loadSpecialistMigrationComparisonCatalog, observeSpecialistMigrationAssets, parseSpecialistContractMigrationRequest, recordSpecialistContractMigration } from '../lib/runs/specialist-contract-migration.js';
@@ -686,19 +684,9 @@ export async function recoverStoppedMission(
       }
     }
   }
-  const provenance = request.disposition.kind !== 'review-provenance' ? undefined
-    : await readRecoveryReviewBindings(workRoot, request.disposition.resolutionArtifact.path);
-  if (request.disposition.kind === 'review-writer-binding') {
-    const amendment = validatedReviewWriterBindingResponse(inspected.stream.events, request.disposition.responseEventId);
-    const artifact = amendment && objectField(amendment.response.payload, 'responseArtifact');
-    const path = artifact && objectField(artifact, 'path');
-    if (typeof path !== 'string' || canonicalJsonHash(await recoveryResolutionArtifact(workRoot, path)) !== canonicalJsonHash(artifact)) {
-      throw Error('MISSION_RECOVERY_INVALID: retained author response artifact changed or is absent');
-    }
-  }
-  const resolutionArtifact = provenance?.artifact ?? ((request.disposition.kind === 'review-blocker'
-    || request.disposition.kind === 'command-correction')
-    ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
+  const { provenance, resolutionArtifact } = await observeRecoveryArtifacts(
+    workRoot, request, inspected.stream.events,
+  );
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
   const recoverySpecialists = targetedContextRecovery || writerBindingRecovery
@@ -728,17 +716,6 @@ export async function recoverStoppedMission(
     routingHash: stored.routingHash, runtime: identity.runtime, capability } };
 }
 
-async function readRecoveryReviewBindings(root: string, path: string) {
-  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 64 * 1024,
-    pathEscapeMessage: 'MISSION_RECOVERY_PROVENANCE: artifact escapes project root',
-    invalidMessage: 'MISSION_RECOVERY_PROVENANCE: artifact must be a bounded stable file' });
-  const value: unknown = JSON.parse(loaded.body);
-  const bindings = isUnknownRecord(value) && Object.keys(value).length === 1
-    ? parseRecoveredReviewBindings(value['bindings']) : undefined;
-  if (bindings === undefined) throw new Error('MISSION_RECOVERY_PROVENANCE: exact original review bindings are required');
-  return { bindings, artifact: { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` } };
-}
-
 async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
   const inspected = await inspectMission(roots.installRoot, missionId, { dependencies: {} });
   const identity = missionRuntimeIdentity(inspected.stream.events);
@@ -751,13 +728,6 @@ async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
     throw new Error(`SPECIALIST_EVIDENCE_INVALID: ${capability.limitations.join('; ')}`);
   }
   return capability;
-}
-
-async function recoveryResolutionArtifact(root: string, path: string) {
-  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 100_000,
-    pathEscapeMessage: 'MISSION_RECOVERY_INVALID: resolution artifact escaped the project',
-    invalidMessage: 'MISSION_RECOVERY_INVALID: unsafe or oversized resolution artifact' });
-  return { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` };
 }
 
 /**

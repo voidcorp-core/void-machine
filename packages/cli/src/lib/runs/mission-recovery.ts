@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import { writeSequencedEventOnce } from '@voidcorp/hook-runner';
 import {
-  canonicalJson, canonicalJsonHash, 
+  canonicalJson, canonicalJsonHash, type CanonicalEvent, parseRecoveredReviewBindings,
+  validatedReviewWriterBindingResponse,
   type MissionRecoveryObservation, type MissionRecoveryRequest,parseEventLine, planStoppedMissionRecovery,
 } from '@voidcorp/mission-engine';
 import { inspectMission } from './store.js';
+import { readBoundedProjectFile } from '../safe-read.js';
 
 /** Admission and compare-and-append share the existing journal lock; no effect is replayed. */
 export async function recordStoppedMissionRecovery(
@@ -112,3 +114,43 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
   return { ...base, disposition: { kind: disposition['kind'], completionEventIds: ids,
     resolutionArtifact: { path: artifact['path'], sha256: artifact['sha256'] } } };
 }
+
+/** Reobserve recovery artifacts before admission without changing their original bounds. */
+export async function observeRecoveryArtifacts(
+  root: string, request: MissionRecoveryRequest, events: readonly CanonicalEvent[],
+) {
+  const provenance = request.disposition.kind !== 'review-provenance' ? undefined
+    : await readRecoveryReviewBindings(root, request.disposition.resolutionArtifact.path);
+  if (request.disposition.kind === 'review-writer-binding') {
+    const amendment = validatedReviewWriterBindingResponse(events, request.disposition.responseEventId);
+    const artifact = amendment && record(amendment.response.payload)
+      ? amendment.response.payload['responseArtifact'] : undefined;
+    const path = record(artifact) ? artifact['path'] : undefined;
+    if (typeof path !== 'string' || canonicalJsonHash(await recoveryResolutionArtifact(root, path)) !== canonicalJsonHash(artifact)) {
+      throw Error('MISSION_RECOVERY_INVALID: retained author response artifact changed or is absent');
+    }
+  }
+  const resolutionArtifact = provenance?.artifact ?? ((request.disposition.kind === 'review-blocker'
+    || request.disposition.kind === 'command-correction')
+    ? await recoveryResolutionArtifact(root, request.disposition.resolutionArtifact.path) : undefined);
+  return { provenance, resolutionArtifact };
+}
+
+async function readRecoveryReviewBindings(root: string, path: string) {
+  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 64 * 1024,
+    pathEscapeMessage: 'MISSION_RECOVERY_PROVENANCE: artifact escapes project root',
+    invalidMessage: 'MISSION_RECOVERY_PROVENANCE: artifact must be a bounded stable file' });
+  const value: unknown = JSON.parse(loaded.body);
+  const bindings = record(value) && Object.keys(value).length === 1
+    ? parseRecoveredReviewBindings(value['bindings']) : undefined;
+  if (bindings === undefined) throw new Error('MISSION_RECOVERY_PROVENANCE: exact original review bindings are required');
+  return { bindings, artifact: { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` } };
+}
+
+async function recoveryResolutionArtifact(root: string, path: string) {
+  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 100_000,
+    pathEscapeMessage: 'MISSION_RECOVERY_INVALID: resolution artifact escaped the project',
+    invalidMessage: 'MISSION_RECOVERY_INVALID: unsafe or oversized resolution artifact' });
+  return { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` };
+}
+

@@ -29,7 +29,7 @@ Usage:
   ${PRODUCT_COMMAND} autopilot update-branch --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
-  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--json]
+  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--worktree <assigned-path>] [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
@@ -57,8 +57,10 @@ then pushes the literal SHA to the named remote branch. It refuses a base or dep
 destination. No push runs after a missing, invalid or indeterminate guard. A failed
 push has an unknown remote outcome: inspect the remote before a deliberate retry.
 Direct Git commands and external concurrent Git writers are outside this guarantee.
-review answers review: it
-checks out the exact head in a detached worktree at the durable worktree
+review reads the assigned checkout selected by --worktree (relative to the coordinator
+checkout, which is the default). It validates the same repository, exact HEAD and frozen
+ticket/plan before spending an attempt. The resolved installation owns the mission journal;
+the coordinator retains its programme, rounds, locks and verdicts. It then checks out the exact head in a detached worktree at the durable worktree
 location, checks its HEAD before and after and collects a fresh-context, read-only
 independent-code-reviewer receipt bound to exact commit, base, criteria and actual
 invocation. Awaiting-native-review asks ORCH to invoke and record it, then repeat

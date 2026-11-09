@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it, vi } from 'vitest';
-import { canonicalJsonHash, type MissionSpecialistPlan, type SpecialistDispatchEnvelope } from '@voidcorp/mission-engine';
+import { canonicalJsonHash, type MissionSpecialistPlan, type SpecialistCompletion, type SpecialistDispatchEnvelope } from '@voidcorp/mission-engine';
 import { dispatchMissionSpecialists, planMission, recordLeadWriterCompletion,
   recoverStoppedMission, recordMissionClosure } from '../../commands/mission.js';
 import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
 import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
-import { createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
+import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 import { verifyMissionCommand } from './verify.js';
 
 const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
@@ -52,8 +52,7 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targe
   let correctionProofIds: readonly string[] = [];
   async function complete(envelope: SpecialistDispatchEnvelope, contextId: string) {
     await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
-    await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId,
-      completion: { schemaVersion: 1, specialistId: envelope.specialistId,
+    const completion = { schemaVersion: 1, specialistId: envelope.specialistId,
         contractVersion: envelope.contractVersion, completionId: `completion_${contextId}_${envelope.reviewRound}`,
         verdict: targeted && envelope.reviewScope?.kind === 'general' ? 'changes-requested' : 'pass',
         findings: targeted && envelope.reviewScope?.kind === 'general' ? [{ id: 'readiness-unverified',
@@ -67,7 +66,19 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targe
           scope: envelope.reviewScope ?? { kind: 'general' as const }, proofIds: correctionProofIds,
           resolutions: envelope.reviewScope?.kind === 'targeted' ? [{ findingId: 'readiness-unverified',
             status: 'resolved' as const, proofIds: correctionProofIds }] : [],
-          provenance: { kind: 'native-context' as const, contextId } } }) } });
+          provenance: { kind: 'native-context' as const, contextId } } }) } satisfies SpecialistCompletion;
+    if (!targeted && envelope.reviewSubject !== undefined) {
+      // Replay a legacy malformed receipt; current ingestion must continue rejecting it.
+      await appendMissionEvent(root, ID, { source: `runtime:${envelope.runtime}`,
+        kind: 'specialist.completed', subject: envelope.specialistId, correlationId: ID,
+        payload: { stage: envelope.stage, reviewRound: envelope.reviewRound,
+          inputHash: envelope.inputHash, contractVersion: envelope.contractVersion, contextId,
+          reviewSubject: { ...envelope.reviewSubject },
+          ...(envelope.reviewScope === undefined ? {} : { reviewScope: { ...envelope.reviewScope } }),
+          completion } });
+    } else {
+      await recordSpecialistLifecycle(root, ID, { status: 'completed', envelope, contextId, completion });
+    }
   }
   expect((await dispatch()).action.kind).toBe('run-lead-writer');
   await writeFile(join(root, 'runtime.ts'), 'export const ready = true;\n');

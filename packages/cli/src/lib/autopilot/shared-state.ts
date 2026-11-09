@@ -54,7 +54,8 @@ export const fingerprintSchema = z.strictObject({
   }),
 });
 
-export type SharedFingerprint = z.infer<typeof fingerprintSchema>;
+export const retainedFingerprintSchema = fingerprintSchema.extend({ schemaVersion: z.union([z.literal(3), z.literal(4)]) });
+export type SharedFingerprint = z.infer<typeof retainedFingerprintSchema>;
 
 /**
  * `branch.<name>.remote` and `.merge` are the upstream of a branch. Units in
@@ -86,9 +87,10 @@ function sha256(text: string): string {
 export function fingerprintOf(
   reading: SharedStateReading,
   protectedBranches: readonly string[],
+  schemaVersion: 3 | 4 = 4,
 ): SharedFingerprint {
   return {
-    schemaVersion: 4,
+    schemaVersion,
     protectedBranches: [...protectedBranches],
     digests: {
       config: sha256(sharedConfig(reading.config, protectedBranches)),
@@ -109,12 +111,13 @@ export function changedParts(
   before: SharedFingerprint,
   after: SharedFingerprint,
 ): SharedStatePart[] {
+  if (before.schemaVersion !== after.schemaVersion) return [...SHARED_STATE_PARTS];
   return SHARED_STATE_PARTS.filter((part) => before.digests[part] !== after.digests[part]);
 }
 
 /** A fingerprint read back from its record: exactly the digests, nothing else. */
 export function admitFingerprint(value: unknown): Admission<SharedFingerprint> {
-  const parsed = fingerprintSchema.safeParse(value);
+  const parsed = retainedFingerprintSchema.safeParse(value);
   if (parsed.success) return { ok: true, value: parsed.data };
   const issues = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
   return { ok: false, reason: `shared state fingerprint refused: ${issues.join('; ')}` };

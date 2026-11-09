@@ -28,9 +28,16 @@ not that output and stays guarded. Symlinks, nested `refs`, `info/exclude`,
 `info/attributes`, hooks and their checksums, config/includes, bases, stash, tags,
 notes, remotes and replace refs retain their previous coverage.
 
-Version 3 aggregated the whole info directory. Its digest cannot be converted to
-v4 without historical file contents. A legacy record refuses with an explicit
-human-renewal instruction; it is never silently re-recorded.
+Version 3 aggregates the whole info directory, including regular root `info/refs`.
+A retained v3 record is compared against a current reading using that same complete
+v3 policy at both publication checks and in `autopilot next` merge decisions. All nine digests and retained protected branches
+stay authoritative; any drift refuses. No conversion, renewal or baseline write is
+needed for an unchanged v3 state. Versions 1 and 2 remain unsupported.
+
+A v3 aggregate cannot be converted to v4 without historical file contents. Relaxing
+its policy or accepting actual drift still requires the explicit human renewal below.
+`fingerprint --record` reports the current v4 reading for that renewal inspection;
+`fingerprint --after` and publication use the retained policy for comparison.
 
 ## Explicit human renewal
 

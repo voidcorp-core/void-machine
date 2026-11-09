@@ -108,7 +108,8 @@ describe('admitFingerprint', () => {
     const { bases: _b, replace: _r, hooks: _h, info: _i, ...older } = digests;
     expect(admitFingerprint({ schemaVersion: 1, digests: older })).toMatchObject({ ok: false });
     expect(admitFingerprint({ schemaVersion: 4, digests })).toMatchObject({ ok: false });
-    expect(admitFingerprint({ schemaVersion: 3, protectedBranches: KEPT, digests })).toMatchObject({ ok: false });
+    expect(admitFingerprint({ schemaVersion: 3, protectedBranches: KEPT, digests })).toMatchObject({ ok: true });
+    expect(changedParts(fingerprintOf(reading(), KEPT, 3), fingerprintOf(reading(), KEPT))).toEqual(SHARED_STATE_PARTS);
     // A record that left out only one ticket's upstream read another config.
     expect(admitFingerprint({ schemaVersion: 2, branch: 'work/dev-1', digests })).toMatchObject({ ok: false });
   });

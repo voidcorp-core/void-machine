@@ -28,6 +28,7 @@ import {
   reduceReviewLoop,
 } from './review-loop.js';
 import { validatedSpecialistContractMigrations } from './specialist-contract-migration.js';
+import { writerBindingRecovery } from './review-writer-binding.js';
 
 export interface MissionSpecialistPlan {
   readonly planHash: string;
@@ -777,6 +778,26 @@ export function orchestrateMissionTeam(
       reviewRound: migration.receipt.reviewRound,
     } }),
   });
+  const bindingRecovery = recovered.ok ? writerBindingRecovery(input.stream.events) : undefined;
+  if (bindingRecovery && postReview && postReview.issues.length === 0 && obligations.issues.length === 0
+    && unresolvedPreparation.length === 0 && (lastWriterSeq ?? 0) < bindingRecovery.seq) {
+    const observation = record(lifecycleField(bindingRecovery, 'observation') as JsonValue);
+    const subject = observation?.['reviewSubject'];
+    if (canonicalJsonHash(subject) !== canonicalJsonHash(input.reviewSubject)
+      || canonicalJsonHash(observation?.['currentInputHashes']) !== canonicalJsonHash(
+        Object.fromEntries(Object.keys(record(observation?.['currentInputHashes'] ?? null) ?? {}).map(id =>
+          [id, input.currentInputHashesByStage['post-implementation'][id]])))) {
+      return stopped('blocked', postReview, baseVerdict, ['Writer binding recovery observations changed before correction']);
+    }
+    const reasons = ['Author-confirmed writer binding permits one correction and one targeted continuation; original review remains degraded'];
+    return applyRuntimeCertification({ phase: 'correction', action: { kind: 'run-correction', writerId: start.leadWriterId,
+      findingIds: postReview.findings.filter(finding => finding.classification === 'blocking').map(finding => finding.findingId) },
+      review: postReview, verdict: overrideVerdict(baseVerdict, 'blocked', reasons), reasons }, input.specialistRuntime);
+  }
+  if (bindingRecovery && postReview && input.stream.events.some(event => event.seq > bindingRecovery.seq
+    && event.kind === 'specialist.completed') && !postReview.readyForVerdict) {
+    return stopped('blocked', postReview, baseVerdict, ['The single targeted continuation is spent; retain the original review budget']);
+  }
   if (postReview?.status === 'blocked' || postReview?.status === 'degraded') {
     return applyRuntimeCertification(
       decideReviewPhase(start, postReview, baseVerdict, 'post-implementation'), input.specialistRuntime);

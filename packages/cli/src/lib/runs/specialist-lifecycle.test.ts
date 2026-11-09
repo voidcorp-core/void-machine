@@ -54,6 +54,24 @@ const COMPLETION = {
 } as const;
 
 describe('specialist lifecycle adapter', () => {
+  it('rejects a native writer alias before recording an independent review', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'void-writer-binding-'));
+    await createMission(root, { missionId: ID, title: 'Canonical writer binding', mode: 'team',
+      teamController: { planHash: HASH, routingHash: HASH, leadWriterId: 'writer:primary', runtime: 'codex', runtimeAttested: true } });
+    const subject = { taskId: ID, baseCommit: 'a'.repeat(40), reviewedCommit: 'b'.repeat(40), acceptanceCriteriaHash: HASH };
+    const envelope = { ...ENVELOPE, reviewSubject: subject, reviewScope: { kind: 'general' as const } };
+    const contextId = '/root/original-reviewer';
+    await recordSpecialistRequests(root, ID, [envelope], HASH);
+    await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
+    const before = (await inspectMission(root, ID, { dependencies: {} })).stream.events;
+    await expect(recordSpecialistLifecycle(root, ID, parseSpecialistLifecycleInput('completed', {
+      envelope, contextId, completion: { ...COMPLETION, review: { ...subject,
+        reviewerId: contextId, writerId: '/root/native-writer', readOnly: true,
+        scope: { kind: 'general' }, proofIds: [], resolutions: [],
+        provenance: { kind: 'native-context', contextId } } },
+    }))).rejects.toThrow('canonical lead writer');
+    expect((await inspectMission(root, ID, { dependencies: {} })).stream.events).toEqual(before);
+  });
   it('preserves native opaque context names as data throughout lifecycle parsing', () => {
     const contextId = '/root/preparation_panel/security';
     expect(parseSpecialistLifecycleInput('started', { envelope: ENVELOPE, contextId }))

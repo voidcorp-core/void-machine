@@ -66,6 +66,10 @@ export function parseMissionRecoveryRequest(value: unknown): MissionRecoveryRequ
   const disposition = value['disposition'];
   const base = { schemaVersion: 1 as const, closureEventId: value['closureEventId'],
     expectedJournalHash: value['expectedJournalHash'] };
+  if (disposition['kind'] === 'review-writer-binding') {
+    if (!exact(disposition, ['kind', 'responseEventId']) || !eventId(disposition['responseEventId'])) invalid();
+    return { ...base, disposition: { kind: 'review-writer-binding', responseEventId: disposition['responseEventId'] } };
+  }
   if (disposition['kind'] === 'controller-defect') {
     const defect = disposition['defect'];
     if (!exact(disposition, ['kind', 'defect'])

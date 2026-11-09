@@ -23,6 +23,7 @@ import {
   type SpecialistRuntimeCapability,
   selectMissionMode,
   validatedSpecialistContractMigrations,
+  validatedReviewWriterBindingResponse,
 } from '@voidcorp/mission-engine';
 import { captureMissionReviewSubject, compileDispatchContent, detectedStack, gitFiles, missionReviewBase, planBoundMission, planMission, validateMissionReviewBase } from '../lib/mission-inputs.js';
 
@@ -38,6 +39,7 @@ import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
 import { observedMissionLifecycle, requireOpenMission } from '../lib/runs/mission-lifecycle.js';
 import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
+import { recordReviewWriterBindingLifecycle, type ReviewAmendmentStatus } from '../lib/runs/review-writer-binding.js';
 import { collectKnownSecrets } from '../lib/runs/redact.js';
 import { loadSpecialistMigrationComparisonCatalog, observeSpecialistMigrationAssets, parseSpecialistContractMigrationRequest, recordSpecialistContractMigration } from '../lib/runs/specialist-contract-migration.js';
 import { parseSpecialistEvidenceRequest, parseSpecialistEvidenceResponse, recordSpecialistEvidence, requestSpecialistEvidence } from '../lib/runs/specialist-evidence.js';
@@ -134,7 +136,7 @@ export type MissionArgs =
   | {
       readonly kind: 'specialist-event';
       readonly missionId: string;
-      readonly status: SpecialistLifecycleStatus;
+      readonly status: SpecialistLifecycleStatus | ReviewAmendmentStatus;
       readonly inputPath: string;
       readonly json: boolean;
     }
@@ -434,7 +436,8 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     const missionId = missionIdFrom(options);
     if (typeof missionId !== 'string') return missionId;
     const status = valueAfter(options, '--status');
-    if (status !== 'started' && status !== 'completed' && status !== 'failed') {
+    if (status !== 'started' && status !== 'completed' && status !== 'failed'
+      && status !== 'amendment-requested' && status !== 'amendment-started' && status !== 'amendment-completed') {
       return invalid(
         'status must be started, completed, or failed',
         'pass --status started|completed|failed',
@@ -632,6 +635,7 @@ export async function recoverStoppedMission(
   const identity = missionRuntimeIdentity(inspected.stream.events);
   const coordinator = coordinatorRuntimeIdentity(process.env);
   const provenanceRecovery = request.disposition.kind === 'review-provenance';
+  const writerBindingRecovery = request.disposition.kind === 'review-writer-binding';
   const targetedContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'targeted-review-context';
   if (identity === undefined || (coordinator.attested && coordinator.runtime !== identity.runtime)
@@ -684,19 +688,27 @@ export async function recoverStoppedMission(
   }
   const provenance = request.disposition.kind !== 'review-provenance' ? undefined
     : await readRecoveryReviewBindings(workRoot, request.disposition.resolutionArtifact.path);
+  if (request.disposition.kind === 'review-writer-binding') {
+    const amendment = validatedReviewWriterBindingResponse(inspected.stream.events, request.disposition.responseEventId);
+    const artifact = amendment && objectField(amendment.response.payload, 'responseArtifact');
+    const path = artifact && objectField(artifact, 'path');
+    if (typeof path !== 'string' || canonicalJsonHash(await recoveryResolutionArtifact(workRoot, path)) !== canonicalJsonHash(artifact)) {
+      throw Error('MISSION_RECOVERY_INVALID: retained author response artifact changed or is absent');
+    }
+  }
   const resolutionArtifact = provenance?.artifact ?? ((request.disposition.kind === 'review-blocker'
     || request.disposition.kind === 'command-correction')
     ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
-  const recoverySpecialists = targetedContextRecovery
+  const recoverySpecialists = targetedContextRecovery || writerBindingRecovery
     ? migration.plan.specialists.filter(value => value.specialistId === 'core:independent-code-reviewer')
     : opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
     ? migration.plan.specialists.filter(value => value.state === 'applicable'
       && value.stages?.includes('pre-implementation'))
     : migration.plan.specialists;
   const observation: MissionRecoveryObservation = {
-    ...((provenance === undefined && !targetedContextRecovery) || subject?.baseCommit === undefined
+    ...((provenance === undefined && !targetedContextRecovery && !writerBindingRecovery) || subject?.baseCommit === undefined
       || subject.reviewedCommit === undefined ? {} : {
       ...(provenance === undefined ? {} : { reviewBindings: provenance.bindings }),
       reviewSubject: { taskId: missionId, baseCommit: subject.baseCommit,
@@ -1234,6 +1246,7 @@ function usage(): string {
   mission evidence-event --id <id> --status started|completed --input <json-file> [--json]
   mission recover --id <id> --input <json-file> [--json]
   mission specialist-event --id <id> --status started|completed|failed --input <json-file> [--json]
+  mission specialist-event --id <id> --status amendment-requested|amendment-started|amendment-completed --input <json-file> [--json]
   mission writer-event --id <id> [--json]
   mission close --id <id> --reason interrupted|abandoned [--json]
   mission verify --id <id> [--shell] [--json] -- <command...>
@@ -1355,6 +1368,14 @@ export async function mission(args: readonly string[]): Promise<void> {
       return;
     }
     if (parsed.kind === 'specialist-event') {
+      if (parsed.status === 'amendment-requested' || parsed.status === 'amendment-started'
+        || parsed.status === 'amendment-completed') {
+        await evidenceRuntime(roots, parsed.missionId);
+        const result = await recordReviewWriterBindingLifecycle(journal, parsed.missionId, parsed.status,
+          await readLifecycleJson(root, parsed.inputPath), root);
+        process.stdout.write(parsed.json ? `${JSON.stringify(result)}\n` : `recorded specialist.review-${parsed.status}: ${result.eventId}\n`);
+        return;
+      }
       const lifecycle = parseSpecialistLifecycleInput(
         parsed.status,
         await readLifecycleJson(root, parsed.inputPath),

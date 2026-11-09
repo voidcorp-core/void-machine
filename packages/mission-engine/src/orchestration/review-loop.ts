@@ -12,6 +12,7 @@ import {
   type SpecialistFindingSeverity,
 } from '../specialist/completion.js';
 import type { EvidenceObligationState } from '../specialist/evidence-obligations.js';
+import { writerBindingRecovery } from './review-writer-binding.js';
 import type {
   SpecialistId,
   SpecialistInvocationStage,
@@ -270,8 +271,11 @@ export function canContinueNativeReview(
   if (history.length === 0 || history.some(item => !item)) return false;
   const prior = history.filter((item): item is CompletionEnvelope => item !== undefined);
   const first = prior[0];
+  const amendment = writerBindingRecovery(events);
   if (!first || first.completion.review?.scope.kind !== 'general'
-    || first.completion.verdict !== 'changes-requested'
+    || (first.completion.verdict !== 'changes-requested'
+      && !(first.completion.verdict === 'degraded' && amendment && prior.length === 1))
+    || (amendment !== undefined && prior.length !== 1)
     || new Set(prior.map(item => item.completion.completionId)).size !== prior.length
     || events.some(event => event.seq < request.seq && ['specialist.started', 'specialist.completed'].includes(event.kind)
       && reviewField(event, 'contextId') === contextId

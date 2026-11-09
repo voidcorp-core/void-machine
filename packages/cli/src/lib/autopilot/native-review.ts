@@ -3,6 +3,9 @@ import {
   type CanonicalEvent, canonicalJsonHash, type IndependentReviewReceipt,
   parseSpecialistCompletionValue, type ReviewSubject, sameReviewSubject,
   type SpecialistCompletion, type EvidenceContext, parseEvidence, assessEvidence, reconcileReviewFindings,
+  validatedRecoveredReviewEvents,
+  validNativeReviewContinuation,
+  writerBindingRecovery,
 } from '@voidcorp/mission-engine';
 import { readBoundedProjectFile } from '../safe-read.js';
 
@@ -20,9 +23,12 @@ function refused(reason: string): never { throw Error(`NATIVE_REVIEW_REFUSED: ${
 
 /** Only canonical requested -> started -> completed evidence is a review transport. */
 export async function collectNativeReview(
-  root: string, events: readonly CanonicalEvent[], subject: ReviewSubject, writerId: string, round: 1 | 2,
+  root: string, originalEvents: readonly CanonicalEvent[], subject: ReviewSubject, writerId: string, round: 1 | 2,
   evidenceContext: EvidenceContext = { dependencies: {} },
 ): Promise<NativeReview> {
+  const projected = validatedRecoveredReviewEvents(originalEvents);
+  if (!projected.ok) refused(projected.reasons.join('; '));
+  const events = projected.events;
   const writerSeq = events.filter(event => event.kind === 'lead-writer.completed').at(-1)?.seq ?? 0;
   const terminals = events.filter(event => event.kind === 'specialist.completed'
     && event.missionId === subject.taskId && event.subject === 'core:independent-code-reviewer'
@@ -36,6 +42,9 @@ export async function collectNativeReview(
     || canonicalJsonHash(field(terminal.payload, 'reviewScope')) !== canonicalJsonHash(receipt.scope)
     || (round === 1 ? receipt.scope.kind !== 'general' : receipt.scope.kind !== 'targeted')) {
     refused('missing independent completion for the exact commit, base, criteria, writer and scope');
+  }
+  if (writerBindingRecovery(events) && (round !== 2 || !validNativeReviewContinuation(events, terminal))) {
+    refused('writer amendment requires the retained reviewer, actual correction and fresh in-window proof');
   }
   const sameDispatch = (event: CanonicalEvent) => event.missionId === subject.taskId
     && event.subject === terminal.subject

@@ -72,16 +72,17 @@ const blocker = { id: 'authorization', severity: 'high', classification: 'blocki
 const proofId = 'evd_00000000-0000-4000-8000-000000000001';
 
 describe('native targeted review historical blockers', () => {
-  it.each(['unresolved', 'omitted', 'missing-proof', 'tampered', 'failed', 'stale', 'foreign', 'future', 'fresh'] as const)
+  it.each(['unresolved', 'omitted', 'missing-proof', 'tampered', 'failed', 'stale', 'foreign', 'future', 'undeclared', 'fresh', 'mixed'] as const)
   ('reconciles %s evidence before accepting a clean review', async mode => {
     const f = await fixture();
     const prior = f.events.find(event => event.kind === 'specialist.completed');
     if (prior === undefined) throw Error('fixture missing completion');
+    const proofIds = mode === 'mixed' ? ['auth.ts:1', proofId] : [proofId];
     const resolutions = mode === 'omitted' ? [] : [{ findingId: blocker.id,
-      status: mode === 'unresolved' ? 'unresolved' : 'resolved', proofIds: [proofId] }];
+      status: mode === 'unresolved' ? 'unresolved' : 'resolved', proofIds }];
     const scope = { kind: 'targeted', findingIds: [blocker.id], affectedPaths: ['auth.ts'] } as const;
     const corrected = { ...completion, completionId: 'cmp_correction_1234', review: {
-      ...completion.review, scope, resolutions,
+      ...completion.review, scope, resolutions, proofIds: mode === 'undeclared' ? [] : proofIds,
       provenance: { kind: 'native-context', contextId: '/root/correction/reviewer' } } };
     const { contextPack: _contextPack, ...dispatch } = envelope;
     const historical: CanonicalEvent = { ...prior, payload: { ...dispatch, contextId,
@@ -110,7 +111,7 @@ describe('native targeted review historical blockers', () => {
       ...(mode === 'missing-proof' ? [] : [evidence]), ...current].sort((a, b) => a.seq - b.seq);
     const collected = collectNativeReview(f.root, events, subject, 'writer:primary', 2,
       { dependencies: { 'git:working-tree': HASH } });
-    if (mode === 'fresh') await expect(collected).resolves.toMatchObject({ completion: corrected });
+    if (mode === 'fresh' || mode === 'mixed') await expect(collected).resolves.toMatchObject({ completion: corrected });
     else await expect(collected).rejects.toThrow(/NATIVE_REVIEW_REFUSED/);
   });
 });

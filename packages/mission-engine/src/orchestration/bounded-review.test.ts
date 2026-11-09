@@ -137,25 +137,25 @@ describe('retained review conclusions', () => {
               writerId: 'writer:primary', baseCommit: 'a'.repeat(40), reviewedCommit: 'b'.repeat(40),
               acceptanceCriteriaHash: HASH, readOnly: true,
               scope: { kind: 'targeted', findingIds: [id], affectedPaths: ['src/auth.ts'] },
-              proofIds: [`proof-${id}`],
-              resolutions: [{ findingId: id, status, proofIds: [`proof-${id}`] }],
+              proofIds: [`evd_proof_${id}`],
+              resolutions: [{ findingId: id, status, proofIds: [`evd_proof_${id}`] }],
               provenance: { kind: 'native-context', contextId: `ctx_review_${seq}` },
             },
           } },
       });
     const firstBatch = [writer(1, 'run-lead-writer'), completed(2, 1, [finding('blocking', 'defect-a')]),
       writer(3, 'run-correction'), resolved(4, 2, 'defect-a', [finding('blocking', 'defect-b')], HASH)];
-    expect(reduce(firstBatch, HASH, ['proof-defect-a']).findings.map(item => item.sourceId))
+    expect(reduce(firstBatch, HASH, ['evd_proof_defect-a']).findings.map(item => item.sourceId))
       .toEqual(['defect-b']);
     const secondBatch = [...firstBatch, writer(5, 'run-correction'), resolved(6, 3, 'defect-b', [], OTHER_HASH)];
-    expect(reduce(secondBatch, OTHER_HASH, ['proof-defect-a', 'proof-defect-b']))
+    expect(reduce(secondBatch, OTHER_HASH, ['evd_proof_defect-a', 'evd_proof_defect-b']))
       .toMatchObject({ status: 'ready-for-verdict', readyForVerdict: true, findings: [] });
-    const expiredProof = reduce(secondBatch, OTHER_HASH, ['proof-defect-b']);
+    const expiredProof = reduce(secondBatch, OTHER_HASH, ['evd_proof_defect-b']);
     expect(expiredProof).toMatchObject({ status: 'blocked', readyForVerdict: false });
     expect(expiredProof.findings.map(item => item.sourceId)).toEqual(['defect-a']);
     const reopened = [...firstBatch, writer(5, 'run-correction'),
       resolved(6, 3, 'defect-a', [], OTHER_HASH, 'unresolved')];
-    expect(reduce(reopened, OTHER_HASH, ['proof-defect-a']).findings.map(item => item.sourceId))
+    expect(reduce(reopened, OTHER_HASH, ['evd_proof_defect-a']).findings.map(item => item.sourceId))
       .toContain('defect-a');
   });
   it('does not silently drop an original blocker when targeted verification says pass', () => {

@@ -314,6 +314,24 @@ export function canContinueNativeReview(
   return authorizedTargetedRequest(events, request, prior);
 }
 
+/** A source citation provides context, never proof authority. Unknown labels fail closed. */
+function sourceCitation(value: string): boolean {
+  if (value.length > 500 || !/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*(?::[1-9][0-9]*)?$/.test(value)) return false;
+  const path = value.split(':')[0] ?? '';
+  return (path.includes('/') || path.includes('.'))
+    && path.split('/').every(part => part !== '.' && part !== '..');
+}
+
+/** Every canonical claim must be valid; ancillary source citations cannot resolve a finding alone. */
+function validResolutionProofs(
+  proofIds: readonly string[], receiptProofIds: readonly string[], validProofIds: readonly string[],
+): boolean {
+  return proofIds.some(id => id.startsWith('evd_')) && proofIds.every(id => receiptProofIds.includes(id)
+    && (id.startsWith('evd_')
+      ? /^evd_[A-Za-z0-9_-]{8,100}$/.test(id) && validProofIds.includes(id)
+      : sourceCitation(id)));
+}
+
 export function validNativeReviewContinuation(
   events: readonly CanonicalEvent[], completion: CanonicalEvent,
 ): boolean {
@@ -330,13 +348,12 @@ export function validNativeReviewContinuation(
     && event.seq < request.seq && reviewField(event, 'actionKind') === 'run-correction').at(-1);
   // Authenticate historical proof references, not their freshness against a later worktree.
   // Current finding resolution is owned by reconcileReviewFindings and its observed proof set.
-  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq < completion.seq), { dependencies: {} });
-  return receipt.reviewerId === previousReceipt?.reviewerId && correction !== undefined
-    && receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
+  if (!correction || receipt.reviewerId !== previousReceipt?.reviewerId) return false;
+  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq > correction.seq
+    && event.seq < completion.seq), { dependencies: {} });
+  return receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
       && receipt.scope.findingIds.includes(resolution.findingId)
-      && (resolution.status !== 'resolved' || resolution.proofIds.every(id => historicalProofIds.includes(id)
-        && receipt.proofIds.includes(id) && events.some(event => event.kind === 'evidence.recorded'
-          && event.subject === id && event.seq > correction.seq && event.seq < completion.seq))));
+      && (resolution.status !== 'resolved' || validResolutionProofs(resolution.proofIds, receipt.proofIds, historicalProofIds)));
 }
 
 function collectCompletions(
@@ -589,8 +606,8 @@ export function reconcileReviewFindings(
   const resolved = new Set<string>();
   for (const item of [...completions].sort((left, right) => left.event.seq - right.event.seq)) {
     for (const resolution of item.completion.review?.resolutions ?? []) {
-      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
-        && resolution.proofIds.every(id => validProofIds.includes(id))) {
+      if (resolution.status === 'resolved'
+        && validResolutionProofs(resolution.proofIds, item.completion.review?.proofIds ?? [], validProofIds)) {
         resolved.add(resolution.findingId);
       } else {
         resolved.delete(resolution.findingId);

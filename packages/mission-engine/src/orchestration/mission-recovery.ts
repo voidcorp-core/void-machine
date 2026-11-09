@@ -159,8 +159,7 @@ function opaqueNativeContextDefect(input: MissionRecoveryInput): boolean {
 }
 
 /** Re-admit an intact native continuation rejected solely by the former global-context rule. */
-function targetedReviewContextDefect(input: MissionRecoveryInput): boolean {
-  const { events } = input.stream;
+function targetedReviewContextDefect(input: MissionRecoveryInput, events: readonly CanonicalEvent[]): boolean {
   const { observation } = input;
   const start = events[0];
   const closure = events.at(-1);
@@ -541,7 +540,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const inadmissible = replacement ? disposition.completionEventIds : targetedContext ? [] : staleDispatchCompletions(projectedHistory);
   if (disposition.kind === 'controller-defect' && (disposition.defect === 'partial-fanout-round'
     ? roundCorrections.length === 0 : disposition.defect === 'stale-input-dispatch'
-      ? inadmissible.length === 0 : targetedContext ? !targetedReviewContextDefect(input) : !opaqueNativeContextDefect(input))) {
+      ? inadmissible.length === 0 : targetedContext ? !targetedReviewContextDefect(input, projectedHistory) : !opaqueNativeContextDefect(input))) {
     return refuse('unproven-controller-defect', 'The journal must prove the requested controller defect; do not reset its budget');
   }
   if (disposition.kind === 'review-provenance' && !validProvenanceRecovery(input, existing)) {

@@ -283,7 +283,8 @@ it('accepts an isolated equivalent checkout of the exact same reviewed commit', 
   } finally { vi.unstubAllEnvs(); }
 });
 
-it.each([false, true])('admits retained correction through completion after changed subject (historical empty request: %s)', async historical => {
+it.each(['current', 'historical', 'closed'] as const)('admits retained mixed-proof correction through the final verdict (%s)', async scenario => {
+  const historical = scenario !== 'current';
   try {
     const fixture = await stoppedReview(true, 'project-v1', false, true);
     const read = async () => (await inspectMission(fixture.root, ID, { dependencies: {} })).stream.events;
@@ -324,22 +325,43 @@ it.each([false, true])('admits retained correction through completion after chan
     const proof = await verifyMissionCommand({ roots: fixture.roots, missionId: ID, shell: false, echo: false,
       command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('runtime.ts','utf8'), /verified/)"] });
     expect(proof.exitCode).toBe(0);
+    const acceptanceProof = await verifyMissionCommand({ roots: fixture.roots, missionId: ID, shell: false, echo: false,
+      command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('ticket.md','utf8'), /readiness/)"] });
+    expect(acceptanceProof.exitCode).toBe(0);
     await recordLeadWriterCompletion(fixture.root, { kind: 'writer-event', missionId: ID, json: true });
     const target = await fixture.dispatch();
     expect(target.action).toMatchObject({ kind: 'invoke-specialists', reviewScope: { kind: 'targeted' } });
     const retainedPrefix = await read();
     await recordSpecialistLifecycle(fixture.root, ID, { status: 'started', envelope: target.envelopes[0]!, contextId: payload.contextId });
     const envelope = target.envelopes[0]!;
+    const resolutionProofIds = ['runtime.ts:1', 'ticket.md:1', proof.evidenceId, acceptanceProof.evidenceId];
     const completion: SpecialistCompletion = { ...payload.completion, completionId: 'completion_retained_targeted',
       verdict: 'pass', findings: [], limitations: [], review: { ...payload.completion.review!, ...envelope.reviewSubject!,
-        writerId: 'writer:primary', scope: envelope.reviewScope!, proofIds: [proof.evidenceId],
-        resolutions: [{ findingId: 'readiness-unverified', status: 'resolved', proofIds: [proof.evidenceId] }] } };
+        writerId: 'writer:primary', scope: envelope.reviewScope!, proofIds: resolutionProofIds,
+        resolutions: [{ findingId: 'readiness-unverified', status: 'resolved', proofIds: resolutionProofIds }] } };
     const completed = { status: 'completed' as const, envelope, contextId: payload.contextId, completion };
     await recordSpecialistLifecycle(fixture.root, ID, completed);
     const after = await read();
     await recordSpecialistLifecycle(fixture.root, ID, completed);
     expect(await read()).toEqual(after);
-    expect((await fixture.dispatch()).action.kind).toBe('complete');
+    if (scenario === 'closed') {
+      // Historical fixture: the old reducer closed after admitting this actual targeted PASS.
+      await recordMissionClosure(fixture.root, ID, 'controller-stop', 'void-harness:mission.dispatch');
+      const stopped = await read();
+      const recovery = { schemaVersion: 1 as const, closureEventId: stopped.at(-1)!.eventId,
+        expectedJournalHash: canonicalJsonHash(stopped),
+        disposition: { kind: 'controller-defect' as const, defect: 'targeted-review-context' as const } };
+      expect(await recoverStoppedMission(fixture.roots, ID, recovery)).toMatchObject({ recorded: true });
+      const recovered = await read();
+      expect(recovered.slice(0, stopped.length)).toEqual(stopped);
+      expect(recovered.at(-1)?.payload).toMatchObject({ consumedCorrectionBatches: 1, consumedRounds: 2,
+        invalidatedCompletionEventIds: [], inadmissibleCompletionEventIds: [] });
+      expect(await recoverStoppedMission(fixture.roots, ID, recovery)).toMatchObject({ recorded: false });
+      expect(await read()).toEqual(recovered);
+    }
+    const final = await fixture.dispatch();
+    expect(final.action.kind).toBe('complete');
+    expect(final.phase).toBe('verified');
     if (correction) expect(correction.action).toMatchObject({ findingIds: [expect.stringMatching(/^fnd_/)] });
     expect((await read()).slice(0, retainedPrefix.length)).toEqual(retainedPrefix);
     expect((await read()).filter(item => item.kind === 'lead-writer.requested')).toHaveLength(2);

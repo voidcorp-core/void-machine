@@ -432,6 +432,79 @@ node "$BOUNDED_CLI" mission dispatch --id "$MISSION_ID" --json
 Use the original task's actual verification command in a consumer project. Completion
 requires passed current evidence and no unresolved blocker; `recover` alone is not closure.
 
+## Correct a historical writer binding
+
+New review ingestion rejects a `review.writerId` that differs from the canonical
+`leadWriterId` in `mission.started`. Native agent names and mission writer identity
+are different fields. Existing malformed history is never rewritten.
+
+For an original degraded general review with explicit blocking findings, a stopped
+mission can request one writer-only amendment from its **original native author**.
+Use the original coordinator session, which can actually contact that author.
+The lifecycle validates its request/start/result chain and the exact returned
+artifact; it does not provide cryptographic author authentication. A recomputable
+hash, a coordinator-written answer, or a replacement reviewer does not constitute
+the required actual author response. If the author is unavailable, leave the request
+pending and the mission closed.
+
+1. Prepare `amendment-request.json` with exactly `closureEventId`,
+   `expectedJournalHash` (canonical hash of the current complete journal),
+   `completionEventId`, and `completionHash` (canonical hash of the original structured
+   completion). Request alone does not reopen the mission:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-requested --input amendment-request.json --json
+   ```
+
+2. Read the resulting `specialist.review-amendment-requested` payload. It includes
+   the original invocation ID, retained context, and canonical writer. Actually
+   follow up with that native author to confirm only this writer binding. Record
+   that invocation using `amendment-started.json` containing exactly `requestEventId`
+   and the original `contextId`:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-started --input amendment-started.json --json
+   ```
+
+3. The author returns an artifact with exactly `requestEventId`, `invocationEventId`
+   (the amendment started event), and `amendment`. That amendment contains exactly
+   `completionEventId`, `completionHash`, `originalInvocationEventId`, `contextId`
+   and `writerId`, matching the request. Preserve those actual returned bytes in a
+   bounded project-local JSON file. Submit `amendment-completed.json` with exactly
+   `requestEventId`, `contextId` and `responseArtifact: { "path": "returned.json",
+   "sha256": "sha256:<hash-of-returned-bytes>" }`:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-completed --input amendment-completed.json --json
+   ```
+
+4. Reobserve the closure and journal. Use the ordinary `mission recover --input`
+   schema, with disposition `{ "kind": "review-writer-binding", "responseEventId":
+   "<amendment-completed-event>" }`. Recovery rereads the artifact and current project
+   inputs, then validates the full history under the journal lock. An actual new
+   amendment is narrowly admissible progress after an ineffective blocker recovery;
+   repeating the old recovery alone remains refused.
+
+5. Dispatch obtains a real `run-correction` request. The original writer reports
+   corrections truthfully, including already-created commits. Obtain fresh canonical
+   proof after that request, then dispatch one targeted continuation to the retained
+   reviewer. An old successful SQL job may be inspected again with a new read-only
+   observation tied to the exact current head; never relabel the old execution as
+   fresh or rerun SQL merely to obtain a new timestamp. Existing evidence obligations
+   and their discharge checks still apply.
+
+The original degraded verdict, historical subject, findings, proof references,
+limitations and resolutions remain unchanged. Effective history substitutes only
+the canonical writer. Recovery grants correction, never PASS. There is no new general
+review, reviewer substitution, automatic obligation discharge or budget reset.
+Historical bounded-correction accounting can legitimately retain `maxRounds: 2`,
+`consumedRounds: 1`, `remainingRounds: 2`: the bounded policy permits three review
+rounds, while `maxRounds` is the original observation. This repair separately permits
+only **one targeted continuation**. It does not rewrite the historical counters to
+claim that they already expressed a two-total-review mandate.
+
+See the [writer amendment decision](decisions-log/2026-11-09-review-writer-binding-amendment--1d1c975b-2249-42d1-b844-37f2f3f5580d.md).
+
 ## Acceptance evidence
 
 Behavioral tests cover advisory-only results, targeted correction, incomplete-panel resume,

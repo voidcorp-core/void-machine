@@ -15,7 +15,6 @@ import {
   type MissionVerdictStatus,
   type OrchestrationCapability,
   orchestrateMissionTeam,
-  parseRecoveredReviewBindings,
   planLensExecution,
   type RecoveryDecision,
   type SpecialistDispatchEnvelope,
@@ -37,7 +36,8 @@ import { loadMissionUsage } from '../lib/runs/usage-report.js';
 import { renderMissionUsage } from '../lib/runs/usage.js';
 import { inspectCurrentMission } from '../lib/runs/inspect-current.js';
 import { observedMissionLifecycle, requireOpenMission } from '../lib/runs/mission-lifecycle.js';
-import { parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
+import { observeRecoveryArtifacts, parseMissionRecoveryRequest, recordStoppedMissionRecovery } from '../lib/runs/mission-recovery.js';
+import { recordReviewWriterBindingLifecycle, type ReviewAmendmentStatus } from '../lib/runs/review-writer-binding.js';
 import { collectKnownSecrets } from '../lib/runs/redact.js';
 import { loadSpecialistMigrationComparisonCatalog, observeSpecialistMigrationAssets, parseSpecialistContractMigrationRequest, recordSpecialistContractMigration } from '../lib/runs/specialist-contract-migration.js';
 import { parseSpecialistEvidenceRequest, parseSpecialistEvidenceResponse, recordSpecialistEvidence, requestSpecialistEvidence } from '../lib/runs/specialist-evidence.js';
@@ -134,7 +134,7 @@ export type MissionArgs =
   | {
       readonly kind: 'specialist-event';
       readonly missionId: string;
-      readonly status: SpecialistLifecycleStatus;
+      readonly status: SpecialistLifecycleStatus | ReviewAmendmentStatus;
       readonly inputPath: string;
       readonly json: boolean;
     }
@@ -434,7 +434,8 @@ export function parseMissionArgs(args: readonly string[]): MissionArgs {
     const missionId = missionIdFrom(options);
     if (typeof missionId !== 'string') return missionId;
     const status = valueAfter(options, '--status');
-    if (status !== 'started' && status !== 'completed' && status !== 'failed') {
+    if (status !== 'started' && status !== 'completed' && status !== 'failed'
+      && status !== 'amendment-requested' && status !== 'amendment-started' && status !== 'amendment-completed') {
       return invalid(
         'status must be started, completed, or failed',
         'pass --status started|completed|failed',
@@ -632,6 +633,7 @@ export async function recoverStoppedMission(
   const identity = missionRuntimeIdentity(inspected.stream.events);
   const coordinator = coordinatorRuntimeIdentity(process.env);
   const provenanceRecovery = request.disposition.kind === 'review-provenance';
+  const writerBindingRecovery = request.disposition.kind === 'review-writer-binding';
   const targetedContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'targeted-review-context';
   if (identity === undefined || (coordinator.attested && coordinator.runtime !== identity.runtime)
@@ -682,21 +684,19 @@ export async function recoverStoppedMission(
       }
     }
   }
-  const provenance = request.disposition.kind !== 'review-provenance' ? undefined
-    : await readRecoveryReviewBindings(workRoot, request.disposition.resolutionArtifact.path);
-  const resolutionArtifact = provenance?.artifact ?? ((request.disposition.kind === 'review-blocker'
-    || request.disposition.kind === 'command-correction')
-    ? await recoveryResolutionArtifact(workRoot, request.disposition.resolutionArtifact.path) : undefined);
+  const { provenance, resolutionArtifact } = await observeRecoveryArtifacts(
+    workRoot, request, inspected.stream.events,
+  );
   const opaqueContextRecovery = request.disposition.kind === 'controller-defect'
     && request.disposition.defect === 'opaque-native-context';
-  const recoverySpecialists = targetedContextRecovery
+  const recoverySpecialists = targetedContextRecovery || writerBindingRecovery
     ? migration.plan.specialists.filter(value => value.specialistId === 'core:independent-code-reviewer')
     : opaqueContextRecovery || request.disposition.kind === 'preparation-invocation'
     ? migration.plan.specialists.filter(value => value.state === 'applicable'
       && value.stages?.includes('pre-implementation'))
     : migration.plan.specialists;
   const observation: MissionRecoveryObservation = {
-    ...((provenance === undefined && !targetedContextRecovery) || subject?.baseCommit === undefined
+    ...((provenance === undefined && !targetedContextRecovery && !writerBindingRecovery) || subject?.baseCommit === undefined
       || subject.reviewedCommit === undefined ? {} : {
       ...(provenance === undefined ? {} : { reviewBindings: provenance.bindings }),
       reviewSubject: { taskId: missionId, baseCommit: subject.baseCommit,
@@ -716,17 +716,6 @@ export async function recoverStoppedMission(
     routingHash: stored.routingHash, runtime: identity.runtime, capability } };
 }
 
-async function readRecoveryReviewBindings(root: string, path: string) {
-  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 64 * 1024,
-    pathEscapeMessage: 'MISSION_RECOVERY_PROVENANCE: artifact escapes project root',
-    invalidMessage: 'MISSION_RECOVERY_PROVENANCE: artifact must be a bounded stable file' });
-  const value: unknown = JSON.parse(loaded.body);
-  const bindings = isUnknownRecord(value) && Object.keys(value).length === 1
-    ? parseRecoveredReviewBindings(value['bindings']) : undefined;
-  if (bindings === undefined) throw new Error('MISSION_RECOVERY_PROVENANCE: exact original review bindings are required');
-  return { bindings, artifact: { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` } };
-}
-
 async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
   const inspected = await inspectMission(roots.installRoot, missionId, { dependencies: {} });
   const identity = missionRuntimeIdentity(inspected.stream.events);
@@ -739,13 +728,6 @@ async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
     throw new Error(`SPECIALIST_EVIDENCE_INVALID: ${capability.limitations.join('; ')}`);
   }
   return capability;
-}
-
-async function recoveryResolutionArtifact(root: string, path: string) {
-  const loaded = await readBoundedProjectFile({ root, inputPath: path, maxBytes: 100_000,
-    pathEscapeMessage: 'MISSION_RECOVERY_INVALID: resolution artifact escaped the project',
-    invalidMessage: 'MISSION_RECOVERY_INVALID: unsafe or oversized resolution artifact' });
-  return { path, sha256: `sha256:${createHash('sha256').update(loaded.body).digest('hex')}` };
 }
 
 /**
@@ -1234,6 +1216,7 @@ function usage(): string {
   mission evidence-event --id <id> --status started|completed --input <json-file> [--json]
   mission recover --id <id> --input <json-file> [--json]
   mission specialist-event --id <id> --status started|completed|failed --input <json-file> [--json]
+  mission specialist-event --id <id> --status amendment-requested|amendment-started|amendment-completed --input <json-file> [--json]
   mission writer-event --id <id> [--json]
   mission close --id <id> --reason interrupted|abandoned [--json]
   mission verify --id <id> [--shell] [--json] -- <command...>
@@ -1355,6 +1338,14 @@ export async function mission(args: readonly string[]): Promise<void> {
       return;
     }
     if (parsed.kind === 'specialist-event') {
+      if (parsed.status === 'amendment-requested' || parsed.status === 'amendment-started'
+        || parsed.status === 'amendment-completed') {
+        await evidenceRuntime(roots, parsed.missionId);
+        const result = await recordReviewWriterBindingLifecycle(journal, parsed.missionId, parsed.status,
+          await readLifecycleJson(root, parsed.inputPath), root);
+        process.stdout.write(parsed.json ? `${JSON.stringify(result)}\n` : `recorded specialist.review-${parsed.status}: ${result.eventId}\n`);
+        return;
+      }
       const lifecycle = parseSpecialistLifecycleInput(
         parsed.status,
         await readLifecycleJson(root, parsed.inputPath),

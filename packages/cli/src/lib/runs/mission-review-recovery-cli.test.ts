@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it, vi } from 'vitest';
-import { canonicalJsonHash, type MissionSpecialistPlan, type SpecialistCompletion, type SpecialistDispatchEnvelope } from '@voidcorp/mission-engine';
+import { amendmentFor, parseSpecialistCompletionValue, validatedReviewWriterBindingRequest, canonicalJsonHash, type MissionSpecialistPlan, type SpecialistCompletion, type SpecialistDispatchEnvelope } from '@voidcorp/mission-engine';
 import { dispatchMissionSpecialists, planMission, recordLeadWriterCompletion,
   recoverStoppedMission, recordMissionClosure } from '../../commands/mission.js';
 import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
+import { recordReviewWriterBindingLifecycle } from './review-writer-binding.js';
 import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
 import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 import { verifyMissionCommand } from './verify.js';
@@ -18,7 +19,7 @@ const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
 const ID = 'mis_review_recovery_cli_12345678';
 const REVIEWER = 'core:independent-code-reviewer';
 
-async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targeted = false) {
+async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targeted = false, writerBinding = false) {
   const root = await mkdtemp(join(tmpdir(), 'void-review-recovery-cli-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-review-recovery');
   const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8',
@@ -54,13 +55,13 @@ async function stoppedReview(bounded: boolean, inputRecipe?: 'project-v1', targe
     await recordSpecialistLifecycle(root, ID, { status: 'started', envelope, contextId });
     const completion = { schemaVersion: 1, specialistId: envelope.specialistId,
         contractVersion: envelope.contractVersion, completionId: `completion_${contextId}_${envelope.reviewRound}`,
-        verdict: targeted && envelope.reviewScope?.kind === 'general' ? 'changes-requested' : 'pass',
-        findings: targeted && envelope.reviewScope?.kind === 'general' ? [{ id: 'readiness-unverified',
+        verdict: writerBinding ? 'degraded' : targeted && envelope.reviewScope?.kind === 'general' ? 'changes-requested' : 'pass',
+        findings: (targeted || writerBinding) && envelope.reviewScope?.kind === 'general' ? [{ id: 'readiness-unverified',
           severity: 'high', classification: 'blocking', basis: 'initial-scope-defect',
           criterion: 'The readiness tag is verified', consequence: 'Unverified readiness is rendered',
           resolutionCondition: 'The command checks the verified tag', summary: 'Readiness lacks verification',
           evidence: [{ path: 'runtime.ts', line: 1, detail: 'Ready is only a boolean' }],
-          recommendation: 'Return the verified tag' }] : [], evidenceRequests: [], limitations: [],
+          recommendation: 'Return the verified tag' }] : [], evidenceRequests: [], limitations: writerBinding ? ['Retained original degraded review'] : [],
         ...(envelope.reviewSubject === undefined ? {} : { review: { ...envelope.reviewSubject,
           reviewerId: 'reviewer:independent', writerId: targeted ? 'writer:primary' : '/root/original_writer', readOnly: true,
           scope: envelope.reviewScope ?? { kind: 'general' as const }, proofIds: correctionProofIds,
@@ -279,5 +280,92 @@ it('accepts an isolated equivalent checkout of the exact same reviewed commit', 
     expect(await recoverStoppedMission({ ...fixture.roots, workRoot: equivalent.root }, ID,
       fixture.targetedRequest)).toMatchObject({ recorded: true });
     expect((await readFile(log, 'utf8')).startsWith(before)).toBe(true);
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it.each(['current', 'historical', 'closed'] as const)('admits retained mixed-proof correction through the final verdict (%s)', async scenario => {
+  const historical = scenario !== 'current';
+  try {
+    const fixture = await stoppedReview(true, 'project-v1', false, true);
+    const read = async () => (await inspectMission(fixture.root, ID, { dependencies: {} })).stream.events;
+    const original = fixture.events.find(item => item.kind === 'specialist.completed' && item.subject === REVIEWER)!;
+    const stored = original.payload;
+    if (!stored || typeof stored !== 'object' || !('completion' in stored)
+      || !('contextId' in stored) || typeof stored.contextId !== 'string') throw Error('Expected historical completion');
+    const parsed = parseSpecialistCompletionValue(stored.completion);
+    if (!parsed) throw Error('Expected valid historical completion');
+    const payload = { completion: parsed, contextId: stored.contextId };
+    await writeFile(join(fixture.root, 'runtime.ts'), "export const ready = 'verified';\n");
+    fixture.git(['add', 'runtime.ts']);
+    fixture.git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'test: correct readiness']);
+    const requested = await recordReviewWriterBindingLifecycle(fixture.root, ID, 'amendment-requested', {
+      closureEventId: fixture.events.at(-1)!.eventId, expectedJournalHash: canonicalJsonHash(fixture.events),
+      completionEventId: original.eventId, completionHash: canonicalJsonHash(payload.completion) });
+    const request = validatedReviewWriterBindingRequest(await read(), requested.eventId)!;
+    const started = await recordReviewWriterBindingLifecycle(fixture.root, ID, 'amendment-started', {
+      requestEventId: requested.eventId, contextId: payload.contextId });
+    const body = JSON.stringify({ requestEventId: requested.eventId, invocationEventId: started.eventId,
+      amendment: amendmentFor(request.envelope) });
+    await writeFile(join(fixture.root, '.void/machine/returned.json'), body);
+    const response = await recordReviewWriterBindingLifecycle(fixture.root, ID, 'amendment-completed', {
+      requestEventId: requested.eventId, contextId: payload.contextId,
+      responseArtifact: { path: '.void/machine/returned.json', sha256: canonicalBody(body) } });
+    expect(await recoverStoppedMission(fixture.roots, ID, { schemaVersion: 1,
+      closureEventId: fixture.events.at(-1)!.eventId, expectedJournalHash: canonicalJsonHash(await read()),
+      disposition: { kind: 'review-writer-binding', responseEventId: response.eventId } })).toMatchObject({ recorded: true });
+    if (historical) {
+      // Seed the old controller's defective request as history; never rewrite an existing event.
+      const start = fixture.events[0]!.payload as { planHash: string };
+      await appendMissionEvent(fixture.root, ID, { source: 'void-harness:mission.dispatch', kind: 'lead-writer.requested',
+        subject: 'writer:primary', correlationId: ID, payload: { actionKind: 'run-correction',
+          planHash: start.planHash, writerId: 'writer:primary', implementationRound: 2, findingIds: [] } });
+    }
+    const correction = historical ? undefined : await fixture.dispatch();
+    if (correction) expect(correction.action.kind).toBe('run-correction');
+    const proof = await verifyMissionCommand({ roots: fixture.roots, missionId: ID, shell: false, echo: false,
+      command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('runtime.ts','utf8'), /verified/)"] });
+    expect(proof.exitCode).toBe(0);
+    const acceptanceProof = await verifyMissionCommand({ roots: fixture.roots, missionId: ID, shell: false, echo: false,
+      command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('ticket.md','utf8'), /readiness/)"] });
+    expect(acceptanceProof.exitCode).toBe(0);
+    await recordLeadWriterCompletion(fixture.root, { kind: 'writer-event', missionId: ID, json: true });
+    const target = await fixture.dispatch();
+    expect(target.action).toMatchObject({ kind: 'invoke-specialists', reviewScope: { kind: 'targeted' } });
+    const retainedPrefix = await read();
+    await recordSpecialistLifecycle(fixture.root, ID, { status: 'started', envelope: target.envelopes[0]!, contextId: payload.contextId });
+    const envelope = target.envelopes[0]!;
+    const resolutionProofIds = ['runtime.ts:1', 'ticket.md:1', proof.evidenceId, acceptanceProof.evidenceId];
+    const completion: SpecialistCompletion = { ...payload.completion, completionId: 'completion_retained_targeted',
+      verdict: 'pass', findings: [], limitations: [], review: { ...payload.completion.review!, ...envelope.reviewSubject!,
+        writerId: 'writer:primary', scope: envelope.reviewScope!, proofIds: resolutionProofIds,
+        resolutions: [{ findingId: 'readiness-unverified', status: 'resolved', proofIds: resolutionProofIds }] } };
+    const completed = { status: 'completed' as const, envelope, contextId: payload.contextId, completion };
+    await recordSpecialistLifecycle(fixture.root, ID, completed);
+    const after = await read();
+    await recordSpecialistLifecycle(fixture.root, ID, completed);
+    expect(await read()).toEqual(after);
+    if (scenario === 'closed') {
+      // Historical fixture: the old reducer closed after admitting this actual targeted PASS.
+      await recordMissionClosure(fixture.root, ID, 'controller-stop', 'void-harness:mission.dispatch');
+      const stopped = await read();
+      const recovery = { schemaVersion: 1 as const, closureEventId: stopped.at(-1)!.eventId,
+        expectedJournalHash: canonicalJsonHash(stopped),
+        disposition: { kind: 'controller-defect' as const, defect: 'targeted-review-context' as const } };
+      expect(await recoverStoppedMission(fixture.roots, ID, recovery)).toMatchObject({ recorded: true });
+      const recovered = await read();
+      expect(recovered.slice(0, stopped.length)).toEqual(stopped);
+      expect(recovered.at(-1)?.payload).toMatchObject({ consumedCorrectionBatches: 1, consumedRounds: 2,
+        invalidatedCompletionEventIds: [], inadmissibleCompletionEventIds: [] });
+      expect(await recoverStoppedMission(fixture.roots, ID, recovery)).toMatchObject({ recorded: false });
+      expect(await read()).toEqual(recovered);
+    }
+    const final = await fixture.dispatch();
+    expect(final.action.kind).toBe('complete');
+    expect(final.phase).toBe('verified');
+    if (correction) expect(correction.action).toMatchObject({ findingIds: [expect.stringMatching(/^fnd_/)] });
+    expect((await read()).slice(0, retainedPrefix.length)).toEqual(retainedPrefix);
+    expect((await read()).filter(item => item.kind === 'lead-writer.requested')).toHaveLength(2);
+    expect((await read()).filter(item => item.kind === 'specialist.completed')).toHaveLength(2);
+    expect((await read()).slice(0, fixture.events.length)).toEqual(fixture.events);
   } finally { vi.unstubAllEnvs(); }
 });

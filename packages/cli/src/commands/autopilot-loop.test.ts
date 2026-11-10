@@ -223,6 +223,22 @@ describe('autopilot next', () => {
     ]);
   });
 
+  it.each([3, 4] as const)('continues next under retained policy %s and keeps its cache coverage', schemaVersion => {
+    const root = project();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const path = join(root, '.void/machine/autopilot/fingerprints/DEV-1.json');
+    const baseline = JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), schemaVersion });
+    writeFileSync(path, baseline);
+    recordLocalVerdict(root);
+    const observed = () => next(root, trackerJson([heldTicket], []), gh).decision.actions[0];
+    expect(observed()).toMatchObject({ kind: 'enable-auto-merge' });
+    writeFileSync(join(root, '.git/info/refs'), 'new server cache');
+    expect(observed()).toMatchObject(schemaVersion === 3
+      ? { kind: 'mark-human-wait', reason: 'shared-state-changed', detail: expect.stringMatching(/info/) }
+      : { kind: 'enable-auto-merge' });
+    expect(readFileSync(path, 'utf8')).toBe(baseline);
+  });
+
   it('withholds the merge of a unit that changed the shared Git state', () => {
     const root = project();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
@@ -965,7 +981,7 @@ describe('guarded publication and human fingerprint renewal', () => {
       if (failure === 'invalid') writeFileSync(recordPath(root), '{');
       if (failure === 'legacy') {
         const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
-        writeFileSync(recordPath(root), JSON.stringify({ ...old, schemaVersion: 3 }));
+        writeFileSync(recordPath(root), JSON.stringify({ ...old, schemaVersion: 2 }));
       }
       if (failure === 'changed') writeFileSync(join(root, '.git/info/exclude'), 'changed');
       const spy = publication(root, { failRead: failure === 'unreadable' });
@@ -1076,16 +1092,37 @@ describe('guarded publication and human fingerprint renewal', () => {
     expect(existsSync(join(root, '.void/machine/autopilot/reviews'))).toBe(false);
   });
 
-  it('requires explicit renewal for legacy policy without converting the aggregate digest', () => {
+  it('compares a retained v3 fingerprint under its original policy without renewal', () => {
     const root = candidate();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
     const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
-    writeFileSync(recordPath(root), JSON.stringify({ ...old, schemaVersion: 3 }));
-    const refused = runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root));
-    expect(refused.exitCode).toBe(2);
-    expect(refused.stderr).toMatch(/renew/);
-    expect(runAutopilotCommand(renewalArgs(root), '', context(root)).exitCode).toBe(0);
+    const original = JSON.stringify({ ...old, schemaVersion: 3 });
+    writeFileSync(recordPath(root), original);
     expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(0);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+    writeFileSync(join(root, '.git/info/refs'), 'changed server cache');
+    expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(2);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+  });
+
+  it.each([false, true])('uses the retained v3 policy at both publication reads (drift: %s)', drift => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
+    const baseline = JSON.stringify({ ...old, schemaVersion: 3 });
+    writeFileSync(recordPath(root), baseline);
+    let reads = 0;
+    const pushes: string[][] = [];
+    const owner = { ...context(root), git: (argv: readonly string[]) => {
+      if (argv[0] === 'config' && ++reads === 2 && drift) writeFileSync(join(root, '.git/info/refs'), 'concurrent cache');
+      if (argv[0] === 'push') { pushes.push([...argv]); return ''; }
+      return gitIn(root)(argv);
+    } };
+    expect(runAutopilotCommand(publishArgs(root), '', owner).exitCode).toBe(drift ? 2 : 0);
+    expect(reads).toBe(2);
+    expect(pushes).toHaveLength(drift ? 0 : 1);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(baseline);
+    expect(existsSync(join(root, '.void/machine/autopilot/fingerprints/DEV-1.renewals'))).toBe(false);
   });
 
   it('refuses stale observations, concurrent operations and incomplete renewal evidence', () => {

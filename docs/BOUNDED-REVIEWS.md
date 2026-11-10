@@ -83,6 +83,25 @@ resolve every blocking finding against the currently observed proof set, includi
 partially resolved in an earlier correction. Missing, forged or out-of-window historical
 proofs still invalidate native continuity; no historical Git observation is invented.
 
+Resolution proof lists may retain relative source citations alongside canonical
+`evd_` references. A source citation is a bounded slash-separated path (or a file
+name containing a dot), optionally followed by a positive `:line`; only letters,
+digits, underscores, dots and hyphens are accepted in path components. Absolute
+paths, traversal components, URLs and unknown labels refuse. Citations supply
+context, never authority: each resolved finding still needs at least one canonical
+proof, every claimed `evd_` reference must be well formed and valid, and every
+resolution reference must also occur in the receipt's proof list. Historical
+continuity requires intact passed canonical proof inside the correction window;
+current finding reconciliation additionally requires current freshness. Top-level
+contextual references do not become resolution authority.
+
+If the old reducer already closed after recording that targeted PASS, use the
+existing `controller-defect` / `targeted-review-context` recovery for the actual
+current closure and journal hash, then dispatch. Recovery validates prior receipts
+and applies their authenticated writer-binding projection before checking native
+continuity. It neither rewrites the completion nor requests another invocation;
+original events and consumed review/correction counts remain intact.
+
 A controller correction request may reopen even the sole previously resolved blocker when
 its proof becomes stale. Continuation authenticates the recorded request and linked writer
 completion, then requires nonempty, unique finding IDs from the authenticated prior blockers.
@@ -492,6 +511,17 @@ pending and the mission closed.
    observation tied to the exact current head; never relabel the old execution as
    fresh or rerun SQL merely to obtain a new timestamp. Existing evidence obligations
    and their discharge checks still apply.
+
+A changed current head does not erase the original blockers: correction dispatch
+normalizes findings from the exact completion named by the validated writer-binding
+recovery. A historical empty `findingIds` request from this defect is interpreted
+only for that recovery's sole round-two correction, with the canonical writer and
+plan, exact completed request/causation, and matching original targeted scope.
+Nonempty incorrect IDs, unrelated recoveries and extra correction requests refuse.
+The raw request remains unchanged. Resume the existing targeted request with the
+actual retained invocation and returned result through ordinary `specialist-event`
+`started` and `completed`; do not dispatch another review or writer completion.
+Fresh proof and all existing continuation checks still apply.
 
 The original degraded verdict, historical subject, findings, proof references,
 limitations and resolutions remain unchanged. Effective history substitutes only

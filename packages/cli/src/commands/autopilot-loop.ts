@@ -349,7 +349,10 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
     const record = recordedArm(context.root, ticket.id);
     if (record !== undefined) armed.set(ticket.id, record);
   }
-  const sharedState = { current, before };
+  const currentV3 = [...before.values()].some(recorded => recorded.schemaVersion === 3)
+    ? readSharedState(runner(context.git, 'git'), { bases: protectedBranches(program.autopilot), schemaVersion: 3 })
+    : undefined;
+  const sharedState = { current, before, ...(currentV3 === undefined ? {} : { currentV3 }) };
   const reviews = readLocalReviews(context.root, tracker.tickets.map((ticket) => ticket.id));
   const now = instantOf(runner(context.now, 'clock'));
   const mergeHold = readMergeHold(context.root);

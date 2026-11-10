@@ -10,7 +10,7 @@ import { planStoppedMissionRecovery, validatedRecoveredReviewEvents } from './mi
 import { stoppedTargetedReview, targetedReviewFixture } from '../test/targeted-review.js';
 import { parseEvidence, sealEvidence } from '../evidence/schema.js';
 import { finding, findingId } from '../test/targeted-review.js';
-import { canContinueNativeReview, freshReviewProofIds, reduceReviewLoop } from './review-loop.js';
+import { canContinueNativeReview, freshReviewProofIds, reduceReviewLoop, validNativeReviewContinuation } from './review-loop.js';
 
 describe('native targeted review continuity', () => {
   it('retains the initial reviewer for a bound correction and resolves its finding', () => {
@@ -54,6 +54,50 @@ function edited(events: readonly CanonicalEvent[], match: (event: CanonicalEvent
 }
 const lastCompletion = (event: CanonicalEvent) => event.kind === 'specialist.completed' && event.seq === 12;
 const lastInvocation = (event: CanonicalEvent) => event.seq >= 10 && event.seq <= 12;
+
+it.each([
+  ['mixed proof', ['src/history.ts:8', 'test/history.test.ts:12', 'evd_targeted_proof_1'], true],
+  ['source only', ['src/history.ts:8'], false],
+  ['missing canonical', ['src/history.ts:8', 'evd_missing_proof_1'], false],
+  ['one invalid canonical', ['evd_targeted_proof_1', 'evd_missing_proof_1'], false],
+  ['malformed canonical', ['evd_targeted_proof_1', 'evd_bad'], false],
+  ['unknown label', ['evd_targeted_proof_1', 'unproven'], false],
+  ['absolute citation', ['evd_targeted_proof_1', '/src/history.ts:8'], false],
+  ['traversal citation', ['evd_targeted_proof_1', 'src/../history.ts:8'], false],
+  ['URL citation', ['evd_targeted_proof_1', 'https://example.test/proof'], false],
+  ['invalid line', ['evd_targeted_proof_1', 'src/history.ts:0'], false],
+] as const)('uses the same resolution authority for continuity and findings: %s', (_name, proofIds, admitted) => {
+  const fixture = targetedReviewFixture();
+  const events = edited(fixture.events, lastCompletion, payload => {
+    const receipt = object(object(payload['completion'])['review']);
+    receipt['proofIds'] = [...proofIds];
+    receipt['resolutions'] = [{ findingId: 'stale-history', status: 'resolved', proofIds: [...proofIds] }];
+  });
+  expect(validNativeReviewContinuation(events, events.at(-1)!)).toBe(admitted);
+  expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(admitted);
+  if (admitted) {
+    // Historical authenticity survives; current resolution still needs a fresh observed proof.
+    expect(reduceReviewLoop({ ...fixture.input, events, validProofIds: [] }).readyForVerdict).toBe(false);
+  }
+});
+
+it('refuses a mixed resolution with an undeclared citation or forged canonical evidence', () => {
+  const fixture = targetedReviewFixture();
+  const mixed = edited(fixture.events, lastCompletion, payload => {
+    const receipt = object(object(payload['completion'])['review']);
+    receipt['resolutions'] = [{ findingId: 'stale-history', status: 'resolved',
+      proofIds: ['evd_targeted_proof_1', 'src/history.ts:8'] }];
+  });
+  expect(validNativeReviewContinuation(mixed, mixed.at(-1)!)).toBe(false);
+  const declared = edited(mixed, lastCompletion, payload => {
+    object(object(payload['completion'])['review'])['proofIds'] = ['evd_targeted_proof_1', 'src/history.ts:8'];
+  });
+  const forged = edited(declared, event => event.kind === 'evidence.recorded', payload => {
+    object(payload['evidence'])['proofHash'] = `sha256:${'f'.repeat(64)}`;
+  });
+  expect(validNativeReviewContinuation(forged, forged.at(-1)!)).toBe(false);
+  expect(reduceReviewLoop({ ...fixture.input, events: forged }).readyForVerdict).toBe(false);
+});
 
 it.each([
   ['duplicate completion', (p: Record<string, JsonValue>) => { object(p['completion'])['completionId'] = 'cmp_targeted_0'; }],

@@ -215,6 +215,17 @@ function sameMembers(actual: unknown, expected: readonly string[]): boolean {
     && new Set(actual).size === actual.length && actual.every(value => expected.includes(value));
 }
 
+/** Read only from recovery-validated events; stale input hashes do not erase the bound review's blockers. */
+export function writerBindingCorrectionFindings(events: readonly CanonicalEvent[]): readonly NormalizedReviewFinding[] {
+  const recovery = writerBindingRecovery(events);
+  const binding = recovery && reviewField(recovery, 'writerBinding');
+  if (!binding || typeof binding !== 'object' || !('completionEventId' in binding)) return [];
+  const original = events.find(event => event.eventId === binding.completionEventId);
+  const envelope = original && parseEnvelope(original);
+  if (!envelope || !recovery || original.seq >= recovery.seq) return [];
+  return reconcileReviewFindings([envelope], []).filter(finding => finding.classification === 'blocking');
+}
+
 function authorizedTargetedRequest(
   events: readonly CanonicalEvent[], request: CanonicalEvent, history: readonly CompletionEnvelope[],
 ): boolean {
@@ -246,13 +257,26 @@ function authorizedTargetedRequest(
     || reviewField(writer, 'implementationRound') !== count + 1
     || !['actionKind', 'planHash', 'writerId', 'implementationRound'].every(key =>
       reviewField(writer, key) === reviewField(correction, key))) return false;
-  // The authenticated dispatch records which blockers required correction at that time.
-  // Without historical Git observations, proof integrity cannot reconstruct that open set.
   const knownBlockers = mergeFindings(history).filter(finding => finding.classification === 'blocking');
   const requestedIds = reviewField(correction, 'findingIds');
-  return Array.isArray(requestedIds) && requestedIds.length > 0
-    && new Set(requestedIds).size === requestedIds.length
+  if (!Array.isArray(requestedIds)) return false;
+  if (requestedIds.length > 0) return new Set(requestedIds).size === requestedIds.length
     && requestedIds.every(id => knownBlockers.some(finding => finding.findingId === id));
+  // Compatibility for the sole empty dispatch emitted by the writer-binding recovery defect.
+  // Its immutable original review, exact writer completion and targeted scope still own the obligation.
+  const recovery = writerBindingRecovery(events);
+  const binding = recovery && reviewField(recovery, 'writerBinding');
+  const recoveredBlockers = writerBindingCorrectionFindings(events);
+  return recovery !== undefined && correction.seq > recovery.seq && count === 1
+    && reviewField(writer, 'writerId') === original.writerId
+    && binding !== undefined && typeof binding === 'object' && binding !== null
+    && 'completionEventId' in binding && binding.completionEventId === previous.event.eventId
+    && history.length === 1 && recoveredBlockers.length > 0
+    && sameMembers(recoveredBlockers.map(finding => finding.findingId), knownBlockers.map(finding => finding.findingId))
+    && events.filter(event => event.kind === 'lead-writer.requested'
+      && reviewField(event, 'actionKind') === 'run-correction').length === 1
+    && events.filter(event => event.kind === 'specialist.requested' && event.subject === request.subject
+      && event.seq > recovery.seq && event.seq <= request.seq).length === 1;
 }
 
 /** Retained native reviewer may start a targeted correction, including after recovery. */
@@ -290,6 +314,24 @@ export function canContinueNativeReview(
   return authorizedTargetedRequest(events, request, prior);
 }
 
+/** A source citation provides context, never proof authority. Unknown labels fail closed. */
+function sourceCitation(value: string): boolean {
+  if (value.length > 500 || !/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*(?::[1-9][0-9]*)?$/.test(value)) return false;
+  const path = value.split(':')[0] ?? '';
+  return (path.includes('/') || path.includes('.'))
+    && path.split('/').every(part => part !== '.' && part !== '..');
+}
+
+/** Every canonical claim must be valid; ancillary source citations cannot resolve a finding alone. */
+function validResolutionProofs(
+  proofIds: readonly string[], receiptProofIds: readonly string[], validProofIds: readonly string[],
+): boolean {
+  return proofIds.some(id => id.startsWith('evd_')) && proofIds.every(id => receiptProofIds.includes(id)
+    && (id.startsWith('evd_')
+      ? /^evd_[A-Za-z0-9_-]{8,100}$/.test(id) && validProofIds.includes(id)
+      : sourceCitation(id)));
+}
+
 export function validNativeReviewContinuation(
   events: readonly CanonicalEvent[], completion: CanonicalEvent,
 ): boolean {
@@ -306,13 +348,12 @@ export function validNativeReviewContinuation(
     && event.seq < request.seq && reviewField(event, 'actionKind') === 'run-correction').at(-1);
   // Authenticate historical proof references, not their freshness against a later worktree.
   // Current finding resolution is owned by reconcileReviewFindings and its observed proof set.
-  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq < completion.seq), { dependencies: {} });
-  return receipt.reviewerId === previousReceipt?.reviewerId && correction !== undefined
-    && receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
+  if (!correction || receipt.reviewerId !== previousReceipt?.reviewerId) return false;
+  const historicalProofIds = freshReviewProofIds(events.filter(event => event.seq > correction.seq
+    && event.seq < completion.seq), { dependencies: {} });
+  return receipt.resolutions.every(resolution => receipt.scope.kind === 'targeted'
       && receipt.scope.findingIds.includes(resolution.findingId)
-      && (resolution.status !== 'resolved' || resolution.proofIds.every(id => historicalProofIds.includes(id)
-        && receipt.proofIds.includes(id) && events.some(event => event.kind === 'evidence.recorded'
-          && event.subject === id && event.seq > correction.seq && event.seq < completion.seq))));
+      && (resolution.status !== 'resolved' || validResolutionProofs(resolution.proofIds, receipt.proofIds, historicalProofIds)));
 }
 
 function collectCompletions(
@@ -565,8 +606,8 @@ export function reconcileReviewFindings(
   const resolved = new Set<string>();
   for (const item of [...completions].sort((left, right) => left.event.seq - right.event.seq)) {
     for (const resolution of item.completion.review?.resolutions ?? []) {
-      if (resolution.status === 'resolved' && resolution.proofIds.length > 0
-        && resolution.proofIds.every(id => validProofIds.includes(id))) {
+      if (resolution.status === 'resolved'
+        && validResolutionProofs(resolution.proofIds, item.completion.review?.proofIds ?? [], validProofIds)) {
         resolved.add(resolution.findingId);
       } else {
         resolved.delete(resolution.findingId);

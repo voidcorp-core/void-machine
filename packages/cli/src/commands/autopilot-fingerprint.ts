@@ -12,14 +12,14 @@ import { ticketIdSchema } from '../lib/autopilot/judgments.js';
 import { loopProgramOf, protectedBranches } from '../lib/autopilot/loop.js';
 import { type GitRunner, readDefaultBranch, readSharedState } from '../lib/autopilot/loop-observe.js';
 import { readProgramDescriptor } from '../lib/autopilot/program.js';
-import { admitFingerprint, changedParts, fingerprintOf, fingerprintSchema, type SharedFingerprint } from '../lib/autopilot/shared-state.js';
+import { admitFingerprint, changedParts, fingerprintOf, fingerprintSchema, retainedFingerprintSchema, type SharedFingerprint } from '../lib/autopilot/shared-state.js';
 import type { LoopCommandOutput, LoopRunners } from './autopilot-loop.js';
 import { flagValue } from './autopilot-usage.js';
 
 const digest = z.string().regex(/^[0-9a-f]{64}$/);
 const headSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const explanation = z.string().trim().min(1).max(2000);
-const historicalSchema = fingerprintSchema.extend({ schemaVersion: z.union([z.literal(3), z.literal(4)]) });
+const historicalSchema = retainedFingerprintSchema;
 const renewalSchema = z.strictObject({
   schemaVersion: z.literal(1),
   priorRecordDigest: digest,
@@ -73,7 +73,9 @@ function recordAt(path: string): RecordState | undefined {
   if (!existsSync(path)) return undefined;
   try {
     const text = readFileSync(path, 'utf8');
-    let state: RecordState = { fingerprint: historicalSchema.parse(JSON.parse(text)), recordDigest: hash(text) };
+    const admitted = admitFingerprint(JSON.parse(text));
+    if (!admitted.ok) refuse(admitted.reason);
+    let state: RecordState = { fingerprint: admitted.value, recordDigest: hash(text) };
     for (let depth = 0; depth < 128; depth++) {
       const next = renewalPath(path, state.recordDigest);
       if (!existsSync(next)) return state;
@@ -91,9 +93,7 @@ function recordAt(path: string): RecordState | undefined {
 export function recordedFingerprint(root: string, ticket: string): SharedFingerprint | undefined {
   const state = recordAt(pathOf(root, ticket));
   if (state === undefined) return undefined;
-  const parsed = admitFingerprint(state.fingerprint);
-  if (!parsed.ok) refuse('legacy fingerprint policy requires explicit human renewal; its aggregate info digest cannot be converted');
-  return parsed.value;
+  return state.fingerprint;
 }
 
 function gitOf(context: LoopRunners): GitRunner {
@@ -101,17 +101,17 @@ function gitOf(context: LoopRunners): GitRunner {
   return context.git;
 }
 
-function current(context: LoopRunners, kept?: readonly string[]): SharedFingerprint {
+function current(context: LoopRunners, kept?: readonly string[], schemaVersion: 3 | 4 = 4): SharedFingerprint {
   const descriptor = readProgramDescriptor(context.root);
   if (descriptor === undefined) refuse('the project has no programme');
   const branches = kept ?? protectedBranches(loopProgramOf(descriptor).autopilot);
-  return fingerprintOf(readSharedState(gitOf(context), { bases: branches }), branches);
+  return fingerprintOf(readSharedState(gitOf(context), { bases: branches, schemaVersion }), branches, schemaVersion);
 }
 
 function guard(context: LoopRunners, ticket: string): SharedFingerprint {
   const recorded = recordedFingerprint(context.root, ticket);
   if (recorded === undefined) refuse('no fingerprint was recorded before the unit began');
-  const changed = changedParts(recorded, current(context, recorded.protectedBranches));
+  const changed = changedParts(recorded, current(context, recorded.protectedBranches, recorded.schemaVersion));
   if (changed.length > 0) refuse(`the shared Git state changed: ${changed.join(', ')}`);
   return recorded;
 }
@@ -151,7 +151,7 @@ function renew(argv: readonly string[], context: LoopRunners, ticket: string): L
     const evidence: Renewal = {
       schemaVersion: 1, priorRecordDigest: request.priorRecordDigest,
       previous: replay ? existing.previous : state.fingerprint,
-      fingerprint: observed, head: request.head, branch: request.branch, cause: request.cause, decision: request.decision,
+      fingerprint: fingerprintSchema.parse(observed), head: request.head, branch: request.branch, cause: request.cause, decision: request.decision,
     };
     if (replay && encode(evidence) !== encode(existing)) refuse('conflicting renewal replay');
     // Observe again immediately before committing. External Git writers do not take our lock.

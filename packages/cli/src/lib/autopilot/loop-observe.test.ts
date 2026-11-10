@@ -1,4 +1,5 @@
 import { currentChecksFixture, noWorkflowRuns } from '../../test/fixtures/loop-checks.js';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, symlinkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -607,6 +608,19 @@ describe('readSharedState', () => {
     expect(changedParts(before, fingerprint(root))).toEqual([]);
     rmSync(join(root, '.git/info/refs'));
     expect(changedParts(before, fingerprint(root))).toEqual([]);
+  });
+
+  it('reproduces the complete v3 info digest and detects root refs drift', () => {
+    const root = repository();
+    git(root, 'update-server-info');
+    const readV3 = () => fingerprintOf(readSharedState(gitIn(root), { bases: ['develop'], schemaVersion: 3 }), ['develop'], 3);
+    const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+    const entries = ['exclude', 'refs'].map(path => `${hash(readFileSync(join(root, '.git/info', path), 'utf8'))} ${path}`).sort().join('\n');
+    const before = readV3();
+    expect(before.digests.info).toBe(hash(entries));
+    expect(changedParts(before, readV3())).toEqual([]);
+    writeFileSync(join(root, '.git/info/refs'), 'changed cache');
+    expect(changedParts(before, readV3())).toEqual(['info']);
   });
 
   it.each(['info/exclude', 'info/attributes', 'info/packs', 'info/nested/refs', 'hooks/checksum', 'hooks/refs'])(

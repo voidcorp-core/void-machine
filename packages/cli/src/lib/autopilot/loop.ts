@@ -390,6 +390,8 @@ export type LoopAction =
  */
 export interface SharedStateObservation {
   readonly current: SharedStateReading;
+  /** Complete original-policy reading, supplied only when a retained v3 baseline needs it. */
+  readonly currentV3?: SharedStateReading;
   readonly before: ReadonlyMap<string, SharedFingerprint>;
 }
 
@@ -767,7 +769,9 @@ function sharedStateOutcome(
     const detail = 'no shared Git state fingerprint was recorded before the unit began';
     return toHuman(ticket.id, 'shared-fingerprint-missing', detail);
   }
-  const changed = changedParts(before, fingerprintOf(shared.current, before.protectedBranches));
+  const current = before.schemaVersion === 3 ? shared.currentV3 : shared.current;
+  if (current === undefined) return toHuman(ticket.id, 'shared-state-changed', 'the retained v3 policy was not observed');
+  const changed = changedParts(before, fingerprintOf(current, before.protectedBranches, before.schemaVersion));
   if (changed.length === 0) return undefined;
   const detail = `the unit changed the shared Git state: ${changed.join(', ')}`;
   return toHuman(ticket.id, 'shared-state-changed', detail);

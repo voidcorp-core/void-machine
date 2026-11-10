@@ -584,6 +584,8 @@ function directoryDigests(directory: string, omitServerRefs = false): string {
 }
 
 export interface SharedStateRequest {
+  /** Retained baselines are compared using their original policy. New reads default to v4. */
+  readonly schemaVersion?: 3 | 4;
   /** The local branches units must not move: the loop's base candidates. */
   readonly bases: readonly string[];
 }
@@ -630,7 +632,7 @@ export function readSharedState(run: GitRunner, request: SharedStateRequest): Sh
     bases: read('bases'),
     replace: read('replace'),
     hooks: attempt('reading hooks/', () => directoryDigests(join(common, 'hooks'))),
-    info: attempt('reading info/', () => directoryDigests(join(common, 'info'), true)),
+    info: attempt('reading info/', () => directoryDigests(join(common, 'info'), request.schemaVersion !== 3)),
   };
 }
 

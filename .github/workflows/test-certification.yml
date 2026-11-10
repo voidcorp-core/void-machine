@@ -27,6 +27,8 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build certification prerequisites
+        run: pnpm build
       - name: Twenty deterministic fast-lane attempts
         env:
           VOID_STRESS_REPORT_PATH: ${{ runner.temp }}/test-proof/fast.json

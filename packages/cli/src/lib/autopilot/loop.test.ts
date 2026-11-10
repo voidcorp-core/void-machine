@@ -1328,6 +1328,29 @@ describe('shared repository state', () => {
     });
   });
 
+  it('compares mixed v3/v4 units under their own policy and refuses an absent v3 observation', () => {
+    const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }),
+      started('DEV-2', { pullRequest: 12, branch: 'work/DEV-2' })];
+    const pulls = [pull(reviewed('DEV-1', 11)), pull(reviewed('DEV-2', 12))];
+    const legacy = { ...SHARED_READING, info: 'legacy full info including refs' };
+    const before = new Map([
+      ['DEV-1', fingerprintOf(legacy, ['develop', 'main'], 3)],
+      ['DEV-2', fingerprintOf(SHARED_READING, ['develop', 'main'])],
+    ]);
+    const input: LoopInput = { program: program(), tracker: tracker({ tickets }), github: github(pulls),
+      signal: 'none', sharedState: { current: SHARED_READING, before, currentV3: legacy },
+      armed: new Map(), reviews: localReviews({ tickets }, pulls), now: NOW, mergeHold: NO_HOLD };
+    const admitted = decideLoop(input).actions;
+    expect(actionFor(admitted, 'DEV-1')).toMatchObject({ kind: 'enable-auto-merge' });
+    expect(actionFor(admitted, 'DEV-2')).toMatchObject({ kind: 'enable-auto-merge' });
+    for (const observed of [undefined, { ...legacy, info: 'changed root refs' }, { ...legacy, tags: 'changed tag' }]) {
+      const shared = { current: SHARED_READING, before, ...(observed === undefined ? {} : { currentV3: observed }) };
+      const actions = decideLoop({ ...input, sharedState: shared }).actions;
+      expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'mark-human-wait', reason: 'shared-state-changed' });
+      expect(actionFor(actions, 'DEV-2')).toMatchObject({ kind: 'enable-auto-merge' });
+    }
+  });
+
   it('protects the local refs of every branch the loop may merge into or ship from', () => {
     expect(protectedBranches(program({ deployBranch: 'main' }).autopilot)).toEqual(['develop', 'main']);
     const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));

@@ -17,12 +17,10 @@
 
 import {
   existsSync,
-  linkSync,
   mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -62,8 +60,9 @@ import {
   type GitRunner,
   observeGithub,
   type MergeMethodFlag,
-  PULL_REQUEST_FIELDS,
+  readPullRequest,
   parsePullRequestView,
+  PULL_REQUEST_FIELDS,
   readBehind,
   readDefaultBranch,
   readMergeMethod,
@@ -72,20 +71,20 @@ import {
   resolveLoopBase,
 } from '../lib/autopilot/loop-observe.js';
 import { readProgramDescriptor } from '../lib/autopilot/program.js';
-import {
-  admitFingerprint,
-  changedParts,
-  fingerprintOf,
-  type SharedFingerprint,
-  type SharedStateReading,
+import type {
+  SharedStateReading,
+  SharedFingerprint,
 } from '../lib/autopilot/shared-state.js';
 import { readLocalReviews } from './autopilot-review.js';
+import { fingerprintCommand, publishCommand, recordedFingerprint } from './autopilot-fingerprint.js';
+export { fingerprintCommand } from './autopilot-fingerprint.js';
 import { flagValue } from './autopilot-usage.js';
 
 const LOOP_SUBCOMMANDS = [
   'next',
   'stop',
   'fingerprint',
+  'publish',
   'merges',
   'merge',
   'update-branch',
@@ -115,6 +114,8 @@ export function loopCommand(
       return stopCommand(argv, context);
     case 'fingerprint':
       return fingerprintCommand(argv, context);
+    case 'publish':
+      return publishCommand(argv, context);
     case 'merges':
       return mergesCommand(argv, context);
     case 'merge':
@@ -147,7 +148,6 @@ export interface LoopRunners {
 
 const LOOP_DIRECTORY = join('.void', 'machine', 'autopilot');
 export const STOP_SIGNAL_PATH = join(LOOP_DIRECTORY, 'stop');
-const FINGERPRINT_DIRECTORY = join(LOOP_DIRECTORY, 'fingerprints');
 const ARMED_DIRECTORY = join(LOOP_DIRECTORY, 'armed');
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const armedRecordSchema = z.strictObject({
@@ -200,26 +200,6 @@ function writeAtomically(path: string, text: string): void {
   renameSync(temporary, path);
 }
 
-/**
- * Write a record that must never be replaced: the complete file is linked into
- * place, and a link onto an existing path fails, so a second writer loses
- * without ever exposing half a record. Returns false when one already exists.
- */
-function writeOnce(path: string, text: string, mode = 0o644): boolean {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporary = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporary, text, { encoding: 'utf8', mode });
-  try {
-    linkSync(temporary, path);
-    return true;
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') return false;
-    throw error;
-  } finally {
-    unlinkSync(temporary);
-  }
-}
-
 /** The file one ticket's record lives in; a name that is not a ticket reaches no path. */
 function ticketFile(root: string, directory: string, ticket: string, extension: string): string {
   const parsed = ticketIdSchema.safeParse(ticket);
@@ -232,10 +212,6 @@ function ticketFile(root: string, directory: string, ticket: string, extension: 
     );
   }
   return join(root, directory, `${parsed.data}${extension}`);
-}
-
-function fingerprintPath(root: string, ticket: string): string {
-  return ticketFile(root, FINGERPRINT_DIRECTORY, ticket, '.json');
 }
 
 function armedPath(root: string, ticket: string): string {
@@ -259,25 +235,6 @@ function recordedArm(root: string, ticket: string): ArmedRecord | undefined {
     `the armed head recorded for ${ticket} is unreadable`,
     'a record is the pull request and the head `autopilot arm` armed it on',
     'disarm the pull request by hand and let the loop arm it again',
-  );
-}
-
-function recordedFingerprint(root: string, ticket: string): SharedFingerprint | undefined {
-  const text = readIfPresent(fingerprintPath(root, ticket));
-  if (text === undefined) return undefined;
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    value = undefined;
-  }
-  const admission = admitFingerprint(value);
-  if (admission.ok) return admission.value;
-  throw autopilotFailure(
-    'AUTOPILOT_INPUT',
-    `the fingerprint recorded for ${ticket} is unreadable`,
-    admission.reason,
-    'hand the unit to a human; a baseline recorded after the unit began proves nothing',
   );
 }
 
@@ -392,7 +349,10 @@ export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOut
     const record = recordedArm(context.root, ticket.id);
     if (record !== undefined) armed.set(ticket.id, record);
   }
-  const sharedState = { current, before };
+  const currentV3 = [...before.values()].some(recorded => recorded.schemaVersion === 3)
+    ? readSharedState(runner(context.git, 'git'), { bases: protectedBranches(program.autopilot), schemaVersion: 3 })
+    : undefined;
+  const sharedState = { current, before, ...(currentV3 === undefined ? {} : { currentV3 }) };
   const reviews = readLocalReviews(context.root, tracker.tickets.map((ticket) => ticket.id));
   const now = instantOf(runner(context.now, 'clock'));
   const mergeHold = readMergeHold(context.root);
@@ -471,72 +431,6 @@ export function stopCommand(argv: readonly string[], context: LoopRunners): Loop
   return {
     value: { signal, path: STOP_SIGNAL_PATH },
     human: `stop signal written: ${signal} (${STOP_SIGNAL_PATH})\n`,
-  };
-}
-
-/**
- * `autopilot fingerprint [--before <ticket> | --after <ticket>]`.
- *
- * Bare, it prints the current digests. `--before` records them, once, for a
- * ticket whose unit is about to start; a second record is refused. It keeps the
- * settings of the bases and the branch that deploys whole and leaves out the
- * upstream of every other branch, which units in flight set and remove; the
- * record names the branches it kept, and `--after` reads them back. `--after`
- * compares, and fails when the shared state moved or was never recorded, so a
- * worker can refuse its own push.
- */
-export function fingerprintCommand(
-  argv: readonly string[],
-  context: LoopRunners,
-): LoopCommandOutput {
-  const program = loopProgram(context.root);
-  const reading = sharedReading(program, context);
-  const before = flagValue(argv, '--before');
-  const after = flagValue(argv, '--after');
-  const kept = protectedBranches(program.autopilot);
-  if (before !== undefined && after !== undefined) {
-    throw autopilotFailure(
-      'AUTOPILOT_USAGE',
-      'autopilot fingerprint takes --before or --after, not both',
-      'one invocation either records a baseline or checks against it',
-      'run it once with --before when the unit starts, once with --after when it ends',
-    );
-  }
-  if (before !== undefined) {
-    const path = fingerprintPath(context.root, before);
-    const current = fingerprintOf(reading, kept);
-    if (!writeOnce(path, `${JSON.stringify(current)}\n`)) {
-      throw autopilotFailure(
-        'AUTOPILOT_CONTRACT',
-        `a baseline is already recorded for ${before}`,
-        'a second --before would replace the state the unit started from with the state it left',
-        'keep the recorded baseline; only a person who has checked the unit deletes it',
-      );
-    }
-    return { value: { ticketId: before, recorded: current }, human: `recorded for ${before}\n` };
-  }
-  if (after === undefined) {
-    const current = fingerprintOf(reading, kept);
-    return { value: current, human: `${JSON.stringify(current)}\n` };
-  }
-  const recorded = recordedFingerprint(context.root, after);
-  const changed =
-    recorded === undefined
-      ? undefined
-      : changedParts(recorded, fingerprintOf(reading, recorded.protectedBranches));
-  if (changed === undefined || changed.length > 0) {
-    throw autopilotFailure(
-      'AUTOPILOT_CONTRACT',
-      `the unit of ${after} may not be published`,
-      changed === undefined
-        ? 'no fingerprint was recorded before the unit began'
-        : `the shared Git state changed: ${changed.join(', ')}`,
-      'leave the unit unpublished and hand it to a human with this report',
-    );
-  }
-  return {
-    value: { ticketId: after, unchanged: true },
-    human: `${after}: shared state unchanged\n`,
   };
 }
 
@@ -667,7 +561,7 @@ function guardedMerge(target: MergeTarget, context: LoopRunners) {
     );
   }
   const gh = runner(context.gh, 'gh');
-  const view = viewOf(gh, number);
+  const view = readPullRequest(gh, number);
   if (view.state !== 'open' || view.headSha !== head) {
     throw autopilotFailure(
       'AUTOPILOT_CONTRACT',

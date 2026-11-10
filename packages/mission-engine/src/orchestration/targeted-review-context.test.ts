@@ -10,7 +10,7 @@ import { planStoppedMissionRecovery, validatedRecoveredReviewEvents } from './mi
 import { stoppedTargetedReview, targetedReviewFixture } from '../test/targeted-review.js';
 import { parseEvidence, sealEvidence } from '../evidence/schema.js';
 import { finding, findingId } from '../test/targeted-review.js';
-import { reduceReviewLoop } from './review-loop.js';
+import { canContinueNativeReview, freshReviewProofIds, reduceReviewLoop, validNativeReviewContinuation } from './review-loop.js';
 
 describe('native targeted review continuity', () => {
   it('retains the initial reviewer for a bound correction and resolves its finding', () => {
@@ -54,6 +54,50 @@ function edited(events: readonly CanonicalEvent[], match: (event: CanonicalEvent
 }
 const lastCompletion = (event: CanonicalEvent) => event.kind === 'specialist.completed' && event.seq === 12;
 const lastInvocation = (event: CanonicalEvent) => event.seq >= 10 && event.seq <= 12;
+
+it.each([
+  ['mixed proof', ['src/history.ts:8', 'test/history.test.ts:12', 'evd_targeted_proof_1'], true],
+  ['source only', ['src/history.ts:8'], false],
+  ['missing canonical', ['src/history.ts:8', 'evd_missing_proof_1'], false],
+  ['one invalid canonical', ['evd_targeted_proof_1', 'evd_missing_proof_1'], false],
+  ['malformed canonical', ['evd_targeted_proof_1', 'evd_bad'], false],
+  ['unknown label', ['evd_targeted_proof_1', 'unproven'], false],
+  ['absolute citation', ['evd_targeted_proof_1', '/src/history.ts:8'], false],
+  ['traversal citation', ['evd_targeted_proof_1', 'src/../history.ts:8'], false],
+  ['URL citation', ['evd_targeted_proof_1', 'https://example.test/proof'], false],
+  ['invalid line', ['evd_targeted_proof_1', 'src/history.ts:0'], false],
+] as const)('uses the same resolution authority for continuity and findings: %s', (_name, proofIds, admitted) => {
+  const fixture = targetedReviewFixture();
+  const events = edited(fixture.events, lastCompletion, payload => {
+    const receipt = object(object(payload['completion'])['review']);
+    receipt['proofIds'] = [...proofIds];
+    receipt['resolutions'] = [{ findingId: 'stale-history', status: 'resolved', proofIds: [...proofIds] }];
+  });
+  expect(validNativeReviewContinuation(events, events.at(-1)!)).toBe(admitted);
+  expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(admitted);
+  if (admitted) {
+    // Historical authenticity survives; current resolution still needs a fresh observed proof.
+    expect(reduceReviewLoop({ ...fixture.input, events, validProofIds: [] }).readyForVerdict).toBe(false);
+  }
+});
+
+it('refuses a mixed resolution with an undeclared citation or forged canonical evidence', () => {
+  const fixture = targetedReviewFixture();
+  const mixed = edited(fixture.events, lastCompletion, payload => {
+    const receipt = object(object(payload['completion'])['review']);
+    receipt['resolutions'] = [{ findingId: 'stale-history', status: 'resolved',
+      proofIds: ['evd_targeted_proof_1', 'src/history.ts:8'] }];
+  });
+  expect(validNativeReviewContinuation(mixed, mixed.at(-1)!)).toBe(false);
+  const declared = edited(mixed, lastCompletion, payload => {
+    object(object(payload['completion'])['review'])['proofIds'] = ['evd_targeted_proof_1', 'src/history.ts:8'];
+  });
+  const forged = edited(declared, event => event.kind === 'evidence.recorded', payload => {
+    object(payload['evidence'])['proofHash'] = `sha256:${'f'.repeat(64)}`;
+  });
+  expect(validNativeReviewContinuation(forged, forged.at(-1)!)).toBe(false);
+  expect(reduceReviewLoop({ ...fixture.input, events: forged }).readyForVerdict).toBe(false);
+});
 
 it.each([
   ['duplicate completion', (p: Record<string, JsonValue>) => { object(p['completion'])['completionId'] = 'cmp_targeted_0'; }],
@@ -294,3 +338,110 @@ it('reopens an old resolved finding when the final review omits its fresh resolu
     findings: [{ sourceId: 'stale-history' }] });
   expect(reduceReviewLoop({ ...fixture.input, validProofIds: [] }).readyForVerdict).toBe(false);
 });
+
+
+function reopenedSoleFinding() {
+  const fixture = stoppedTargetedReview(2);
+  const currentDiff = `sha256:${'e'.repeat(64)}`;
+  const events = edited(fixture.events, () => true, p => {
+    if (p['reviewRound'] === 2) {
+      p['inputHash'] = fixture.input.currentInputHashes[REVIEWER];
+      object(p['reviewSubject'])['reviewedCommit'] = fixture.subject.reviewedCommit;
+      if (p['completion']) {
+        const completion = object(p['completion']);
+        completion['verdict'] = 'pass';
+        const receipt = object(completion['review']);
+        receipt['reviewedCommit'] = fixture.subject.reviewedCommit;
+        receipt['resolutions'] = [{ findingId: finding.id, status: 'resolved',
+          proofIds: ['evd_targeted_proof_1'] }];
+      }
+    }
+    const proof = parseEvidence(p['evidence']);
+    if (proof.ok && proof.value.evidenceId === 'evd_targeted_proof_2') {
+      const { proofHash: _proofHash, ...draft } = proof.value;
+      p['evidence'] = JSON.parse(JSON.stringify(sealEvidence({ ...draft, diffHash: currentDiff,
+        dependencies: [{ kind: 'diff', key: 'git:working-tree', hash: currentDiff }] })));
+    }
+  });
+  const validProofIds = freshReviewProofIds(events, { dependencies: { 'git:working-tree': currentDiff } });
+  return { ...fixture, events, input: { ...fixture.input, events, validProofIds },
+    recovery: { ...fixture.recovery, stream: replayEventLog(events.map(serializeEvent).join('\n')),
+      request: { ...fixture.recovery.request, expectedJournalHash: canonicalJsonHash(events) },
+      observation: { ...fixture.recovery.observation,
+        evidenceDependencies: { 'git:working-tree': currentDiff } } } };
+}
+
+it('refreshes the sole resolved finding after its precommit proof becomes stale at the same HEAD', () => {
+  const fixture = reopenedSoleFinding();
+  const beforeCorrection = { ...fixture.input, events: fixture.events.filter(event => event.seq < 13),
+    afterSeqExclusive: 9 };
+  expect(reduceReviewLoop({ ...beforeCorrection, validProofIds: ['evd_targeted_proof_1'] }))
+    .toMatchObject({ status: 'ready-for-verdict', findings: [] });
+  expect(reduceReviewLoop(beforeCorrection)).toMatchObject({ readyForVerdict: false,
+    findings: [{ sourceId: finding.id }] });
+  expect(fixture.input.validProofIds).toEqual(['evd_targeted_proof_2']);
+  expect(reduceReviewLoop(fixture.input)).toMatchObject({ status: 'ready-for-verdict',
+    reviewRound: 3, issues: [], findings: [] });
+});
+
+it('recovers the refreshed sole finding without rewriting history or restoring correction budget', () => {
+  const fixture = reopenedSoleFinding();
+  const prefix = fixture.events.map(serializeEvent).join('\n');
+  expect(planStoppedMissionRecovery(fixture.recovery)).toMatchObject({ kind: 'recover',
+    receipt: { consumedCorrectionBatches: 2, remainingCorrectionBatches: 0,
+      consumedRounds: 3, remainingRounds: 0 } });
+  expect(fixture.events.map(serializeEvent).join('\n')).toBe(prefix);
+});
+
+it.each([{ findingIds: [] }, { findingIds: [findingId, findingId] },
+  { findingIds: ['fnd_unknown'] }, { findingIds: ['fnd_advisory'] }])(
+  'refuses correction finding IDs $findingIds after the sole finding reopens', ({ findingIds }) => {
+    const fixture = reopenedSoleFinding();
+    const events = edited(fixture.events, event => event.seq === 13, p => { p['findingIds'] = [...findingIds]; });
+    const request = events.find(event => event.seq === 16);
+    if (!request) throw new Error('Expected targeted request');
+    expect(canContinueNativeReview(events, request, CONTEXT)).toBe(false);
+    expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(false);
+  });
+
+
+it.each(['forged source', 'wrong causation', 'wrong writer', 'wrong plan', 'wrong context'] as const)(
+  'refuses a reopened finding with %s', flaw => {
+    const fixture = reopenedSoleFinding();
+    let events = fixture.events;
+    if (flaw === 'forged source') events = events.map(event => event.seq === 13
+      ? { ...event, source: 'runtime:codex' } : event);
+    if (flaw === 'wrong causation') events = events.map(event => event.seq === 15
+      ? { ...event, causationId: 'evt_other_request' } : event);
+    if (flaw === 'wrong writer') events = events.map(event => event.seq === 15
+      ? { ...event, subject: 'writer:other' } : event);
+    if (flaw === 'wrong plan') events = edited(events, event => event.seq === 13 || event.seq === 15,
+      p => { p['planHash'] = `sha256:${'f'.repeat(64)}`; });
+    if (flaw === 'wrong context') events = edited(events, event => event.seq === 17,
+      p => { p['contextId'] = '/root/unrelated_reviewer'; });
+    expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(false);
+  });
+
+it('does not authorize correction of an authenticated advisory finding', () => {
+  const fixture = reopenedSoleFinding();
+  const advisory = { ...finding, id: 'advisory', classification: 'advisory' };
+  const advisoryId = `fnd_${canonicalJsonHash({ evidence: advisory.evidence,
+    sourceId: advisory.id, classification: advisory.classification }).slice('sha256:'.length, 29)}`;
+  const events = edited(fixture.events, event => event.seq === 6 || event.seq === 13, p => {
+    if (p['completion']) object(p['completion'])['findings'] = [finding, advisory];
+    else p['findingIds'] = [advisoryId];
+  });
+  expect(reduceReviewLoop({ ...fixture.input, events }).readyForVerdict).toBe(false);
+});
+
+it.each(['missing', 'forged', 'pre-request', 'stale'] as const)(
+  'does not resolve the reopened sole finding with a %s final proof', flaw => {
+    const fixture = reopenedSoleFinding();
+    let events = fixture.events;
+    if (flaw === 'missing') events = events.filter(event => event.seq !== 14);
+    if (flaw === 'pre-request') events = events.map(event => event.seq === 14 ? { ...event, seq: 12 } : event);
+    if (flaw === 'forged') events = edited(events, event => event.seq === 14,
+      p => { object(p['evidence'])['diffHash'] = `sha256:${'f'.repeat(64)}`; });
+    const validProofIds = flaw === 'stale' ? [] : fixture.input.validProofIds;
+    expect(reduceReviewLoop({ ...fixture.input, events, validProofIds }).readyForVerdict).toBe(false);
+  });

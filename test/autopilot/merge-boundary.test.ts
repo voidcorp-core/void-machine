@@ -26,6 +26,7 @@ const SURFACES = [
   'packages/cli/src/lib/autopilot',
   'packages/cli/src/commands/autopilot.ts',
   'packages/cli/src/commands/autopilot-loop.ts',
+  'packages/cli/src/commands/autopilot-fingerprint.ts',
 ];
 
 /** The one source allowed to arm or disarm a merge, named so the gate is exhaustive. */
@@ -120,7 +121,11 @@ describe('the argv the autopilot surface can emit', () => {
     expect(mutations.map((file) => file.path)).toEqual([]);
   });
 
-  it('pushes nothing: a worker pushes its own branch, the loop only reads and merges', () => {
-    expect(violating((command) => command.tokens[0] === 'push')).toEqual([]);
+  it('publishes only through the explicit guarded publication command', () => {
+    const pushes = COMMANDS.filter((command) => command.tokens[0] === 'push');
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]?.file).toBe('packages/cli/src/commands/autopilot-fingerprint.ts');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: assert the emitted source template, not this test scope.
+    expect(pushes[0]?.source).toBe("['push', '--', remote, `${head}:refs/heads/${branch}`]");
   });
 });

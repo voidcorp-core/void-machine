@@ -151,7 +151,7 @@ Act on each returned action, then ask again:
 
 | Action | What you do |
 |---|---|
-| `assign` | claim the ticket (In Progress, assigned), run `autopilot fingerprint --before <ticket>`, create or reuse its worktree, spawn its worker |
+| `assign` | claim the ticket (In Progress, assigned), run `autopilot fingerprint --before <ticket>`, create or reuse its worktree, create the controlled mission there with title and full frozen ticket via `void-orchestrate`, hand its ID to the worker |
 | `wait` | nothing; the reason says who is working |
 | `hand-back-to-worker` | give the ticket back to its worker, alive or respawned in the same worktree, with the reason and the pull request; a respawned worker resumes its mission (see Respawning) |
 | `mark-human-wait` | record it in `recent` with its `reason`, which `recent` requires and the recap repeats, put the decision's `humanWaitLabel` on the ticket, comment the reason and detail, free the slot; keep reporting its pull request and footprint, which hold its ground until that pull request merges or closes |
@@ -159,7 +159,7 @@ Act on each returned action, then ask again:
 | `update-branch` | `void-machine autopilot update-branch --pr <n> --head <headSha>`: GitHub merges the base into the branch if its head is still that one; the new head is reviewed before anything merges it |
 | `enable-auto-merge` | `void-machine autopilot arm --ticket <id> --pr <n> --head <headSha>`, on a base with a merge queue: the same guards, then it records the head, arms on exactly that head and reads GitHub back; never `gh pr merge --auto` by hand, never `--admin` |
 | `disable-auto-merge` | `void-machine autopilot disarm --pr <n>`, before the action that follows it for the same ticket; it turns its auto-merge off, then takes it out of the merge queue, and fails while GitHub still shows either; never `gh pr merge --disable-auto` alone, which leaves a queued pull request in the queue |
-| `review` | `void-machine autopilot review --ticket <id> --pr <n> --head <headSha> --round <round> --mission <canonical-id>`; on awaiting-native-review use `void-orchestrate` for the actual reviewer, record canonical receipts, then repeat to collect. The same attempt keeps its 30 minute deadline; failures retain the existing budget |
+| `review` | `void-machine autopilot review --ticket <id> --pr <n> --head <headSha> --round <round> --mission <canonical-id> --worktree <assigned-path>` from the coordinator checkout; on awaiting-native-review use `void-orchestrate` for the actual reviewer, record canonical receipts, then repeat to collect. The same attempt keeps its 30 minute deadline; failures retain the existing budget |
 | `requeue` | the same command, to put an ejected head back in the queue; the kernel bounds how often |
 | `drain` | take nothing new; keep acting on the tickets in flight |
 | `freeze` | stop acting, once the disarms before it succeeded |
@@ -201,13 +201,13 @@ the local config and the files it includes, the stash, tags, notes, remotes, the
 deploy branches, replace refs, `hooks/` and `info/` are one set for every worktree. The upstream
 (`remote`, `merge`) of every branch but the bases and the one that deploys is left out, since units
 in flight set it when they create or push their branch and drop it with a merged one; the bases'
-own settings still count. So start each worktree from
+own settings still count; only regular root `info/refs`, Git’s generated transport cache, is exempt. Start each worktree from
 `origin/<base>` and never move a local base branch while units are in flight. The baseline
 recorded at `assign` is written once: a second `--before` for the same ticket is refused, so a unit
-cannot re-record the state it left as the state it found. It is compared by the coordinator before it
-publishes, with `autopilot fingerprint --after <ticket>`, and again by the kernel before it arms a
-merge. A changed or missing baseline sends the ticket to a human, unpublished; only that person
-deletes the record.
+cannot re-record the state it left as the state it found. `autopilot fingerprint --after <ticket>`
+checks it; the coordinator publishes only through `autopilot publish --ticket <ticket> --head <sha>
+--remote <remote> --branch <branch>`, which couples that guard to the literal SHA push. Never follow
+refusal with direct Git. Human renewal retains evidence; see [publication and recovery](references/publication.md).
 
 **Disarming.** Armed means GitHub merges without anyone acting again: an auto-merge request, or,
 once the checks pass on a base with a merge queue, an entry in that queue and no request at all.
@@ -266,18 +266,19 @@ neither, so a restart loses nothing.
 
 ## Workers
 
-Given: one ticket id, its worktree, its branch, the programme's plan and spec. The worker re-fetches
+Given: one ticket id, its worktree, its branch, its canonical mission ID, the programme's plan and spec. The worker re-fetches
 the complete ticket itself; it never works from a summary.
 
-It runs `void-implement` whole in that worktree, and starts its mission with the ticket id as its
-`--title`, which is how a respawn finds it again. Before any context compaction it writes to the
+It runs `void-implement` whole and `mission dispatch` in that worktree, reusing the mission
+the coordinator created once with `--title <ticket-id> --ticket <full-frozen-ticket>`.
+A respawn retains that identity and its budgets. Before any context compaction it writes to the
 mission what it has done: each specialist result through `mission specialist-event`, each proof
 through `mission verify`, a committed candidate through `mission writer-event`. The journal accepts
 only these typed events, no free note; what is not yet one of them does not survive a respawn, and
 uncommitted edits survive only in the worktree. During development, the coordinator may create or reuse a draft pull request
 for the branch; drafts are permitted for development, never for merge admission. After the worker
-returns its commit and green proofs, the coordinator runs `autopilot fingerprint --after <ticket>`,
-pushes, and must mark the same pull request ready (create one only if absent), then move the ticket
+returns its commit and green proofs, the coordinator runs the guarded `autopilot publish` command
+and must mark the same pull request ready (create one only if absent), then move the ticket
 to In Review. The independent reviewer examines ready pull requests only; an unfinished draft waits.
 Blocking findings come back as a hand-back and are corrected as a batch, per `void-implement`.
 

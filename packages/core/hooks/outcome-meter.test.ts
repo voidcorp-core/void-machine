@@ -12,7 +12,8 @@ import { describe, expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'outcome-meter.sh');
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 
 function runHook(
   payload: Record<string, unknown>,

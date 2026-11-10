@@ -300,6 +300,12 @@ export async function loadMissionControllerPlan(
     maxBytes: 256_000,
     pathEscapeMessage: 'MISSION_CONTROLLER_PLAN_INVALID: plan path escaped the project',
     invalidMessage: 'MISSION_CONTROLLER_PLAN_INVALID: plan file is unsafe or oversized',
+  }).catch((error: unknown) => {
+    if (errorCode(error) !== 'ENOENT') throw error;
+    throw new Error('MISSION_CONTROLLER_PLAN_MISSING: controlled dispatch and review require a frozen ticket; '
+      + 'the coordinator must create the mission once from the assigned worktree with '
+      + 'mission start --title <unit> --ticket <ticket> and hand its ID to the writer. '
+      + 'Preserve this mission history; do not fabricate a plan or create a replacement to bypass refusal.');
   });
   let parsed: unknown;
   try {

@@ -1,4 +1,4 @@
-// syntax-worker: {"sha256":"12e6a141d5bda6486f285da9af96d09c638ceb26a321f1362a1df064b8eefea3","bytes":3588399}
+// syntax-worker: {"sha256":"462f4c488e85f6e104338e09b283bb934a84442f26c40102ec268eeb89c12ffe","bytes":3588428}
 import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -52,7 +52,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var define_VOID_SYNTAX_WORKER_IDENTITY_default;
 var init_define_VOID_SYNTAX_WORKER_IDENTITY = __esm({
   "<define:__VOID_SYNTAX_WORKER_IDENTITY__>"() {
-    define_VOID_SYNTAX_WORKER_IDENTITY_default = { sha256: "12e6a141d5bda6486f285da9af96d09c638ceb26a321f1362a1df064b8eefea3", bytes: 3588399 };
+    define_VOID_SYNTAX_WORKER_IDENTITY_default = { sha256: "462f4c488e85f6e104338e09b283bb934a84442f26c40102ec268eeb89c12ffe", bytes: 3588428 };
   }
 });
 
@@ -7842,7 +7842,7 @@ function noConsole(edits, projectRoot2) {
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-var FOCUSED = /\b(?:it|test|describe)\.only\b|\b(?:it|test)\.skip\b|\b(?:xit|xdescribe)\b/;
+var FOCUSED = /\b(?:it|test|describe)\.only\b|\b(?:it|test|describe)\.skip\b|\b(?:xit|xdescribe|fit|fdescribe)\b/;
 function noFocusedTest(edits) {
   return evidenceVerdict(
     "FOCUSED_OR_SKIPPED_TEST",
@@ -8406,7 +8406,7 @@ import { readFileSync as readFileSync4, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-var SYNTAX_WORKER_IDENTITY = { "sha256": "12e6a141d5bda6486f285da9af96d09c638ceb26a321f1362a1df064b8eefea3", "bytes": 3588399 };
+var SYNTAX_WORKER_IDENTITY = { "sha256": "462f4c488e85f6e104338e09b283bb934a84442f26c40102ec268eeb89c12ffe", "bytes": 3588428 };
 
 function runSyntaxWorker(root, input, remainingMs) {
   const started = performance.now();
@@ -8746,8 +8746,8 @@ function focusedVerdict(root, edits, raw, syntaxInspector) {
       edit.path,
       "provide an exact supported Edit/patch or a complete Write within 64 KiB"
     );
-    if (!/\b(?:only|skip|xit|xdescribe)\b|\\u/.test(proposed.content)) continue;
-    if (/^[ \t]*(?:(?:it|test|describe)\.only|(?:it|test)\.skip|xit|xdescribe)[ \t]*\(/.test(proposed.content)) {
+    if (!/\b(?:only|skip|xit|xdescribe|fit|fdescribe)\b|\\u/.test(proposed.content)) continue;
+    if (/^[ \t]*(?:(?:it|test|describe)\.only|(?:it|test|describe)\.skip|xit|xdescribe|fit|fdescribe)[ \t]*\(/.test(proposed.content)) {
       return noFocusedTest([{ path: edit.path, addedContent: proposed.content.split("\n")[0] ?? "" }]);
     }
     const verdict = syntaxInspector(root, edit.path, proposed.content, deadline - performance.now());
@@ -15096,6 +15096,8 @@ function replayEventLog(text3) {
     issues
   };
 }
+
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 

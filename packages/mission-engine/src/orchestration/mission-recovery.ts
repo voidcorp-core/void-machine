@@ -10,6 +10,7 @@ import type { SpecialistId, SpecialistInvocationStage } from '../specialist/rout
 import { projectMissionLifecycle } from './mission-lifecycle.js';
 import { BOUNDED_REVIEW_BUDGET, freshReviewProofIds, reduceReviewLoop, validNativeContextId, validNativeReviewContinuation } from './review-loop.js';
 import { validatedSpecialistContractMigrationBoundary } from './specialist-contract-migration.js';
+import { validatedReviewWriterBindingResponse } from './review-writer-binding.js';
 
 export interface RecoveryResolutionArtifact {
   readonly path: string;
@@ -20,6 +21,7 @@ export interface MissionRecoveryRequest {
   readonly closureEventId: string;
   readonly expectedJournalHash: string;
   readonly disposition:
+    | { readonly kind: 'review-writer-binding'; readonly responseEventId: string }
     | { readonly kind: 'controller-defect'; readonly defect: 'partial-fanout-round' | 'stale-input-dispatch' | 'opaque-native-context' | 'targeted-review-context' }
     | { readonly kind: 'evidence-disposition'; readonly responseEventIds: readonly string[] }
     | { readonly kind: 'preparation-invocation'; readonly completionEventIds: readonly string[] }
@@ -57,6 +59,7 @@ export interface RecoveryRoundCorrection {
   readonly toRound: number;
 }
 export interface MissionRecoveryReceipt {
+  readonly writerBinding?: RecoveredReviewBinding;
   readonly schemaVersion: 1;
   readonly closureEventId: string;
   readonly previousEpisodeId: string;
@@ -156,8 +159,7 @@ function opaqueNativeContextDefect(input: MissionRecoveryInput): boolean {
 }
 
 /** Re-admit an intact native continuation rejected solely by the former global-context rule. */
-function targetedReviewContextDefect(input: MissionRecoveryInput): boolean {
-  const { events } = input.stream;
+function targetedReviewContextDefect(input: MissionRecoveryInput, events: readonly CanonicalEvent[]): boolean {
   const { observation } = input;
   const start = events[0];
   const closure = events.at(-1);
@@ -506,10 +508,24 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   }
   const existing = completions(events).filter((item) => field(item.event, 'stage') === observation.stage);
   const previousRecovery = events.filter((event) => event.kind === 'mission.recovered').at(-1);
+  const amendment = request.disposition.kind === 'review-writer-binding'
+    ? validatedReviewWriterBindingResponse(events, request.disposition.responseEventId) : undefined;
+  if (request.disposition.kind === 'review-writer-binding' && (!amendment
+    || observation.reviewBindings !== undefined
+    || observation.stage !== 'post-implementation' || observation.reviewPolicy !== 'bounded-corrections-v1'
+    || !observation.reviewSubject || observation.reviewSubject.taskId !== amendment.binding.review.taskId
+    || observation.reviewSubject.baseCommit !== amendment.binding.review.baseCommit
+    || observation.reviewSubject.acceptanceCriteriaHash !== amendment.binding.review.acceptanceCriteriaHash
+    || observation.contractVersions['core:independent-code-reviewer'] !==
+      completions(events).find(item => item.event.eventId === amendment.binding.completionEventId)?.completion.contractVersion
+    || amendment.response.source !== observation.expectedSource)) {
+    return refuse('invalid-writer-binding-amendment', 'Collect the retained author response for this closure; preserve its original result and subject');
+  }
   if (previousRecovery !== undefined && !events.some((event) => event.seq > previousRecovery.seq
     && event.kind === 'lead-writer.completed')
     && !pendingPreparationClarification(input, previousRecovery)
     && !validEvidenceDispositionRecovery(input)
+    && !(amendment && amendment.response.seq > previousRecovery.seq)
     // Only a complete new independent invocation can advance provenance recovery.
     && !validProvenanceRecovery(input, existing, previousRecovery.seq)) {
     return refuse('no-recovery-progress', 'Record actual corrective progress before reopening another stopped episode');
@@ -524,7 +540,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
   const inadmissible = replacement ? disposition.completionEventIds : targetedContext ? [] : staleDispatchCompletions(projectedHistory);
   if (disposition.kind === 'controller-defect' && (disposition.defect === 'partial-fanout-round'
     ? roundCorrections.length === 0 : disposition.defect === 'stale-input-dispatch'
-      ? inadmissible.length === 0 : targetedContext ? !targetedReviewContextDefect(input) : !opaqueNativeContextDefect(input))) {
+      ? inadmissible.length === 0 : targetedContext ? !targetedReviewContextDefect(input, projectedHistory) : !opaqueNativeContextDefect(input))) {
     return refuse('unproven-controller-defect', 'The journal must prove the requested controller defect; do not reset its budget');
   }
   if (disposition.kind === 'review-provenance' && !validProvenanceRecovery(input, existing)) {
@@ -632,6 +648,7 @@ function admitStoppedMission(input: MissionRecoveryInput, projectedHistory = inp
     && field(item.event, 'inputHash') === observation.currentInputHashes[item.event.subject]);
   const preservedIds = new Set(preserved.map((item) => item.event.eventId));
   const receipt: MissionRecoveryReceipt = {
+    ...(amendment === undefined ? {} : { writerBinding: amendment.binding }),
     schemaVersion: 1, closureEventId: lifecycle.closure.eventId, previousEpisodeId: lifecycle.episodeId,
     priorJournalHash: journalHash, priorJournalLastSeq: stream.lastSeq,
     requestHash: canonicalJsonHash(request), request, observation,
@@ -669,6 +686,10 @@ function recoveryRequest(value: JsonValue | undefined): value is JsonValue & Mis
     || typeof value['expectedJournalHash'] !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value['expectedJournalHash'])
     || value['disposition'] === undefined || !record(value['disposition'])) return false;
   const disposition = value['disposition'];
+  if (disposition['kind'] === 'review-writer-binding') {
+    return exactKeys(disposition, ['kind', 'responseEventId']) && typeof disposition['responseEventId'] === 'string'
+      && /^evt_[A-Za-z0-9_-]{8,100}$/.test(disposition['responseEventId']);
+  }
   if (disposition['kind'] === 'evidence-disposition') {
     const ids = disposition['responseEventIds'];
     return exactKeys(disposition, ['kind', 'responseEventIds']) && Array.isArray(ids)
@@ -747,7 +768,8 @@ function projectRecoveries(events: readonly CanonicalEvent[], recoveries: readon
     .filter(event => item.receipt.request.disposition.kind !== 'command-correction'
       || !item.receipt.request.disposition.pairs.some(pair => pair.failedEventId === event.eventId))
     .map(event => {
-      const binding = item.receipt.observation.reviewBindings?.find(value => value.completionEventId === event.eventId);
+      const binding = item.receipt.writerBinding?.completionEventId === event.eventId ? item.receipt.writerBinding
+        : item.receipt.observation.reviewBindings?.find(value => value.completionEventId === event.eventId);
       const completion = field(event, 'completion');
       if (binding === undefined || !record(event.payload) || completion === undefined || !record(completion)) return event;
       const receipt = binding.review;

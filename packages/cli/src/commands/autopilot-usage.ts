@@ -21,12 +21,15 @@ Usage:
   echo '<LoopTracker>'           | ${PRODUCT_COMMAND} autopilot next [--json]
   ${PRODUCT_COMMAND} autopilot stop --drain | --now [--json]
   ${PRODUCT_COMMAND} autopilot fingerprint [--before <ticket> | --after <ticket>] [--json]
+  ${PRODUCT_COMMAND} autopilot fingerprint --record <ticket> [--json]
+  ${PRODUCT_COMMAND} autopilot fingerprint --renew <ticket> --head <sha> --branch <branch> --previous <record-digest> --expected <current-digest> --cause <reason> --decision <human-reference> [--json]
+  ${PRODUCT_COMMAND} autopilot publish --ticket <id> --head <sha> --remote <name> --branch <branch> [--json]
   ${PRODUCT_COMMAND} autopilot merges [--by-human | --automatic] [--json]
   ${PRODUCT_COMMAND} autopilot merge --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot update-branch --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot arm --ticket <id> --pr <number> --head <sha> [--json]
   ${PRODUCT_COMMAND} autopilot disarm --pr <number> [--json]
-  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--json]
+  ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--worktree <assigned-path>] [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
 next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
@@ -42,8 +45,22 @@ the digests of the shared Git state around one unit: local config and its
 includes, stash, tags, notes, remotes, the local base and deploy branches,
 replace refs, hooks/ and info/. The upstream (remote, merge) of every branch but
 those is left out, since units in flight set and remove their own. --after fails
-when it moved, and a second --before is refused. review answers review: it
-checks out the exact head in a detached worktree at the durable worktree
+when it moved, and a second --before is refused. Policy v4 excludes only regular
+root info/refs, Git's generated transport cache. Legacy records need explicit
+human renewal: --record prints the retained recordDigest and observed currentDigest;
+--renew binds both digests, the candidate branch/SHA, cause and human decision.
+It preserves the original and every renewal, never grants merge authority, and
+refuses stale observations or conflicting replay. An abandoned per-ticket lock
+requires human inspection; never delete fingerprint or renewal evidence.
+publish checks the explicit local branch/SHA and the same guard under that lock,
+then pushes the literal SHA to the named remote branch. It refuses a base or deploy
+destination. No push runs after a missing, invalid or indeterminate guard. A failed
+push has an unknown remote outcome: inspect the remote before a deliberate retry.
+Direct Git commands and external concurrent Git writers are outside this guarantee.
+review reads the assigned checkout selected by --worktree (relative to the coordinator
+checkout, which is the default). It validates the same repository, exact HEAD and frozen
+ticket/plan before spending an attempt. The resolved installation owns the mission journal;
+the coordinator retains its programme, rounds, locks and verdicts. It then checks out the exact head in a detached worktree at the durable worktree
 location, checks its HEAD before and after and collects a fresh-context, read-only
 independent-code-reviewer receipt bound to exact commit, base, criteria and actual
 invocation. Awaiting-native-review asks ORCH to invoke and record it, then repeat
@@ -96,6 +113,7 @@ export const SUBCOMMANDS = Object.freeze({
   next: 'reads-stdin',
   stop: 'no-stdin',
   fingerprint: 'no-stdin',
+  publish: 'no-stdin',
   merges: 'no-stdin',
   merge: 'no-stdin',
   'update-branch': 'no-stdin',

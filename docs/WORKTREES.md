@@ -41,6 +41,29 @@ shares across its worktrees (the config and its includes, `refs/stash`, tags, no
 local base and deploy branches, hooks) is what a unit must not touch, and
 `autopilot fingerprint --before` and `--after` around each unit prove it did not.
 
+## Controlled mission and review roots
+
+The coordinator creates the controlled mission once, from the assigned checkout:
+`void-machine mission start --title <ticket-id> --ticket <full-frozen-ticket> --json`.
+It hands the returned ID to the writer, which runs `mission dispatch` there and
+retains the same identity through corrections and resume. The ticket may live only
+in that checkout under `.void/machine/tickets/`; it need not be copied to the main tree.
+The resolved installation root owns the mission plan and journal.
+
+Run `autopilot review --ticket <id> --pr <n> --head <sha> --round <1|2>
+--mission <canonical-id> --worktree <assigned-path>` from the coordinator checkout.
+`--worktree` is optional and defaults to that checkout; a relative path resolves there.
+The assigned tree must belong to the same Git repository and hold the exact candidate
+HEAD and frozen ticket bytes. The coordinator keeps its own programme, review rounds,
+locks and verdict records, which `next` and `merge` read. Review evidence is collected
+in the separate detached checkout at the exact head. Repeat the same arguments while
+awaiting the reviewer; the existing attempt retains its deadline.
+
+Title-only missions remain available for simple work. Controlled dispatch and review
+refuse a missing plan with `MISSION_CONTROLLER_PLAN_MISSING` before starting a review
+attempt. Preserve the existing journal; never fabricate a late plan or create a second
+mission to bypass refusal. Invalid plans, changed tickets and stale subjects also refuse.
+
 ## Removal after an observed merge
 
 A worktree is removed only once its pull request is observed merged on GitHub: a pull request

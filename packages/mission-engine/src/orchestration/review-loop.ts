@@ -279,6 +279,13 @@ function authorizedTargetedRequest(
       && event.seq > recovery.seq && event.seq <= request.seq).length === 1;
 }
 
+/** A completed review can establish correction obligations without approving its subject. */
+function hasBlockingReview(completion: SpecialistCompletion): boolean {
+  return completion.review !== undefined
+    && completion.findings.some(finding => finding.classification === 'blocking')
+    && completion.findings.every(finding => finding.classification !== undefined);
+}
+
 /** Retained native reviewer may start a targeted correction, including after recovery. */
 export function canContinueNativeReview(
   events: readonly CanonicalEvent[], request: CanonicalEvent, contextId: string,
@@ -297,8 +304,7 @@ export function canContinueNativeReview(
   const first = prior[0];
   const amendment = writerBindingRecovery(events);
   if (!first || first.completion.review?.scope.kind !== 'general'
-    || (first.completion.verdict !== 'changes-requested'
-      && !(first.completion.verdict === 'degraded' && amendment && prior.length === 1))
+    || !hasBlockingReview(first.completion)
     || (amendment !== undefined && prior.length !== 1)
     || new Set(prior.map(item => item.completion.completionId)).size !== prior.length
     || events.some(event => event.seq < request.seq && ['specialist.started', 'specialist.completed'].includes(event.kind)
@@ -673,7 +679,9 @@ function decideStatus(input: {
   readonly evidenceObligations?: EvidenceObligationState;
 }): ReviewLoopStatus {
   if (input.issues.length > 0) return 'degraded';
-  if (input.current.some((item) => item.completion.verdict === 'degraded')) {
+  if (input.current.some(item => item.completion.verdict === 'degraded'
+    && (input.correctionBatches === undefined || !hasBlockingReview(item.completion)
+      || !input.findings.some(finding => finding.classification === 'blocking')))) {
     return 'degraded';
   }
   if (input.stale.length > 0) {

@@ -14,7 +14,7 @@ import {
   type EvidenceObligationState,
   reduceEvidenceObligations,
 } from '../specialist/evidence-obligations.js';
-import { type ReviewScope, type ReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
+import { type ReviewScope, type ReviewSubject, isReviewSubject, sameReviewSubject } from '../specialist/review-receipt.js';
 import type {
   SpecialistId,
   SpecialistInvocationStage,
@@ -420,6 +420,8 @@ function boundedReceiptReasons(
   input: MissionTeamControllerInput, start: MissionStart, events: readonly CanonicalEvent[],
 ): readonly string[] {
   const lastWriter = writerCompletions(input).at(-1)?.seq ?? 0;
+  const recovery = writerBindingRecovery(events);
+  const binding = recovery && record(lifecycleField(recovery, 'writerBinding') as JsonValue);
   return events.filter(event => event.kind === 'specialist.completed' && event.seq > lastWriter
     && event.subject === 'core:independent-code-reviewer'
     && lifecycleField(event, 'stage') === 'post-implementation').flatMap(event => {
@@ -428,7 +430,9 @@ function boundedReceiptReasons(
     if (result === undefined || receipt === undefined || input.reviewSubject === undefined) {
       return ['Independent review requires its durable committed subject and reviewer receipt'];
     }
-    if (!sameReviewSubject(receipt, input.reviewSubject) || receipt.taskId !== event.missionId
+    const subject = binding?.['completionEventId'] === event.eventId
+      ? lifecycleField(event, 'reviewSubject') : input.reviewSubject;
+    if (!isReviewSubject(subject) || !sameReviewSubject(receipt, subject) || receipt.taskId !== event.missionId
       || receipt.writerId !== start.leadWriterId || receipt.reviewerId === start.leadWriterId) {
       return ['Independent review receipt does not match the observed task, commit, base, or writer'];
     }
@@ -439,7 +443,7 @@ function boundedReceiptReasons(
     if (result.findings.some(finding => finding.classification === undefined)) {
       return ['Bounded findings require an explicit consequence classification'];
     }
-    return [];
+    return unboundCompletionReasons(input, start.runtime, [event]);
   });
 }
 
@@ -760,7 +764,7 @@ export function orchestrateMissionTeam(
       }, input.specialistRuntime);
     }
   }
-  const postReview = firstImplementationSeq === undefined || lastWriterSeq === undefined
+  let postReview = firstImplementationSeq === undefined || lastWriterSeq === undefined
     ? undefined : reduceReviewLoop({
     stage: 'post-implementation',
     expectedSource,
@@ -790,14 +794,18 @@ export function orchestrateMissionTeam(
           [id, input.currentInputHashesByStage['post-implementation'][id]])))) {
       return stopped('blocked', postReview, baseVerdict, ['Writer binding recovery observations changed before correction']);
     }
-    const reasons = ['Author-confirmed writer binding permits one correction and one targeted continuation; original review remains degraded'];
-    return applyRuntimeCertification({ phase: 'correction', action: { kind: 'run-correction', writerId: start.leadWriterId,
-      findingIds: writerBindingCorrectionFindings(reviewEvents).map(finding => finding.findingId) },
-      review: postReview, verdict: overrideVerdict(baseVerdict, 'blocked', reasons), reasons }, input.specialistRuntime);
+    // Historical binding repair may observe a newer subject. Retain its exact original obligations;
+    // the ordinary correction decision below owns dispatch and outstanding evidence.
+    postReview = { ...postReview, status: 'correction-required', readyForVerdict: false,
+      findings: writerBindingCorrectionFindings(reviewEvents) };
   }
   if (bindingRecovery && postReview && input.stream.events.some(event => event.seq > bindingRecovery.seq
     && event.kind === 'specialist.completed') && !postReview.readyForVerdict) {
     return stopped('blocked', postReview, baseVerdict, ['The single targeted continuation is spent; retain the original review budget']);
+  }
+  if (start.boundedReview && postReview) {
+    const receiptReasons = boundedReceiptReasons(input, start, reviewEvents);
+    if (receiptReasons.length > 0) return stopped('degraded', postReview, baseVerdict, receiptReasons);
   }
   if (postReview?.status === 'blocked' || postReview?.status === 'degraded') {
     return applyRuntimeCertification(
@@ -805,7 +813,9 @@ export function orchestrateMissionTeam(
   }
   const correctiveFindingIds = pendingRecoveredCorrectionFindingIds(input.stream.events);
   const correctiveContinuation = pendingEvidence !== undefined && obligations.issues.length === 0
-    && firstImplementationSeq !== undefined && correctiveFindingIds.length > 0;
+    && firstImplementationSeq !== undefined && (correctiveFindingIds.length > 0
+      || (postReview?.status === 'correction-required'
+        && postReview.findings.some(finding => finding.classification === 'blocking')));
   if (pendingEvidence !== undefined && !correctiveContinuation) {
     return applyRuntimeCertification(pendingEvidence, input.specialistRuntime);
   }
@@ -860,10 +870,6 @@ export function orchestrateMissionTeam(
   if (firstWriterSeq === undefined || firstImplementationSeq === undefined || lastWriterSeq === undefined
     || postReview === undefined) {
     throw new Error('MISSION_TEAM_INVARIANT: writer completion boundary is missing');
-  }
-  if (start.boundedReview && postReview.missingSpecialists.length === 0) {
-    const receiptReasons = boundedReceiptReasons(input, start, reviewEvents);
-    if (receiptReasons.length > 0) return stopped('degraded', postReview, baseVerdict, receiptReasons);
   }
   if (postReview.readyForVerdict) {
     const completionEvidence = obligationStop(

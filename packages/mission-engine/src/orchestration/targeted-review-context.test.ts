@@ -445,3 +445,63 @@ it.each(['missing', 'forged', 'pre-request', 'stale'] as const)(
     const validProofIds = flaw === 'stale' ? [] : fixture.input.validProofIds;
     expect(reduceReviewLoop({ ...fixture.input, events, validProofIds }).readyForVerdict).toBe(false);
   });
+
+
+it.each(['degraded', 'blocked', 'pass'] as const)('continues a completed %s review with explicit blockers', verdict => {
+  const fixture = targetedReviewFixture();
+  const events = edited(fixture.events, event => event.seq === 6, p => {
+    object(p['completion'])['verdict'] = verdict;
+    object(p['completion'])['evidenceRequests'] = ['General proof remains due'];
+  });
+  const request = events[9];
+  if (!request) throw Error('Expected targeted request');
+  expect(canContinueNativeReview(events, request, CONTEXT)).toBe(true);
+  const completion = events.at(-1);
+  if (!completion) throw Error('Expected targeted completion');
+  expect(validNativeReviewContinuation(events, completion)).toBe(true);
+});
+
+it('does not continue a degraded limitation without an actionable finding', () => {
+  const fixture = targetedReviewFixture();
+  const events = edited(fixture.events, event => event.seq === 6, p => {
+    object(p['completion'])['verdict'] = 'degraded';
+    object(p['completion'])['findings'] = [];
+    object(p['completion'])['limitations'] = ['Review could not be performed'];
+  });
+  const request = events[9];
+  if (!request) throw Error('Expected targeted request');
+  expect(canContinueNativeReview(events, request, CONTEXT)).toBe(false);
+});
+
+
+it.each(['valid', 'wrong writer', 'wrong subject', 'wrong provenance', 'missing invocation',
+  'invalid obligation', 'no blocker', 'exhausted'] as const)(
+  'keeps correction readiness separate from acceptance and integrity: %s', scenario => {
+    const fixture = targetedReviewFixture(scenario === 'exhausted' ? 2 : 0);
+    let events = edited(fixture.events, event => event.kind === 'specialist.completed', p => {
+      const completion = object(p['completion']);
+      completion['verdict'] = 'degraded';
+      completion['evidenceRequests'] = ['Acceptance proof remains due'];
+      if (scenario === 'no blocker') completion['findings'] = [];
+      if (scenario === 'exhausted') completion['findings'] = [finding];
+      const receipt = object(completion['review']);
+      if (scenario === 'exhausted') receipt['resolutions'] = [];
+      if (scenario === 'wrong writer') receipt['writerId'] = 'writer:foreign';
+      if (scenario === 'wrong subject') receipt['reviewedCommit'] = 'f'.repeat(40);
+      if (scenario === 'wrong provenance') object(receipt['provenance'])['contextId'] = 'foreign';
+    });
+    if (scenario === 'missing invocation') events = events.filter(event => event.kind !== 'specialist.started');
+    if (scenario === 'invalid obligation') events = [...events, event({ seq: events.length + 1,
+      eventId: 'evt_invalid_obligation', kind: 'specialist.evidence-classified', subject: REVIEWER,
+      source: 'runtime:codex', payload: { completionEventId: 'evt_targeted_6' } })];
+    // Keep corruption semantic rather than introducing an unrelated journal gap.
+    events = events.map((event, index) => ({ ...event, seq: index + 1 }));
+    const decision = orchestrateMissionTeam({ stream: replayEventLog(events.map(serializeEvent).join('\n')),
+      plan: { planHash: PLAN_HASH, context: { status: 'complete', issues: [] }, specialists: [{ specialistId: REVIEWER,
+        contractVersion: 1, state: 'applicable', stages: ['post-implementation'] }] },
+      evidenceContext: { dependencies: { 'git:working-tree': DIFF_HASH } }, maxReviewRounds: 2,
+      currentInputHashesByStage: { 'pre-implementation': {}, 'post-implementation': fixture.input.currentInputHashes },
+      reviewSubject: fixture.subject, specialistRuntime: { status: 'available', limitations: [] } });
+    expect(decision.action.kind, decision.reasons.join('; ')).toBe(scenario === 'valid' ? 'run-correction' : 'stop');
+    expect(decision.verdict.status).not.toBe('verified');
+  });

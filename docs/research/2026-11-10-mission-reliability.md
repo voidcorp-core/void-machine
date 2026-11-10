@@ -10,6 +10,8 @@ Document demandé par Folpe pour conserver les mécanismes à examiner lors de l
 
 La [vocation de Machine](../MACHINE-VOCATION.md) reste la référence : Cortex, ou un autre demandeur autorisé, transmet une intention ; Machine conduit l'exécution dans son environnement et retourne résultats, preuves et limites. Le développement est une spécialité parmi d'autres. L'interface de transport et la forme d'installation ne sont pas le sujet de ce catalogue.
 
+Le [catalogue élargi des capacités IA](2026-11-10-agent-harness-capabilities.md) complète ce document : contexte, planification, outils, mémoire, modèles locaux, évaluation et simplification. Il conserve le même statut de propositions à examiner, sans imposer leur implémentation.
+
 ## 1. Résultat recherché et limites
 
 Machine doit savoir comprendre une mission, chercher le contexte pertinent, utiliser les modèles et outils nécessaires, réaliser les actions autorisées, vérifier leurs effets et reprendre après interruption. Les modèles locaux sur un poste ou un serveur chez le client font partie de la cible. Leur accès aux fichiers et connecteurs passe par Machine et ses restrictions effectives ; le respect de cette frontière ne peut dépendre d'un prompt.

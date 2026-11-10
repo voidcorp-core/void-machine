@@ -18,10 +18,9 @@ progress:
     done: [Done, Canceled]
 humanGates: [DEV-923, DEV-928, DEV-930]
 autopilot:
-  schemaVersion: 1
+  schemaVersion: 2
   clusterSize: 4
   base: develop
-  mergeGate: union-reviewed
   deployBranch: main
   verifyCommands:
     - [pnpm, build]
@@ -51,10 +50,12 @@ display) and DEV-920 (autonomous merge with no setup in a consumer project).
 DEV-923 and DEV-928 end on a checkpoint Folpe reviews; DEV-930 holds the
 promotion and the release, a human gate.
 
-Until DEV-927 lands, the loop and its grant are unchanged: it merges into
-`develop` only, on a head the review App passed, never into `main`, and never a
-pull request touching the machinery that judges merges, which goes to a person.
-Promotion and release stay a person's.
+Since DEV-927 there is one merge mode: the loop merges into `develop` on a
+local verdict bound to the head, unless a person holds the merges with
+`void-machine autopilot merges --by-human`; never into `main`, and never a pull
+request touching the machinery that judges merges, which goes to a person. This
+repository keeps its review App as a required check, which GitHub enforces at
+merge time. Promotion and release stay a person's.
 
 Corrections stay in the artefact being worked on. A change contradicting an
 accepted decision requires supersession, never an in-place rewrite.

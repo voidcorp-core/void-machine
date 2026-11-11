@@ -43,6 +43,24 @@ actions; this optimisation programme authorizes neither. A release PR opened wit
 the Release App token triggers normal PR checks. Back-merges return through the
 protected integration path; they are not direct unverified writes to `develop`.
 
+## Consumer CI without a queue service
+
+The diagram above describes this repository's configured GitHub queue, not a
+consumer prerequisite. Consumers can merge sequentially with the existing
+Autopilot kernel: an armed PR retains its turn, otherwise the oldest open,
+non-draft PR among tracked tickets takes it. Refresh only the branch whose turn
+it is, then require current review and CI evidence. The merge skill preserves
+this order rather than preferring a newer green PR; real dependencies and durable
+blockers are reported explicitly, never resolved by bypassing the kernel.
+
+The shipped [CI feedback reference](../packages/core/skills/void-verify/references/ci-feedback.md#measure-feedback-before-changing-ci)
+owns the measurement procedure and advisory latency targets. It separates waiting,
+elapsed time, summed job-minutes and billing, includes cancelled/repeated work, and
+requires actual dependency evidence before avoiding a suite on documentation changes.
+There is no new queue, CLI command, budget gate or automatic protection change.
+`init` installs these skill references; `update` refreshes owned references while
+preserving project edits. Existing consumer workflows remain project-owned.
+
 ## Current `ci.yml` job DAG
 
 ```mermaid

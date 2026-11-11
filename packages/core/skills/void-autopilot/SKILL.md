@@ -339,7 +339,10 @@ its proofs and returns its commit for coordinator publication; `semantic` -- two
 sends the ticket to a human. A worker never picks a side of a semantic conflict to keep the loop
 moving.
 
-**Serial fallback.** Without a merge queue, merges run one at a time: the oldest ready pull request
+**Serial fallback.** This path requires no queue service or paid plan.
+For CI optimization, use [void-verify CI feedback](../void-verify/references/ci-feedback.md);
+add neither a second scheduler nor a mandatory duration gate.
+Without a merge queue, merges run one at a time: the oldest ready pull request
 (or the one already merging) holds the turn. The kernel reads whether the base moved past its head
 itself, since GitHub reports it only under a protection that requires it: a head behind gets
 `update-branch`, its new head is reviewed again, then merged, then the next. `merge` reads it once

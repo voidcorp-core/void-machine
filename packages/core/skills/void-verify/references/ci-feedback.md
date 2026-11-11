@@ -40,15 +40,16 @@ concurrency keys: `cancel-in-progress: false` alone still replaces pending runs 
 shared group. Keep integration checks before entry to the protected branch; checking
 only after merge permits broken integration.
 
-GitHub couples required PR and merge queue checks. Preserve both. Remove a redundant
-post-merge run only after checking that no release, promotion or artifact consumer
+Where a repository already uses a merge queue, preserve both its required PR and
+merge-group checks. A queue is optional; sequential merging needs no queue setup.
+Remove a redundant post-merge run only after checking that no release, promotion or artifact consumer
 needs it, and that the protected integration path proves the merged result. The
 example has no push trigger; add one where it provides distinct release evidence.
 
-For reusable enforcement, the caller must also declare `ready_for_review`,
-`converted_to_draft` and `merge_group: checks_requested`, keeping its existing
-check names. Put concurrency only in that caller; the called workflow inherits
-`github.workflow` and must not cancel the same group. Its admission guard runs
+For reusable enforcement, the caller must also declare `ready_for_review` and
+`converted_to_draft`, keeping its existing check names. Preserve
+`merge_group: checks_requested` where a queue is configured. Put concurrency only
+in that caller; the called workflow inherits `github.workflow` and must not cancel the same group. Its admission guard runs
 from the immutable harness checkout before Node setup and floor execution.
 GitHub-hosted runner usage belongs to the caller, even when the reusable workflow
 is public and the caller private. Compare latency and job-minutes before making
@@ -71,6 +72,41 @@ Rollback: restore the prior workflow triggers and admission step together. Resto
 full draft CI costs runner time but does not weaken the floor. Leave protection and
 review evidence unchanged. Existing missions and receipts are not migrated.
 
+## Measure feedback before changing CI
+
+On a CI optimization request, use existing run history to agree a project-specific
+feedback target, separately for ordinary changes and documentation changes. Around ten
+minutes for a complete PR and a few minutes for documentation can start the discussion;
+they are advisory targets, not timeouts, required checks or permission to omit tests.
+Report the sample size, median and p95 when the sample supports it. A missed target
+calls for diagnosis of the critical path, not a retry or another reporting service.
+
+Record separately: time waiting for execution, elapsed time until all required results
+are available, and summed job execution minutes across parallel jobs and all attempts.
+Include cancelled work and runs invalidated by branch updates. A later PR overtaking an
+older one only wastes CI when that change actually invalidates work; do not assume a
+saving from ordering alone. Use provider billing data for money: job-minutes are not
+billed minutes. Missing runner-wait timestamps mean unknown, not zero; dependency waits
+are not automatically runner waits. A run update timestamp is not its completion time.
+
+For GitHub, inspect a concrete run and repeat for earlier attempts when present:
+
+```sh
+gh run view RUN_ID --repo OWNER/REPO --attempt ATTEMPT --json attempt,event,headSha,createdAt,startedAt,jobs
+```
+
+Job start/completion times describe execution intervals; inspect the workflow dependencies
+and every required workflow before deriving the feedback delay. Another CI provider's
+native run/job view supplies the same evidence; this is no GitHub prerequisite.
+
+Investigate a full build/test cache miss on a documentation-only diff by tracing actual
+inputs and cache keys. Markdown may feed generated assets, executable skills or contract
+tests; the extension alone proves nothing. Optimize unaffected work only when dependencies
+are proven; otherwise keep the complete suite above. Preserve exact-candidate checks,
+release artifacts and integration evidence. Reuse local evidence with unchanged inputs
+instead of asking every agent to repeat the same full suite. Adopt workflow changes in
+the consumer's existing configuration; updating these references does not rewrite it.
+
 Sources read for GitHub Actions (hosted service):
 - https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
 - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
@@ -78,3 +114,6 @@ Sources read for GitHub Actions (hosted service):
 - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions
 
 - https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+
+- https://cli.github.com/manual/gh_run_view
+- https://docs.github.com/en/rest/actions/workflow-jobs

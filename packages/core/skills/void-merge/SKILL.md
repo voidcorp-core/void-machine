@@ -1,12 +1,12 @@
 ---
 name: void-merge
-description: Vider la file des PR ouvertes sans casser le dépôt. Ordre par déblocage plutôt que par date, CI verte ET à jour, artefacts générés régénérés, conflits de contenu rendus à leur auteur. Use when merging pull requests.
+description: Vider la file des PR ouvertes sans casser le dépôt. Fusions séquentielles, ordre stable et dépendances explicites, CI verte ET à jour, artefacts générés régénérés, conflits de contenu rendus à leur auteur. Use when merging pull requests.
 ---
 
 # merge — voidcorp craftsman edition
 
 `void-implement` s'arrête à la PR ouverte. `void-autopilot` laisse à une personne les PR qu'il ne peut
-pas armer. Personne ne dit comment vider la file. Ce geste a l'air trivial jusqu'au moment où il ne l'est pas.
+pas fusionner dans son mandat. Personne ne dit comment vider la file. Ce geste a l'air trivial jusqu'au moment où il ne l'est pas.
 
 **Attribution**: see `.source`.
 
@@ -36,19 +36,26 @@ Sortent de la file, sans discussion :
 
 Une file vide est un résultat, pas un échec : le dire et s'arrêter.
 
-## Étape 2 — Ordonner par déblocage, jamais par date
+## Étape 2 — Garder un ordre stable, identifier les dépendances
 
-L'ordre correct n'a aucun rapport avec le numéro ni l'ancienneté.
+Une seule fusion à la fois suffit, sans service de file ni abonnement particulier.
+Une file native déjà configurée reste compatible ; ses protections restent applicables.
 
-1. **Une PR dont le contenu supprime la cause du conflit d'une autre passe avant elle.** Le cas
-   qui a motivé cette skill : la PR réparant le workflow de back-merge était en conflit
-   précisément parce que ce back-merge n'avait jamais tourné. Sans le back-merge d'abord, elle
-   restait bloquée pour toujours.
-2. À défaut de relation, **le moindre conflit d'abord** : ce qui se merge sans rien toucher, puis
-   ce qui demande une régénération.
+1. **Conserver le tour engagé.** Dans `void-autopilot`, le noyau choisit : une PR dont la
+   fusion est déjà armée garde son tour ; sinon, la plus ancienne PR ouverte non brouillon
+   parmi les tickets suivis passe d'abord. Utiliser ses actions, pas un script de fusion parallèle.
+2. **Hors autopilot, garder l'ordre des PR admissibles.** À défaut d'ordre explicite, partir
+   de la plus ancienne. Une PR dont la revue est acquise et dont seule la CI attendue tourne
+   conserve son tour ; une PR plus récente ne la dépasse pas simplement parce qu'elle est verte.
+3. **Un déblocage réel se traite explicitement.** Nommer la dépendance, le conflit ou le
+   blocage durable et son propriétaire. Hors autopilot, une PR préalable peut passer d'abord
+   avec cette raison. Sous autopilot, rendre ce blocage au coordinateur : ne pas contourner
+   le tour choisi par le noyau. Une PR rouge ou en conflit ne justifie pas une attente indéfinie.
 
-Chercher la relation explicitement : une PR en conflit avec la base, dont une autre PR ouverte (ou
-un geste manquant) explique le conflit, attend cette autre.
+Remettre à jour seulement la PR dont le tour arrive, puis attendre ses preuves avant de
+fusionner. Ne pas remettre toutes les branches à jour après chaque fusion : la suivante
+ferait immédiatement vieillir ce travail. Le temps déjà dépensé ne rend jamais valide
+une preuve liée à un ancien commit ou à une ancienne base.
 
 ## Étape 3 — Trois conditions pour merger, toutes nécessaires
 

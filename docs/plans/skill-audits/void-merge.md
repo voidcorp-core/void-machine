@@ -36,3 +36,14 @@ dépôt le 2026-08-19, dont quatre auraient été mal traitées par un « merger
   Le problème traité ici est une file, et le déploiement n'en fait pas partie.
 - **Faire relire le diff par la skill.** La revue est un geste humain déjà fait quand la PR est
   ouverte ; l'ajouter ici mélangerait deux responsabilités et rendrait la boucle non déterministe.
+
+## Stable sequential ordering (2026-11-11, #549)
+
+The original dependency example remains valid, but does not justify reordering
+independent PRs by convenience. The skill now preserves the existing Autopilot
+serial turn and names genuine dependencies explicitly. A pending CI alone is not
+a reason to overtake; a durable failure is reported instead of waiting forever.
+Only the branch whose turn arrives is refreshed. Exact-candidate review, required
+CI and base freshness remain mandatory. No queue service, extra scheduler or
+runtime hook was introduced. CI measurement belongs to the existing verification
+reference, with advisory project targets rather than universal blocking budgets.

@@ -23,6 +23,7 @@ import { DEFAULT_PROJECT_PATHS, PRODUCT_COMMAND, stripManagedBlock } from '@void
 import { PROJECT_DOCTRINE_PATH } from '../lib/co-owned.js';
 import { observeKeptTracked, writeExcludeBlock } from '../lib/git-exclude.js';
 import { isUntouchedSinceInstall, readInstallManifest, sha256Of } from '../lib/install-manifest.js';
+import { inspectHarnessLintExclusion } from '../lib/lint-exclusion.js';
 import * as p from '@clack/prompts';
 import {
   prepareInstallCommit,
@@ -408,6 +409,12 @@ export async function init(args: readonly string[]): Promise<void> {
     // the receipt is what is on disk.
     claimOwnedPaths(projectRoot, prepared.receipt.files.map((file) => file.path));
     reportHiddenByProject(projectRoot);
+    // Inspect the published ownership, once for every runtime, including a first
+    // install. The project analyzer config never participates in this transaction.
+    for (const check of await inspectHarnessLintExclusion(projectRoot)) {
+      line(`${c.dim(check.name.padEnd(18))}${check.message}`);
+      if (check.fix !== undefined) nextSteps.push(check.fix);
+    }
     // A preserved asset is one the previous install owned and this one refuses
     // to delete, because it was edited by hand. Saying nothing here is how a
     // renamed skill keeps loading beside its replacement under a clean success.

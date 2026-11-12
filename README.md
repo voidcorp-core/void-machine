@@ -178,6 +178,7 @@ Some things are honestly incomplete:
 ```
 npx voidmachine status     # per-capability lifecycle, offline, no model call
 npx voidmachine doctor     # health check of the wiring itself
+npx voidmachine check      # version freshness for the installed channel
 ```
 
 `status` reads a frozen capability certification plus local telemetry and shows
@@ -190,6 +191,14 @@ Both surfaces also report whether your install is behind the version published
 on npm. That check is advisory, never fails a run, sends nothing about your
 machine, and reports `unknown` with a cause when the registry is unreachable
 rather than claiming you are current. `doctor --no-remote` skips it.
+
+`check` uses the installed bundled version from the local receipt, or the committed
+manifest on a fresh clone. Legacy plugin pins apply only to marketplace installs;
+`check --doctrine` explicitly compares marketplace doctrine. `doctor` and a successful
+bundled install/update also report owned scripts exposed to Biome or Knip. This advice
+never edits your analyzer configuration: it names specific harness files and preserves
+project files alongside them. Complex Knip configuration needs manual inspection.
+
 
 ## Verify the supply chain yourself
 

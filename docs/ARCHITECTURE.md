@@ -1567,6 +1567,32 @@ never implied: rewriting a project's index is the project's call, not a side
 effect of updating. `doctor` reports the count as **advisory** (nothing is
 broken) with that command as its fix.
 
+## Consumer analyzer diagnostics
+
+`doctor` and a successful bundled `init`/`update` inspect the installation's
+attested files against project analyzer configuration. Installation advice runs
+once after publication, so a first install and Codex-only installations use the
+same manifest/receipt evidence as later health checks. Diagnostics never edit
+project configuration or execute it.
+
+The ownership reader is shared with Git hygiene, but the policies differ: lint
+also considers load-bearing `.void/hooks/` scripts that Git must retain. Only
+present analyzer-relevant files classified as derived are considered. Co-owned
+configuration and project-authored neighbors remain in project scope. Reports
+count exposed assets and show at most five examples with file-specific repair
+suggestions; they never recommend excluding an entire shared runtime directory.
+
+Biome inspection retains the bounded plain-JSON/local-extends resolver and checks
+`files.includes` separately for each file. Knip inspection supports plain JSON in
+its standard config locations or `package.json#knip`, with unconditional `ignore`
+and `ignoreFiles` arrays. `ignoreFiles` suppresses unused-file findings only, so it
+does not prove exclusion from all analysis. Executable configuration, workspaces,
+other Knip options, mode-specific patterns and unreadable evidence report unknown
+and request manual inspection. These are conservative static configuration
+checks, not execution of an analyzer or proof of every invocation's effective scope.
+See [Biome configuration](https://biomejs.dev/reference/configuration/#filesincludes)
+and [Knip configuration](https://knip.dev/reference/configuration).
+
 ## Exact rehydration: the manifest and `hydrate`
 
 `.void/config.json` cannot answer "which bytes". `core` is a caret RANGE, and
@@ -1613,8 +1639,15 @@ The `packs` field pins the **marketplace plugins** that were enabled, keyed
 `@voidcorp/<plugin-name>` (the plugin name, e.g. `harness-nextjs`, scoped under
 `@voidcorp/`), each mapped to the version it was pinned at. These are plugin
 references, not npm package names: the npm packages are `@voidcorp/pack-<stack>`,
-the plugins they pair with are `harness-<stack>`. `doctor` reads this field to
-detect version drift against the marketplace HEAD.
+the plugins they pair with are `harness-<stack>`. `doctor` reads this field for marketplace installs to
+detect version drift against the marketplace HEAD. `check` follows the update
+channel: an explicit receipt wins; without a receipt, a manifest selects the
+bundled channel, otherwise legacy marketplace behavior applies. Bundled checks
+compare the receipt version (or the clone's valid manifest version) with npm,
+never stale plugin pins. Unreadable version evidence or registry failures remain
+unknown. Ordinary bundled checks need no marketplace access or `gh` authentication;
+`--doctrine` explicitly retains the marketplace doctrine comparison. Neither check
+rewrites pins, and remedies from linked worktrees name the installation root.
 
 ```json
 {

@@ -1,9 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { compareFreshness } from '@voidcorp/hook-runner';
+import { buildInstallReceipt, encodeReceipt, INSTALL_RECEIPT_PATH } from '../lib/receipts.js';
 import { CORE_PLUGIN_NAME } from '../lib/packs.js';
 import { check, type CheckRemote } from './check.js';
 
@@ -191,4 +193,113 @@ describe('check in the main checkout', () => {
     expect(report).toContain('in sync');
     expect(report).not.toContain('missing locally');
   });
+});
+
+
+describe('check installation channel', () => {
+  function receipt(root: string, source: 'local' | 'marketplace', version: string): void {
+    const path = join(root, INSTALL_RECEIPT_PATH);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, encodeReceipt(buildInstallReceipt({ version, source, runtimes: ['codex'], files: [] })));
+  }
+
+  function manifest(root: string, version: string): void {
+    writeFileSync(join(root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version, files: [] }));
+  }
+
+  async function bundledReport(root: string, args: string[] = []): Promise<string> {
+    let output = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      output += String(chunk);
+      return true;
+    });
+    await check(args, {
+      cwd: root,
+      remote: {
+        ...marketplaceAhead(),
+        fetchRemoteMarketplace: () => { throw new Error('ordinary bundled check must not contact marketplace'); },
+      },
+      resolveFreshness: async ({ installed }) => compareFreshness(installed, '7.0.1'),
+    });
+    return output;
+  }
+
+  it('compares the bundled receipt version, ignoring old pins and a different manifest version', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'local', '7.0.1');
+    manifest(root, '6.0.0');
+    const pins = readFileSync(join(root, '.void/config.json'), 'utf8');
+    const out = await bundledReport(root);
+    expect(readFileSync(join(root, '.void/config.json'), 'utf8')).toBe(pins);
+    expect(out).toContain('7.0.1 is the published version');
+    expect(out).not.toContain('plugin');
+    expect(out).not.toContain('3.5.0');
+  });
+
+  it('reads a clone manifest when no local receipt exists', async () => {
+    const root = repository();
+    install(root);
+    manifest(root, '7.0.1');
+    expect(await bundledReport(root)).toContain('7.0.1 is the published version');
+    manifest(root, '7.0.0');
+    const behind = await bundledReport(root);
+    expect(behind).toContain('void-machine update');
+    expect(behind).not.toContain('hydrate');
+  });
+
+  it('reports an invalid existing manifest as unknown, never legacy marketplace or current', async () => {
+    const root = repository();
+    install(root);
+    writeFileSync(join(root, '.void/install-manifest.json'), '{ broken');
+    const out = await bundledReport(root);
+    expect(out).toContain('unknown');
+    expect(out).not.toContain('all up to date');
+  });
+
+  it('names the install root in the bundled update remedy from a linked worktree', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'local', '7.0.0');
+    const out = await bundledReport(linkedWorktree(root));
+    expect(out).toContain('7.0.0 installed, 7.0.1 published');
+    expect(out).toContain(`in ${realpathSync(root)}: `);
+    expect(out).toContain('void-machine update');
+  });
+
+  it('keeps an explicit marketplace receipt authoritative over the manifest', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'marketplace', '7.0.1');
+    manifest(root, '7.0.1');
+    expect(await checkFrom(root)).toContain('update available');
+  });
+
+  it('still compares marketplace doctrine when explicitly requested on a bundled install', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'local', '7.0.1');
+    let output = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => { output += String(chunk); return true; });
+    await check(['--doctrine'], { cwd: root, remote: marketplaceAhead(),
+      resolveFreshness: async ({ installed }) => compareFreshness(installed, '7.0.1') });
+    expect(output).toContain('7.0.1 is the published version');
+    expect(output).toContain('in sync');
+    expect(output).not.toContain('plugins behind');
+  });
+});
+
+
+it('reports unavailable published freshness without claiming the bundled install is current', async () => {
+  const root = repository();
+  install(root);
+  writeFileSync(join(root, '.void/install-manifest.json'), JSON.stringify({ schemaVersion: 1, version: '7.0.1', files: [] }));
+  let output = '';
+  vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => { output += String(chunk); return true; });
+  await check([], { cwd: root,
+    remote: { ...marketplaceAhead(), fetchRemoteMarketplace: () => { throw new Error('wrong channel'); } },
+    resolveFreshness: async ({ installed }) => ({ verdict: 'unknown', installed, reason: 'registry unavailable' }),
+  });
+  expect(output).toContain('unknown (registry unavailable)');
+  expect(output).not.toContain('all up to date');
 });

@@ -8,12 +8,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { doctor } from '../../packages/cli/src/commands/doctor.js';
 import { init } from '../../packages/cli/src/commands/init.js';
+import { update } from '../../packages/cli/src/commands/update.js';
 
 let originalCwd: string;
 let dir: string;
@@ -223,5 +224,31 @@ describe('doctor', () => {
     expect(out).toContain('not-installed');
     expect(out).not.toContain('skipped');
     expect(out).not.toContain('nothing to fix');
+  });
+});
+
+
+describe('published lint boundaries', () => {
+  it('diagnoses first Codex install and doctor from actual published ownership', async () => {
+    const biome = JSON.stringify({ files: { includes: ['**'] } });
+    const knip = JSON.stringify({ ignore: [] });
+    writeFileSync(join(dir, 'biome.json'), biome);
+    writeFileSync(join(dir, 'knip.json'), knip);
+    await init(['--runtime', 'codex', '--no-interactive']);
+    expect(output).toContain('lint boundary');
+    expect(output).toContain('.void/hooks/');
+    expect(output).toContain('knip boundary');
+    expect(output).not.toContain('ownership unknown');
+    output = '';
+    const out = await runDoctor();
+    expect(out).toContain('lint boundary');
+    expect(out).toContain('knip boundary');
+    expect(out).toContain('.void/hooks/');
+    output = '';
+    await update([]);
+    expect(output).toContain('lint boundary');
+    expect(output).toContain('knip boundary');
+    expect(readFileSync(join(dir, 'biome.json'), 'utf8')).toBe(biome);
+    expect(readFileSync(join(dir, 'knip.json'), 'utf8')).toBe(knip);
   });
 });

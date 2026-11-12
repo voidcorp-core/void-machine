@@ -1,5 +1,5 @@
-// `void-machine check` — compare local plugin versions and (optionally) the
-// PHILOSOPHY.md doctrine against the remote marketplace at HEAD.
+// `check` compares the installed channel: bundled receipt/manifest against npm,
+// marketplace pins against their remote. --doctrine explicitly reads marketplace doctrine.
 
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -15,7 +15,11 @@ import {
 } from '../lib/remote.js';
 import { compareVersions, normalizeVersion } from '../lib/version.js';
 import { banner, blank, c, footer, glyph, line, meta, row, status } from '../lib/render.js';
-import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, resolveFreshness } from '@voidcorp/hook-runner';
+import { readInstallReceipt } from '../lib/receipts.js';
+import { INSTALL_MANIFEST_PATH, readInstallManifest } from '../lib/install-manifest.js';
+import { publishedVersionCheck } from '../lib/freshness-check.js';
+import { updateRouteFor } from './update.js';
 
 
 interface LocalConfig {
@@ -35,6 +39,7 @@ export interface CheckOptions {
   readonly cwd?: string;
   /** What the marketplace answers. A test hands in a remote that needs no network. */
   readonly remote?: CheckRemote;
+  readonly resolveFreshness?: typeof resolveFreshness;
 }
 
 const GH_REMOTE: CheckRemote = {
@@ -55,10 +60,24 @@ export async function check(args: readonly string[], options: CheckOptions = {})
   // bumping none of the pins this check measures, so it names the installation.
   const where = remedyPrefix(roots);
 
+  const receipt = await readInstallReceipt(installRoot);
+  const route = updateRouteFor(receipt, existsSync(join(installRoot, INSTALL_MANIFEST_PATH)));
+  banner('check');
+  if (route !== 'marketplace') {
+    const installed = receipt?.version ?? readInstallManifest(installRoot)?.version ?? 'unknown';
+    const freshness = await (options.resolveFreshness ?? resolveFreshness)({
+      installed, env: process.env, now: Date.now(), cwd: installRoot,
+    });
+    const published = publishedVersionCheck(freshness, 'local');
+    meta('source', 'bundled local package');
+    blank();
+    status(published.message, published.status === 'pass' ? 'ok' : 'warn');
+    if (published.fix !== undefined) line(c.dim(`${where}${published.fix}`));
+    if (!doctrine) return;
+    blank();
+  }
   const repo = await resolveMarketplaceRepo(installRoot);
   const local = await readLocalConfig(installRoot);
-
-  banner('check');
   meta('marketplace', repo);
   blank();
 
@@ -69,12 +88,16 @@ export async function check(args: readonly string[], options: CheckOptions = {})
     process.exit(1);
   }
 
-  const drift = reportVersionDrift(local, marketplace.value, repo, remote);
+  const drift = route === 'marketplace'
+    ? reportVersionDrift(local, marketplace.value, repo, remote)
+    : 0;
 
   if (doctrine) {
     blank();
     await reportDoctrineDrift(installRoot, where, marketplace.value, repo, remote);
   }
+
+  if (route !== 'marketplace') return;
 
   if (drift > 0) {
     footer(

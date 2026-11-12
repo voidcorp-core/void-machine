@@ -1645,7 +1645,10 @@ channel: an explicit receipt wins; without a receipt, a manifest selects the
 bundled channel, otherwise legacy marketplace behavior applies. Bundled checks
 compare the receipt version (or the clone's valid manifest version) with npm,
 never stale plugin pins. Unreadable version evidence or registry failures remain
-unknown. Ordinary bundled checks need no marketplace access or `gh` authentication;
+unknown. An existing damaged receipt without a manifest cannot prove a legacy
+marketplace install: `check` reports an unknown channel without a remote version
+lookup. A valid manifest still supplies the bundled fallback. Ordinary bundled
+checks need no marketplace access or `gh` authentication;
 `--doctrine` explicitly retains the marketplace doctrine comparison. Neither check
 rewrites pins, and remedies from linked worktrees name the installation root.
 

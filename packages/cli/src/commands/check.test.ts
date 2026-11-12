@@ -257,6 +257,51 @@ describe('check installation channel', () => {
     expect(out).not.toContain('all up to date');
   });
 
+  it.each([
+    { label: 'malformed JSON', body: '{ broken' },
+    { label: 'invalid receipt shape', body: JSON.stringify({ schemaVersion: 1, version: '7.0.1', source: 'local' }) },
+    { label: 'unreadable receipt directory', body: undefined },
+  ])('keeps $label without a manifest unknown instead of consulting marketplace', async ({ body }) => {
+    const root = repository();
+    install(root);
+    const path = join(root, INSTALL_RECEIPT_PATH);
+    mkdirSync(join(path, '..'), { recursive: true });
+    if (body === undefined) mkdirSync(path);
+    else writeFileSync(path, body);
+
+    const out = await bundledReport(root);
+
+    expect(out).toContain('unknown');
+    expect(out).toContain('receipt');
+    expect(out).not.toContain('all up to date');
+    expect(out).not.toContain('update available');
+    expect(out).not.toContain('bundled local package');
+  });
+
+  it('uses the valid manifest fallback when the local receipt is damaged', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'local', '7.0.0');
+    writeFileSync(join(root, INSTALL_RECEIPT_PATH), '{ broken');
+    manifest(root, '7.0.1');
+
+    expect(await bundledReport(root)).toContain('7.0.1 is the published version');
+  });
+
+  it('limits an explicit doctrine check to doctrine when receipt evidence is damaged', async () => {
+    const root = repository();
+    install(root);
+    receipt(root, 'local', '7.0.1');
+    writeFileSync(join(root, INSTALL_RECEIPT_PATH), '{ broken');
+
+    const out = await checkFrom(root);
+
+    expect(out).toContain('unknown');
+    expect(out).toContain('in sync');
+    expect(out).not.toContain('update available');
+    expect(out).not.toContain('plugins behind');
+  });
+
   it('names the install root in the bundled update remedy from a linked worktree', async () => {
     const root = repository();
     install(root);

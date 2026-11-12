@@ -2,7 +2,7 @@
 // marketplace pins against their remote. --doctrine explicitly reads marketplace doctrine.
 
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CORE_PLUGIN_NAME, MARKETPLACE_NAME, MARKETPLACE_REPO, PACKS } from '../lib/packs.js';
 import { remedyPrefix, resolveProjectRoots } from '../lib/project-roots.js';
@@ -15,7 +15,7 @@ import {
 } from '../lib/remote.js';
 import { compareVersions, normalizeVersion } from '../lib/version.js';
 import { banner, blank, c, footer, glyph, line, meta, row, status } from '../lib/render.js';
-import { PRODUCT_COMMAND, resolveFreshness } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, resolveFreshness, voidReadPath } from '@voidcorp/hook-runner';
 import { readInstallReceipt } from '../lib/receipts.js';
 import { INSTALL_MANIFEST_PATH, readInstallManifest } from '../lib/install-manifest.js';
 import { publishedVersionCheck } from '../lib/freshness-check.js';
@@ -61,9 +61,15 @@ export async function check(args: readonly string[], options: CheckOptions = {})
   const where = remedyPrefix(roots);
 
   const receipt = await readInstallReceipt(installRoot);
-  const route = updateRouteFor(receipt, existsSync(join(installRoot, INSTALL_MANIFEST_PATH)));
+  const hasManifest = existsSync(join(installRoot, INSTALL_MANIFEST_PATH));
+  const unknownChannel = receipt === undefined && !hasManifest && await receiptEvidenceExists(installRoot);
+  const route = updateRouteFor(receipt, hasManifest);
   banner('check');
-  if (route !== 'marketplace') {
+  if (unknownChannel) {
+    status('unknown (install receipt is unreadable or invalid; installation channel cannot be established)', 'warn');
+    if (!doctrine) return;
+    blank();
+  } else if (route !== 'marketplace') {
     const installed = receipt?.version ?? readInstallManifest(installRoot)?.version ?? 'unknown';
     const freshness = await (options.resolveFreshness ?? resolveFreshness)({
       installed, env: process.env, now: Date.now(), cwd: installRoot,
@@ -88,7 +94,7 @@ export async function check(args: readonly string[], options: CheckOptions = {})
     process.exit(1);
   }
 
-  const drift = route === 'marketplace'
+  const drift = route === 'marketplace' && !unknownChannel
     ? reportVersionDrift(local, marketplace.value, repo, remote)
     : 0;
 
@@ -97,7 +103,7 @@ export async function check(args: readonly string[], options: CheckOptions = {})
     await reportDoctrineDrift(installRoot, where, marketplace.value, repo, remote);
   }
 
-  if (route !== 'marketplace') return;
+  if (route !== 'marketplace' || unknownChannel) return;
 
   if (drift > 0) {
     footer(
@@ -107,6 +113,16 @@ export async function check(args: readonly string[], options: CheckOptions = {})
     );
   } else {
     footer(c.dim('all up to date'));
+  }
+}
+
+/** Only an absent receipt permits the legacy channel fallback; read failures do not. */
+async function receiptEvidenceExists(root: string): Promise<boolean> {
+  try {
+    await lstat(voidReadPath(root, 'receipts', 'install-v1.json'));
+    return true;
+  } catch (error) {
+    return !(error instanceof Error && 'code' in error && error.code === 'ENOENT');
   }
 }
 

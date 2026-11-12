@@ -10,6 +10,12 @@ interface ProtectedFileOptions {
   readonly shellWritePaths?: readonly string[];
 }
 
+/** Examples are exempt only at the terminal suffix; .env.example.local is live. */
+export function isSecretEnvironment(path: string): boolean {
+  const base = basename(path.replaceAll('\\', '/').toLowerCase());
+  return /^\.env(?:\..+)?$/.test(base) && !/\.(?:example|sample|template|dist)$/.test(base);
+}
+
 function manifestOwnedPaths(root: string): ReadonlySet<string> {
   try {
     const parsed: unknown = JSON.parse(readFileSync(resolve(root, '.void/install-manifest.json'), 'utf8'));
@@ -47,7 +53,7 @@ function protectedReason(path: string, root: string | undefined, shellWrite: boo
   }
   const normalized = path.replaceAll('\\', '/').toLowerCase();
   const base = basename(normalized);
-  if (/^\.env(?:\..+)?$/.test(base) && !/\.(?:example|sample|template|dist)$/.test(base)) {
+  if (isSecretEnvironment(path)) {
     return 'environment file with secrets';
   }
   if (/\.(?:pem|key|p12|pfx|keystore|jks|asc)$/.test(base) || /^id_(?:rsa|ed25519|ecdsa|dsa)$/.test(base)) {

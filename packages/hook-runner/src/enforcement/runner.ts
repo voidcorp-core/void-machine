@@ -31,7 +31,8 @@ import {
 } from '../rules/tdd-order.js';
 import { testName } from '../rules/test-name.js';
 import { allow } from '../rules/verdict.js';
-import { normalizeToolCall } from './normalize.js';
+import { normalizeReadCall, normalizeToolCall } from './normalize.js';
+import { secretRead } from './secret-read.js';
 import { readOriginalSource } from './original-source.js';
 import { proposedSource } from './proposed-source.js';
 import { shellWriteTargets } from './shell-writes.js';
@@ -378,6 +379,11 @@ export function evaluateRule(
   const call = normalizeToolCall(rawInput,
     options.source === 'checked-out' ? MAX_CI_CONTENT_BYTES : MAX_HOOK_INPUT_BYTES);
   const env = options.env ?? process.env;
+  if (rule === 'protected-file' && options.source !== 'checked-out') {
+    const reads = normalizeReadCall(rawInput, options.root);
+    const verdict = secretRead(reads, reads.cwd);
+    if (!verdict.allow) return verdict;
+  }
   if (rule === 'dangerous-command') {
     if (call.tool !== 'Bash' && call.tool !== 'shell') return allow();
     if (productSetting(env, 'ALLOW_DANGEROUS') === '1') return allow('OVERRIDE', 'one-shot override');

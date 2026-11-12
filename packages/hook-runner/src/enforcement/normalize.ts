@@ -1,4 +1,6 @@
 import { shellWriteTargets } from './shell-writes.js';
+import { isShellTool, type ReadTargets, shellReadTargets } from './shell-reads.js';
+import { resolve } from 'node:path';
 import type {
   NormalizedEdit,
   NormalizedToolCall,
@@ -76,7 +78,7 @@ export function normalizeToolCall(value: unknown, contentLimit = MAX_FIELD_BYTES
   if (raw === undefined) throw new Error('invalid hook input: expected object');
   const input = record(raw['tool_input']) ?? {};
   const tool = safeString(raw['tool_name'], 'tool_name');
-  const command = commandText(input['command']);
+  const command = commandText(input['command'] ?? input['cmd']);
   const file = safeString(input['file_path'] ?? input['path'], 'file_path');
   let edits: NormalizedEdit[];
   if (file !== '') {
@@ -95,4 +97,27 @@ export function normalizeToolCall(value: unknown, contentLimit = MAX_FIELD_BYTES
     .filter((path) => !edits.some((edit) => edit.path === path))
     .map((path) => ({ path, addedContent: '' }));
   return { tool, command, edits: [...edits, ...shellTargets] };
+}
+
+/** Read intent is separate from edits, including native Grep's scope, not its pattern. */
+export function normalizeReadCall(value: unknown, root: string): ReadTargets & { readonly cwd: string } {
+  const raw = record(value) ?? {};
+  const input = record(raw['tool_input']) ?? {};
+  const tool = safeString(raw['tool_name'], 'tool_name');
+  const cwd = resolve(root, safeString(raw['cwd'], 'cwd') || root,
+    safeString(input['workdir'] ?? input['cwd'], 'workdir') || '.');
+  if (isShellTool(tool)) {
+    return { ...shellReadTargets(commandText(input['command'] ?? input['cmd'])), cwd };
+  }
+  const paths: string[] = [];
+  let unsafeSearch = false;
+  if (['Read', 'read_file', 'Grep'].includes(tool)) {
+    const path = safeString(input['file_path'] ?? input['path'], 'read path');
+    if (path !== '') paths.push(path);
+    if (tool === 'Grep') {
+      const glob = safeString(input['glob'], 'read glob');
+      if (glob !== '' && !glob.startsWith('!')) { paths.push(glob); unsafeSearch = true; }
+    }
+  }
+  return { paths, unsafeSearch, searchPaths: unsafeSearch ? [paths[0] ?? '.'] : [], cwd };
 }

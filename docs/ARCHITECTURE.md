@@ -365,6 +365,12 @@ co-owned path skips only that ownership refusal; nested namesakes and prefixes
 do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
 remain active, as do independent content scans. Claude and Codex share this rule.
 
+The same handler checks a separate read-intent model before write-only dispatch
+and edit overrides. Only the environment filename classifier is shared with
+write protection: reading lockfiles or installed assets remains allowed. Native
+read/search scopes and a bounded direct-shell subset are checked without reading
+target contents or walking directories. See [the read boundary and its limits](CODEX.md#secret-environment-reads).
+
 The credential-name heuristic permits source filenames ending in `.js`, `.jsx`,
 `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts` or `.cts` (case-insensitive), such as
 `client-secrets.mjs` and `client-secrets.test.mjs`. A source module need not be a

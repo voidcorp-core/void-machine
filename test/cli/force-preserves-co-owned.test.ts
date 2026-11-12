@@ -16,6 +16,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CO_OWNED_FILES } from '../../packages/cli/src/lib/co-owned.js';
 import { init } from '../../packages/cli/src/commands/init.js';
+import { update } from '../../packages/cli/src/commands/update.js';
+import { evaluateRule } from '../../packages/hook-runner/src/enforcement/runner.js';
 
 let dir: string;
 let cwd: string;
@@ -108,4 +110,32 @@ describe('--force never seizes a co-owned file', () => {
 
     expect(readConfig().paths).toBeDefined();
   });
+});
+
+describe('mono-app defaults and existing installations', () => {
+  it('enforces TDD for fresh Bun root-src and apps sources after real init', async () => {
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ packageManager: 'bun@1.3.0' }));
+    writeFileSync(join(dir, 'bun.lock'), '');
+    await init(['--runtime', 'claude', '--no-interactive']);
+    for (const path of ['src/feature.ts', 'apps/web/src/feature.ts']) {
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: path, content: 'export const feature = 1;',
+      } }, { root: dir }).code).toBe('TDD_SIBLING_TEST_MISSING');
+    }
+  });
+
+  it.each([{ business: 'apps/*/src/**' }, { business: 'services/**' }, { business: ['services/**', 'domain/**'] }])(
+    'preserves existing business scope $business across init and update', async ({ business }) => {
+      await init(['--runtime', 'claude', '--no-interactive']);
+      const config = { ...readConfig(), paths: { business, spikes: ['services/spike-*'] } };
+      writeFileSync(join(dir, '.void/config.json'), JSON.stringify(config));
+      await init(['--runtime', 'claude', '--no-interactive']);
+      expect(readConfig().paths).toEqual(config.paths);
+      await update([]);
+      expect(readConfig().paths).toEqual(config.paths);
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: 'src/feature.ts', content: 'export const feature = 1;',
+      } }, { root: dir }).code).toBe('ALLOW');
+    },
+  );
 });

@@ -8952,8 +8952,16 @@ function configuredStrings(parent, key, fallback) {
     const kept = value.filter((entry) => typeof entry === "string");
     if (kept.length > 0) return kept;
   }
-  return [fallback];
+  return typeof fallback === "string" ? [fallback] : [...fallback];
 }
+var DEFAULT_PROJECT_PATHS = {
+  business: ["src/**", "apps/*/src/**"],
+  tests: ["src/**/*.test.{ts,tsx}", "apps/*/src/**/*.test.{ts,tsx}"],
+  spikes: ["scripts/spike-*", "apps/*/scripts/spike-*"],
+  serverActions: ["src/app/(api|actions)/**", "apps/*/src/app/(api|actions)/**"],
+  contracts: ["src/lib/contracts/**", "apps/*/src/lib/contracts/**"],
+  e2e: ["tests/e2e/**", "apps/*/tests/e2e/**"]
+};
 function readTddConfig(root) {
   let config2 = {};
   try {
@@ -8966,8 +8974,8 @@ function readTddConfig(root) {
   const mode = configuredMode === "strict" || configuredMode === "souple" || configuredMode === "exploratory" ? configuredMode : "auto";
   return {
     mode,
-    businessGlobs: configuredStrings(paths, "business", "apps/*/src/**"),
-    spikesGlob: configuredString(paths, "spikes", "apps/*/scripts/spike-*")
+    businessGlobs: configuredStrings(paths, "business", DEFAULT_PROJECT_PATHS.business),
+    spikeGlobs: configuredStrings(paths, "spikes", DEFAULT_PROJECT_PATHS.spikes)
   };
 }
 function focusedVerdict(root, edits, raw, syntaxInspector) {
@@ -9033,7 +9041,7 @@ function tddVerdict(root, edits, raw, checkedOut, syntaxInspector) {
   const declaredTests = {};
   const proposedSources = {};
   const deadline = performance.now() + SYNTAX_OPERATION_BUDGET_MS;
-  const governed = projectChanges.filter((edit) => !(edit.operation === "delete" && edit.addedContent === "") && tddApplies(edit.path, config2.businessGlobs, [config2.spikesGlob]));
+  const governed = projectChanges.filter((edit) => !(edit.operation === "delete" && edit.addedContent === "") && tddApplies(edit.path, config2.businessGlobs, config2.spikeGlobs));
   if (governed.length > 32) return tddOperationLimit("operation exceeds 32 governed production files");
   if (new Set(governed.map((edit) => edit.path)).size !== governed.length) {
     return tddOperationLimit("patch must name each physical file exactly once");
@@ -9106,7 +9114,7 @@ function tddVerdict(root, edits, raw, checkedOut, syntaxInspector) {
     edits: projectChanges,
     mode: config2.mode,
     businessGlobs: config2.businessGlobs,
-    spikeGlobs: [config2.spikesGlob],
+    spikeGlobs: config2.spikeGlobs,
     existingHeaders,
     originalSources,
     siblingTests,

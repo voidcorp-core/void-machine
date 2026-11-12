@@ -195,7 +195,7 @@ function configuredString(
 export function configuredStrings(
   parent: Record<string, unknown> | undefined,
   key: string,
-  fallback: string,
+  fallback: string | readonly string[],
 ): string[] {
   const value = parent?.[key];
   if (typeof value === 'string') return [value];
@@ -203,13 +203,25 @@ export function configuredStrings(
     const kept = value.filter((entry): entry is string => typeof entry === 'string');
     if (kept.length > 0) return kept;
   }
-  return [fallback];
+  return typeof fallback === 'string' ? [fallback] : [...fallback];
 }
+
+/** Shared by fresh init scaffolds and the optional-config TDD fallback.
+ * Keep these roots bounded: unrelated nested src directories are not business defaults.
+ */
+export const DEFAULT_PROJECT_PATHS = {
+  business: ['src/**', 'apps/*/src/**'],
+  tests: ['src/**/*.test.{ts,tsx}', 'apps/*/src/**/*.test.{ts,tsx}'],
+  spikes: ['scripts/spike-*', 'apps/*/scripts/spike-*'],
+  serverActions: ['src/app/(api|actions)/**', 'apps/*/src/app/(api|actions)/**'],
+  contracts: ['src/lib/contracts/**', 'apps/*/src/lib/contracts/**'],
+  e2e: ['tests/e2e/**', 'apps/*/tests/e2e/**'],
+} as const;
 
 interface TddConfig {
   readonly mode: TddMode;
   readonly businessGlobs: readonly string[];
-  readonly spikesGlob: string;
+  readonly spikeGlobs: readonly string[];
 }
 
 function readTddConfig(root: string): TddConfig {
@@ -229,8 +241,8 @@ function readTddConfig(root: string): TddConfig {
     : 'auto';
   return {
     mode,
-    businessGlobs: configuredStrings(paths, 'business', 'apps/*/src/**'),
-    spikesGlob: configuredString(paths, 'spikes', 'apps/*/scripts/spike-*'),
+    businessGlobs: configuredStrings(paths, 'business', DEFAULT_PROJECT_PATHS.business),
+    spikeGlobs: configuredStrings(paths, 'spikes', DEFAULT_PROJECT_PATHS.spikes),
   };
 }
 
@@ -301,7 +313,7 @@ function tddVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown
   const proposedSources: Record<string, string> = {};
   const deadline = performance.now() + SYNTAX_OPERATION_BUDGET_MS;
   const governed = projectChanges.filter((edit) => !(edit.operation === 'delete' && edit.addedContent === '')
-    && tddApplies(edit.path, config.businessGlobs, [config.spikesGlob]));
+    && tddApplies(edit.path, config.businessGlobs, config.spikeGlobs));
   if (governed.length > 32) return tddOperationLimit('operation exceeds 32 governed production files');
   if (new Set(governed.map((edit) => edit.path)).size !== governed.length) {
     return tddOperationLimit('patch must name each physical file exactly once');
@@ -360,7 +372,7 @@ function tddVerdict(root: string, edits: readonly NormalizedEdit[], raw: unknown
     edits: projectChanges,
     mode: config.mode,
     businessGlobs: config.businessGlobs,
-    spikeGlobs: [config.spikesGlob],
+    spikeGlobs: config.spikeGlobs,
     existingHeaders,
     originalSources,
     siblingTests,

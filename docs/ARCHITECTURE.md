@@ -1629,9 +1629,12 @@ detect version drift against the marketplace HEAD.
     "e2eRunner": "playwright"
   },
   "paths": {
-    "src": "apps/*/src/**",
-    "tests": "apps/*/src/**/*.test.{ts,tsx}",
-    "spikes": "apps/*/scripts/spike-*"
+    "business": ["src/**", "apps/*/src/**"],
+    "tests": ["src/**/*.test.{ts,tsx}", "apps/*/src/**/*.test.{ts,tsx}"],
+    "spikes": ["scripts/spike-*", "apps/*/scripts/spike-*"],
+    "serverActions": ["src/app/(api|actions)/**", "apps/*/src/app/(api|actions)/**"],
+    "contracts": ["src/lib/contracts/**", "apps/*/src/lib/contracts/**"],
+    "e2e": ["tests/e2e/**", "apps/*/tests/e2e/**"]
   },
   "modes": {
     "tdd": "auto"
@@ -1640,6 +1643,25 @@ detect version drift against the marketplace HEAD.
 ```
 
 Skills and hooks read this file to adapt to the consumer's conventions without hardcoding.
+
+Fresh installs seed both root `src/` applications and `apps/*/src/` applications,
+regardless of package manager, from the shared `DEFAULT_PROJECT_PATHS` contract.
+The TDD runner uses those same business and spike defaults when optional config
+is absent or unreadable; missing paths, unsupported values and lists without
+strings also use these defaults. It does not widen to arbitrary nested `src/`
+directories. Test files, declarations, generated files
+and configured spikes retain the TDD rule's existing exemptions. The business
+and spike matcher supports `*` and `**`; use an array for alternative roots,
+not braces or extglobs. The other seeded paths remain skill configuration.
+
+An existing readable config is project-owned: `init`, `update` and `--force`
+preserve its explicit string or array paths, including the previous
+`"business": "apps/*/src/**"` default. That exact value does not prove consent to
+broaden enforcement. For an existing mono-app, explicitly amend
+`.void/config.json` to `"business": "src/**"`, or to the two-root array above if
+both layouts are wanted; review the associated paths at the same time. No
+consumer file is automatically migrated. These defaults change TDD scope, not
+TypeScript compiler settings or the separate static guards.
 
 ## Versioning
 

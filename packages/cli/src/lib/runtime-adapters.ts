@@ -50,7 +50,6 @@ import {
 import { CODEX_SKILLS_DIR, codexSkillsHealth, wireCodexSkills } from './codex-skills.js';
 import { loadCanonicalEventBody } from './graph-io.js';
 import { smokeInstalledHook } from './hook-smoke.js';
-import { inspectHarnessLintExclusion } from './lint-exclusion.js';
 import {
   CORE_PLUGIN_NAME,
   enabledPluginsKey,
@@ -346,30 +345,10 @@ const claudeAdapter: RuntimeAdapter = {
           enabledPacks: ctx.enabledPacks,
           channel: ctx.source,
         });
-    // `.claude/` holds engine-format files this repo wrote. Left inside the
-    // project's lint glob they fail on code the project does not own.
-    //
-    // Read against `installRoot`, never `stageRoot`: the latter is the
-    // isolated stage this transaction writes into, which holds none of the
-    // project's own files — looking for a linter config there finds nothing,
-    // always.
-    //
-    // Reported, not written. The config belongs to the project, and a
-    // transaction that rolls back byte-for-byte cannot roll back an edit to a
-    // file it does not own. Telling the truth beats leaving a surprise behind.
-    const lint = await inspectHarnessLintExclusion(ctx.installRoot);
-    const lintLine =
-      lint.kind === 'excluded'
-        ? `${lint.file}: .claude excluded from lint`
-        : lint.kind === 'no-linter'
-          ? 'lint: no linter config found, nothing to exclude'
-          : `lint: ${lint.file} lints .claude as project source`;
-    if (lint.kind === 'missing' || lint.kind === 'manual') nextSteps.push(lint.instruction);
     return {
       statusLines: [
         status,
         `CLAUDE.md: ${docResult}`,
-        lintLine,
       ],
       nextSteps,
     };

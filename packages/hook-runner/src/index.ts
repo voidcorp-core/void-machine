@@ -55,6 +55,7 @@ export {
   type SequencedWriteResult,
 } from './sequenced-writer.js';
 export {
+  DEFAULT_PROJECT_PATHS,
   discoverProjectRoot,
   evaluateRule,
   MAX_HOOK_INPUT_BYTES,

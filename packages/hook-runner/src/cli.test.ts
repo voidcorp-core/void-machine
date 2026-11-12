@@ -57,6 +57,38 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
   return { code: result.status ?? 0, stderr: result.stderr ?? '' };
 }
 
+describe('secret reads through the shipped manifests and bundled runner', () => {
+  it.each(['claude', 'codex'])('refuses before reading for %s with a content-free diagnostic', (runtime) => {
+    const manifestPath = runtime === 'claude' ? '../core/.claude-plugin/plugin.json' : '../core/codex/hooks.json';
+    const manifest = JSON.parse(readFileSync(join(here, '..', manifestPath), 'utf8')) as {
+      hooks: { PreToolUse: { matcher: string; hooks: { command: string }[] }[] };
+    };
+    const cases: [string, Record<string, string>][] = [
+      ['Read', { file_path: '.env' }], ['Grep', { path: '.env', pattern: 'SYNTHETIC_PATTERN' }],
+      ['Grep', { glob: '.env*', pattern: 'SYNTHETIC_PATTERN' }],
+      ['Bash', { command: 'grep -n SYNTHETIC_PATTERN .env*' }],
+    ];
+    for (const [tool, tool_input] of cases) {
+      const configured = manifest.hooks.PreToolUse.find((entry) =>
+        entry.hooks.some((entry) => entry.command.endsWith(` enforce protected-file ${runtime}`))
+        && new RegExp(`^(?:${entry.matcher})$`).test(tool));
+      expect(configured, `${runtime} must intercept ${tool}`).toBeDefined();
+      const result = spawnSync(process.execPath, [hook, 'enforce', 'protected-file', runtime], {
+        cwd: workspace, encoding: 'utf8',
+        input: JSON.stringify({ tool_name: tool, tool_input }),
+        env: { ...process.env, VOID_PROJECT_ROOT: workspace, VOID_MACHINE_ALLOW_SECRET_EDIT: '1' },
+      });
+      expect(result.status).toBe(runtime === 'codex' ? 0 : 2);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain('SECRET_FILE_READ');
+      expect(output).not.toContain('SYNTHETIC_PATTERN');
+      if (runtime === 'codex') {
+        expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+      }
+    }
+  });
+});
+
 describe('bundled credential source content enforcement', () => {
   it.each([['claude', 'Bash'], ['codex', 'shell']])(
     'refuses uninspectable redirected source modules for %s through %s', (runtime, tool) => {

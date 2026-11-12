@@ -8187,45 +8187,59 @@ function isShellTool(tool) {
   return ["Bash", "shell", "shell_command", "exec_command"].includes(tool);
 }
 function words(command) {
-  return (command.match(/(?:"(?:\\.|[^"\\])*"|'[^']*'|\\.|[^\s;|&<>"'\\])+|[;|&<>]+|\n/g) ?? []).map((word) => word.replace(
-    /"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g,
-    (_match, double, single, escaped) => double ?? single ?? escaped ?? ""
-  ));
+  return (command.match(/(?:"(?:\\.|[^"\\])*"|'[^']*'|\\.|[^\s;|&<>"'\\])+|[;|&<>]+|\n/g) ?? []).map((word) => ({
+    control: /^[;|&<>]+$|^\n$/.test(word),
+    value: word.replace(
+      /"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g,
+      (_match, double, single, escaped) => double ?? single ?? escaped ?? ""
+    )
+  }));
 }
 var READERS = /* @__PURE__ */ new Set(["cat", "head", "tail", "sed", "grep", "rg"]);
-var VALUE_OPTIONS = /* @__PURE__ */ new Set([
-  "-n",
-  "-c",
-  "--lines",
-  "--bytes",
-  "-A",
-  "-B",
-  "-C",
-  "--after-context",
-  "--before-context",
-  "--context",
-  "-m",
-  "--max-count",
-  "--encoding",
-  "--max-depth",
-  "--maxdepth",
-  "-t",
-  "--type",
-  "-T",
-  "--type-not",
-  "--exclude",
-  "--exclude-dir",
-  "--include",
-  "--color",
-  "--colors"
-]);
+var VALUE_OPTIONS = {
+  head: ["-n", "-c", "--lines", "--bytes"],
+  tail: ["-n", "-c", "--lines", "--bytes"],
+  grep: [
+    "-A",
+    "-B",
+    "-C",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "-m",
+    "--max-count",
+    "--exclude-dir",
+    "-d",
+    "--directories"
+  ],
+  rg: [
+    "-A",
+    "-B",
+    "-C",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "-m",
+    "--max-count",
+    "--encoding",
+    "--max-depth",
+    "--maxdepth",
+    "-t",
+    "--type",
+    "-T",
+    "--type-not",
+    "--color",
+    "--colors"
+  ]
+};
 function readArguments(command, args) {
   if (command === "rg" && args.includes("--files")) {
     return { paths: [], unsafeSearch: false, searchPaths: [] };
   }
   const paths = [];
   const searchPaths = [];
-  let pattern2 = !["grep", "rg", "sed"].includes(command);
+  const patternReader = ["grep", "rg", "sed"].includes(command);
+  let pattern2 = !patternReader;
   let options = true;
   let hidden = false;
   let excluded = false;
@@ -8244,10 +8258,10 @@ function readArguments(command, args) {
       if (command === "grep" && (flag === "--dereference-recursive" || /^-[^-]*R/.test(flag))) {
         followsLinks = true;
       }
-      if (["-e", "--regexp", "--expression"].includes(flag)) {
+      if (patternReader && ["-e", "--regexp", "--expression"].includes(flag)) {
         pattern2 = true;
         if (attached === void 0) i += 1;
-      } else if (["-f", "--file"].includes(flag)) {
+      } else if (patternReader && ["-f", "--file"].includes(flag)) {
         paths.push(value);
         pattern2 = true;
         if (attached === void 0) i += 1;
@@ -8268,9 +8282,9 @@ function readArguments(command, args) {
       } else if (command === "grep" && (flag === "--recursive" || /^-[^-]*[rR]/.test(flag) || ["-d", "--directories"].includes(flag) && value === "recurse")) {
         hidden = true;
         if (flag === "-d" || flag === "--directories" && attached === void 0) i += 1;
-      } else if (VALUE_OPTIONS.has(flag) && !(flag === "-n" && ["grep", "rg", "sed"].includes(command))) {
+      } else if (VALUE_OPTIONS[command]?.includes(flag)) {
         if (attached === void 0) i += 1;
-      } else if (/^-(?:e|f|g).+/.test(flag)) {
+      } else if (patternReader && /^-(?:e|f|g).+/.test(flag)) {
         const value2 = flag.slice(2);
         if (flag[1] === "f") {
           paths.push(value2);
@@ -8317,13 +8331,19 @@ function shellReadTargets(command) {
   };
   const tokens = words(command);
   for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i] ?? "";
+    const word = tokens[i];
+    if (word === void 0) continue;
+    const token = word.value;
+    if (!word.control) {
+      segment2.push(token);
+      continue;
+    }
     if (/^[;|&]+$|^\n$/.test(token)) {
       inspect();
       continue;
     }
     if (token === "<") {
-      paths.push(tokens[i + 1] ?? "");
+      paths.push(tokens[i + 1]?.value ?? "");
       i += 1;
       continue;
     }

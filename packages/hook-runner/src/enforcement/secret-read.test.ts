@@ -41,6 +41,11 @@ describe('secret reads are refused before execution, independently of edit overr
     ['read_file', { path: '.env' }],
     ['Bash', { command: 'rg --hidden -g !.env* -g *.ts PATTERN .' }],
     ['Grep', { pattern: 'PATTERN', glob: '*.ts', path: 'src' }],
+    ['Bash', { command: "rg '|' .env" }],
+    ['Bash', { command: "grep ';' .env" }],
+    ['Bash', { command: 'grep -c PATTERN .env' }],
+    ['Bash', { command: 'rg -c PATTERN .env' }],
+    ['Bash', { command: 'grep --color PATTERN .env' }],
   ] satisfies [string, Record<string, unknown>][])('refuses %s %# without echoing contents', (tool, input) => {
     const verdict = check(tool, input);
     expect(verdict.allow).toBe(false);
@@ -64,6 +69,8 @@ describe('secret reads are refused before execution, independently of edit overr
     ['Bash', { command: 'rg --files --hidden -g .env*' }],
     ['Grep', { pattern: 'PATTERN', glob: '*.ts', path: 'src/code.ts' }],
     ['Bash', { command: 'rg --hidden PATTERN src/code.ts' }],
+    ['Bash', { command: "echo '|' cat .env" }],
+    ['Bash', { command: 'grep -c .env src/code.ts' }],
   ] satisfies [string, Record<string, unknown>][])('allows %s %#', (tool, input) => {
     expect(check(tool, input).allow).toBe(true);
   });

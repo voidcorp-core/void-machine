@@ -67,6 +67,9 @@ describe('secret reads through the shipped manifests and bundled runner', () => 
       ['Read', { file_path: '.env' }], ['Grep', { path: '.env', pattern: 'SYNTHETIC_PATTERN' }],
       ['Grep', { glob: '.env*', pattern: 'SYNTHETIC_PATTERN' }],
       ['Bash', { command: 'grep -n SYNTHETIC_PATTERN .env*' }],
+      ['Bash', { command: "rg '|' .env" }],
+      ['Bash', { command: 'grep -c SYNTHETIC_PATTERN .env' }],
+      ['Bash', { command: 'grep --color SYNTHETIC_PATTERN .env' }],
     ];
     for (const [tool, tool_input] of cases) {
       const configured = manifest.hooks.PreToolUse.find((entry) =>

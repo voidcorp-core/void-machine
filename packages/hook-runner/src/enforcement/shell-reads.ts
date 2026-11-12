@@ -12,19 +12,33 @@ export function isShellTool(tool: string): boolean {
 
 // A bounded lexical subset, not a shell interpreter. Preserve argument roles:
 // grep's pattern and echo's text are not file reads. Never execute or expand input.
-function words(command: string): string[] {
+interface ShellWord {
+  readonly value: string;
+  readonly control: boolean;
+}
+
+function words(command: string): ShellWord[] {
   return (command.match(/(?:"(?:\\.|[^"\\])*"|'[^']*'|\\.|[^\s;|&<>"'\\])+|[;|&<>]+|\n/g) ?? [])
-    .map((word) => word.replace(/"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g,
+    .map((word) => ({
+      control: /^[;|&<>]+$|^\n$/.test(word),
+      value: word.replace(/"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g,
       (_match, double: string | undefined, single: string | undefined, escaped: string | undefined) =>
-        double ?? single ?? escaped ?? ''));
+        double ?? single ?? escaped ?? ''),
+    }));
 }
 
 const READERS = new Set(['cat', 'head', 'tail', 'sed', 'grep', 'rg']);
-const VALUE_OPTIONS = new Set([
-  '-n', '-c', '--lines', '--bytes', '-A', '-B', '-C', '--after-context', '--before-context',
-  '--context', '-m', '--max-count', '--encoding', '--max-depth', '--maxdepth', '-t', '--type',
-  '-T', '--type-not', '--exclude', '--exclude-dir', '--include', '--color', '--colors',
-]);
+// Arity belongs to the reader: grep/rg -c counts matches, cat -n numbers lines,
+// and grep --color accepts only an attached optional value. None consume a pattern.
+const VALUE_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  head: ['-n', '-c', '--lines', '--bytes'],
+  tail: ['-n', '-c', '--lines', '--bytes'],
+  grep: ['-A', '-B', '-C', '--after-context', '--before-context', '--context',
+    '-m', '--max-count', '--exclude-dir', '-d', '--directories'],
+  rg: ['-A', '-B', '-C', '--after-context', '--before-context', '--context',
+    '-m', '--max-count', '--encoding', '--max-depth', '--maxdepth', '-t', '--type',
+    '-T', '--type-not', '--color', '--colors'],
+};
 
 function readArguments(command: string, args: readonly string[]): ReadTargets {
   if (command === 'rg' && args.includes('--files')) {
@@ -32,7 +46,8 @@ function readArguments(command: string, args: readonly string[]): ReadTargets {
   }
   const paths: string[] = [];
   const searchPaths: string[] = [];
-  let pattern = !['grep', 'rg', 'sed'].includes(command);
+  const patternReader = ['grep', 'rg', 'sed'].includes(command);
+  let pattern = !patternReader;
   let options = true;
   let hidden = false;
   let excluded = false;
@@ -48,10 +63,10 @@ function readArguments(command: string, args: readonly string[]): ReadTargets {
       if (command === 'grep' && (flag === '--dereference-recursive' || /^-[^-]*R/.test(flag))) {
         followsLinks = true;
       }
-      if (['-e', '--regexp', '--expression'].includes(flag)) {
+      if (patternReader && ['-e', '--regexp', '--expression'].includes(flag)) {
         pattern = true;
         if (attached === undefined) i += 1;
-      } else if (['-f', '--file'].includes(flag)) {
+      } else if (patternReader && ['-f', '--file'].includes(flag)) {
         paths.push(value);
         pattern = true;
         if (attached === undefined) i += 1;
@@ -69,9 +84,9 @@ function readArguments(command: string, args: readonly string[]): ReadTargets {
         || (['-d', '--directories'].includes(flag) && value === 'recurse'))) {
         hidden = true;
         if (flag === '-d' || (flag === '--directories' && attached === undefined)) i += 1;
-      } else if (VALUE_OPTIONS.has(flag) && !(flag === '-n' && ['grep', 'rg', 'sed'].includes(command))) {
+      } else if (VALUE_OPTIONS[command]?.includes(flag)) {
         if (attached === undefined) i += 1;
-      } else if (/^-(?:e|f|g).+/.test(flag)) {
+      } else if (patternReader && /^-(?:e|f|g).+/.test(flag)) {
         const value = flag.slice(2);
         if (flag[1] === 'f') { paths.push(value); pattern = true; }
         if (flag[1] === 'e') pattern = true;
@@ -106,9 +121,12 @@ export function shellReadTargets(command: string): ReadTargets {
   };
   const tokens = words(command);
   for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i] ?? '';
+    const word = tokens[i];
+    if (word === undefined) continue;
+    const token = word.value;
+    if (!word.control) { segment.push(token); continue; }
     if (/^[;|&]+$|^\n$/.test(token)) { inspect(); continue; }
-    if (token === '<') { paths.push(tokens[i + 1] ?? ''); i += 1; continue; }
+    if (token === '<') { paths.push(tokens[i + 1]?.value ?? ''); i += 1; continue; }
     if (/^[<>]+$/.test(token)) { i += 1; continue; }
     segment.push(token);
   }

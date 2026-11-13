@@ -1,5 +1,23 @@
 # Changelog
 
+## [7.0.2](https://github.com/voidcorp-core/void-machine/compare/v7.0.1...v7.0.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **ci:** keep merge ordering stable without a queue service ([1c82fd5](https://github.com/voidcorp-core/void-machine/commit/1c82fd55f4b569ae9b14939c18e88702565ec477))
+* **ci:** keep merge ordering stable without a queue service ([703792f](https://github.com/voidcorp-core/void-machine/commit/703792fb59e2b8020b36cd0e1bbf1bb276643a60)), closes [#549](https://github.com/voidcorp-core/void-machine/issues/549)
+* **cli:** align consumer diagnostics with installed ownership ([80f45b6](https://github.com/voidcorp-core/void-machine/commit/80f45b6399eb1845c458056d26f8f66f110553d1))
+* **cli:** diagnose the installed channel and owned analyzer files ([c34cf2c](https://github.com/voidcorp-core/void-machine/commit/c34cf2ca8421699ef11db49a7ca919064a98387b)), closes [#545](https://github.com/voidcorp-core/void-machine/issues/545) [#327](https://github.com/voidcorp-core/void-machine/issues/327)
+* **cli:** keep damaged receipt channels unknown ([c969990](https://github.com/voidcorp-core/void-machine/commit/c9699903f90aa1472cffe600e988c9dd7855489b)), closes [#545](https://github.com/voidcorp-core/void-machine/issues/545)
+* **hooks:** block direct reads of environment secrets ([b909f8e](https://github.com/voidcorp-core/void-machine/commit/b909f8e2cfad1478657d3b4ca589b22e75360157))
+* **hooks:** guard direct secret environment reads ([83c486c](https://github.com/voidcorp-core/void-machine/commit/83c486ce1d9d46305be0ef054ec0db1d74f1b894)), closes [#454](https://github.com/voidcorp-core/void-machine/issues/454)
+* **hooks:** preserve shell read argument roles ([f1f14b4](https://github.com/voidcorp-core/void-machine/commit/f1f14b45cf8ff46c211d51d642d1c5cd71798bf0)), closes [#454](https://github.com/voidcorp-core/void-machine/issues/454)
+* **init:** cover root src applications in default paths ([d69337b](https://github.com/voidcorp-core/void-machine/commit/d69337bd14defef3d608b34e8226a4acc80f299e))
+* **init:** cover root src applications in default paths ([9a31fc8](https://github.com/voidcorp-core/void-machine/commit/9a31fc80b0c1f798334b58b19e48d4db6ed8fc3f)), closes [#452](https://github.com/voidcorp-core/void-machine/issues/452)
+* **review:** separate correction readiness from acceptance ([5e9f23a](https://github.com/voidcorp-core/void-machine/commit/5e9f23ad5f5a4b6e3ce0c65f80e41a16adb083ae))
+* **review:** separate correction readiness from acceptance ([57a1e40](https://github.com/voidcorp-core/void-machine/commit/57a1e40d4f4e50d32d6d2673f038789f59b3d1fe))
+
 ## [7.0.1](https://github.com/voidcorp-core/void-machine/compare/v7.0.0...v7.0.1) (2026-11-10)
 
 

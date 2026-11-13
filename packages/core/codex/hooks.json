@@ -9,7 +9,7 @@
         ]
       },
       {
-        "matcher": "apply_patch|Edit|Write|Bash|shell",
+        "matcher": "apply_patch|Edit|Write|Read|read_file|Grep|Bash|shell|shell_command|exec_command",
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" enforce protected-file codex" }
         ]

@@ -7429,16 +7429,16 @@ init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import {
   existsSync as existsSync3,
   readFileSync as readFileSync5,
-  realpathSync,
-  statSync as statSync2
+  realpathSync as realpathSync2,
+  statSync as statSync3
 } from "node:fs";
 import {
-  basename as basename2,
+  basename as basename4,
   dirname as dirname2,
   isAbsolute as isAbsolute2,
   join as join3,
   relative as relative2,
-  resolve as resolve4
+  resolve as resolve6
 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -7894,6 +7894,10 @@ function isCoOwned(path2) {
   return CO_OWNED.has(path2);
 }
 
+function isSecretEnvironment(path2) {
+  const base = basename(path2.replaceAll("\\", "/").toLowerCase());
+  return /^\.env(?:\..+)?$/.test(base) && !/\.(?:example|sample|template|dist)$/.test(base);
+}
 function manifestOwnedPaths(root) {
   try {
     const parsed = JSON.parse(readFileSync3(resolve2(root, ".void/install-manifest.json"), "utf8"));
@@ -7923,7 +7927,7 @@ function protectedReason(path2, root, shellWrite) {
   }
   const normalized = path2.replaceAll("\\", "/").toLowerCase();
   const base = basename(normalized);
-  if (/^\.env(?:\..+)?$/.test(base) && !/\.(?:example|sample|template|dist)$/.test(base)) {
+  if (isSecretEnvironment(path2)) {
     return "environment file with secrets";
   }
   if (/\.(?:pem|key|p12|pfx|keystore|jks|asc)$/.test(base) || /^id_(?:rsa|ed25519|ecdsa|dsa)$/.test(base)) {
@@ -8177,6 +8181,183 @@ function shellWriteTargets(command) {
   return [...targets].sort();
 }
 
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
+import { basename as basename2 } from "node:path";
+function isShellTool(tool) {
+  return ["Bash", "shell", "shell_command", "exec_command"].includes(tool);
+}
+function words(command) {
+  return (command.match(/(?:"(?:\\.|[^"\\])*"|'[^']*'|\\.|[^\s;|&<>"'\\])+|[;|&<>]+|\n/g) ?? []).map((word) => ({
+    control: /^[;|&<>]+$|^\n$/.test(word),
+    value: word.replace(
+      /"((?:\\.|[^"\\])*)"|'([^']*)'|\\(.)/g,
+      (_match, double, single, escaped) => double ?? single ?? escaped ?? ""
+    )
+  }));
+}
+var READERS = /* @__PURE__ */ new Set(["cat", "head", "tail", "sed", "grep", "rg"]);
+var VALUE_OPTIONS = {
+  head: ["-n", "-c", "--lines", "--bytes"],
+  tail: ["-n", "-c", "--lines", "--bytes"],
+  grep: [
+    "-A",
+    "-B",
+    "-C",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "-m",
+    "--max-count",
+    "--exclude-dir",
+    "-d",
+    "--directories"
+  ],
+  rg: [
+    "-A",
+    "-B",
+    "-C",
+    "--after-context",
+    "--before-context",
+    "--context",
+    "-m",
+    "--max-count",
+    "--encoding",
+    "--max-depth",
+    "--maxdepth",
+    "-t",
+    "--type",
+    "-T",
+    "--type-not",
+    "--color",
+    "--colors"
+  ]
+};
+function readArguments(command, args) {
+  if (command === "rg" && args.includes("--files")) {
+    return { paths: [], unsafeSearch: false, searchPaths: [] };
+  }
+  const paths = [];
+  const searchPaths = [];
+  const patternReader = ["grep", "rg", "sed"].includes(command);
+  let pattern2 = !patternReader;
+  let options = true;
+  let hidden = false;
+  let excluded = false;
+  let followsLinks = false;
+  let unrestricted = 0;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] ?? "";
+    if (options && arg === "--") {
+      options = false;
+      continue;
+    }
+    if (options && arg.startsWith("-")) {
+      const [flag = "", attached] = arg.split(/=(.*)/s);
+      const value = attached ?? args[i + 1] ?? "";
+      if (command === "rg" && (flag === "--follow" || /^-[^-]*L/.test(flag))) followsLinks = true;
+      if (command === "grep" && (flag === "--dereference-recursive" || /^-[^-]*R/.test(flag))) {
+        followsLinks = true;
+      }
+      if (patternReader && ["-e", "--regexp", "--expression"].includes(flag)) {
+        pattern2 = true;
+        if (attached === void 0) i += 1;
+      } else if (patternReader && ["-f", "--file"].includes(flag)) {
+        paths.push(value);
+        pattern2 = true;
+        if (attached === void 0) i += 1;
+      } else if (["-g", "--glob", "--iglob", "--exclude", "--include"].includes(flag)) {
+        if (flag === "--exclude") excluded ||= value === ".env*";
+        else {
+          if (!value.startsWith("!")) {
+            paths.push(value);
+            hidden = true;
+            excluded = false;
+          }
+          if (value === "!.env*") excluded = true;
+        }
+        if (attached === void 0) i += 1;
+      } else if (command === "rg" && (flag === "--hidden" || /^-[^-]*u/.test(flag))) {
+        unrestricted += [...flag].filter((letter) => letter === "u").length;
+        hidden ||= flag === "--hidden" || unrestricted >= 2;
+      } else if (command === "grep" && (flag === "--recursive" || /^-[^-]*[rR]/.test(flag) || ["-d", "--directories"].includes(flag) && value === "recurse")) {
+        hidden = true;
+        if (flag === "-d" || flag === "--directories" && attached === void 0) i += 1;
+      } else if (VALUE_OPTIONS[command]?.includes(flag)) {
+        if (attached === void 0) i += 1;
+      } else if (patternReader && /^-(?:e|f|g).+/.test(flag)) {
+        const value2 = flag.slice(2);
+        if (flag[1] === "f") {
+          paths.push(value2);
+          pattern2 = true;
+        }
+        if (flag[1] === "e") pattern2 = true;
+        if (flag[1] === "g") {
+          if (!value2.startsWith("!")) {
+            paths.push(value2);
+            hidden = true;
+            excluded = false;
+          }
+          if (value2 === "!.env*") excluded = true;
+        }
+      }
+      continue;
+    }
+    if (!pattern2) {
+      pattern2 = true;
+      continue;
+    }
+    if (arg !== "-") {
+      paths.push(arg);
+      searchPaths.push(arg);
+    }
+  }
+  const unsafeSearch = hidden && !excluded || followsLinks;
+  return { paths, unsafeSearch, searchPaths: unsafeSearch ? searchPaths.length ? searchPaths : ["."] : [] };
+}
+function shellReadTargets(command) {
+  const paths = [];
+  const searchPaths = [];
+  let unsafeSearch = false;
+  let segment2 = [];
+  const inspect = () => {
+    const name = basename2(segment2[0] ?? "");
+    if (READERS.has(name)) {
+      const read = readArguments(name, segment2.slice(1));
+      paths.push(...read.paths);
+      searchPaths.push(...read.searchPaths);
+      unsafeSearch ||= read.unsafeSearch;
+    }
+    segment2 = [];
+  };
+  const tokens = words(command);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const word = tokens[i];
+    if (word === void 0) continue;
+    const token = word.value;
+    if (!word.control) {
+      segment2.push(token);
+      continue;
+    }
+    if (/^[;|&]+$|^\n$/.test(token)) {
+      inspect();
+      continue;
+    }
+    if (token === "<") {
+      paths.push(tokens[i + 1]?.value ?? "");
+      i += 1;
+      continue;
+    }
+    if (/^[<>]+$/.test(token)) {
+      i += 1;
+      continue;
+    }
+    segment2.push(token);
+  }
+  inspect();
+  return { paths, unsafeSearch, searchPaths };
+}
+
+import { resolve as resolve3 } from "node:path";
 var MAX_FIELD_BYTES = 1024 * 1024;
 function record(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
@@ -8235,7 +8416,7 @@ function normalizeToolCall(value, contentLimit = MAX_FIELD_BYTES) {
   if (raw === void 0) throw new Error("invalid hook input: expected object");
   const input = record(raw["tool_input"]) ?? {};
   const tool = safeString(raw["tool_name"], "tool_name");
-  const command = commandText(input["command"]);
+  const command = commandText(input["command"] ?? input["cmd"]);
   const file = safeString(input["file_path"] ?? input["path"], "file_path");
   let edits;
   if (file !== "") {
@@ -8249,12 +8430,77 @@ function normalizeToolCall(value, contentLimit = MAX_FIELD_BYTES) {
   const shellTargets = shellWriteTargets(command).filter((path2) => !edits.some((edit) => edit.path === path2)).map((path2) => ({ path: path2, addedContent: "" }));
   return { tool, command, edits: [...edits, ...shellTargets] };
 }
+function normalizeReadCall(value, root) {
+  const raw = record(value) ?? {};
+  const input = record(raw["tool_input"]) ?? {};
+  const tool = safeString(raw["tool_name"], "tool_name");
+  const cwd = resolve3(
+    root,
+    safeString(raw["cwd"], "cwd") || root,
+    safeString(input["workdir"] ?? input["cwd"], "workdir") || "."
+  );
+  if (isShellTool(tool)) {
+    return { ...shellReadTargets(commandText(input["command"] ?? input["cmd"])), cwd };
+  }
+  const paths = [];
+  let unsafeSearch = false;
+  if (["Read", "read_file", "Grep"].includes(tool)) {
+    const path2 = safeString(input["file_path"] ?? input["path"], "read path");
+    if (path2 !== "") paths.push(path2);
+    if (tool === "Grep") {
+      const glob = safeString(input["glob"], "read glob");
+      if (glob !== "" && !glob.startsWith("!")) {
+        paths.push(glob);
+        unsafeSearch = true;
+      }
+    }
+  }
+  return { paths, unsafeSearch, searchPaths: unsafeSearch ? [paths[0] ?? "."] : [], cwd };
+}
+
+init_define_VOID_SYNTAX_WORKER_IDENTITY();
+import { realpathSync, statSync } from "node:fs";
+import { basename as basename3, resolve as resolve4 } from "node:path";
+function secretTarget(path2) {
+  return isSecretEnvironment(path2) || /^\.env[^/]*[*?{[]/i.test(basename3(path2.replaceAll("\\", "/")));
+}
+function regularFile(path2, cwd) {
+  try {
+    return statSync(resolve4(cwd, path2)).isFile();
+  } catch {
+    return false;
+  }
+}
+function secretRead(reads, cwd) {
+  if (reads.paths.length + reads.searchPaths.length > 128) {
+    return block("SECRET_READ_SCOPE", "too many read targets to check; split the operation", []);
+  }
+  for (const path2 of reads.paths) {
+    let physical = path2;
+    try {
+      physical = realpathSync(resolve4(cwd, path2));
+    } catch {
+    }
+    if (secretTarget(path2) || secretTarget(physical)) {
+      return block(
+        "SECRET_FILE_READ",
+        "refusing to read a secret environment file; use a safe example or non-sensitive metadata",
+        []
+      );
+    }
+  }
+  return reads.unsafeSearch && !reads.searchPaths.every((path2) => regularFile(path2, cwd)) ? block(
+    "SECRET_READ_SCOPE",
+    "search can include secret environment files; use explicit files or exclude .env* from traversal",
+    []
+  ) : allow();
+}
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { resolve as resolve3 } from "node:path";
+import { resolve as resolve5 } from "node:path";
 var MAX_SOURCE_BYTES = 65536;
 var unresolved = (reason) => ({ kind: "unresolved", reason });
 function object(value) {
@@ -8329,7 +8575,7 @@ function fromPatch(patch, root, target, existing) {
   for (const line of lines) {
     const header = /^\*\*\* (Add|Update|Delete) File: (.+)$/.exec(line);
     if (header !== null) {
-      active = resolve3(root, header[2] ?? "") === target ? { kind: header[1] ?? "", lines: [] } : void 0;
+      active = resolve5(root, header[2] ?? "") === target ? { kind: header[1] ?? "", lines: [] } : void 0;
       if (active !== void 0) sections.push(active);
     } else if (line === "*** End Patch") {
       active = void 0;
@@ -8355,7 +8601,7 @@ function proposedSource(raw, root, path2, existing) {
   for (const key of ["patch", "input", "content", "command"]) {
     const value = input[key];
     if (typeof value === "string" && value.includes("*** Begin Patch")) {
-      return fromPatch(value, root, resolve3(root, path2), existing);
+      return fromPatch(value, root, resolve5(root, path2), existing);
     }
   }
   return unresolved("tool input does not describe a reconstructable file");
@@ -8402,7 +8648,7 @@ init_define_VOID_SYNTAX_WORKER_IDENTITY();
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync as readFileSync4, statSync } from "node:fs";
+import { readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -8413,7 +8659,7 @@ function runSyntaxWorker(root, input, remainingMs) {
   const worker = fileURLToPath(new URL(true ? "./_syntax-worker.cjs" : "../../../core/hooks/_syntax-worker.cjs", import.meta.url));
   const identity2 = typeof define_VOID_SYNTAX_WORKER_IDENTITY_default === "object" ? define_VOID_SYNTAX_WORKER_IDENTITY_default : SYNTAX_WORKER_IDENTITY;
   try {
-    if (identity2.bytes > 8 * 1024 * 1024 || statSync(worker).size !== identity2.bytes || createHash("sha256").update(readFileSync4(worker)).digest("hex") !== identity2.sha256) {
+    if (identity2.bytes > 8 * 1024 * 1024 || statSync2(worker).size !== identity2.bytes || createHash("sha256").update(readFileSync4(worker)).digest("hex") !== identity2.sha256) {
       return { version: 1, kind: "unavailable" };
     }
     const timeout = Math.min(SYNTAX_OPERATION_BUDGET_MS, remainingMs) - (performance.now() - started);
@@ -8655,16 +8901,16 @@ function parseHookPayload(input) {
   return parsed;
 }
 function physicalPath(path2) {
-  const absolute = resolve4(path2);
+  const absolute = resolve6(path2);
   let existing = absolute;
   const suffix = [];
   while (true) {
     try {
-      return join3(realpathSync(existing), ...suffix);
+      return join3(realpathSync2(existing), ...suffix);
     } catch {
       const parent = dirname2(existing);
       if (parent === existing) return absolute;
-      suffix.unshift(basename2(existing));
+      suffix.unshift(basename4(existing));
       existing = parent;
     }
   }
@@ -8682,7 +8928,7 @@ function discoverProjectRoot(start) {
 }
 function projectRelativePath(root, path2) {
   const physicalRoot = physicalPath(root);
-  const absolute = physicalPath(isAbsolute2(path2) ? path2 : resolve4(physicalRoot, path2));
+  const absolute = physicalPath(isAbsolute2(path2) ? path2 : resolve6(physicalRoot, path2));
   const projectPath2 = relative2(physicalRoot, absolute).replaceAll("\\", "/");
   return projectPath2 === ".." || projectPath2.startsWith("../") || isAbsolute2(projectPath2) ? void 0 : projectPath2;
 }
@@ -8706,8 +8952,16 @@ function configuredStrings(parent, key, fallback) {
     const kept = value.filter((entry) => typeof entry === "string");
     if (kept.length > 0) return kept;
   }
-  return [fallback];
+  return typeof fallback === "string" ? [fallback] : [...fallback];
 }
+var DEFAULT_PROJECT_PATHS = {
+  business: ["src/**", "apps/*/src/**"],
+  tests: ["src/**/*.test.{ts,tsx}", "apps/*/src/**/*.test.{ts,tsx}"],
+  spikes: ["scripts/spike-*", "apps/*/scripts/spike-*"],
+  serverActions: ["src/app/(api|actions)/**", "apps/*/src/app/(api|actions)/**"],
+  contracts: ["src/lib/contracts/**", "apps/*/src/lib/contracts/**"],
+  e2e: ["tests/e2e/**", "apps/*/tests/e2e/**"]
+};
 function readTddConfig(root) {
   let config2 = {};
   try {
@@ -8720,8 +8974,8 @@ function readTddConfig(root) {
   const mode = configuredMode === "strict" || configuredMode === "souple" || configuredMode === "exploratory" ? configuredMode : "auto";
   return {
     mode,
-    businessGlobs: configuredStrings(paths, "business", "apps/*/src/**"),
-    spikesGlob: configuredString(paths, "spikes", "apps/*/scripts/spike-*")
+    businessGlobs: configuredStrings(paths, "business", DEFAULT_PROJECT_PATHS.business),
+    spikeGlobs: configuredStrings(paths, "spikes", DEFAULT_PROJECT_PATHS.spikes)
   };
 }
 function focusedVerdict(root, edits, raw, syntaxInspector) {
@@ -8762,9 +9016,9 @@ function declaredTest(root, content) {
   const match = /^\/\/ tdd-cover: e2e (.+)$/.exec(lines[0] ?? "");
   const path2 = match?.[1];
   if (path2 === void 0 || path2 !== path2.trim() || isAbsolute2(path2) || /^[A-Za-z]:|\\/.test(path2) || path2.split("/").some((part) => part === ".." || part === ".") || !isTestPath(path2)) throw new Error("declare exactly one project-relative E2E spec on the first line");
-  const target = realpathSync(join3(root, path2));
+  const target = realpathSync2(join3(root, path2));
   const location = relative2(root, target);
-  if (location.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || location === ".." || isAbsolute2(location) || !statSync2(target).isFile()) {
+  if (location.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || location === ".." || isAbsolute2(location) || !statSync3(target).isFile()) {
     throw new Error("E2E spec must be a regular file inside the physical project root");
   }
   return path2;
@@ -8787,7 +9041,7 @@ function tddVerdict(root, edits, raw, checkedOut, syntaxInspector) {
   const declaredTests = {};
   const proposedSources = {};
   const deadline = performance.now() + SYNTAX_OPERATION_BUDGET_MS;
-  const governed = projectChanges.filter((edit) => !(edit.operation === "delete" && edit.addedContent === "") && tddApplies(edit.path, config2.businessGlobs, [config2.spikesGlob]));
+  const governed = projectChanges.filter((edit) => !(edit.operation === "delete" && edit.addedContent === "") && tddApplies(edit.path, config2.businessGlobs, config2.spikeGlobs));
   if (governed.length > 32) return tddOperationLimit("operation exceeds 32 governed production files");
   if (new Set(governed.map((edit) => edit.path)).size !== governed.length) {
     return tddOperationLimit("patch must name each physical file exactly once");
@@ -8860,7 +9114,7 @@ function tddVerdict(root, edits, raw, checkedOut, syntaxInspector) {
     edits: projectChanges,
     mode: config2.mode,
     businessGlobs: config2.businessGlobs,
-    spikeGlobs: [config2.spikesGlob],
+    spikeGlobs: config2.spikeGlobs,
     existingHeaders,
     originalSources,
     siblingTests,
@@ -8875,6 +9129,11 @@ function evaluateRule(rule, rawInput, options) {
     options.source === "checked-out" ? MAX_CI_CONTENT_BYTES : MAX_HOOK_INPUT_BYTES
   );
   const env = options.env ?? process.env;
+  if (rule === "protected-file" && options.source !== "checked-out") {
+    const reads = normalizeReadCall(rawInput, options.root);
+    const verdict = secretRead(reads, reads.cwd);
+    if (!verdict.allow) return verdict;
+  }
   if (rule === "dangerous-command") {
     if (call.tool !== "Bash" && call.tool !== "shell") return allow();
     if (productSetting(env, "ALLOW_DANGEROUS") === "1") return allow("OVERRIDE", "one-shot override");
@@ -9102,12 +9361,12 @@ async function fetchLatestVersion(options = {}) {
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { readFileSync as readFileSync7, statSync as statSync3 } from "node:fs";
+import { readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
 import { join as join5 } from "node:path";
 var MAX_NPMRC_BYTES = 64 * 1024;
 function readIfSmall(path2) {
   try {
-    if (statSync3(path2).size > MAX_NPMRC_BYTES) return void 0;
+    if (statSync4(path2).size > MAX_NPMRC_BYTES) return void 0;
     return readFileSync7(path2, "utf8");
   } catch {
     return void 0;
@@ -9150,7 +9409,7 @@ import { existsSync as existsSync5, mkdirSync as mkdirSync2, readFileSync as rea
 import { dirname as dirname4, join as join8 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
-import { lstatSync, readFileSync as readFileSync8, readdirSync, statSync as statSync4 } from "node:fs";
+import { lstatSync, readFileSync as readFileSync8, readdirSync, statSync as statSync5 } from "node:fs";
 import { join as join7 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -9295,7 +9554,7 @@ function voidReadPath(root, ...segments2) {
 var MISSION_DIRECTORY = /^mis_[A-Za-z0-9_-]{8,100}$/;
 var MAX_MISSION_LOGS = 1e4;
 var MAX_JOURNAL_BYTES = 64 * 1024 * 1024;
-function regularFile(path2) {
+function regularFile2(path2) {
   try {
     const info = lstatSync(path2);
     return info.isFile() && !info.isSymbolicLink();
@@ -9318,9 +9577,9 @@ function journalFiles(root) {
   for (const runs of locations) {
     for (const entry of missionEntries(runs)) {
       const path2 = join7(runs, entry.name, "events.jsonl");
-      if (!regularFile(path2)) continue;
+      if (!regularFile2(path2)) continue;
       try {
-        const info = statSync4(path2);
+        const info = statSync5(path2);
         files.push({ path: path2, modifiedMs: info.mtimeMs, bytes: info.size });
       } catch {
       }
@@ -9685,14 +9944,14 @@ import {
   mkdirSync as mkdirSync3,
   openSync as openSync2,
   readSync as readSync2,
-  realpathSync as realpathSync3,
+  realpathSync as realpathSync4,
   renameSync as renameSync3,
-  statSync as statSync5,
+  statSync as statSync6,
   unlinkSync,
   writeSync
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename3, isAbsolute as isAbsolute4, join as join10, relative as relative4, resolve as resolve5 } from "node:path";
+import { basename as basename5, isAbsolute as isAbsolute4, join as join10, relative as relative4, resolve as resolve7 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 
@@ -10327,7 +10586,7 @@ import {
   constants as constants2,
   lstatSync as lstatSync2,
   readFileSync as readFileSync10,
-  realpathSync as realpathSync2
+  realpathSync as realpathSync3
 } from "node:fs";
 import { delimiter, isAbsolute as isAbsolute3, join as join9, relative as relative3 } from "node:path";
 function record3(value) {
@@ -10368,12 +10627,12 @@ function findExecutable(name, root, env) {
   return void 0;
 }
 function safeExistingFiles(paths, root) {
-  const canonicalRoot = realpathSync2(root);
+  const canonicalRoot = realpathSync3(root);
   return paths.filter((path2) => {
     try {
       const info = lstatSync2(path2);
       if (!info.isFile() || info.isSymbolicLink()) return false;
-      return within(canonicalRoot, realpathSync2(path2));
+      return within(canonicalRoot, realpathSync3(path2));
     } catch {
       return false;
     }
@@ -10570,7 +10829,7 @@ function claimStaleLock(path2, observed, now) {
 }
 function safeMachineDirectory(root) {
   try {
-    const canonicalRoot = realpathSync3(resolve5(root));
+    const canonicalRoot = realpathSync4(resolve7(root));
     let cursor = canonicalRoot;
     for (const segment2 of [".void", "machine"]) {
       cursor = join10(cursor, segment2);
@@ -10587,7 +10846,7 @@ function safeMachineDirectory(root) {
         const created = lstatSync3(cursor);
         if (!created.isDirectory() || created.isSymbolicLink()) return void 0;
       }
-      const canonical4 = realpathSync3(cursor);
+      const canonical4 = realpathSync4(cursor);
       if (!within(canonicalRoot, canonical4) || canonical4 !== cursor) return void 0;
     }
     return cursor;
@@ -10611,8 +10870,8 @@ function anchorMachineDirectory(root) {
     if (!opened.isDirectory()) return void 0;
     process.chdir(directory2);
     changedDirectory = true;
-    const current = statSync5(".");
-    if (current.dev !== opened.dev || current.ino !== opened.ino || realpathSync3(".") !== directory2) return void 0;
+    const current = statSync6(".");
+    if (current.dev !== opened.dev || current.ino !== opened.ino || realpathSync4(".") !== directory2) return void 0;
     anchorEstablished = true;
     return { descriptor, previousCwd };
   } catch {
@@ -10704,8 +10963,8 @@ function canonicalDirectory(path2) {
   try {
     const info = lstatSync3(path2);
     if (!info.isDirectory() || info.isSymbolicLink()) return void 0;
-    const canonical4 = realpathSync3(path2);
-    return canonical4 === resolve5(path2) ? canonical4 : void 0;
+    const canonical4 = realpathSync4(path2);
+    return canonical4 === resolve7(path2) ? canonical4 : void 0;
   } catch {
     return void 0;
   }
@@ -10714,7 +10973,7 @@ function encodedClaudeProject(root) {
   return root.replace(/[^a-zA-Z0-9]/g, "-");
 }
 function transcriptRoots(root, runtime3) {
-  const canonicalRoot = realpathSync3(resolve5(root));
+  const canonicalRoot = realpathSync4(resolve7(root));
   const candidates = [canonicalRoot];
   if (runtime3 === "claude") {
     candidates.push(
@@ -10728,22 +10987,22 @@ function runtimeSessionId(input) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value) ? value : void 0;
 }
 function isExternalTranscriptBound(path2, runtime3, sessionId) {
-  return runtime3 === "claude" && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId) && basename3(path2) === `${sessionId}.jsonl`;
+  return runtime3 === "claude" && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId) && basename5(path2) === `${sessionId}.jsonl`;
 }
 function openBoundedRegularFile(path2, maxBytes, allowedRoots) {
   let descriptor;
   try {
     const before = lstatSync3(path2);
     if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes) return void 0;
-    const canonicalPath = realpathSync3(path2);
+    const canonicalPath = realpathSync4(path2);
     if (!allowedRoots.some((root) => within(root, canonicalPath))) return void 0;
     descriptor = openSync2(
       path2,
       constants3.O_RDONLY | constants3.O_NONBLOCK | (constants3.O_NOFOLLOW ?? 0)
     );
     const opened = fstatSync2(descriptor);
-    const currentPath = realpathSync3(path2);
-    const current = statSync5(currentPath);
+    const currentPath = realpathSync4(path2);
+    const current = statSync6(currentPath);
     if (!opened.isFile() || opened.size > maxBytes || currentPath !== canonicalPath || opened.dev !== current.dev || opened.ino !== current.ino || !allowedRoots.some((root) => within(root, currentPath))) {
       closeSync2(descriptor);
       return void 0;
@@ -10792,7 +11051,7 @@ function observeTranscript(path2, state, input, root, runtime3) {
     const opened = openBoundedRegularFile(path2, Number.MAX_SAFE_INTEGER, roots);
     if (opened === void 0) return void 0;
     descriptor = opened.descriptor;
-    const canonicalRoot = realpathSync3(resolve5(root));
+    const canonicalRoot = realpathSync4(resolve7(root));
     if (!within(canonicalRoot, opened.canonicalPath)) {
       const sessionId = runtimeSessionId(input);
       if (sessionId === void 0 || !isExternalTranscriptBound(opened.canonicalPath, runtime3, sessionId)) {
@@ -10861,7 +11120,7 @@ function observeTranscript(path2, state, input, root, runtime3) {
 function contextConfig(root) {
   let descriptor;
   try {
-    const canonicalRoot = realpathSync3(resolve5(root));
+    const canonicalRoot = realpathSync4(resolve7(root));
     const opened = openBoundedRegularFile(
       join10(canonicalRoot, ".void", "config.json"),
       MAX_CONFIG_BYTES,
@@ -10989,8 +11248,8 @@ function successfulToolUse(input) {
 }
 function boundedProjectPath(root, candidate) {
   if (candidate === "" || candidate.length > 500 || mentionsCheckpointMarker(candidate) || [...candidate].some((character) => character.charCodeAt(0) < 32)) return void 0;
-  const target = isAbsolute4(candidate) ? resolve5(candidate) : resolve5(root, candidate);
-  const local = relative4(resolve5(root), target);
+  const target = isAbsolute4(candidate) ? resolve7(candidate) : resolve7(root, candidate);
+  const local = relative4(resolve7(root), target);
   if (local === "" || local.startsWith("..") || isAbsolute4(local)) return void 0;
   return local.split("\\").join("/");
 }
@@ -11071,7 +11330,7 @@ function measureHerdrContext(input, root, runtime3, now) {
   return measureContext(initialState(""), input, root, "UserPromptSubmit", runtime3, now).usagePercent;
 }
 function executeContextContinuity(rawInput, root, runtime3, now) {
-  const projectRoot2 = resolve5(root);
+  const projectRoot2 = resolve7(root);
   const input = record3(rawInput);
   if (input === void 0) {
     return { status: "degraded", details: { reason: "invalid-hook-input" } };
@@ -11120,12 +11379,12 @@ function resolveInstall(root, env) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { randomUUID } from "node:crypto";
-import { lstatSync as lstatSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync4, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { basename as basename5, dirname as dirname6, isAbsolute as isAbsolute5, join as join13 } from "node:path";
+import { lstatSync as lstatSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync11, readdirSync as readdirSync3, realpathSync as realpathSync5, renameSync as renameSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { basename as basename7, dirname as dirname6, isAbsolute as isAbsolute5, join as join13 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { basename as basename4, dirname as dirname5, join as join12 } from "node:path";
+import { basename as basename6, dirname as dirname5, join as join12 } from "node:path";
 function machineRootOf(cwd) {
   const result = spawnSync2(
     "git",
@@ -11133,7 +11392,7 @@ function machineRootOf(cwd) {
     { cwd, shell: false, encoding: "utf8", timeout: 5e3 }
   );
   const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, "") : "";
-  return common !== "" && basename4(common) === ".git" ? join12(dirname5(common), ".void", "machine") : void 0;
+  return common !== "" && basename6(common) === ".git" ? join12(dirname5(common), ".void", "machine") : void 0;
 }
 
 var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -11146,25 +11405,25 @@ function claimedPath(root, sessionId) {
     const claim2 = record3(JSON.parse(readFileSync11(join13(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
     const path2 = claim2?.["resultPath"];
     if (claim2?.["schemaVersion"] !== 1 || typeof path2 !== "string" || !isAbsolute5(path2)) return void 0;
-    if (path2.length > MAX_CLAIM_BYTES || basename5(path2) !== "result.json") return void 0;
+    if (path2.length > MAX_CLAIM_BYTES || basename7(path2) !== "result.json") return void 0;
     const runs = join13(root, "runs");
     if (!within(runs, path2) || lstatSync4(dirname6(path2), { throwIfNoEntry: false })?.isDirectory() !== true) {
       return void 0;
     }
-    return within(realpathSync4(runs), realpathSync4(dirname6(path2))) ? path2 : void 0;
+    return within(realpathSync5(runs), realpathSync5(dirname6(path2))) ? path2 : void 0;
   } catch {
     return void 0;
   }
 }
 function waitingRun(root, cwd, now) {
   try {
-    const here = realpathSync4(cwd);
+    const here = realpathSync5(cwd);
     const directory2 = join13(root, "agents", "pending");
     return readdirSync3(directory2).filter((name) => !name.startsWith(".")).slice(0, 64).some((name) => {
       const marker = record3(JSON.parse(readFileSync11(join13(directory2, name), "utf8")));
       const createdAt = marker?.["createdAt"];
       const runCwd = marker?.["cwd"];
-      return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync4(runCwd) === here;
+      return typeof createdAt === "number" && now - createdAt < PARKING_WINDOW_MS && typeof runCwd === "string" && realpathSync5(runCwd) === here;
     });
   } catch {
     return false;
@@ -11217,7 +11476,7 @@ init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import {
   isAbsolute as isAbsolute6,
   relative as relative5,
-  resolve as resolve6
+  resolve as resolve8
 } from "node:path";
 var FORMATTABLE = /\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|css)$/;
 function within2(root, target) {
@@ -11225,10 +11484,10 @@ function within2(root, target) {
   return rel === "" || !rel.startsWith("..") && !isAbsolute6(rel);
 }
 function formatCandidates(touchedPaths, projectRoot2) {
-  const root = resolve6(projectRoot2);
+  const root = resolve8(projectRoot2);
   const found = /* @__PURE__ */ new Set();
   for (const touchedPath of touchedPaths) {
-    const target = resolve6(root, touchedPath);
+    const target = resolve8(root, touchedPath);
     if (touchedPath.trim() !== "" && FORMATTABLE.test(touchedPath.replaceAll("\\", "/")) && within2(root, target)) {
       found.add(target);
     }
@@ -11285,7 +11544,7 @@ function executeFormat(rawInput, root, env) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { realpathSync as realpathSync6 } from "node:fs";
+import { realpathSync as realpathSync7 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join15 } from "node:path";
 
@@ -13239,8 +13498,8 @@ function proveOwnership(pids, call) {
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { createHash as createHash4 } from "node:crypto";
-import { closeSync as closeSync3, constants as constants4, fstatSync as fstatSync3, lstatSync as lstatSync5, opendirSync, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync5 } from "node:fs";
-import { isAbsolute as isAbsolute8, join as join14, parse as parse2, relative as relative6, resolve as resolve7, sep } from "node:path";
+import { closeSync as closeSync3, constants as constants4, fstatSync as fstatSync3, lstatSync as lstatSync5, opendirSync, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync6 } from "node:fs";
+import { isAbsolute as isAbsolute8, join as join14, parse as parse2, relative as relative6, resolve as resolve9, sep } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 var import_yaml = __toESM(require_dist(), 1);
@@ -13348,7 +13607,7 @@ function absent(error) {
 }
 function canonical(path2) {
   try {
-    return realpathSync5(path2);
+    return realpathSync6(path2);
   } catch (error) {
     if (absent(error)) return void 0;
     throw error;
@@ -13378,10 +13637,10 @@ function safePath(path2) {
 }
 function readDocument(root, relativePath, limit) {
   if (isAbsolute8(relativePath) || relativePath.split(/[\\/]/).includes("..")) throw Error("orchestra traversal refused");
-  const target = resolve7(root, relativePath);
+  const target = resolve9(root, relativePath);
   safePath(target);
-  const canonicalRoot = realpathSync5(root);
-  const rel = relative6(canonicalRoot, realpathSync5(target));
+  const canonicalRoot = realpathSync6(root);
+  const rel = relative6(canonicalRoot, realpathSync6(target));
   if (rel.startsWith("..") || isAbsolute8(rel)) throw Error("orchestra path escapes mission");
   const descriptor = openSync3(target, constants4.O_RDONLY | constants4.O_NONBLOCK | constants4.O_NOFOLLOW);
   try {
@@ -13450,9 +13709,9 @@ function selectCandidates(candidates, binding, cwd, panes) {
   return active.length ? active : candidates.filter(({ mission }) => [mission.coordinator, ...mission.workers].some((person) => canonical(person.worktree) === cwd && panes.some((pane) => pane.label === person.label && canonical(pane.cwd) === cwd && pane.tokens?.["mission"] === mission.mission)));
 }
 function readOrchestra(state, common, cwd, inventory) {
-  const repository = realpathSync5(common);
+  const repository = realpathSync6(common);
   const project = projectIdentity(repository);
-  const canonicalCwd = realpathSync5(cwd);
+  const canonicalCwd = realpathSync6(cwd);
   const binding = readSelection(canonicalCwd, project);
   const root = join14(state, project);
   let entries;
@@ -13564,10 +13823,10 @@ function executeHerdrMetadata(raw, root, env, runtime3, run = runCommand) {
       const panes = inventory();
       const matches2 = panes.filter((pane2) => pane2.pane_id === paneId);
       const pane = matches2[0];
-      if (matches2.length !== 1 || !pane || !pane.cwd || realpathSync6(pane.cwd) !== realpathSync6(root)) {
+      if (matches2.length !== 1 || !pane || !pane.cwd || realpathSync7(pane.cwd) !== realpathSync7(root)) {
         throw Error("Herdr caller pane missing or foreign worktree");
       }
-      if (pane.label && panes.filter((other) => other.label === pane.label && typeof other.cwd === "string" && realpathSync6(other.cwd) === realpathSync6(root)).length !== 1) {
+      if (pane.label && panes.filter((other) => other.label === pane.label && typeof other.cwd === "string" && realpathSync7(other.cwd) === realpathSync7(root)).length !== 1) {
         throw Error("ambiguous Herdr coordinator identity");
       }
       const pids = foreground(Buffer.from(call("herdr", ["pane", "process-info", "--pane", paneId])), paneId);
@@ -13632,7 +13891,7 @@ Do not act on this host until resolved. Native delegation independent of that ac
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync5 } from "node:child_process";
-import { statSync as statSync6 } from "node:fs";
+import { statSync as statSync7 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join16 } from "node:path";
 var runCommand2 = (command, args, options) => {
@@ -13650,7 +13909,7 @@ function nativeHook(env) {
     "herdr-agent-state.sh"
   );
   try {
-    return statSync6(path2).isFile() ? path2 : void 0;
+    return statSync7(path2).isFile() ? path2 : void 0;
   } catch {
     return void 0;
   }
@@ -13840,9 +14099,9 @@ import {
   mkdirSync as mkdirSync5,
   openSync as openSync4,
   readSync as readSync4,
-  realpathSync as realpathSync7,
+  realpathSync as realpathSync8,
   renameSync as renameSync5,
-  statSync as statSync7,
+  statSync as statSync8,
   unlinkSync as unlinkSync2,
   writeFileSync as writeFileSync4
 } from "node:fs";
@@ -13927,7 +14186,7 @@ function recordCode(error) {
   return typeof error === "object" && error !== null && "code" in error ? error.code : void 0;
 }
 function directory(root) {
-  let path2 = realpathSync7(root);
+  let path2 = realpathSync8(root);
   for (const segment2 of [".void", "machine", "read-loop"]) {
     path2 = join17(path2, segment2);
     try {
@@ -13936,7 +14195,7 @@ function directory(root) {
       if (recordCode(error) !== "EEXIST") throw error;
     }
     const info = lstatSync6(path2);
-    if (!info.isDirectory() || info.isSymbolicLink() || realpathSync7(path2) !== path2) throw new Error("unsafe-directory");
+    if (!info.isDirectory() || info.isSymbolicLink() || realpathSync8(path2) !== path2) throw new Error("unsafe-directory");
     if (segment2 === "read-loop" && process.platform !== "win32" && (info.mode & 63) !== 0) throw new Error("public-cache");
   }
   return path2;
@@ -13972,8 +14231,8 @@ function executeReadLoop(raw, root, runtime3) {
     anchor2 = openSync4(path2, constants5.O_RDONLY | (constants5.O_DIRECTORY ?? 0) | (constants5.O_NOFOLLOW ?? 0));
     const expected = fstatSync4(anchor2);
     process.chdir(path2);
-    const actual = statSync7(".");
-    if (!expected.isDirectory() || actual.dev !== expected.dev || actual.ino !== expected.ino || realpathSync7(".") !== path2) throw new Error("directory-changed");
+    const actual = statSync8(".");
+    if (!expected.isDirectory() || actual.dev !== expected.dev || actual.ino !== expected.ino || realpathSync8(".") !== path2) throw new Error("directory-changed");
     lock = openSync4("state.lock", constants5.O_WRONLY | constants5.O_CREAT | constants5.O_EXCL | (constants5.O_NOFOLLOW ?? 0), 384);
     const next = advanceReadLoop(readState(), observation, Date.now());
     const serialized = JSON.stringify(next.state);
@@ -14015,9 +14274,9 @@ import {
   existsSync as existsSync6,
   lstatSync as lstatSync7,
   readFileSync as readFileSync12,
-  statSync as statSync8
+  statSync as statSync9
 } from "node:fs";
-import { basename as basename6, join as join18 } from "node:path";
+import { basename as basename8, join as join18 } from "node:path";
 var PROGRAM_PATHS = [
   join18(".void", "program.md"),
   join18(".void", "active.md"),
@@ -14127,7 +14386,7 @@ function checkpointObservation(root) {
     const raw = readBounded(path2);
     if (raw === void 0) continue;
     try {
-      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync8(path2).mtimeMs };
+      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync9(path2).mtimeMs };
     } catch {
       return { checkpoint: parseCheckpoint2(raw) };
     }
@@ -14137,7 +14396,7 @@ function checkpointObservation(root) {
 function observeResume(root, now, options = {}) {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
-    project: { name: basename6(root), path: root },
+    project: { name: basename8(root), path: root },
     now,
     git: gitObservation(root),
     ...observeProgram(root),
@@ -14192,7 +14451,7 @@ import { createHash as createHash6 } from "node:crypto";
 import {
   lstatSync as lstatSync8,
   mkdirSync as mkdirSync6,
-  realpathSync as realpathSync8,
+  realpathSync as realpathSync9,
   writeFileSync as writeFileSync5
 } from "node:fs";
 import { join as join19, relative as relative7 } from "node:path";
@@ -14263,11 +14522,11 @@ ${errors}
 
 function safeOutputDirectory(root) {
   try {
-    const canonicalRoot = realpathSync8(root);
+    const canonicalRoot = realpathSync9(root);
     const directory2 = voidMachinePath(root, "outputs");
     mkdirSync6(directory2, { recursive: true, mode: 448 });
     const info = lstatSync8(directory2);
-    const canonicalDirectory2 = realpathSync8(directory2);
+    const canonicalDirectory2 = realpathSync9(directory2);
     if (!info.isDirectory() || info.isSymbolicLink() || !within(canonicalRoot, canonicalDirectory2)) {
       return void 0;
     }
@@ -14303,7 +14562,7 @@ function executeTrim(rawInput, root, env) {
   const hash2 = createHash6("sha256").update(extracted.text).digest("hex").slice(0, 12);
   const tool = extracted.tool.replaceAll(/[^A-Za-z0-9_]/g, "_").slice(0, 80);
   const file = join19(directory2, `${tool}-${process.pid}-${Date.now()}-${hash2}.log`);
-  const spillPath = relative7(realpathSync8(root), file).replaceAll("\\", "/");
+  const spillPath = relative7(realpathSync9(root), file).replaceAll("\\", "/");
   const plan = planOutputTrim(extracted.text, {
     tool: extracted.tool,
     thresholdBytes,
@@ -14348,7 +14607,7 @@ import {
   isAbsolute as isAbsolute9,
   join as join20,
   relative as relative8,
-  resolve as resolve8
+  resolve as resolve10
 } from "node:path";
 function record6(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
@@ -14440,11 +14699,11 @@ function within3(root, target) {
   return rel === "" || !rel.startsWith("..") && !isAbsolute9(rel);
 }
 function nearestTsconfigs(changedPaths, projectRoot2, hasFile) {
-  const root = resolve8(projectRoot2);
+  const root = resolve10(projectRoot2);
   const found = /* @__PURE__ */ new Set();
   for (const changedPath of changedPaths) {
     if (!/\.(?:ts|tsx)$/.test(changedPath) || changedPath.endsWith(".d.ts")) continue;
-    const target = resolve8(root, changedPath);
+    const target = resolve10(root, changedPath);
     if (!within3(root, target)) continue;
     let current = dirname7(target);
     while (within3(root, current)) {
@@ -14590,15 +14849,15 @@ Resolve before claiming done. This never blocks.
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { spawnSync as spawnSync8 } from "node:child_process";
-import { closeSync as closeSync5, existsSync as existsSync8, lstatSync as lstatSync9, openSync as openSync5, readSync as readSync5, realpathSync as realpathSync9 } from "node:fs";
-import { dirname as dirname8, isAbsolute as isAbsolute10, join as join22, resolve as resolve9 } from "node:path";
+import { closeSync as closeSync5, existsSync as existsSync8, lstatSync as lstatSync9, openSync as openSync5, readSync as readSync5, realpathSync as realpathSync10 } from "node:fs";
+import { dirname as dirname8, isAbsolute as isAbsolute10, join as join22, resolve as resolve11 } from "node:path";
 var GIT_TIMEOUT_MS2 = 5e3;
 var GIT_MAX_OUTPUT_BYTES = 1e6;
 function canonical3(path2) {
   try {
-    return realpathSync9(resolve9(path2));
+    return realpathSync10(resolve11(path2));
   } catch {
-    return resolve9(path2);
+    return resolve11(path2);
   }
 }
 function git2(cwd, args, deadline) {
@@ -14629,7 +14888,7 @@ function mainWorkingTree(cwd, deadline, expectedCommon, query = git2) {
   const args = ["rev-parse", "--show-toplevel", ...expectedCommon === void 0 ? [] : ["--git-common-dir"]];
   const [toplevel, common] = query(listed, args, deadline)?.trim().split(/\r?\n/) ?? [];
   if (toplevel === void 0 || toplevel === "") return void 0;
-  if (expectedCommon !== void 0 && (common === void 0 || canonical3(resolve9(listed, common)) !== expectedCommon)) return void 0;
+  if (expectedCommon !== void 0 && (common === void 0 || canonical3(resolve11(listed, common)) !== expectedCommon)) return void 0;
   return canonical3(toplevel);
 }
 function holdsInstallReceipt(root) {
@@ -14656,9 +14915,9 @@ function ordinaryLinkedMain(tree) {
   const marker = join22(tree, ".git");
   const pointer = gitPointer(marker);
   if (!pointer.startsWith("gitdir: ")) throw new Error("INVALID_GIT_POINTER");
-  const directory2 = canonical3(resolve9(tree, pointer.slice(8)));
+  const directory2 = canonical3(resolve11(tree, pointer.slice(8)));
   if (!existsSync8(join22(directory2, "commondir"))) return void 0;
-  const common = canonical3(resolve9(directory2, gitPointer(join22(directory2, "commondir"))));
+  const common = canonical3(resolve11(directory2, gitPointer(join22(directory2, "commondir"))));
   const backlink = gitPointer(join22(directory2, "gitdir"));
   if (!isAbsolute10(backlink) || canonical3(backlink) !== canonical3(marker) || canonical3(dirname8(directory2)) !== canonical3(join22(common, "worktrees"))) {
     throw new Error("INVALID_GIT_POINTER");
@@ -14696,7 +14955,7 @@ function resolveTelemetryRoot(cwd, query = git2) {
     ], deadline)?.trim().split(/\r?\n/) ?? [];
     if (toplevel === void 0 || canonical3(toplevel) !== tree) return refused2;
     if (directory2 === void 0 || common === void 0) return refused2;
-    const commonDirectory = canonical3(resolve9(tree, common));
+    const commonDirectory = canonical3(resolve11(tree, common));
     if (canonical3(directory2) === commonDirectory) return { kind: "resolved", root: tree };
     const main2 = mainWorkingTree(tree, deadline, commonDirectory, query);
     if (main2 === void 0) return refused2;
@@ -14711,11 +14970,11 @@ init_define_VOID_SYNTAX_WORKER_IDENTITY();
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
 import { createHash as createHash7 } from "node:crypto";
 import {
-  basename as basename7,
+  basename as basename9,
   extname,
   isAbsolute as isAbsolute11,
   relative as relative9,
-  resolve as resolve10
+  resolve as resolve12
 } from "node:path";
 var MISSION_ID = /^mis_[A-Za-z0-9_-]{8,100}$/;
 function record7(value) {
@@ -14756,12 +15015,12 @@ function nameFor(tool, category, input) {
     const explicit = text2(input["name"]);
     if (explicit !== "") return explicit;
     const script = text2(input["scriptPath"]);
-    return script === "" || script.endsWith("/") ? "inline" : basename7(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
+    return script === "" || script.endsWith("/") ? "inline" : basename9(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
   }
   return tool || "unknown";
 }
 function safePaths(input, root) {
-  const absoluteRoot = resolve10(root);
+  const absoluteRoot = resolve12(root);
   const candidates = [
     input["file_path"],
     input["path"],
@@ -14774,7 +15033,7 @@ function safePaths(input, root) {
       if (!candidate.startsWith("..")) paths.push(candidate.slice(0, 500));
       continue;
     }
-    const rel = relative9(absoluteRoot, resolve10(candidate));
+    const rel = relative9(absoluteRoot, resolve12(candidate));
     if (rel !== "" && !rel.startsWith("..") && !isAbsolute11(rel)) {
       paths.push(rel.slice(0, 500));
     }
@@ -14829,7 +15088,7 @@ function deriveMissionId(explicit, runtime3, runtimeSessionId2, root) {
     }
     return explicit;
   }
-  const opaque = createHash7("sha256").update(`${runtime3}\0${runtimeSessionId2 || "unknown"}\0${resolve10(root)}`).digest("hex").slice(0, 32);
+  const opaque = createHash7("sha256").update(`${runtime3}\0${runtimeSessionId2 || "unknown"}\0${resolve12(root)}`).digest("hex").slice(0, 32);
   return `mis_${opaque}`;
 }
 
@@ -14853,7 +15112,7 @@ import {
   isAbsolute as isAbsolute12,
   join as join23,
   relative as relative10,
-  resolve as resolve11
+  resolve as resolve13
 } from "node:path";
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -15127,7 +15386,7 @@ async function safeRunDirectory(root, missionId) {
   if (!MISSION_ID3.test(missionId)) {
     throw new Error("HOOK_INVALID_MISSION_ID: expected mis_<opaque-id>");
   }
-  const absoluteRoot = resolve11(root);
+  const absoluteRoot = resolve13(root);
   const canonicalRoot = await realpath(absoluteRoot);
   const run = voidReadPath(absoluteRoot, "runs", missionId);
   let ancestor = run;

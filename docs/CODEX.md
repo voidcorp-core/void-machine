@@ -134,6 +134,44 @@ trusted project binding. Because neither runtime documents a reliable window siz
 nudge requires explicit `context.windowTokens` configuration; model names are never mapped to
 guessed windows. The handler does not invoke `/clear`, `/compact`, or a semantic checkpoint.
 
+### Secret environment reads
+
+The existing `protected-file` PreToolUse handler also refuses direct reads of
+`.env` and `.env.*`, before its write-only gate or `ALLOW_SECRET_EDIT` override.
+It covers `Read`/`Grep` paths and direct shell `cat`, `head`, `tail`, `sed`,
+`grep`, `rg` operands and input redirections. Examples with terminal `.example`,
+`.sample`, `.template` or `.dist` suffixes are allowed; `.env.example.local`
+is not an example. Literal paths and their resolved symlink targets are checked
+using metadata only. Commands and file contents never appear in a refusal.
+
+Ordinary `rg`/`Grep` searches retain their default hidden-file exclusion. Searches
+that enable hidden traversal, including positive globs such as `*.ts` (which
+can match `.env.ts`), require explicit regular-file scopes or an environment
+exclusion. For example, use `rg --hidden -g '*.ts' -g '!.env*' PATTERN src` or
+`grep -r --exclude='.env*' PATTERN src`. The final ripgrep glob wins; putting a
+positive glob after the exclusion can restore secret files. Native `Grep` with
+a positive glob and a directory scope should use the shell form above instead.
+`Glob` and `rg --files` enumerate names without reading content. Explicit
+symlink-following traversal requires regular-file scopes even with exclusions.
+The metadata check is capped at 128 target/scope entries per invocation.
+
+The [Codex hooks contract](https://learn.chatgpt.com/docs/hooks#tool-coverage)
+canonicalizes shell and unified exec calls as `Bash` with `tool_input.command`.
+The matcher already covered that canonical shell event. Raw `shell`,
+`shell_command`, `exec_command`/`cmd`, and `read_file` are compatibility inputs,
+not evidence of additional native interception. Claude uses its documented
+[PreToolUse contract](https://code.claude.com/docs/en/hooks#pretooluse).
+Manifest and bundled-handler replay tests prove the shipped adapter and refusal
+protocol, not runtime interception in an installed agent session.
+
+This is a bounded pre-execution guard, not universal data-loss prevention. It
+does not interpret arbitrary programs, shell wrappers, substitutions, variables,
+aliases, changed shell directories, shell options or search configuration. It
+does not crawl directories, discover hardlinks, prevent path swaps after checking,
+or mediate later `write_stdin` calls. Other secret formats keep their existing
+write protections; this read guard classifies environment filenames only.
+Runtime permissions remain necessary outside this explicitly supported subset.
+
 ### Repeated-read advice: narrow observation, no universal interception
 
 The existing `outcome-meter` handler uses documented `PostToolUse` JSON `additionalContext`

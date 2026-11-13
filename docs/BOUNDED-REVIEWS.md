@@ -451,6 +451,54 @@ node "$BOUNDED_CLI" mission dispatch --id "$MISSION_ID" --json
 Use the original task's actual verification command in a consumer project. Completion
 requires passed current evidence and no unresolved blocker; `recover` alone is not closure.
 
+## Recover correction readiness without accepting the review
+
+A completed, bound independent review with concrete blocking findings can request
+correction even when its verdict is `degraded`. The same finding-based rule governs
+normal dispatch and native targeted continuation; the label does not promote the
+review to PASS. A limitation without an actionable finding still stops. Invalid
+source, contract, writer, subject, provenance, invocation, journal or evidence
+remains blocking before any correction dispatch. Missing evidence prevents
+acceptance but does not prevent correcting an established defect.
+
+For an existing `controller-stop`, retain the original receipt and the actual
+reviewer's clarification. Use the existing recovery request, with the clarification
+saved under the original worktree and its exact byte hash:
+
+```json
+{
+  "schemaVersion": 1,
+  "closureEventId": "evt_original_controller_stop",
+  "expectedJournalHash": "sha256:<canonical current journal hash>",
+  "disposition": {
+    "kind": "review-blocker",
+    "completionEventIds": ["evt_original_completion"],
+    "resolutionArtifact": {
+      "path": ".void/machine/reviewer-clarification.json",
+      "sha256": "sha256:<clarification byte hash>"
+    }
+  }
+}
+```
+
+Run `mission recover --id <same-id> --input <request.json> --json`, then
+`mission dispatch --id <same-id> --json` using the verified candidate from the
+original worktree. Recovery appends its receipt; it changes neither the original
+review nor its findings, proofs, baseline or counters. A valid actionable review
+then yields `run-correction`. Record the real writer completion and fresh proofs,
+and continue only the targeted review in its retained native context. Evidence
+classification and discharge remain author-owned through the existing evidence
+commands. A targeted PASS does not discharge an earlier evidence request.
+
+The controller no longer gives writer-binding recovery its own correction-dispatch
+policy: after authenticated repair, its retained findings enter the same decision.
+The writer-only identity amendment, original-subject observation checks, historical
+empty-request compatibility and its single-targeted-continuation limit remain
+necessary to replay those old journals without broadening their authorization.
+Ordinary bounded missions keep their existing two-correction ceiling; a stricter
+caller mandate, including one remaining targeted review, still applies. Recovery
+never resets either limit or authorizes another general review.
+
 ## Correct a historical writer binding
 
 New review ingestion rejects a `review.writerId` that differs from the canonical

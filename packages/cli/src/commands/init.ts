@@ -19,10 +19,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PRODUCT_COMMAND, stripManagedBlock } from '@voidcorp/hook-runner';
+import { DEFAULT_PROJECT_PATHS, PRODUCT_COMMAND, stripManagedBlock } from '@voidcorp/hook-runner';
 import { PROJECT_DOCTRINE_PATH } from '../lib/co-owned.js';
 import { observeKeptTracked, writeExcludeBlock } from '../lib/git-exclude.js';
 import { isUntouchedSinceInstall, readInstallManifest, sha256Of } from '../lib/install-manifest.js';
+import { inspectHarnessLintExclusion } from '../lib/lint-exclusion.js';
 import * as p from '@clack/prompts';
 import {
   prepareInstallCommit,
@@ -142,14 +143,7 @@ export function buildDefaultConfig(seed: ConfigSeed): Record<string, unknown> & 
   const config: Record<string, unknown> & { packs: Record<string, string> } = {
     packs: {} as Record<string, string>,
     stack: { ...seed.stack },
-    paths: {
-      business: 'apps/*/src/**',
-      tests: 'apps/*/src/**/*.test.{ts,tsx}',
-      spikes: 'apps/*/scripts/spike-*',
-      serverActions: 'apps/*/src/app/(api|actions)/**',
-      contracts: 'apps/*/src/lib/contracts/**',
-      e2e: 'apps/*/tests/e2e/**',
-    },
+    paths: DEFAULT_PROJECT_PATHS,
     commands: commandsFor(seed.stack),
     modes: { tdd: 'auto', codeReview: 'auto' },
   };
@@ -415,6 +409,12 @@ export async function init(args: readonly string[]): Promise<void> {
     // the receipt is what is on disk.
     claimOwnedPaths(projectRoot, prepared.receipt.files.map((file) => file.path));
     reportHiddenByProject(projectRoot);
+    // Inspect the published ownership, once for every runtime, including a first
+    // install. The project analyzer config never participates in this transaction.
+    for (const check of await inspectHarnessLintExclusion(projectRoot)) {
+      line(`${c.dim(check.name.padEnd(18))}${check.message}`);
+      if (check.fix !== undefined) nextSteps.push(check.fix);
+    }
     // A preserved asset is one the previous install owned and this one refuses
     // to delete, because it was edited by hand. Saying nothing here is how a
     // renamed skill keeps loading beside its replacement under a clean success.

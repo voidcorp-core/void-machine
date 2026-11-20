@@ -107,16 +107,20 @@ describe('distributed global Herdr guard', () => {
 });
 
 describe('distributed first-ticket host discovery', () => {
-  it.each(['codex', 'claude'] as const)('emits host guidance from the installed %s SessionStart hook without central state', async runtime => {
+  it.each([
+    ['codex', true], ['claude', true], ['codex', false], ['claude', false],
+  ] as const)('handles installed %s SessionStart with ownership=%s without central state', async (runtime, owned) => {
     const root = realpathSync(mkdtempSync(resolve(tmpdir(), 'distributed-herdr-bootstrap-')));
     const bin = resolve(root, 'bin'); mkdirSync(bin);
     const common = resolve(root, '.git'); mkdirSync(common);
     writeFileSync(resolve(bin, 'git'), `#!${process.execPath}\nprocess.stdout.write(${JSON.stringify(common)});\n`, { mode: 0o755 });
+    writeFileSync(resolve(bin, 'ps'), `#!${process.execPath}\nprocess.stdout.write('1');\n`, { mode: 0o755 });
     writeFileSync(resolve(bin, 'herdr'), `#!${process.execPath}\n`
       + 'const args = process.argv.slice(2);\n'
       + 'const result = args[1] === "list" ? {panes:[{pane_id:"w1:p1",workspace_id:"w1",label:"ORCH",cwd:process.cwd()}]}'
-      + ': args[1] === "process-info" ? {process_info:{pane_id:"w1:p1",foreground_processes:[{pid:process.ppid}]}} : undefined;\n'
-      + 'if (!result) process.exit(1); process.stdout.write(JSON.stringify({result}));\n', { mode: 0o755 });
+      + `: args[1] === "process-info" ? {process_info:{pane_id:"w1:p1",foreground_processes:[{pid:${owned ? 'process.ppid' : '2147483647'}}]}} : undefined;\n`
+      + 'if (!result) { require("node:fs").writeFileSync("unexpected-herdr-command", JSON.stringify(args)); process.exit(1); }\n'
+      + 'process.stdout.write(JSON.stringify({result}));\n', { mode: 0o755 });
     await adapterFor(runtime).wire({ stageRoot: root, installRoot: root,
       sourceRoot: resolve('packages/cli/core-assets'), enabledPlugins: ['harness'], enabledPacks: [],
       source: 'local', marketplaceRepo: 'test/harness', pinVersion: '0.0.0' });
@@ -130,9 +134,14 @@ describe('distributed first-ticket host discovery', () => {
         HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p1', HERDR_SOCKET_PATH: resolve(root, 'unused') },
     });
     expect(result.status).toBe(0);
-    expect(result.stderr.toString()).toBe('');
-    expect(result.stdout.toString()).toContain('void-orchestrate');
-    expect(result.stdout.toString()).toContain('w1:p1');
+    expect(result.stderr.toString()).toBe(owned ? '' : 'herdr-metadata: ownership-unproven\n');
+    if (owned) {
+      expect(result.stdout.toString()).toContain('void-orchestrate');
+      expect(result.stdout.toString()).toContain('w1:p1');
+    } else {
+      expect(result.stdout.toString()).toBe('');
+    }
+    expect(existsSync(resolve(root, 'unexpected-herdr-command'))).toBe(false);
     expect(existsSync(resolve(root, '.local/state/orchestra'))).toBe(false);
   });
 });

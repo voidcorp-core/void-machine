@@ -28,18 +28,14 @@ commit `15d6689` ; les règles de garde restent actualisées lorsqu'elles change
 
 ## Hooks câblés
 
-`packages/core/.claude-plugin/plugin.json` déclare 19 entrées de hook réparties ainsi :
+`packages/core/.claude-plugin/plugin.json` et `packages/core/codex/hooks.json`
+portent le câblage natif des événements. Leurs listes sont la référence pour les
+entrées et matchers ; les hooks de cycle de vie restent distincts de l'enforcement.
 
-| Événement | Entrées | Matchers |
-|---|---:|---|
-| `PreToolUse` | 13 | 11 × `Edit\|Write`, 1 × `Bash`, 1 × `*` |
-| `PostToolUse` | 3 | 1 × `Edit\|Write`, 2 × `*` |
-| `SessionStart` | 1 | aucun |
-| `Stop` | 2 | aucun |
-
-Les 11 règles `enforce` câblées en `PreToolUse` : `tdd-order`, `no-any`, `no-as-cast`, `no-console`, `no-null`, `no-focused-test`, `boundary-direction`, `protected-file`, `dangerous-command`, `secret-content`, `control-character`. Preuve : `packages/core/.claude-plugin/plugin.json`.
-
-La 13e entrée `PreToolUse` (matcher `*`) appelle `activation`, non `enforce`. Preuve : `packages/core/.claude-plugin/plugin.json`.
+Les quatre règles `enforce` conservées en `PreToolUse` sont `protected-file`,
+`dangerous-command`, `secret-content` et `control-character`. Les contrôles de
+syntaxe et de sélection des tests passent dans la validation configurée du projet.
+`activation` reste une observation distincte, non une règle `enforce`.
 
 Toutes les entrées invoquent le même exécutable, `packages/core/hooks/_void-hook.mjs`. Preuve : champ `command` de chaque entrée dans `packages/core/.claude-plugin/plugin.json`.
 
@@ -99,7 +95,10 @@ Exécuté sur `ubuntu-latest`, `macos-latest`, `windows-latest` : installation h
 
 ### CI — job `enforce` (`.github/workflows/void-enforce.yml`)
 
-Rejoue quatre règles via `packages/core/enforce/ci-enforce.sh` : `protected-file` (ligne 136), `secret-content` (157), `tdd-order` (168), `boundary-direction` (174). `protected-file` s'exécute sur le chemin ; les trois autres sur les lignes ajoutées du diff.
+Rejoue `protected-file` sur les chemins et `secret-content` sur le contenu ajouté
+via `packages/core/enforce/ci-enforce.sh`. La validation des imports, des types et
+de la sélection des tests appartient aux commandes configurées du projet ; le
+workflow ne prétend pas configurer un linter chez les consommateurs.
 
 `dangerous-command` n'est pas rejouée sur le diff. Le fichier en donne la raison : « A destructive PATTERN committed into a file is a weak signal that self-matches the harness's own detector, security docs, and test fixtures » — `packages/core/enforce/ci-enforce.sh:184-188`.
 

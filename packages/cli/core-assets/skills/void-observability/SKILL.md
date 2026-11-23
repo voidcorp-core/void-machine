@@ -24,11 +24,14 @@ logger.info({ userId, action, durationMs }, 'user_action');
 
 Structured logs are queryable. String-interpolated logs are searchable at best.
 
-The companion hook `no-console-log-grep` blocks `console.log` / `console.error` / `console.warn` in business code.
+The existing project linter must reject console calls in application code during validation. In this repository Biome `noConsole` is an error. Limit exceptions to legitimate CLI/script output or the logger's explicit transport implementation; do not exempt an application or all tests. Keep error reporting when replacing a console call.
 
-### Use `@repo/core/logger` (pino)
+### Use the project logger
 
-Provided by `pack-monorepo`. Business code imports `logger`, not pino directly — the adapter pattern lets us swap the backend later without business-code edits.
+Reuse the logger the project already owns. `@repo/core/logger` below is an example
+for a project with that module, not an asset installed by `pack-monorepo`. Keep
+transport-specific output at that boundary; do not add a logging dependency just
+to satisfy an import convention.
 
 ```typescript
 import { logger } from '@repo/core/logger';
@@ -204,11 +207,13 @@ Defense in depth. The discipline says "don't log it." The config says "even if y
 
 ---
 
-## Companion hooks
+## Validation
 
-- `no-console-log-grep` (pre-commit) — fails if `console.log` / `console.error` / `console.warn` in staged business code. Allowed in `scripts/`, `**/*.test.{ts,tsx}` (with explicit allowlist marker). See `../../hooks/`.
-
-(Sentry / pino / OTel integration code lives in `pack-nextjs` because stack-specific.)
+Configure and verify the corresponding rule in the consumer's existing linter,
+including blocking severity and application-path coverage. `init` does not install
+this repository's Biome configuration. Report missing validation coverage without
+claiming it is active or stopping unrelated work. Logging secrets remains a
+separate security concern; using a logger alone does not make its payload safe.
 
 ---
 

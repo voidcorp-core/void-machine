@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci-enforce — replay the void-machine enforcement floor over a PR diff.
 #
-# Critical path, secret-content, TDD and boundary rules execute through the SAME
+# Protected-path and secret-content rules execute through the SAME
 # portable Node bundle as local PreToolUse hooks.
 #
 # FAIL-CLOSED (DEV-393, the #62-64 class): a missing prerequisite or an
@@ -131,14 +131,7 @@ while IFS= read -r -d '' status; do
     fi
   fi
 
-  # TDD judges final source even when the diff only removes lines.
-  if tdd=$("$NODE_BIN" "$RUNNER" enforce-ci tdd-order "$path" </dev/null 2>&1); then
-    [[ -z "$tdd" ]] || printf 'void-enforce: %s\n' "${tdd//$'\n'/ }"
-  else
-    annotate error "$path" 1 "${tdd//$'\n'/ }"
-  fi
-
-  # 2+3) Content checks over the ADDED lines, with real line numbers.
+  # 2) Secret checks over the ADDED lines, with real line numbers.
   diff_added=$(added_lines "$path") || fail_closed "git diff failed for '${path}' (cannot scan its content)"
   [[ -z "$diff_added" ]] && continue
   LNOS=()
@@ -158,16 +151,6 @@ while IFS= read -r -d '' status; do
     [[ "$FOUND" -eq 1 ]] || annotate error "$path" 1 "secret scan failed closed: ${hits//$'\n'/ }"
   fi
 
-  if hits=$(printf '%s' "$added_text" | "$NODE_BIN" "$RUNNER" enforce-ci boundary-direction "$path" 2>&1); then :; else
-    FOUND=0
-    while IFS= read -r hit; do
-      [[ "$hit" =~ ^-\ .+:([0-9]+)\ \-\>\ (.+)$ ]] || continue
-      FOUND=1
-      rel="${BASH_REMATCH[1]}"
-      annotate error "$path" "${LNOS[rel - 1]:-1}" "forbidden @repo/* import: ${BASH_REMATCH[2]}"
-    done <<<"$hits"
-    [[ "$FOUND" -eq 1 ]] || annotate error "$path" 1 "boundary scan failed closed: ${hits//$'\n'/ }"
-  fi
   # NB: checks_dangerous_command (the local Bash runtime guard) is deliberately
   # NOT replayed over the diff. A destructive PATTERN committed into a file is a
   # weak signal that self-matches the harness's own detector, security docs, and

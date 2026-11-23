@@ -10,14 +10,14 @@ const entry = (type: 'skill' | 'hook' | 'specialist', name: string): CatalogEntr
   invocations: [], triggers: [], relatedIds: [],
 });
 const catalog = [entry('skill', 'void-tdd'), entry('skill', 'void-debug'),
-  entry('hook', 'tdd-guard'), entry('specialist', 'test-qa-engineer')];
+  entry('hook', 'secret-in-content'), entry('specialist', 'test-qa-engineer')];
 function event(seq: number, kind: string, subject: string, extra: Partial<CanonicalEvent> = {}): CanonicalEvent {
   return { schemaVersion: 1, eventId: `evt_0000000${seq}`, seq, missionId,
     ts: '2026-10-23T10:00:00.000Z', source: 'runtime:claude', kind, subject,
     correlationId: missionId, payload: {}, ...extra };
 }
 const project = (events: readonly CanonicalEvent[]) => projectMissionUsage({
-  missionId, events, catalog, hookSubjects: { 'hook:tdd-order': 'tdd-guard' },
+  missionId, events, catalog, hookSubjects: { 'hook:secret-content': 'secret-in-content' },
 });
 
 describe('mission usage observations', () => {
@@ -28,13 +28,13 @@ describe('mission usage observations', () => {
       event(3, 'specialist.requested', 'core:test-qa-engineer'),
       event(4, 'specialist.started', 'core:test-qa-engineer'),
       event(5, 'specialist.completed', 'core:test-qa-engineer'),
-      event(6, 'hook.completed', 'hook:tdd-order', { payload: { status: 'skipped' } }),
-      event(7, 'hook.completed', 'hook:tdd-order', { payload: { status: 'blocked' } }),
-      event(8, 'hook.completed', 'hook:tdd-order', { payload: { status: 'ok' } }),
+      event(6, 'hook.completed', 'hook:secret-content', { payload: { status: 'skipped' } }),
+      event(7, 'hook.completed', 'hook:secret-content', { payload: { status: 'blocked' } }),
+      event(8, 'hook.completed', 'hook:secret-content', { payload: { status: 'ok' } }),
     ]);
     expect(report.rows.find(row => row.name === 'void-tdd')).toMatchObject({ observedHits: 1, outcomes: { ok: 1 } });
     expect(report.rows.find(row => row.name === 'test-qa-engineer')).toMatchObject({ observedHits: 1, outcomes: { completed: 1 } });
-    expect(report.rows.find(row => row.name === 'tdd-guard')).toMatchObject({ observedHits: 3, outcomes: { skipped: 1, blocked: 1, ok: 1 } });
+    expect(report.rows.find(row => row.name === 'secret-in-content')).toMatchObject({ observedHits: 3, outcomes: { skipped: 1, blocked: 1, ok: 1 } });
     expect(report.rows.find(row => row.name === 'void-debug')).toMatchObject({ observedHits: 0 });
   });
 
@@ -86,12 +86,12 @@ describe('mission usage observations', () => {
   });
 
   it('accepts only explicit separately scoped events and deduplicates source plus event ID', () => {
-    const direct = event(1, 'hook.completed', 'hook:tdd-order', { payload: { status: 'ok' } });
+    const direct = event(1, 'hook.completed', 'hook:secret-content', { payload: { status: 'ok' } });
     const linked = { ...direct, missionId: 'mis_source00000001' };
     const report = projectMissionUsage({ missionId, events: [direct, linked], catalog,
-      hookSubjects: { 'hook:tdd-order': 'tdd-guard' },
+      hookSubjects: { 'hook:secret-content': 'secret-in-content' },
       linkedScopes: [{ missionId: linked.missionId, events: [linked, linked] }] });
-    expect(report.rows.find(row => row.name === 'tdd-guard')?.observedHits).toBe(2);
+    expect(report.rows.find(row => row.name === 'secret-in-content')?.observedHits).toBe(2);
     expect(linked.missionId).toBe('mis_source00000001');
   });
 

@@ -36,21 +36,21 @@ const codexPatch = (body: readonly string[]) => ({
   tool_input: { input: ['*** Begin Patch', ...body, '*** End Patch'].join('\n') },
 });
 
-describe('no-console-log-grep — Claude / Codex parity', () => {
-  it('blocks a console.log on the Claude Write shape', () => {
-    const { code, stderr } = runHook('no-console-log-grep.sh', claudeWrite('src/a.ts', 'console.log("x")\n'));
+describe('secret-in-content — Claude / Codex parity', () => {
+  it('blocks a secret on the Claude Write shape', () => {
+    const { code, stderr } = runHook('secret-in-content.sh', claudeWrite('src/a.ts', `token = 'ghp_${'a'.repeat(36)}'\n`));
     expect(code).toBe(2);
-    expect(stderr).toMatch(/console\.\* in src\/a\.ts/);
+    expect(stderr).toMatch(/src\/a\.ts/);
   });
 
   it('allows clean content on the Claude Write shape', () => {
-    expect(runHook('no-console-log-grep.sh', claudeWrite('src/a.ts', 'const x = 1\n')).code).toBe(0);
+    expect(runHook('secret-in-content.sh', claudeWrite('src/a.ts', 'const x = 1\n')).code).toBe(0);
   });
 
-  it('blocks a console.log ADDED by a Codex apply_patch', () => {
+  it('blocks a secret ADDED by a Codex apply_patch', () => {
     const { code, stderr } = runHook(
-      'no-console-log-grep.sh',
-      codexPatch(['*** Update File: src/b.ts', '+console.log("x")']),
+      'secret-in-content.sh',
+      codexPatch(['*** Update File: src/b.ts', `+token = 'ghp_${'a'.repeat(36)}'`]),
     );
     expect(code).toBe(2);
     expect(stderr).toMatch(/src\/b\.ts/);
@@ -58,30 +58,30 @@ describe('no-console-log-grep — Claude / Codex parity', () => {
 
   it('blocks when the violation is in the SECOND file of a multi-file patch', () => {
     const { code, stderr } = runHook(
-      'no-console-log-grep.sh',
+      'secret-in-content.sh',
       codexPatch([
         '*** Update File: src/clean.ts',
         '+const ok = 1',
         '*** Update File: src/dirty.ts',
-        '+console.log("x")',
+        `+token = 'ghp_${'a'.repeat(36)}'`,
       ]),
     );
     expect(code).toBe(2);
     expect(stderr).toMatch(/src\/dirty\.ts/);
   });
 
-  it('allows a patch that only REMOVES a console.log', () => {
+  it('allows a patch that only REMOVES a secret', () => {
     const { code } = runHook(
-      'no-console-log-grep.sh',
-      codexPatch(['*** Update File: src/c.ts', '-console.log("gone")', '+const kept = 1']),
+      'secret-in-content.sh',
+      codexPatch(['*** Update File: src/c.ts', `-token = 'ghp_${'a'.repeat(36)}'`, '+const kept = 1']),
     );
     expect(code).toBe(0);
   });
 
-  it('allows an untouched context line that contains console.log', () => {
+  it('allows an untouched context line that contains secret', () => {
     const { code } = runHook(
-      'no-console-log-grep.sh',
-      codexPatch(['*** Update File: src/d.ts', ' console.log("context")', '+const added = 1']),
+      'secret-in-content.sh',
+      codexPatch(['*** Update File: src/d.ts', ` token = 'ghp_${'a'.repeat(36)}'`, '+const added = 1']),
     );
     expect(code).toBe(0);
   });

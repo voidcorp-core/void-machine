@@ -1,3 +1,4 @@
+import { logger } from '../logger.js';
 import type {
   CostReport,
   Finding,
@@ -56,7 +57,7 @@ export async function resolveStudioBoot(): Promise<StudioBoot> {
     } catch (err) {
       // Served from an http origin but the data fetch failed (server down, malformed payload).
       // Surface it, then fall back to the build-time snapshot so the studio still renders.
-      console.warn('graph-studio: server-fed data unavailable, using build-time snapshot', err); // allow-console: browser studio has no logger
+      logger.warn('graph-studio.snapshot-fallback', err);
     }
   }
   const configured = import.meta.env.VITE_LIVE_URL as string | undefined;

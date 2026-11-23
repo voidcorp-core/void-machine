@@ -42,13 +42,21 @@ The release lane still runs `pnpm verify` once on the integrated result.
 checked-out SHA and exact argv. The final step rejects a missing, duplicate, stale or red report.
 Performance benchmarks remain explicit observations through `pnpm verify --observations`; shared
 PR runners do not authorize correctness from wall-clock thresholds.
-Install conformance proves the packed syntax worker by the identity the runtime verifies and two
-exact answers; its repeated latency campaign is printed as the `syntax-worker-latency` observation
-(`complete` or `latency-anomaly`) with every sample kept. Only a measured timeout is an anomaly; a
-wrong answer, a launch error or an incomplete campaign still fails consumer conformance.
-The campaign runs in its own `latency` suite against the same verified tarball, with the same
-120-second process budget. Its 180 samples never consume the functional install suite's budget;
-installation still verifies each runtime's worker identity and exact answers.
+Install conformance proves the packed runner and native runtime wiring, preserves
+user doctrine and adjacent files, and exercises update and receipt recovery.
+The retired syntax worker has no installation prerequisite or latency campaign.
+
+`pnpm lint` uses this repository's Biome 2.4.16 configuration. The explicit-any,
+console, undeclared-dependency and focused/skipped-test rules are errors. Run the
+configured checks after coherent changes, before accepting test evidence; do not
+wait until the final handoff to discover violations. Tests containing intentional
+invalid source should use data strings or narrowly justified fixture handling.
+CLI output exceptions must not exempt application logging.
+The repository configuration is not a consumer preset installed by `init`.
+Consumers configure and verify equivalents in their existing toolchain; missing
+coverage is reported honestly, without a new checker or a general work veto.
+See [test evidence and validation](HOOK-TEST-EVIDENCE.md) for scope and limitations.
+
 Repeated reliability stress is not a laptop gate. `.github/workflows/test-certification.yml` runs
 twenty seeded fast attempts and ten seeded complete attempts weekly or on explicit dispatch, with
 fixed worker budgets and exact-SHA JSON reports. A failure stops the campaign and remains red; the

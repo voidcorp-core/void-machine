@@ -76,14 +76,14 @@ Every implementation step states its mode. Examples:
 - **souple** — glue at integration boundary covered by higher-level test, framework wiring
 - **exploratory** — spike, POC, throwaway script
 
-The declared mode flows into `tdd-guard` enforcement at execution time. If mode is missing, the plan is incomplete.
+The declared mode guides testing at execution time. Observed test results establish evidence; no sibling-file or declaration write gate proves the mode was followed. If mode is missing, the plan is incomplete.
 
 ### Verification gate
 
 Each step's gate states which checks must pass before moving on. Examples:
 
 - `tsc --noEmit && vitest run --filter checkoutCart`
-- `pre-commit hooks dry-run on staged set` (composes with `tdd-guard`, `tigerstyle-check`, `no-any-grep`, etc.)
+- the project's configured lint command for the affected code and tests
 - the configured mutation threshold, when the project has a mutation runner
 
 The gate is observable. The user sees the output before the next step begins.

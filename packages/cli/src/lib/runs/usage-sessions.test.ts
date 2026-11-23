@@ -16,7 +16,7 @@ afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, {
 const inspect = (root: string, id = target) => inspectMission(root, id, { dependencies: {} }, { quarantine: false });
 async function hook(root: string) {
   return writeSequencedEvent({ root, missionId: source, draft: { source: 'runtime:codex',
-    kind: 'hook.completed', subject: 'hook:tdd-order', correlationId: source, payload: { status: 'ok' } } });
+    kind: 'hook.completed', subject: 'hook:secret-content', correlationId: source, payload: { status: 'ok' } } });
 }
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'usage-binding-')); roots.push(root);
@@ -90,7 +90,7 @@ describe('prospective explicit usage intervals', () => {
   it.each([false, true])('releases the losing source at concurrent capacity, or exposes bounded cleanup (close failure=%s)', async failClose => {
     const root = await fixture();
     const seed = async (id: string) => writeSequencedEvent({ root, missionId: id, draft: {
-      source: 'runtime:codex', kind: 'hook.completed', subject: 'hook:tdd-order',
+      source: 'runtime:codex', kind: 'hook.completed', subject: 'hook:secret-content',
       correlationId: id, payload: { status: 'ok' } } });
     for (let index = 0; index < 31; index += 1) {
       const id = `mis_seed_source_${index}`;

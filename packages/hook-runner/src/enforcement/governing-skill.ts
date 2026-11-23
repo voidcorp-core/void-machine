@@ -20,19 +20,12 @@ import type { RuleName } from './runner.js';
  * the compiled hook, and a test holds the two together so they cannot drift.
  */
 const GOVERNING_SKILL = {
-  'boundary-direction': 'void-hexagonal-architecture',
   // The remedy the refusal teaches -- build the byte rather than type it -- is a
   // fixture practice, and void-testing is the only skill that already carries it.
   'control-character': 'void-testing',
   'dangerous-command': 'void-security-guidance',
-  'no-any': 'void-typescript-strict',
-  'no-as-cast': 'void-typescript-strict',
-  'no-console': 'void-observability',
-  'no-focused-test': 'void-testing',
-  'no-null': 'void-functional',
   'protected-file': 'void-security-guidance',
   'secret-content': 'void-security-guidance',
-  'tdd-order': 'void-tdd',
 } satisfies Record<RuleName, string>;
 
 /**
@@ -41,17 +34,10 @@ const GOVERNING_SKILL = {
  * instead of a cast asserting it.
  */
 export const RULE_NAMES = [
-  'boundary-direction',
   'control-character',
   'dangerous-command',
-  'no-any',
-  'no-as-cast',
-  'no-console',
-  'no-focused-test',
-  'no-null',
   'protected-file',
   'secret-content',
-  'tdd-order',
 ] as const satisfies readonly RuleName[];
 
 /** The skill whose doctrine a refusal of `rule` comes from. */

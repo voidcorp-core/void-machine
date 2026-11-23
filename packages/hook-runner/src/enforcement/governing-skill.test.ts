@@ -39,21 +39,18 @@ describe('governingSkill', () => {
     }
   });
 
-  it('sends the two type rules to the same doctrine', () => {
-    expect(governingSkill('no-any')).toBe('void-typescript-strict');
-    expect(governingSkill('no-as-cast')).toBe('void-typescript-strict');
-  });
+
 });
 
 describe('withGoverningSkill', () => {
   it('appends the doctrine as one clause, keeping the refusal readable at a blocked keystroke', () => {
-    expect(withGoverningSkill('tdd-order', 'production edit requires a test')).toBe(
-      'production edit requires a test (doctrine: the void-tdd skill)',
+    expect(withGoverningSkill('secret-content', 'secret rejected')).toBe(
+      'secret rejected (doctrine: the void-security-guidance skill)',
     );
   });
 
   it('names the doctrine once, never twice', () => {
-    const message = withGoverningSkill('no-null', 'null is not the absence of a value');
+    const message = withGoverningSkill('secret-content', 'secret rejected');
     expect(message.match(/doctrine:/g)).toHaveLength(1);
   });
 });

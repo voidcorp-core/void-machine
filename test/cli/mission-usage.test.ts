@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { adaptRuntimeInput } from '../../packages/hook-runner/src/runtime-input.js';
-import type { CanonicalEvent } from '@voidcorp/mission-engine';
+import type { CanonicalEvent } from '../../packages/mission-engine/src/index.js';
 
 const CLI = resolve(__dirname, '../../packages/cli/bin/void-machine.mjs');
 const id = 'mis_0123456789abcdef';
@@ -23,7 +23,7 @@ function fixture() {
   writeFileSync(log, [event(1, 'mission.started', 'mission', { title: 'Example', mode: 'team' }),
     event(2, 'specialist.started', 'core:devex-docs-engineer', { contextId: '/root/devex',
       stage: 'post-implementation', reviewRound: 1, contractVersion: 1, inputHash: `sha256:${'a'.repeat(64)}` }),
-    event(3, 'hook.completed', 'hook:tdd-order', { status: 'skipped' }),
+    event(3, 'hook.completed', 'hook:secret-content', { status: 'skipped' }),
   ].map(value => JSON.stringify(value)).join('\n') + '\n');
   return { root, log, directory };
 }
@@ -42,7 +42,7 @@ describe('mission usage CLI', () => {
     const document = JSON.parse(result.stdout);
     expect(document.status).toBe(JSON.parse(ordinary.stdout).status);
     expect(JSON.parse(ordinary.stdout)).not.toHaveProperty('usage');
-    expect(document.usage.rows.find((row: { name: string }) => row.name === 'tdd-guard'))
+    expect(document.usage.rows.find((row: { name: string }) => row.name === 'secret-in-content'))
       .toMatchObject({ observedHits: 1, outcomes: { skipped: 1 } });
     expect(document.usage.rows.find((row: { name: string }) => row.name === 'devex-docs-engineer').observedHits).toBe(1);
     expect(document.usage.rows.find((row: { name: string }) => row.name === 'void-tdd').observedHits).toBe('unknown');
@@ -77,7 +77,7 @@ describe('mission usage CLI', () => {
     const hook = (seq: number): CanonicalEvent => ({ schemaVersion: 1, seq,
       eventId: `evt_native_hook_${seq}`, missionId: source, correlationId: source,
       ts: '2026-10-23T10:00:00.000Z', source: 'runtime:codex', kind: 'hook.completed',
-      subject: 'hook:tdd-order', payload: { status: 'ok' } });
+      subject: 'hook:secret-content', payload: { status: 'ok' } });
     writeFileSync(path, JSON.stringify(hook(1)) + '\n');
     const command = (...args: string[]) => spawnSync(process.execPath,
       [CLI, 'mission', ...args, '--json'], { cwd: root, encoding: 'utf8', timeout: 15000 });
@@ -93,7 +93,7 @@ describe('mission usage CLI', () => {
     const report = JSON.parse(result.stdout);
     expect(report.status).toBe(before.status);
     expect(report.usage.links[0].status).toBe('closed');
-    expect(report.usage.rows.find((row: { name: string }) => row.name === 'tdd-guard'))
+    expect(report.usage.rows.find((row: { name: string }) => row.name === 'secret-in-content'))
       .toMatchObject({ observedHits: 2, outcomes: { ok: 1, skipped: 1 } });
     expect(report.usage.rows.find((row: { type: string }) => row.type === 'advisory'))
       .toMatchObject({ name: 'security-engineer', observedHits: 1, runtimeHits: { codex: 1 } });

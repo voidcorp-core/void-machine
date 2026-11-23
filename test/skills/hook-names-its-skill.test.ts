@@ -53,7 +53,6 @@ function skillExists(name: string): boolean {
  */
 const UNDECLARED_BY_DESIGN = [
   'dangerous-command',
-  'no-focused-test',
   'protected-file',
   'secret-content',
 ] as const;
@@ -136,14 +135,14 @@ describe('every enforcement rule names the doctrine it enforces', () => {
     const root = fileURLToPath(ROOT).replace(/\/$/, '');
     const payload = JSON.stringify({
       tool_name: 'Write',
-      tool_input: { file_path: `${root}/packages/cli/src/probe.ts`, content: 'const x: any = 1;' },
+      tool_input: { file_path: `${root}/packages/cli/src/probe.ts`, content: `const token = 'ghp_${'a'.repeat(36)}';` },
     });
-    const run = spawnSync(process.execPath, [bundle, 'enforce', 'no-any', 'claude'], {
+    const run = spawnSync(process.execPath, [bundle, 'enforce', 'secret-content', 'claude'], {
       input: payload,
       encoding: 'utf8',
       env: { ...process.env, VOID_PROJECT_ROOT: root },
     });
     expect(run.status).toBe(2);
-    expect(run.stderr).toContain('typescript-strict');
+    expect(run.stderr).toContain('security-guidance');
   });
 });

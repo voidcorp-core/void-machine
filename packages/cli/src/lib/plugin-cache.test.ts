@@ -4,7 +4,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,8 +17,8 @@ const MANIFEST = {
     PreToolUse: [
       {
         hooks: [
-          { command: `node ${ROOT}/hooks/_void-hook.mjs enforce tdd-order` },
-          { command: 'bash hooks/no-any-grep.sh' },
+          { command: `node ${ROOT}/hooks/_void-hook.mjs enforce secret-content` },
+          { command: 'bash hooks/secret-in-content.sh' },
         ],
       },
     ],
@@ -31,7 +30,7 @@ describe('wiredHooks', () => {
   it('extracts distinct shell and Node hook assets, sorted', () => {
     expect(wiredHooks(MANIFEST)).toEqual([
       'hooks/_void-hook.mjs',
-      'hooks/no-any-grep.sh',
+      'hooks/secret-in-content.sh',
       'hooks/sessionstart-context.sh',
     ]);
   });
@@ -46,11 +45,7 @@ function pluginFixture(hooks: Record<string, { exec: boolean }>): string {
   mkdirSync(join(dir, 'hooks'), { recursive: true });
   for (const [name, { exec }] of Object.entries(hooks)) {
     const abs = join(dir, 'hooks', name);
-    const workerBytes = '#!/usr/bin/env bash\nexit 0\n';
-    const header = name === '_void-hook.mjs' ? `// syntax-worker: ${JSON.stringify({
-      sha256: createHash('sha256').update(workerBytes).digest('hex'), bytes: Buffer.byteLength(workerBytes),
-    })}\n` : '';
-    writeFileSync(abs, header + workerBytes);
+    writeFileSync(abs, '#!/usr/bin/env bash\nexit 0\n');
     chmodSync(abs, exec ? 0o755 : 0o644);
   }
   return dir;
@@ -59,9 +54,8 @@ function pluginFixture(hooks: Record<string, { exec: boolean }>): string {
 describe('hookHealthIssues', () => {
   it('reports nothing when every wired hook exists and is executable', () => {
     const dir = pluginFixture({
-      '_syntax-worker.cjs': { exec: false },
       '_void-hook.mjs': { exec: false },
-      'no-any-grep.sh': { exec: true },
+      'secret-in-content.sh': { exec: true },
       'sessionstart-context.sh': { exec: true },
     });
     try {
@@ -75,7 +69,7 @@ describe('hookHealthIssues', () => {
     const dir = pluginFixture({ '_void-hook.mjs': { exec: false }, 'sessionstart-context.sh': { exec: true } });
     try {
       const issues = hookHealthIssues(dir, MANIFEST);
-      expect(issues.some((i) => i.includes('no-any-grep.sh') && i.includes('missing'))).toBe(true);
+      expect(issues.some((i) => i.includes('secret-in-content.sh') && i.includes('missing'))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -84,7 +78,7 @@ describe('hookHealthIssues', () => {
   it('flags a present-but-non-executable hook', () => {
     const dir = pluginFixture({
       '_void-hook.mjs': { exec: false },
-      'no-any-grep.sh': { exec: true },
+      'secret-in-content.sh': { exec: true },
       'sessionstart-context.sh': { exec: false },
     });
     try {

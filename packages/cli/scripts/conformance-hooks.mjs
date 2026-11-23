@@ -138,7 +138,7 @@ async function exerciseRuntime(runner, fixture, missionId, runtime) {
     input: JSON.stringify(payload),
     timeoutMs: HOOK_TIMEOUT_MS,
   });
-  await run(process.execPath, [runner, 'enforce', 'no-console', runtime], {
+  await run(process.execPath, [runner, 'enforce', 'secret-content', runtime], {
     cwd: fixture,
     env,
     input: JSON.stringify(payload),
@@ -194,7 +194,7 @@ function manifestHook(manifest, suffix) {
 async function exerciseCodexManifest(fixture, mode) {
   const manifest = JSON.parse(await readFile(join(fixture, '.codex', 'hooks.json'), 'utf8'));
   const blockHook = manifestHook(manifest, ' enforce dangerous-command codex');
-  const allowHook = manifestHook(manifest, ' enforce no-console codex');
+  const allowHook = manifestHook(manifest, ' enforce secret-content codex');
   const nested = join(fixture, 'src', 'nested');
   await mkdir(nested, { recursive: true });
   const env = conformanceFixtureEnvironment(fixture, {

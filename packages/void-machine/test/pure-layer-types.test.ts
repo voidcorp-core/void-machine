@@ -4,7 +4,7 @@ import ts from '@typescript/typescript6';
 import { expect, it } from 'vitest';
 
 const packageRoot = resolve(import.meta.dirname, '..');
-const escape = join(packageRoot, 'test', 'fixtures', 'pure-layer-escape.ts');
+const fixturePath = join(packageRoot, 'test', 'fixtures', 'pure-layer-escape.ts');
 
 function pureConfig(): ts.ParsedCommandLine {
   const path = join(packageRoot, 'tsconfig.pure.json');
@@ -30,9 +30,9 @@ it('types the pure layers without any host global', () => {
 });
 
 it('refuses every host global in a pure-layer source', () => {
-  const program = ts.createProgram([escape], pureConfig().options);
+  const program = ts.createProgram([fixturePath], pureConfig().options);
   const messages = ts.getPreEmitDiagnostics(program)
-    .filter((diagnostic) => diagnostic.file?.fileName === escape)
+    .filter((diagnostic) => diagnostic.file?.fileName === fixturePath)
     .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
   for (const name of escapes) {
     expect(messages.some((message) => message.includes(`'${name}'`)), name).toBe(true);

@@ -34,7 +34,6 @@ async function temporaryRoot(name: string): Promise<string> {
 
 const copyCommittedRunner: BuildHookBundle = async ({ outfile }) => {
   await cp(join(REPO, 'packages/core/hooks/_void-hook.mjs'), outfile);
-  await cp(join(REPO, 'packages/core/hooks/_syntax-worker.cjs'), join(outfile, '..', '_syntax-worker.cjs'));
 };
 
 afterEach(async () => {

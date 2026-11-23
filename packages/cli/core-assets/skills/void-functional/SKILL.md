@@ -178,29 +178,17 @@ The companion `void-code-review` flags mutation in domain code without justifica
 
 ---
 
-## No `null`
+## Model absence explicitly
 
-`null` duplicates the optionality concept and creates `null | undefined` ambiguity. Banned.
+Choose the representation that matches the contract and handle it exhaustively:
 
-Use `T | undefined` with `exactOptionalPropertyTypes` semantics:
+- `T | undefined` or an optional property for an absent setting or field;
+- `T | null` when explicit absence is part of an API, persistence or domain contract;
+- `Option<T>` when named `some`/`none` cases clarify domain behavior.
 
-```typescript
-type User = { id: UserId; email: Email; nickname?: string };
-//   nickname property may be absent OR present (with a value), never explicitly undefined or null
-```
-
-Or `Option<T>` (also in `@voidcorp/core`):
-
-```typescript
-type Option<T> = { kind: 'some'; value: T } | { kind: 'none' };
-```
-
-When to choose:
-
-- `T | undefined` for "may not be set yet" / optional configuration / props
-- `Option<T>` for domain optionality where you want to discriminate explicitly (and prevent forgetting to handle the `none` case via exhaustive switch)
-
-The companion hook `no-null-grep` warns on `null` literals in domain code.
+Avoid unexplained `null | undefined` ambiguity. Preserve strict typing and
+`exactOptionalPropertyTypes`; there is no universal lexical ban on `null` and no
+annotation required to use a legitimate nullable contract.
 
 ---
 
@@ -241,9 +229,9 @@ Rejected as default. Available as opt-in via a future pack when a project needs 
 
 Reject as default vocabulary. Use plain TS function parameters and the minimal `Result` / `Option` / `pipe` helpers. Consumers reaching for richer combinators adopt fp-ts or Effect-TS as a pack.
 
-### `null`
+### Ambiguous absence
 
-Banned in domain code.
+Do not mix missing, unknown and explicitly empty values without a defined contract.
 
 ### Throwing for expected domain failures
 
@@ -259,11 +247,10 @@ Inject ports.
 
 ---
 
-## Companion hooks
+## Verification
 
-- **`no-null-grep`** (pre-commit) — warn on `null` literal in domain code (`config.paths.business`). Tag `// allow-null: <reason>` to suppress.
-
-(Most functional rules surface via `void-typescript-strict` enforcement and `void-code-review` flags.)
+Typechecking, behavioral tests and review verify absence handling and functional
+boundaries. A literal scan cannot establish those properties.
 
 ---
 

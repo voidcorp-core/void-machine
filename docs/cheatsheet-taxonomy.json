@@ -61,7 +61,8 @@
         "void-ticket",
         "void-implement",
         "void-merge",
-        "void-autopilot", "void-orchestrate",
+        "void-autopilot",
+        "void-orchestrate",
         "void-retrospective",
         "void-make-pdf"
       ]
@@ -91,11 +92,9 @@
       }
     },
     {
-      "title": "Tests and TDD",
-      "blurb": "The order of work, enforced rather than recommended.",
+      "title": "Review and typecheck",
+      "blurb": "Review evidence and compiler checks around delivery.",
       "hooks": {
-        "tdd-guard": "Refuses production code with no failing test behind it, at the strictness the project declared.",
-        "no-only-no-skip": "Refuses a focused or skipped test reaching a commit, where it would silently shrink the suite.",
         "pre-PR-review-evidence": "Requires the review evidence a pull request claims to have.",
         "stop-typecheck": "Typechecks at the end of a session, so a green run cannot end on a broken tree."
       }
@@ -104,9 +103,6 @@
       "title": "Type safety",
       "blurb": "The escape hatches that quietly undo a strict configuration.",
       "hooks": {
-        "no-any-grep": "Refuses a new `any`, the fastest way to lose every guarantee downstream.",
-        "no-as-cast-grep": "Refuses an `as` cast that asserts what the compiler was about to prove.",
-        "no-null-grep": "Refuses a bare `null` where the project models absence explicitly.",
         "tsc-noemit-precommit": "Runs the typechecker before the commit lands, not after CI says so."
       }
     },
@@ -114,7 +110,6 @@
       "title": "Cleanliness and refactor",
       "blurb": "Keeping the diff readable and the vocabulary stable.",
       "hooks": {
-        "no-console-log-grep": "Refuses a `console.log` in committed code; the project logger exists for this.",
         "auto-format": "Formats on write, so formatting never appears in a behavioural diff.",
         "ubiquitous-language-lint": "Refuses a name that contradicts the domain vocabulary the project settled on.",
         "refactor-named-grep": "Requires a refactor to name the Fowler transformation it applies.",
@@ -134,7 +129,6 @@
       "title": "Architecture, migrations and cost",
       "blurb": "The changes whose damage only shows up later.",
       "hooks": {
-        "boundary-direction-check": "Refuses an import of a workspace package the importing package does not declare in its own package.json.",
         "migration-lint": "Refuses a migration that cannot run without downtime.",
         "migration-pr-template": "Requires a migration pull request to carry its rollback and backfill plan.",
         "llm-cost-precommit": "Flags a model call whose cost profile changed without anyone deciding it.",

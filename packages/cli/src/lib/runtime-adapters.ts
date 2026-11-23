@@ -1,4 +1,3 @@
-import { syntaxWorkerHealth } from './syntax-worker-health.js';
 // The runtime seam. The harness authors ONE doctrine and compiles it to each
 // agent runtime through an adapter. Core commands (init / runtime add / doctor)
 // iterate the adapters for detect / prerequisites / wire / doctorChecks rather
@@ -391,16 +390,12 @@ const claudeAdapter: RuntimeAdapter = {
     const localAgent = join(root, '.claude', 'agents', 'doctrine-critic.md');
     if (localSettings) {
       installed = await safeRegularFile(localRunner)
-        && await safeRegularFile(join(root, '.void', 'hooks', '_syntax-worker.cjs'))
         && await anyStagedSkill(join(root, '.claude', 'skills'))
         && await safeRegularFile(localAgent);
       if (installed) {
         activationHook = localRunner;
         agentsRoot = join(root, '.claude', 'agents');
       }
-      const syntaxIssue = syntaxWorkerHealth(join(root, '.void', 'hooks'));
-      checks.push({ name: 'syntax worker', ok: syntaxIssue === undefined,
-        message: syntaxIssue ?? 'worker matches the installed hook', fix: `${PRODUCT_COMMAND} update` });
       checks.push({
         name: 'local assets',
         ok: installed,
@@ -451,10 +446,9 @@ const claudeAdapter: RuntimeAdapter = {
       check.name === 'settings.json'
       || check.name === 'CLAUDE.md'
       || check.name === 'claude agents'
-      || (localSettings && check.name === 'syntax worker')
       || check.name === (localSettings ? 'local assets' : 'plugin cache'),
     );
-    const wired = installed && wiringChecks.length === (localSettings ? 5 : 4)
+    const wired = installed && wiringChecks.length === 4
       && wiringChecks.every((check) => check.ok);
     const smoke = wired && activationHook !== undefined
       ? await smokeInstalledHook(activationHook, 'claude')

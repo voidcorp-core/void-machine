@@ -11,4 +11,4 @@ Sources for `void-functional` skill (see `docs/plans/skill-audits/void-functiona
 
 Strategy: distill. Reject Effect-TS / fp-ts / point-free / monad transformers as defaults. Standardize Result<T, E> + Option<T> + pipe helpers in @voidcorp/core (≤ 50 LOC total).
 
-Companion hook: no-null-grep (warn on null in domain code).
+Absence handling is checked through types, behavior tests and review; no literal-null write gate.

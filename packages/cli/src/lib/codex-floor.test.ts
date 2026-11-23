@@ -161,7 +161,7 @@ describe('safety-floor matcher coverage', () => {
 
 describe('referencedScripts drift guard', () => {
   it('stages only the self-contained Node runner', () => {
-    expect(CODEX_FLOOR_SCRIPTS).toEqual(['_void-hook.mjs', '_syntax-worker.cjs']);
+    expect(CODEX_FLOOR_SCRIPTS).toEqual(['_void-hook.mjs']);
   });
 
   it('every script the template invokes is in the staged floor set', () => {
@@ -201,7 +201,7 @@ describe('wireCodexFloor', () => {
     }
   });
 
-  it('executes the native Node TDD rule from a project subdirectory', async () => {
+  it('executes the native Node safety rule from a project subdirectory', async () => {
     const project = mkdtempSync(join(tmpdir(), 'void codex native '));
     await wireCodexFloor(project, CORE_ROOT);
     mkdirSync(join(project, '.void'), { recursive: true });
@@ -213,7 +213,7 @@ describe('wireCodexFloor', () => {
     const manifest = JSON.parse(readFileSync(join(project, '.codex', 'hooks.json'), 'utf8'));
     const command = manifest.hooks.PreToolUse
       .flatMap((entry: { hooks: Array<{ command: string }> }) => entry.hooks)
-      .find((hook: { command: string }) => hook.command.includes('enforce tdd-order'))
+      .find((hook: { command: string }) => hook.command.includes('enforce secret-content'))
       ?.command;
     expect(command).toBeDefined();
 

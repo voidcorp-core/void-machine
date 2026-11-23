@@ -1,3 +1,4 @@
+import { logger } from './logger.js';
 // tdd-cover: e2e apps/graph-studio/src/data/load.test.ts
 import { indexCost } from './data/cost.js';
 import { resolveStudioBoot } from './data/load.js';
@@ -21,7 +22,7 @@ if (!sceneRoot) throw new Error('graph-studio: #scene container missing');
 // build-time snapshot. Wrapped in a function so the module has no top-level await; a boot
 // failure is surfaced in the container instead of leaving a blank screen.
 void boot(sceneRoot).catch((err: unknown) => {
-  console.error('graph-studio: boot failed', err); // allow-console: browser studio has no logger
+  logger.error('graph-studio.boot-failed', err);
   sceneRoot.textContent = `graph-studio failed to start: ${err instanceof Error ? err.message : String(err)}`;
 });
 

@@ -240,14 +240,7 @@ describe('claude adapter', () => {
     expect(inspection.specialistCapability.limitations.join(' ')).not.toMatch(/MCP/i);
   });
 
-  it('refuses wired evidence for an incompatible local syntax worker', async () => {
-    const dir = scratch();
-    await adapterFor('claude').wire(ctxFor(dir));
-    writeFileSync(join(dir, '.void/hooks/_syntax-worker.cjs'), 'incompatible worker');
-    const inspection = await adapterFor('claude').inspect(dir);
-    expect(inspection.evidence.wired).toBe(false);
-    expect(inspection.evidence.fired).toBe(false);
-  });
+
 });
 
 describe('specialists from a linked worktree', () => {

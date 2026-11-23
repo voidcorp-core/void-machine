@@ -9,8 +9,8 @@ const manifest = (command: string) => [{ runtime: 'claude' as const, value: {
 } }];
 describe('hook owner wiring discovery', () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: exact shipped shell interpolation fixture.
-  const wired = manifest('node "${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs" enforce tdd-order claude');
-  const call = 'exec "$NODE_BIN" "$HOOK_DIR/_void-hook.mjs" enforce tdd-order "$RUNTIME"';
+  const wired = manifest('node "${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs" enforce secret-content claude');
+  const call = 'exec "$NODE_BIN" "$HOOK_DIR/_void-hook.mjs" enforce secret-content "$RUNTIME"';
   it('derives events and matchers from the actual owner invocation', () => {
     expect(hookWiring('tdd-guard', call, wired)).toEqual([
       { name: 'tdd-guard', runtime: 'claude', trigger: 'PreToolUse (Edit|Write)' },

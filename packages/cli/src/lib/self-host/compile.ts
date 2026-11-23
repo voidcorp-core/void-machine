@@ -45,8 +45,6 @@ const SOURCE_INPUTS = [
 const HASH_EXCLUSIONS = new Set([
   'packages/core/graph/void-graph.mjs',
   'packages/core/hooks/_void-hook.mjs',
-  'packages/core/hooks/_syntax-worker.cjs',
-  'packages/hook-runner/src/enforcement/syntax-worker-identity.generated.ts',
 ]);
 
 function lexical(a: string, b: string): number {

@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:74ecee36d6ebf2b80df6b0140825c3fb08b015f3f263b52c47e48120b0ac12dc"
+    "rootHash": "sha256:9a9f285272a76c92b18ac706fc4f9dfe77ff46c305ecda757aebdc3d9c13e745"
   },
   "nodes": [
     {
@@ -156,11 +156,11 @@
         "legacy": {
           "description": "Judges a diff against VoidCorp doctrine that hooks/reviewers miss: weak tests, over-abstraction, broken boundaries, anti-bloat. Read-only; routes security to security-audit, bugs to /void-code-review.",
           "id": "agent:doctrine-critic",
-          "lines": 91,
+          "lines": 89,
           "name": "doctrine-critic",
           "pack": null,
           "source": "packages/core/agents/doctrine-critic.md",
-          "staticTokens": 1126,
+          "staticTokens": 1094,
           "type": "agent"
         }
       },
@@ -737,34 +737,6 @@
       }
     },
     {
-      "id": "catalog:hook:hook:boundary-direction-check",
-      "kind": "hook",
-      "label": "boundary-direction-check",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:boundary-direction-check",
-          "lines": 10,
-          "name": "boundary-direction-check",
-          "pack": null,
-          "source": "packages/core/hooks/boundary-direction-check.sh",
-          "staticTokens": 96,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/boundary-direction-check.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:hook:hook:control-character-grep",
       "kind": "hook",
       "label": "control-character-grep",
@@ -899,146 +871,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/migration-pr-template.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:no-any-grep",
-      "kind": "hook",
-      "label": "no-any-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-any-grep",
-          "lines": 10,
-          "name": "no-any-grep",
-          "pack": null,
-          "source": "packages/core/hooks/no-any-grep.sh",
-          "staticTokens": 93,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-any-grep.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:no-as-cast-grep",
-      "kind": "hook",
-      "label": "no-as-cast-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-as-cast-grep",
-          "lines": 10,
-          "name": "no-as-cast-grep",
-          "pack": null,
-          "source": "packages/core/hooks/no-as-cast-grep.sh",
-          "staticTokens": 94,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-as-cast-grep.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:no-console-log-grep",
-      "kind": "hook",
-      "label": "no-console-log-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-console-log-grep",
-          "lines": 10,
-          "name": "no-console-log-grep",
-          "pack": null,
-          "source": "packages/core/hooks/no-console-log-grep.sh",
-          "staticTokens": 94,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-console-log-grep.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:no-null-grep",
-      "kind": "hook",
-      "label": "no-null-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-null-grep",
-          "lines": 10,
-          "name": "no-null-grep",
-          "pack": null,
-          "source": "packages/core/hooks/no-null-grep.sh",
-          "staticTokens": 93,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-null-grep.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:no-only-no-skip",
-      "kind": "hook",
-      "label": "no-only-no-skip",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-only-no-skip",
-          "lines": 10,
-          "name": "no-only-no-skip",
-          "pack": null,
-          "source": "packages/core/hooks/no-only-no-skip.sh",
-          "staticTokens": 95,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-only-no-skip.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -1235,34 +1067,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/stop-typecheck.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:tdd-guard",
-      "kind": "hook",
-      "label": "tdd-guard",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:tdd-guard",
-          "lines": 10,
-          "name": "tdd-guard",
-          "pack": null,
-          "source": "packages/core/hooks/tdd-guard.sh",
-          "staticTokens": 94,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/tdd-guard.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -2082,7 +1886,7 @@
       "label": "void-dependency-direction",
       "data": {
         "legacy": {
-          "description": "Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or fixing boundary-direction-check.",
+          "description": "Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or investigating undeclared dependencies.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -2099,7 +1903,7 @@
             }
           ],
           "id": "skill:pack-monorepo/void-dependency-direction",
-          "lines": 41,
+          "lines": 47,
           "name": "void-dependency-direction",
           "owner": "folpe",
           "pack": "pack-monorepo",
@@ -2108,7 +1912,7 @@
             "codex"
           ],
           "source": "packages/packs/pack-monorepo/skills/void-dependency-direction/SKILL.md",
-          "staticTokens": 535,
+          "staticTokens": 599,
           "type": "skill"
         }
       },
@@ -4008,7 +3812,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-domain-driven-design/SKILL.md",
-          "staticTokens": 3182,
+          "staticTokens": 3186,
           "type": "skill"
         }
       },
@@ -4102,7 +3906,7 @@
             }
           ],
           "id": "skill:void-functional",
-          "lines": 312,
+          "lines": 299,
           "name": "void-functional",
           "owner": "folpe",
           "pack": null,
@@ -4111,7 +3915,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-functional/SKILL.md",
-          "staticTokens": 2813,
+          "staticTokens": 2743,
           "type": "skill"
         }
       },
@@ -4208,7 +4012,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-hexagonal-architecture/SKILL.md",
-          "staticTokens": 2797,
+          "staticTokens": 2806,
           "type": "skill"
         }
       },
@@ -4545,7 +4349,7 @@
             }
           ],
           "id": "skill:void-observability",
-          "lines": 245,
+          "lines": 250,
           "name": "void-observability",
           "owner": "folpe",
           "pack": null,
@@ -4554,7 +4358,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-observability/SKILL.md",
-          "staticTokens": 2277,
+          "staticTokens": 2382,
           "type": "skill"
         }
       },
@@ -4650,7 +4454,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan/SKILL.md",
-          "staticTokens": 2797,
+          "staticTokens": 2810,
           "type": "skill"
         }
       },
@@ -5033,7 +4837,7 @@
             }
           ],
           "id": "skill:void-tdd",
-          "lines": 343,
+          "lines": 340,
           "name": "void-tdd",
           "owner": "folpe",
           "pack": null,
@@ -5042,7 +4846,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-tdd/SKILL.md",
-          "staticTokens": 3712,
+          "staticTokens": 3609,
           "type": "skill"
         }
       },
@@ -5082,7 +4886,7 @@
             }
           ],
           "id": "skill:void-testing",
-          "lines": 301,
+          "lines": 300,
           "name": "void-testing",
           "owner": "folpe",
           "pack": null,
@@ -5091,7 +4895,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-testing/SKILL.md",
-          "staticTokens": 3078,
+          "staticTokens": 3126,
           "triggers": {
             "globs": [
               "**/*.test.ts",
@@ -5185,7 +4989,7 @@
             }
           ],
           "id": "skill:void-typescript-strict",
-          "lines": 294,
+          "lines": 291,
           "name": "void-typescript-strict",
           "owner": "folpe",
           "pack": null,
@@ -5194,7 +4998,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-typescript-strict/SKILL.md",
-          "staticTokens": 2733,
+          "staticTokens": 2840,
           "triggers": {
             "extensions": [
               "ts",
@@ -7189,6 +6993,32 @@
       }
     },
     {
+      "id": "catalog:edge:composes:68681cb8680be11b55b986abd0497b70",
+      "from": "catalog:skill:skill:pack-monorepo/void-dependency-direction",
+      "to": "catalog:skill:skill:void-hexagonal-architecture",
+      "kind": "composes",
+      "data": {
+        "legacy": {
+          "evidence": "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture.",
+          "from": "skill:pack-monorepo/void-dependency-direction",
+          "kind": "composes",
+          "origin": "declared",
+          "to": "skill:void-hexagonal-architecture"
+        }
+      },
+      "provenance": {
+        "origin": "declared",
+        "confidence": 1,
+        "sources": [
+          {
+            "kind": "contract",
+            "ref": "relations:v1",
+            "hashOrVersion": "1"
+          }
+        ]
+      }
+    },
+    {
       "id": "catalog:edge:composes:6990bd481ca0d31377faa962b30506a7",
       "from": "catalog:skill:skill:pack-react/void-accessibility-check",
       "to": "catalog:skill:skill:void-accessibility",
@@ -8775,32 +8605,6 @@
       }
     },
     {
-      "id": "catalog:edge:composes:cbcfcaac75d5e930fc78918a9c7f55e2",
-      "from": "catalog:skill:skill:pack-monorepo/void-dependency-direction",
-      "to": "catalog:skill:skill:void-hexagonal-architecture",
-      "kind": "composes",
-      "data": {
-        "legacy": {
-          "evidence": "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture and the boundary-direction-check hook.",
-          "from": "skill:pack-monorepo/void-dependency-direction",
-          "kind": "composes",
-          "origin": "declared",
-          "to": "skill:void-hexagonal-architecture"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:edge:composes:cd362389e76c0731c34c6121273f695e",
       "from": "catalog:skill:skill:void-implement",
       "to": "catalog:skill:skill:void-testing",
@@ -9581,58 +9385,6 @@
       }
     },
     {
-      "id": "catalog:edge:enforces:4b6736b741264bb350c759d0585ab7f0",
-      "from": "catalog:hook:hook:no-only-no-skip",
-      "to": "catalog:skill:skill:void-testing",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-only-no-skip bans .only/.skip — enforces testing (no silently disabled tests)",
-          "from": "hook:no-only-no-skip",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-testing"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:5971a0a36ca0dd0297019424a0fbf5a1",
-      "from": "catalog:hook:hook:no-console-log-grep",
-      "to": "catalog:skill:skill:void-observability",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-console-log-grep bans console.log — enforces observability (use the logger)",
-          "from": "hook:no-console-log-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-observability"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:edge:enforces:5a17cd58e935ef12fc26cf97fdd96145",
       "from": "catalog:hook:hook:ubiquitous-language-lint",
       "to": "catalog:skill:skill:void-domain-driven-design",
@@ -9685,58 +9437,6 @@
       }
     },
     {
-      "id": "catalog:edge:enforces:6660ec1cf32b5f82e5295bd7cc5d4927",
-      "from": "catalog:hook:hook:no-any-grep",
-      "to": "catalog:skill:skill:void-typescript-strict",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-any-grep blocks the `any` type — enforces typescript-strict's zero-any budget",
-          "from": "hook:no-any-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-typescript-strict"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:6a110223d66ff6ccb73cb6fd9ea6b8a8",
-      "from": "catalog:hook:hook:tdd-guard",
-      "to": "catalog:skill:skill:void-tdd",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "tdd-guard requires a test to drive every production change — enforces tdd (Iron Law)",
-          "from": "hook:tdd-guard",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-tdd"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:edge:enforces:76628ebf831bc44bad934c1fe124e4e3",
       "from": "catalog:hook:hook:refactor-named-grep",
       "to": "catalog:skill:skill:void-refactor",
@@ -9748,32 +9448,6 @@
           "kind": "enforces",
           "origin": "declared",
           "to": "skill:void-refactor"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:7f57141a14401298077a4c723b2eb751",
-      "from": "catalog:hook:hook:no-as-cast-grep",
-      "to": "catalog:skill:skill:void-typescript-strict",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-as-cast-grep blocks `as Foo` casts — enforces typescript-strict (satisfies over as)",
-          "from": "hook:no-as-cast-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-typescript-strict"
         }
       },
       "provenance": {
@@ -10008,58 +9682,6 @@
           "kind": "enforces",
           "origin": "declared",
           "to": "skill:void-commit-discipline"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:e495436f71e9f455ce53e88c849ee32c",
-      "from": "catalog:hook:hook:boundary-direction-check",
-      "to": "catalog:skill:skill:void-hexagonal-architecture",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "boundary-direction-check enforces the import direction — enforces hexagonal-architecture",
-          "from": "hook:boundary-direction-check",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-hexagonal-architecture"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:e6b37a080d97ecdeec1c336e29195d48",
-      "from": "catalog:hook:hook:no-null-grep",
-      "to": "catalog:skill:skill:void-functional",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-null-grep prefers undefined/Option over null — enforces functional",
-          "from": "hook:no-null-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-functional"
         }
       },
       "provenance": {

@@ -7,7 +7,7 @@ spec: docs/plans/2026-11-23-void-machine-simplification-decisions.md
 progress:
   provider: linear
   scope: voidcorp/DEV/void machine
-  order: [DEV-1372]
+  order: [DEV-1372, DEV-1373, DEV-1374, DEV-1375, DEV-1376]
   states:
     ready: [Backlog, Todo]
     started: [In Progress]

@@ -1,6 +1,6 @@
 ---
 name: void-dependency-direction
-description: Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or fixing boundary-direction-check.
+description: Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or investigating undeclared dependencies.
 ---
 
 # dependency-direction
@@ -20,19 +20,25 @@ architecture owns which dependencies make sense. A universal star topology throu
    and compose at the application edge. A structural exception follows `void-decide`.
 5. Run the affected package's typecheck and behavior tests.
 
-## Mechanical scope
+## Validation scope
 
-The shared Node `boundary-direction-check` rule rejects detected scoped imports
-that the nearest readable package manifest does not declare. It accepts self-imports
-and dependencies, devDependencies, peerDependencies and optionalDependencies.
-It skips tests/generated files and allows when no manifest can be read. Its lexical
-matcher is a guardrail, not a complete import graph or internal-layer validator.
-An `allow-boundary:` comment is a narrow escape recognized by the existing rule;
-it does not approve an architectural exception or make a missing dependency buildable.
+Use the project's existing linter to reject undeclared package dependencies,
+with focused checks that legitimate package imports and aliases still pass.
+In void-machine, Biome `noUndeclaredDependencies` is an error. It uses the nearest
+package manifest, allows declared dev/peer/optional dependencies by default and
+ignores relative imports, `#`/`@/` aliases and protocol imports. It is not a proof
+of every alias resolution, internal layer, cycle or package boundary.
 
-A `tsconfig` path alias changes resolution, not permission. It cannot prove a
-package boundary. Project-specific cycle or layer checks must be explicitly wired
-and verified before claiming deterministic enforcement.
+A `tsconfig` alias changes resolution, not architectural permission. Review the
+actual boundary and run the affected package's typecheck and behavior tests.
+This pack does not install a Biome configuration: verify equivalent checks in the
+consumer's existing tooling before claiming deterministic enforcement. Missing
+coverage is reported at validation, not converted into a general host veto.
+
+## Sources
+
+- [Biome dependency rule](https://biomejs.dev/linter/rules/no-undeclared-dependencies/),
+  checked against the documentation bundled with repository version 2.4.16.
 
 ## Composition
 

@@ -48,8 +48,8 @@ own agent-status surface remains available where supported; this CLI does not co
 
 Requests and completions do not add specialist starts. Event IDs are deduplicated, not lifecycle
 triples. Local skill aliases (`harness:void-tdd`, `core/void-tdd`) join the local skill; foreign
-provider identity remains separate. Mixed-runtime counts keep Codex skill usage unknown. Hook subjects use the shipped wrapper command mapping (for example `tdd-order` belongs
-to `tdd-guard`). Names observed outside the current catalogue remain visible. Payload bodies,
+provider identity remains separate. Mixed-runtime counts keep Codex skill usage unknown. Hook subjects use the shipped wrapper command mapping (for example `secret-content`
+belongs to `secret-in-content`). Names observed outside the current catalogue remain visible. Payload bodies,
 commands and transcripts are never exported.
 
 Direct events retain the requested mission ID. To include an ongoing native session, the

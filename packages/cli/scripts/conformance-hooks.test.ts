@@ -20,7 +20,7 @@ function event(
     ts: '2026-07-24T00:00:00.000Z',
     source: `runtime:${runtime}`,
     kind,
-    subject: kind === 'hook.completed' ? 'hook:no-console' : 'tool:Write',
+    subject: kind === 'hook.completed' ? 'hook:secret-content' : 'tool:Write',
     correlationId: 'mis_conformance_both',
     payload: {},
   });

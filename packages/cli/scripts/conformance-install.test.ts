@@ -1,7 +1,7 @@
 // @test-resource subprocess
-import { mkdtempSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('one package installation proof across runtime consumers', () => {
@@ -54,4 +54,14 @@ it('runs each consumer suite on the same artifact', async () => {
   await expect(exerciseConsumerSuites('hooks', '/artifact/consumer.tgz', root, async () => ({
     outcome: { kind: 'timed-out' }, stdout: '', stderr: '',
   }))).rejects.toThrow('hooks: timed-out');
+});
+
+
+it('executes the installed CI admission driver for draft and ready pull requests', async () => {
+  const { proveInstalledCiAdmission } = await import('./conformance-install.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'installed-ci-admission-'));
+  try {
+    cpSync(resolve('packages/core/skills/void-verify'), join(root, '.claude/skills/void-verify'), { recursive: true });
+    await proveInstalledCiAdmission(root, '.claude', {});
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -11,6 +11,7 @@ import {
   conformanceFixtureEnvironment,
   packageManagerCommand,
   runConformanceStep,
+  runConformanceProcess,
 } from './conformance-process.mjs';
 
 async function run(label, command, args, cwd, env) {

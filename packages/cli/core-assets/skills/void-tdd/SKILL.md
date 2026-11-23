@@ -1,6 +1,6 @@
 ---
 name: void-tdd
-description: TDD in three modes (strict/souple/exploratory) chosen by path. Iron Law in strict (no prod code without a failing test), mutation gate if tooled, anti-rustine. Use for any feature, bugfix, refactor.
+description: TDD in three modes (strict/souple/exploratory) chosen by path. Iron Law in strict (no prod code without a failing test), targeted mutation testing, anti-rustine. Use for any feature, bugfix, refactor.
 ---
 
 # tdd — voidcorp craftsman edition
@@ -23,7 +23,7 @@ Three postures, chosen from the actual behavior and project configuration. Resol
 
 | Mode | When | Posture |
 |---|---|---|
-| **strict** | New behavior on production code, hotfix on paying surface, refactor that changes observable behavior, DB integration that affects business invariants | Iron Law (zero line of production code without a failing test that requested it) + mutation testing when the project has a mutation runner + behavior/risk coverage + observed RED/GREEN evidence |
+| **strict** | New behavior on production code, hotfix on paying surface, refactor that changes observable behavior, DB integration that affects business invariants | Iron Law (zero line of production code without a failing test that requested it) + mutation testing when required or justified by concrete uncertainty + behavior/risk coverage + observed RED/GREEN evidence |
 | **souple** | Integration glue tested at a higher level (E2E + handler covers the chain), framework wiring, config | RED-GREEN-REFACTOR without mutation gate, project coverage thresholds, no commit-by-phase ritual |
 | **exploratory** | Documented spike, throwaway POC, scripts marked as such, draft work | No TDD obligation. The file MUST declare throwaway status + deletion date in a header comment. If the code survives the spike, it transitions to strict before merging to prod. |
 
@@ -72,7 +72,7 @@ must be able to inspect the actual failing test before the production behavior c
 RED → Verify RED → GREEN → Verify GREEN → [MUTATE → KILL MUTANTS] → REFACTOR
 ```
 
-The bracketed steps run only when the project has a mutation runner (see MUTATE below).
+The bracketed steps run when explicitly required or justified by concrete test-strength uncertainty, using available tooling (see MUTATE below).
 
 ### Souple mode
 
@@ -89,8 +89,7 @@ Code → [does the demo prove the idea?] → either transition to strict before 
 ### RED — write the failing test
 
 One thing tested, a name that states the behavior, real code — assert on the observable
-outcome, never on a mock's call count (that tests the mock, not the behavior). Mocks live
-only at infrastructure boundaries. The full technique (how to express the test, factories,
+outcome, including calls or counts when they are meaningful boundary effects such as bounded retries or preventing duplicate payments. Keep actual decision code; doubles live at faithful infrastructure boundaries. The full technique (how to express the test, factories,
 mocking policy) is the `void-testing` skill's job; TDD owns only *when* and *that* it fails first.
 
 Before finalizing the test, scan the mutator rules (boundaries, boolean combinations, equality, arithmetic identities, array/string ops, optional chaining, side effects). This scan needs no tooling and no runner: it is how you write a test that a mutant could not survive, whether or not the project can actually run one.
@@ -133,19 +132,15 @@ Confirm:
 
 - Test passes
 - Other tests still pass
-- Pristine output (no warnings, no errors)
+- No unhandled errors, leaked resources or sensitive output; inspect actionable diagnostics
 
-### MUTATE (strict, only when a mutation runner is present)
+### MUTATE (when required or justified)
 
-The harness ships no mutation runner and installs none. `init` detects Stryker in the project's
-dependencies and writes `commands.mutation` into `.void/config.json` only on that signal, so the
-presence of that key *is* the capability check.
-
-- Key present → run `<config.commands.mutation> --mutate <path>`, produce a killed/survived/score
-  report, and treat the gate as mandatory in strict.
-- Key absent → the gate does not apply. Never invent a `stryker` command and never block the cycle
-  on it; the mutator scan at RED carries the intent instead. Adopting a runner is a project
-  decision, not something this skill performs.
+Honor explicit project mutation requirements and thresholds, explicit user requests, or targeted
+use for critical behavior and concrete uncertainty about assertion strength. A runner or
+`commands.mutation` declares capability, not an obligation. Use an available configured runner;
+do not install a tool or launch a campaign merely because this skill was invoked. Keep relevant
+behavioral tests and report any required proof that could not run.
 
 ### KILL MUTANTS (strict, when MUTATE ran)
 
@@ -179,7 +174,7 @@ start an improvement loop. Keep tests green. `void-refactor` owns behavior-prese
 - Real-I/O integration tests: `Name.integration.test.ts`
 - E2E Playwright: `<config.paths.e2e>` (e.g. `apps/*/tests/e2e/*.spec.ts`)
 
-See the `void-testing` skill for the full technique catalog (factories over `beforeEach`, fixture externalization, behavior-first naming, snapshot policy).
+See the `void-testing` skill for the full technique catalog (isolated setup, readable fixtures, behavior-first naming, reviewed snapshots).
 
 ### Schema contracts at trust boundaries
 
@@ -294,10 +289,10 @@ Before marking the work complete:
 - [ ] Every test fails for the right reason (feature missing, not typo)
 - [ ] Minimal code to pass each test
 - [ ] All tests pass
-- [ ] Pristine output (no warnings, no errors)
+- [ ] No unhandled errors, leaked resources or sensitive output; actionable diagnostics assessed
 - [ ] Tests use real code (mocks only where unavoidable)
 - [ ] Edge cases and errors covered
-- [ ] Mutation testing run + survivors handled (strict, when `commands.mutation` exists)
+- [ ] Required or justified mutation testing run + survivors handled
 - [ ] Relevant behavior covered and configured coverage thresholds satisfied
 - [ ] Actual RED-before-implementation and GREEN evidence retained (strict)
 - [ ] Necessary refactoring complete; optional improvements do not reopen the cycle

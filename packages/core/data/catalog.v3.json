@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:830df80a2f09e7b5a3bd1e0d20cc9b1ed5f7ad47cf3c8692dd996d932f31cf32"
+    "rootHash": "sha256:febc0ebd8c3e8fae175913cc8ecebb8ef1baad4830052ab8ebd73a5b93ffee98"
   },
   "nodes": [
     {
@@ -580,7 +580,7 @@
           "name": "visual-craft-director",
           "pack": null,
           "source": "packages/core/agents/visual-craft-director.md",
-          "staticTokens": 1324,
+          "staticTokens": 1346,
           "type": "agent"
         }
       },
@@ -849,34 +849,6 @@
       }
     },
     {
-      "id": "catalog:hook:hook:pre-PR-review-evidence",
-      "kind": "hook",
-      "label": "pre-PR-review-evidence",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:pre-PR-review-evidence",
-          "lines": 47,
-          "name": "pre-PR-review-evidence",
-          "pack": null,
-          "source": "packages/core/hooks/pre-PR-review-evidence.sh",
-          "staticTokens": 376,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/pre-PR-review-evidence.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:hook:hook:protect-sensitive-files",
       "kind": "hook",
       "label": "protect-sensitive-files",
@@ -899,34 +871,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/protect-sensitive-files.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:refactor-named-grep",
-      "kind": "hook",
-      "label": "refactor-named-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:refactor-named-grep",
-          "lines": 49,
-          "name": "refactor-named-grep",
-          "pack": null,
-          "source": "packages/core/hooks/refactor-named-grep.sh",
-          "staticTokens": 367,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/refactor-named-grep.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -983,34 +927,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/sessionstart-context.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:tidying-commit-prefix",
-      "kind": "hook",
-      "label": "tidying-commit-prefix",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:tidying-commit-prefix",
-          "lines": 37,
-          "name": "tidying-commit-prefix",
-          "pack": null,
-          "source": "packages/core/hooks/tidying-commit-prefix.sh",
-          "staticTokens": 300,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/tidying-commit-prefix.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -3168,7 +3084,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7217,
+          "staticTokens": 7230,
           "type": "skill"
         }
       },
@@ -3207,7 +3123,7 @@
             }
           ],
           "id": "skill:void-brainstorm",
-          "lines": 257,
+          "lines": 251,
           "name": "void-brainstorm",
           "owner": "folpe",
           "pack": null,
@@ -3216,7 +3132,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-brainstorm/SKILL.md",
-          "staticTokens": 3930,
+          "staticTokens": 3761,
           "type": "skill"
         }
       },
@@ -3352,7 +3268,7 @@
             }
           ],
           "id": "skill:void-code-review",
-          "lines": 241,
+          "lines": 219,
           "name": "void-code-review",
           "owner": "folpe",
           "pack": null,
@@ -3361,7 +3277,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-code-review/SKILL.md",
-          "staticTokens": 3369,
+          "staticTokens": 3163,
           "type": "skill"
         }
       },
@@ -3401,7 +3317,7 @@
             }
           ],
           "id": "skill:void-commit-discipline",
-          "lines": 204,
+          "lines": 201,
           "name": "void-commit-discipline",
           "owner": "folpe",
           "pack": null,
@@ -3410,7 +3326,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-commit-discipline/SKILL.md",
-          "staticTokens": 1830,
+          "staticTokens": 1774,
           "type": "skill"
         }
       },
@@ -3577,7 +3493,7 @@
       "data": {
         "legacy": {
           "activation": "on-demand",
-          "description": "Audit an EXISTING dev-facing surface (API/CLI/SDK/docs): measured TTHW, real error-path tracing, evidence-backed DX scorecard, scoped refine. The audit ceiling to plan-review's DevEx-lens.",
+          "description": "Audit an EXISTING dev-facing surface (API/CLI/SDK/docs): measured TTHW, real error-path tracing, concrete DX findings, scoped refine. The audit ceiling to plan-review's DevEx-lens.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3594,7 +3510,7 @@
             }
           ],
           "id": "skill:void-devex-audit",
-          "lines": 113,
+          "lines": 43,
           "name": "void-devex-audit",
           "owner": "folpe",
           "pack": null,
@@ -3603,7 +3519,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-devex-audit/SKILL.md",
-          "staticTokens": 2109,
+          "staticTokens": 647,
           "type": "skill"
         }
       },
@@ -3939,7 +3855,7 @@
             }
           ],
           "id": "skill:void-implement",
-          "lines": 236,
+          "lines": 237,
           "name": "void-implement",
           "owner": "folpe",
           "pack": null,
@@ -3948,7 +3864,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6683,
+          "staticTokens": 6696,
           "type": "skill"
         }
       },
@@ -4285,7 +4201,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 203,
+          "lines": 204,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4294,7 +4210,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 3363,
+          "staticTokens": 3385,
           "type": "skill"
         }
       },
@@ -4333,7 +4249,7 @@
             }
           ],
           "id": "skill:void-plan",
-          "lines": 241,
+          "lines": 214,
           "name": "void-plan",
           "owner": "folpe",
           "pack": null,
@@ -4342,7 +4258,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan/SKILL.md",
-          "staticTokens": 2810,
+          "staticTokens": 2468,
           "type": "skill"
         }
       },
@@ -4382,7 +4298,7 @@
             }
           ],
           "id": "skill:void-plan-review",
-          "lines": 128,
+          "lines": 46,
           "name": "void-plan-review",
           "owner": "folpe",
           "pack": null,
@@ -4391,7 +4307,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan-review/SKILL.md",
-          "staticTokens": 2685,
+          "staticTokens": 736,
           "type": "skill"
         }
       },
@@ -4463,7 +4379,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "Tidy-First. Tidyings commit separately from behavior changes (Two-Hat). Named Fowler refactors only. Tests stay green. Two modes (strict/souple). Use when improving structure without behavior change.",
+          "description": "Improve structure without changing behavior through small verified transformations and coherent commits. Use when current code resists the accepted task.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4480,7 +4396,7 @@
             }
           ],
           "id": "skill:void-refactor",
-          "lines": 220,
+          "lines": 52,
           "name": "void-refactor",
           "owner": "folpe",
           "pack": null,
@@ -4489,7 +4405,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-refactor/SKILL.md",
-          "staticTokens": 2443,
+          "staticTokens": 840,
           "type": "skill"
         }
       },
@@ -4587,7 +4503,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-security-audit/SKILL.md",
-          "staticTokens": 4179,
+          "staticTokens": 4210,
           "type": "skill"
         }
       },
@@ -4708,7 +4624,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "TDD in three modes (strict/souple/exploratory) chosen by path. Iron Law in strict (no prod code without a failing test), mutation gate if tooled, anti-rustine. Use for any feature, bugfix, refactor.",
+          "description": "TDD in three modes (strict/souple/exploratory) chosen by path. Iron Law in strict (no prod code without a failing test), targeted mutation testing, anti-rustine. Use for any feature, bugfix, refactor.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4725,7 +4641,7 @@
             }
           ],
           "id": "skill:void-tdd",
-          "lines": 340,
+          "lines": 335,
           "name": "void-tdd",
           "owner": "folpe",
           "pack": null,
@@ -4734,7 +4650,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-tdd/SKILL.md",
-          "staticTokens": 3609,
+          "staticTokens": 3613,
           "type": "skill"
         }
       },
@@ -4757,7 +4673,7 @@
       "data": {
         "legacy": {
           "activation": "always",
-          "description": "How to write a good test. Behavior over implementation, real code over mocks, factories over beforeEach, pyramid respected, pristine output, no snapshot creep. Use when writing or modifying tests.",
+          "description": "Write meaningful behavioral tests with faithful boundaries, isolated setup, readable assertions and honest evidence. Use when writing or modifying tests.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4774,7 +4690,7 @@
             }
           ],
           "id": "skill:void-testing",
-          "lines": 300,
+          "lines": 77,
           "name": "void-testing",
           "owner": "folpe",
           "pack": null,
@@ -4783,7 +4699,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-testing/SKILL.md",
-          "staticTokens": 3126,
+          "staticTokens": 1161,
           "triggers": {
             "globs": [
               "**/*.test.ts",
@@ -4828,7 +4744,7 @@
             }
           ],
           "id": "skill:void-ticket",
-          "lines": 240,
+          "lines": 210,
           "name": "void-ticket",
           "owner": "folpe",
           "pack": null,
@@ -4837,7 +4753,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-ticket/SKILL.md",
-          "staticTokens": 3360,
+          "staticTokens": 2991,
           "type": "skill"
         }
       },
@@ -4941,7 +4857,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-ui-review/SKILL.md",
-          "staticTokens": 1964,
+          "staticTokens": 1982,
           "type": "skill"
         }
       },
@@ -9232,84 +9148,6 @@
           "kind": "enforces",
           "origin": "declared",
           "to": "skill:void-domain-driven-design"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:5abfe6d659725d1a05e4b0e8d627ec42",
-      "from": "catalog:hook:hook:tidying-commit-prefix",
-      "to": "catalog:skill:skill:void-refactor",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "tidying-commit-prefix separates tidyings from behavior — enforces refactor (Tidy-First)",
-          "from": "hook:tidying-commit-prefix",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-refactor"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:76628ebf831bc44bad934c1fe124e4e3",
-      "from": "catalog:hook:hook:refactor-named-grep",
-      "to": "catalog:skill:skill:void-refactor",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "refactor-named-grep requires named Fowler refactors — enforces refactor",
-          "from": "hook:refactor-named-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-refactor"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:846cd20694dfda9ecd6765419094a5d5",
-      "from": "catalog:hook:hook:pre-PR-review-evidence",
-      "to": "catalog:skill:skill:void-code-review",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "pre-PR-review-evidence requires review evidence before a PR — enforces code-review",
-          "from": "hook:pre-PR-review-evidence",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-code-review"
         }
       },
       "provenance": {

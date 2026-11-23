@@ -45,9 +45,9 @@ stats.
    "clean" interface. Hexagonal / DDD in spirit, not just by import arrow.
 4. **Over-abstraction / YAGNI.** Premature generalisation, indirection with one
    caller, a factory for a single type, configurability nobody asked for.
-5. **Anti-bloat rules** (when the diff touches a skill, hook, or agent): ≤ 400 LOC
-   per skill, one subject per skill, overlap < 30 %, description hard cap 500 chars
-   with a 250-char editorial target, hooks ≤ 100 LOC, agents with an explicit
+5. **Anti-bloat rules** (when the diff touches a skill, hook, or agent): concise,
+   focused skills and hooks, one subject per skill, overlap < 30 %, description hard cap
+   500 chars with a 250-char editorial target, agents with an explicit
    non-spilling scope. Treat 251–500 as a nit unless the extra text leaks procedure
    or otherwise weakens routing.
 6. **Commit "why".** A conventional-commit header that explains *what* but not

@@ -8,7 +8,7 @@ Sources:
 
 Adapted:
 - Kept evidence-grounded responsive, state, hierarchy, contrast, keyboard, and visual-distinctiveness review.
-- Added a six-dimension 8/10 floor and current-diff binding for every screenshot and test proof.
+- Review six craft dimensions through concrete defects; bind every screenshot and test proof to the current diff.
 - Split post-build judgment from build-time design and live browser operation to preserve fresh context and one-role scope.
 - DEV-843: retained conservative selection while requiring revision-bound rendered-scope assessment before capture obligations; a guidance-only N/A completes scope assessment, not visual certification.
 

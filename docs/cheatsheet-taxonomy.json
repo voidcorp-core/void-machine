@@ -94,9 +94,7 @@
     {
       "title": "Review and typecheck",
       "blurb": "Review evidence and compiler checks around delivery.",
-      "hooks": {
-        "pre-PR-review-evidence": "Requires the review evidence a pull request claims to have."
-      }
+      "hooks": {}
     },
     {
       "title": "Type safety",
@@ -109,9 +107,7 @@
       "title": "Cleanliness and refactor",
       "blurb": "Keeping the diff readable and the vocabulary stable.",
       "hooks": {
-        "ubiquitous-language-lint": "Refuses a name that contradicts the domain vocabulary the project settled on.",
-        "refactor-named-grep": "Requires a refactor to name the Fowler transformation it applies.",
-        "tidying-commit-prefix": "Keeps tidyings in their own commit, separate from behaviour change."
+        "ubiquitous-language-lint": "Refuses a name that contradicts the domain vocabulary the project settled on."
       }
     },
     {

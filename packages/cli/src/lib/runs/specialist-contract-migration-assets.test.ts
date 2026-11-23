@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
-import { loadSpecialists } from '../specialists/load.js';
+import { loadSpecialists, parseSpecialistYaml } from '../specialists/load.js';
 import { compileCodexSpecialist } from '../specialists/compile-codex.js';
 import { observeSpecialistMigrationAssets } from './specialist-contract-migration.js';
 const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
@@ -13,7 +13,7 @@ const TO = 'sha256:333f5d2cd8dc21cb5f059c926f5db5a19b8511e2a3dd7ea0764a40b4502c2
 it('observes the exact released archive and actually installed v3 agent without installing anything', async () => {
   const root = await mkdtemp(join(tmpdir(), 'void-migration-assets-'));
   try {
-    const visual = (await loadSpecialists(CORE)).find(value => value.id === 'core:visual-craft-director');
+    const visual = parseSpecialistYaml(await readFile(join(CORE, 'contract-history/visual-craft-director/v3.yaml'), 'utf8'), 'v3.yaml');
     if (!visual) throw new Error('Expected current visual contract.');
     const compiled = compileCodexSpecialist(visual);
     await mkdir(join(root, '.codex/agents'), { recursive: true });
@@ -28,6 +28,12 @@ it('observes the exact released archive and actually installed v3 agent without 
       nativeAgentSha256: `sha256:${createHash('sha256').update(compiled.content).digest('hex')}`,
     });
     expect(await readFile(path, 'utf8')).toBe(compiled.content);
+    const current = (await loadSpecialists(CORE)).find(value => value.id === visual.id);
+    if (!current) throw new Error('Expected current visual contract.');
+    expect(current.version).toBe(4);
+    await writeFile(path, compileCodexSpecialist(current).content);
+    await expect(observeSpecialistMigrationAssets(CORE, root, 'codex'))
+      .rejects.toThrow('SPECIALIST_CONTRACT_MIGRATION_NATIVE');
     await writeFile(path, compiled.content.replace('v3', 'v2'));
     await expect(observeSpecialistMigrationAssets(CORE, root, 'codex'))
       .rejects.toThrow('SPECIALIST_CONTRACT_MIGRATION_NATIVE');

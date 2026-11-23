@@ -13,7 +13,7 @@ Sources for `void-testing` skill (see `docs/plans/skill-audits/void-testing.md` 
 - MSW (Mock Service Worker) — https://mswjs.io — HTTP boundary mocking
 - pglite — https://pglite.dev — in-memory Postgres for fast integration tests
 
-Strategy: distill. Author from sources; framework specifics live in packs. Hooks: no-business-mock, no-snapshot-default. Focused/skipped tests are checked by the existing validation tooling before accepting test evidence. Test-name quality remains review guidance rather than a lexical write gate.
+Strategy: distill. Author from sources; framework specifics live in packs. Use faithful boundary doubles, isolated setup and reviewed snapshots without lexical companion gates. Focused/skipped tests are checked by the existing validation tooling before accepting test evidence. Test-name quality remains review guidance rather than a lexical write gate.
 
 DEV-444 adaptation: Testing Library's role-first principle is extended to keyboard input and explicit
 applicable-state coverage without moving TDD cycle ownership into this skill.

@@ -192,10 +192,9 @@ describe('the review is local, bound to the head and to the session it delegated
     expect(flat(body(SKILL))).toMatch(/a reviewer that failed without a verdict is an attempt it delegates again, not a round/);
   });
 
-  it('blocks only on a scenario, files advisories once, and stops at two rounds', () => {
+  it('blocks only on a scenario and files advisories once', () => {
     expect(flat(body(SKILL))).toMatch(/Only what is wrong or dangerous, with a concrete scenario/);
     expect(flat(body(SKILL))).toMatch(/single Triage issue per ticket/);
-    expect(flat(body(SKILL))).toMatch(/round 2 is handed round 1's blocking findings and checks only those/i);
   });
 });
 

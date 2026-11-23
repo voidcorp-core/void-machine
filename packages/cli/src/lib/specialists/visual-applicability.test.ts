@@ -18,7 +18,7 @@ const previous = parseSpecialistYaml(readFileSync(BASELINE, 'utf8'), BASELINE);
 describe('visual applicability contract isolation', () => {
   it('versions the changed evidence obligation without rewriting the prior contract', () => {
     expect(previous.version).toBe(2);
-    expect(current.version).toBe(3);
+    expect(current.version).toBe(4);
     expect(current.stages).toEqual(['post-implementation']);
     expect(current.appliesWhen).toEqual(previous.appliesWhen);
   });
@@ -45,11 +45,11 @@ describe('visual applicability contract isolation', () => {
     expect(readFileSync(agent, 'utf8')).toBe(compileClaudeSpecialist(current).content);
   });
 
-  it('keeps a v3 applicability completion out of a frozen v2 contract', () => {
+  it('keeps a v4 applicability completion out of a frozen v2 contract', () => {
     const completion = JSON.stringify({
       schemaVersion: 1,
       specialistId: 'core:visual-craft-director',
-      contractVersion: 3,
+      contractVersion: 4,
       completionId: 'visual_scope_regression',
       verdict: 'pass',
       findings: [],
@@ -63,7 +63,7 @@ describe('visual applicability contract isolation', () => {
     expect(() => parseSpecialistCompletion(completion, previous, [])).toThrow(/version/i);
     expect(parseSpecialistCompletion(completion, current, [])).toMatchObject({
       verdict: 'pass',
-      contractVersion: 3,
+      contractVersion: 4,
       limitations: [expect.stringContaining('not applicable')],
     });
   });

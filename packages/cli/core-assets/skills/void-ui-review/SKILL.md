@@ -5,7 +5,7 @@ description: "Audit and polish an EXISTING UI: the AI-slop test, heuristic criti
 
 # ui-review — voidcorp craftsman edition
 
-`void-frontend-design` is the build-time floor: the discipline applied while writing UI. This skill is the audit-time ceiling: a deliberate pass over an *existing* interface to find what makes it read as generated, score it, and drive a refine. Invoke it to critique, audit, or polish a UI that already renders.
+`void-frontend-design` is the build-time floor: the discipline applied while writing UI. This skill is the audit-time ceiling: a deliberate pass over an *existing* interface to find what makes it read as generated, identify concrete defects, and refine within scope. Invoke it to critique, audit, or polish a UI that already renders.
 
 It proposes findings and edits at the component level; it does not rewrite the brand (`DESIGN.md` owns that) and it does not re-teach the build rules (`void-frontend-design` owns those — this skill assumes them and checks against them).
 
@@ -37,7 +37,7 @@ Cross-register slop (the absolute bans — side-stripe, gradient text, glassmorp
 - **Information architecture** — is the primary action singular and the most prominent? Is supporting context recessed, and noise cut?
 - **Interaction-state coverage** — every state the user hits, described as what they *see*: loading, empty, error, success, partial. A missing state is a finding, not a detail.
 - **Emotional arc** — the 5-second / 5-minute / 5-year read: does the first glance earn the second, and does it hold up on the hundredth visit?
-- Score each dimension `N/10 → target`, write the fix, and re-rate. "Design-complete" when every dimension clears the bar for its register.
+- Ground findings in the affected journey and visual evidence. Completion follows accepted requirements and resolution of concrete defects, without numeric ratings.
 
 ## Technical audit pass
 
@@ -50,8 +50,8 @@ Cross-register slop (the absolute bans — side-stripe, gradient text, glassmorp
 
 For a changed UI, `void-qa` supplies current-diff screenshots and behavioral proof, then
 `core:visual-craft-director` reviews them in a fresh context distinct from the builder and pre-build
-designer. It scores hierarchy, information architecture, interaction states, responsive intent,
-distinctiveness, and accessibility; every dimension must reach 8/10. Missing browser access,
+designer. It reviews hierarchy, information architecture, interaction states, responsive intent,
+distinctiveness and accessibility against accepted requirements, reporting concrete defects. Missing browser access,
 mobile/desktop or applicable-state captures, current-diff binding, or test proof blocks approval.
 Model judgment alone is never visual certification.
 

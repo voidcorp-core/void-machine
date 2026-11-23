@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 describe('native orchestration executable contract', () => {
   it('ships bounded launch, identity, continuity and proof instructions', () => {
     const text = readFileSync(new URL('../../packages/core/skills/void-orchestrate/SKILL.md', import.meta.url), 'utf8');
-    expect(text.split('\n').length).toBeLessThanOrEqual(400);
     for (const token of ['verified absolute `worktree`', 'attachCommand', 'unknown',
       'worker.dispatched', 'worker.state', 'worker.finished', 'observationId',
       'reviewedCommit', 'baseCommit', 'acceptanceCriteriaHash', 'Publish the initial running state']) {

@@ -13,7 +13,8 @@ import { inspectMission, loadMissionControllerPlan } from './store.js';
 
 const MIGRATION = 'visual-craft-director-v2-v3';
 const ARCHIVE = 'contract-history/visual-craft-director/v2.yaml';
-const TARGET = 'specialists/visual-craft-director.yaml';
+// The v2-to-v3 edge remains bound to released bytes after newer contracts ship.
+const TARGET = 'contract-history/visual-craft-director/v3.yaml';
 function object(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

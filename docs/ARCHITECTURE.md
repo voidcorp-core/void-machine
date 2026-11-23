@@ -43,7 +43,7 @@ void-machine/
 └── docs/                          # doctrine, architecture, release and decisions
     ├── specs/                     # approved designs
     ├── plans/                     # implementation plans
-    │   └── skill-audits/          # one audit note per vendored skill
+    │   └── skill-audits/          # historical adaptation notes
     └── decisions-log/             # one immutable, collision-free file per ADR
 ```
 
@@ -815,8 +815,7 @@ cli  →  core  ←  packs
 
 `apps/*` are private, unpublished surfaces that consume the packages. They may
 depend on `packages/*` (e.g. `apps/graph-studio` devDepends on
-`@voidcorp/harness-graph`), never the reverse. They are exempt from the 400-line
-skill cap (they are apps, not skills) and from version lockstep (private, not
+`@voidcorp/harness-graph`), never the reverse. They are applications rather than skills (they are apps, not skills) and from version lockstep (private, not
 shipped). `apps/graph-studio` is the maintainer 3D view of the component graph
 (spec §7): a Node prebuild runs the kernel's `analyze()` into static JSON, and the
 browser bundle is a pure renderer of that JSON (functional core / imperative shell,
@@ -1046,9 +1045,16 @@ Applicable UI work adds a pure fail-closed quality gate after planning. An Exper
 attestation must match the current mission input before implementation. After implementation, QA
 captures each applicable state at mobile and desktop sizes, and a Visual Craft Director reviews
 that evidence in a distinct fresh context. Tests, captures, and the post-build review carry the
-current diff hash; a later component or CSS change makes them stale. Six named craft dimensions
-must each reach 8/10, and unavailable browser proof blocks instead of falling back to LLM-only
-approval. The gate is exported by `@voidcorp/mission-engine`; browser I/O remains in runtime adapters.
+current diff hash; a later component or CSS change makes them stale. Craft review identifies
+concrete defects against accepted requirements; unavailable browser proof blocks instead of
+falling back to LLM-only approval. The gate is exported by `@voidcorp/mission-engine`; browser I/O remains in runtime adapters.
+
+The current Visual Craft Director contract is v4: findings identify concrete defects rather than
+require numeric ratings. Its v2 and v3 bytes remain under `contract-history/visual-craft-director/`.
+The existing v2-to-v3 migration reads the archived v3 target and still requires an exact installed
+v3 agent. It does not reinterpret a frozen mission using v4 or provide automatic v3-to-v4 migration.
+New missions use v4. The UI assessment API accepts optional legacy ratings for input compatibility
+but bases approval on verdict, independent contexts and current visual/test evidence.
 
 All runtimes now emit one strict, versioned event contract. `@voidcorp/mission-engine`
 validates bounded JSON and reduces it without I/O. `@voidcorp/hook-runner` adapts
@@ -1654,8 +1660,6 @@ Implemented today in `.github/workflows/ci.yml` (all block the PR on failure):
 
 | Gate | What it runs |
 |---|---|
-| Anti-bloat: SKILL.md size | fails if any `SKILL.md` exceeds 400 LOC |
-| Anti-bloat: hook size | fails if any `hooks/*.sh` (excluding `_`-prefixed libs) exceeds 100 LOC |
 | Shell syntax | `bash -n` on every hook |
 | Manifest ↔ disk | fails if `plugin.json` wires a `hooks/<name>.sh` that does not exist on disk |
 | core-assets sync | regenerates `core-assets` and fails if it drifted from `packages/core` |

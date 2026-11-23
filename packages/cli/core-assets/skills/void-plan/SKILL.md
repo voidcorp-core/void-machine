@@ -62,21 +62,15 @@ Each implementation step has this shape:
 
 - **Goal**: <one sentence>
 - **Depends on**: [step-3, step-5] (or "none")
-- **TDD mode**: strict | souple | exploratory
 - **Verification gate**: <what must pass before moving to step N+1>
 - **Expected change**: one logical, bisectable commit or dependency-ordered commits; RED/GREEN evidence is retained independently of commit boundaries
 - **Notes**: <constraints, gotchas, hook implications>
 ```
 
-### TDD mode declaration
+### Testing strategy
 
-Every implementation step states its mode. Examples:
-
-- **strict** — new business behavior, hotfix on payment surface, refactor that changes payment behavior
-- **souple** — glue at integration boundary covered by higher-level test, framework wiring
-- **exploratory** — spike, POC, throwaway script
-
-The declared mode guides testing at execution time. Observed test results establish evidence; no sibling-file or declaration write gate proves the mode was followed. If mode is missing, the plan is incomplete.
+Apply `void-tdd` from the actual change and explicit project requirements. Record material
+strategy or exceptions only; a missing per-step mode label does not make a plan incomplete.
 
 ### Verification gate
 
@@ -84,43 +78,24 @@ Each step's gate states which checks must pass before moving on. Examples:
 
 - `tsc --noEmit && vitest run --filter checkoutCart`
 - the project's configured lint command for the affected code and tests
-- the configured mutation threshold, when the project has a mutation runner
+- mutation checks when explicitly required or needed to resolve concrete test-strength uncertainty
 
 The gate is observable. The user sees the output before the next step begins.
 
 ---
 
-## Vertical slices over horizontal phases
+## Prefer small verifiable slices
 
-Slice the plan into **vertical tranches** that cut through every layer (UI → domain → persistence) and deliver one end-to-end testable behavior. Do NOT phase horizontally — "first the whole schema, then the whole API, then the whole UI."
-
-Why vertical wins:
-
-- A vertical slice is verifiable and mergeable on its own: it produces working, demonstrable value at each step.
-- Horizontal phasing accumulates undeliverable work and hides integration errors until the final wiring step, exactly when they are most expensive to fix.
-- Each slice exercises the seams between layers early, so contract mismatches surface in step 1, not step 8.
-
-Prefer "checkout one item, end to end" then "checkout many items" over "all models, then all ports, then all UI." Each step in the plan should name the thin slice it ships.
-
-**MVP-cut first** (vendored from gstack `/spec`): the first slice is the smallest version that delivers real value — name it explicitly, and defer everything not required to prove that value. The plan grows from a shipping core, not toward one.
-
----
+Prefer end-to-end feature slices that expose integration errors early. Bounded preparatory
+refactors, infrastructure work and compatible migration stages are useful steps when the accepted
+scope needs them. Verify contracts early and finish migration cleanup; do not invent UI work or
+speculative foundations just to make every step cross every layer.
 
 ## Review checkpoints
 
-For non-trivial plans (≥ 5 steps), declare 1–2 explicit checkpoints where the user reviews work-to-date.
-
-```markdown
-### Checkpoint A — after Step 4
-
-User reviews the domain layer (Steps 1–4) before proceeding to the adapters layer.
-
-Stop here. Run `void-verify`. Wait for user signal to proceed.
-```
-
-Checkpoints prevent "I shipped 10 steps before you noticed step 3 was wrong."
-
----
+Continue authorized execution with progress updates and incremental verification. Pause for an
+explicit human hold, a decision beyond the mandate, `void-learn` approval or protected deployment
+promotion. Step count alone never creates a human pause; preserve existing explicit holds.
 
 ## Resume point
 
@@ -160,11 +135,10 @@ After writing the plan, scan for:
 
 1. **Placeholders** — any TBD / TODO / vague steps? Fix.
 2. **Missing verification gates** — every step has one? Fix.
-3. **Missing TDD mode** — every implementation step declares one? Fix.
 4. **Unrealistic dependencies** — does step N actually need step N-1, or could they parallelize?
 5. **Missing execution handoff** — a standalone plan has a correct resume point; a tracker-backed program has the complete stable order/dependency table?
 6. **Source of authority** — links to the approved spec when present, otherwise records the explicit request?
-7. **Executability gate** (vendored from gstack `/spec`) — could an *unfamiliar* implementer or agent execute this plan with **zero follow-up questions**? Walk one step as if you'd never seen the codebase: is every file named, every metric quantified, every acceptance criterion observable? Any "figure it out at implementation time" is an ambiguity to resolve now.
+7. **Executability gate** (vendored from gstack `/spec`) — can an unfamiliar implementer understand the goal, constraints, dependencies and observable acceptance? Resolve consequential ambiguity; routine implementation choices and investigation stay with the writer.
 
 Fix inline. Then user-review gate.
 
@@ -212,7 +186,7 @@ Set `high_risk: true` when the plan touches:
 - **Downstream — `void-ticket`**: converts a multi-ticket plan into native tracker items and installs its active handoff.
 - **Downstream — `void-implement`**: executes one complete ticket and maintains its tracker lifecycle.
 - **With `void-autopilot`**: drains independent ready tickets only through its attended flow.
-- **With `void-tdd`**: per-step mode selection lives in the plan.
+- **With `void-tdd`**: execution applies the discipline; the plan records material testing choices.
 - **With `void-code-review`**: review checkpoints declared in the plan are honored.
 - **With `void-verify`**: the plan's "Done" criteria feed the completion checklist.
 - **With `void-plan-review`**: optional multi-lens review for high-risk plans (downstream of this skill, upstream of implementation).
@@ -223,7 +197,6 @@ Set `high_risk: true` when the plan touches:
 ## Anti-rules
 
 - MUST NOT invent scope beyond the approved spec or explicit request.
-- MUST NOT skip TDD mode declaration per implementation step.
 - MUST NOT skip verification gates per step.
 - MUST NOT omit the applicable execution handoff: resume point for standalone work, tracker table for a multi-ticket program.
 - MUST NOT omit the source of authority: link the spec when present, otherwise record the explicit request.

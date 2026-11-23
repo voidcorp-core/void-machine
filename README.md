@@ -73,7 +73,7 @@ What is installed, in numbers:
 |---|---|---|
 | Core skills | 42 | Automatically, when what you are doing matches |
 | Stack pack skills | 28 | Same, for the packs you activated |
-| Hooks | 18 | Native tool guards and optional diagnostics; see the runtime manifests |
+| Hooks | 15 | Native tool guards and optional diagnostics; see the runtime manifests |
 | Agents | 21 | Delegated by a skill, or invoked by name |
 | Specialists | 16 | Invoked in their own fresh context during review |
 
@@ -284,17 +284,16 @@ pnpm verify     # every gate CI runs, in its order
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md), then
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the package boundaries.
 
-Eight anti-bloat rules gate every pull request: a skill stays under 400 lines
-and covers one subject, two skills may not overlap by more than 30%, a
-discovery description has a non-blocking 250-character target and a hard cap at 500, hooks stay under 100 lines
-with no home-grown DSL, agents keep an explicit scope, and skill tests gate the
-release. They exist because a doctrine that grows without limit stops being
-read.
+Keep skills and hooks concise and focused without absolute line caps or a
+home-grown DSL. Review responsibility overlap in context. Discovery descriptions
+keep a non-blocking 250-character target and a hard cap at 500; technical names,
+resolved references, explicit agent scopes and applicable skill tests remain
+required. Load detailed references only when useful so the doctrine stays readable.
 
 ## Philosophy
 
-Three non-negotiables, in order: **safety** (test-first, paired assertions,
-schema-validated boundaries), **performance** (back-of-the-envelope before code,
+Three non-negotiables, in order: **safety** (test-first, validation at trust boundaries
+and where invariants can change), **performance** (back-of-the-envelope before code,
 mechanical sympathy, batch over react), **developer experience** (fast feedback,
 no magic, every convention motivated in writing).
 

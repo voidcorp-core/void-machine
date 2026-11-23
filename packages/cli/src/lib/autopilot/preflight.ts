@@ -24,6 +24,7 @@ import type { CheckResult } from '../prerequisites.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 export interface ParsedProgram {
+  readonly source?: string;
   readonly status?: string;
   /**
    * True when a block was written and then took its consent back. Carried
@@ -32,6 +33,7 @@ export interface ParsedProgram {
    */
   readonly autopilotConsentWithheld?: boolean;
   readonly autopilot?: {
+    readonly schemaVersion?: 1 | 2;
     readonly clusterSize?: number;
     /** The `mergeGate` of a 4.0 programme, which the loop refuses until migrated. */
     readonly legacyMergeGate?: string;
@@ -117,14 +119,14 @@ function programCheck(observation: AutopilotObservation): CheckResult {
   const name = 'autopilot program';
   const broken = malformedProgram(observation);
   if (broken !== undefined) {
-    return fail(name, `.void/program.md could not be parsed: ${broken.problem}`, broken.fix);
+    return fail(name, `Autopilot authority could not be parsed: ${broken.problem}`, broken.fix);
   }
   const program = parsedProgram(observation);
   if (program === undefined) {
     return unknown(
       name,
-      'no .void/program.md, so there is no program to drain',
-      'author one with void-ticket, or ignore autopilot in this project',
+      'no Autopilot authority declared',
+      'declare authority only after user approval, or ignore autopilot in this project',
     );
   }
   if (program.status !== 'executing') {
@@ -140,8 +142,8 @@ function programCheck(observation: AutopilotObservation): CheckResult {
   if (program.autopilotConsentWithheld === true) {
     return fail(
       name,
-      'the program declares `enabled: false`, so it has taken back its consent to run unattended',
-      'set `autopilot.enabled: true`, or leave the field out; the block itself stays as it is',
+      `${program.source ?? 'the program'} declares \`enabled: false\`, so it has taken back its consent to run unattended`,
+      'change consent only on an explicit user decision; config declarations require an explicit enabled boolean',
     );
   }
   // Declaring the block is the consent. A program without one has not withheld a
@@ -150,17 +152,17 @@ function programCheck(observation: AutopilotObservation): CheckResult {
     return fail(
       name,
       'the program declares no autopilot block, so nothing resumes automatically',
-      'add an autopilot block to the program frontmatter; declaring it is the consent',
+      'declare config.autopilot with explicit enabled only after user approval',
     );
   }
-  return pass(name, 'executing, autopilot declared');
+  return pass(name, `executing, autopilot declared${program.source === undefined ? '' : ` in ${program.source}`}`);
 }
 
 // A file that did not parse has no fields to judge. Reporting a merge mode
 // and failing "no verifyCommands" off an unparsed file states two things the
 // file never said — the same misattribution this preflight exists to avoid.
-const UNPARSED = 'not judged: .void/program.md could not be parsed';
-const UNPARSED_FIX = 'fix the frontmatter reported by the program check above, then run doctor again';
+const UNPARSED = 'not judged: Autopilot authority could not be parsed';
+const UNPARSED_FIX = 'fix the declaration reported by the authority check above, then run doctor again';
 
 /**
  * Who merges, as the loop will read it. There is one mode: the loop merges on
@@ -174,10 +176,11 @@ function mergeModeCheck(observation: AutopilotObservation): CheckResult {
   if (malformedProgram(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
   const block = parsedProgram(observation)?.autopilot;
   const gate = block?.legacyMergeGate;
-  if (gate !== undefined) {
+  if (gate !== undefined || block?.schemaVersion === 1) {
     return fail(
       name,
-      `the programme still declares \`mergeGate: ${gate}\`, which the loop refuses since the single merge mode`,
+      gate === undefined ? 'autopilot.schemaVersion is 1, which the loop refuses'
+        : `the programme still declares \`mergeGate: ${gate}\`, which the loop refuses since the single merge mode`,
       gate === 'union-reviewed'
         ? 'remove `mergeGate` and set `autopilot.schemaVersion: 2`; the loop merges on its own by default'
         : `run \`${PRODUCT_COMMAND} autopilot merges --by-human\` first to keep every merge yours, then remove \`mergeGate\` and set \`autopilot.schemaVersion: 2\``,

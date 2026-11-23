@@ -11,7 +11,7 @@ import { autopilotFailure } from '../lib/autopilot/errors.js';
 import { ticketIdSchema } from '../lib/autopilot/judgments.js';
 import { loopProgramOf, protectedBranches } from '../lib/autopilot/loop.js';
 import { type GitRunner, readDefaultBranch, readSharedState } from '../lib/autopilot/loop-observe.js';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { requireAutopilotAuthority } from '../lib/autopilot/authority.js';
 import { admitFingerprint, changedParts, fingerprintOf, fingerprintSchema, retainedFingerprintSchema, type SharedFingerprint } from '../lib/autopilot/shared-state.js';
 import type { LoopCommandOutput, LoopRunners } from './autopilot-loop.js';
 import { flagValue } from './autopilot-usage.js';
@@ -102,9 +102,8 @@ function gitOf(context: LoopRunners): GitRunner {
 }
 
 function current(context: LoopRunners, kept?: readonly string[], schemaVersion: 3 | 4 = 4): SharedFingerprint {
-  const descriptor = readProgramDescriptor(context.root);
-  if (descriptor === undefined) refuse('the project has no programme');
-  const branches = kept ?? protectedBranches(loopProgramOf(descriptor).autopilot);
+  const authority = loopProgramOf(requireAutopilotAuthority(context.root));
+  const branches = kept ?? protectedBranches(authority.autopilot);
   return fingerprintOf(readSharedState(gitOf(context), { bases: branches, schemaVersion }), branches, schemaVersion);
 }
 
@@ -206,9 +205,7 @@ export function publishCommand(argv: readonly string[], context: LoopRunners): L
     const recorded = guard(context, ticket);
     if (recorded.protectedBranches.includes(branch)) refuse('publication cannot target a base or deploying branch');
     // Match merge/arm: an omitted deployment branch means the repository default.
-    const descriptor = readProgramDescriptor(context.root);
-    if (descriptor === undefined) refuse('the project has no programme');
-    let deploying = loopProgramOf(descriptor).autopilot.deployBranch;
+    let deploying = loopProgramOf(requireAutopilotAuthority(context.root)).autopilot.deployBranch;
     if (deploying === undefined) {
       if (context.gh === undefined) refuse('the deploying branch is indeterminate without a GitHub runner');
       deploying = readDefaultBranch(context.gh);

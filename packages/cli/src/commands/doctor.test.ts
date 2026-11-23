@@ -176,3 +176,24 @@ describe('doctor from a linked worktree', () => {
     });
   });
 });
+
+
+describe('doctor shares Autopilot authority admission', () => {
+  it('reports config-only authority and its actual source without requiring a programme', () => {
+    const root = projectRecording(cliVersion());
+    writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: {
+      schemaVersion: 2, enabled: true, base: 'develop', deployBranch: 'main',
+      progress: { provider: 'linear', scope: 'team/project',
+        states: { ready: ['Todo'], started: ['Doing'], review: ['Review'], done: ['Done'] } },
+    } }));
+    const { out } = runDoctor(root);
+    expect(out).toContain('executing, autopilot declared in .void/config.json');
+    expect(out).not.toContain('no .void/program.md');
+  });
+  it('does not invent a permission for absent or malformed config', () => {
+    const root = projectRecording(cliVersion());
+    expect(runDoctor(root).out).not.toContain('autopilot program');
+    writeFileSync(join(root, '.void/config.json'), '{ broken');
+    expect(runDoctor(root).out).toContain('Autopilot authority could not be parsed');
+  });
+});

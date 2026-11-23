@@ -929,6 +929,22 @@ describe('guarded publication and human fingerprint renewal', () => {
       '--expected', record.currentDigest, '--cause', 'authorized repair', '--decision', 'human:approval-42'];
   }
 
+  it.each(['disabled', 'invalid', 'unknown', 'unreadable'])('refuses %s authority during fingerprint and publication without pushing', failure => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const bytes = failure === 'unreadable' ? '{' : JSON.stringify({ autopilot: {
+      ...CONFIG_AUTHORITY, ...(failure === 'disabled' ? { enabled: false } : failure === 'invalid' ? { enabled: 'true' } : { trusted: true }),
+    } });
+    writeFileSync(join(root, '.void/config.json'), bytes);
+    const original = readFileSync(recordPath(root), 'utf8');
+    const spy = publication(root);
+    for (const args of [['fingerprint', '--after', 'DEV-1'], publishArgs(root)]) {
+      expect(runAutopilotCommand(args, '', spy.context).exitCode).toBe(2);
+    }
+    expect(spy.pushes).toEqual([]);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+  });
+
   it('pushes the literal checked SHA and explicit target only after a successful guard', () => {
     const root = candidate();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
@@ -1145,5 +1161,56 @@ describe('guarded publication and human fingerprint renewal', () => {
     writeFileSync(join(directory, `${prior}.json`), '{');
     expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(2);
     expect(runAutopilotCommand(valid, '', context(root)).exitCode).toBe(2);
+  });
+});
+
+const CONFIG_AUTHORITY = {
+  schemaVersion: 2,
+  enabled: true,
+  clusterSize: 4,
+  base: 'develop',
+  deployBranch: 'main',
+  progress: {
+    provider: 'linear', scope: 'voidcorp/DEV',
+    states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] },
+  },
+};
+
+describe('autopilot authority migration', () => {
+  it.each([
+    ['withheld consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: false } })],
+    ['invalid consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: 'true' } })],
+    ['unknown field', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, trusted: true } })],
+    ['conflicting target', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, base: 'integration' } })],
+    ['unreadable config', '{ unfinished'],
+  ])('refuses %s before contacting GitHub despite a legacy grant', (_name, config) => {
+    const root = project();
+    writeFileSync(join(root, '.void/config.json'), config);
+    const calls: string[] = [];
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']), args => {
+      calls.push(args.join(' '));
+      return answer(args);
+    });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/autopilot|config/i);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not admit work from a completed legacy programme', () => {
+    const root = project();
+    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('status: executing', 'status: completed'));
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('executing');
+  });
+
+  it('uses explicit config authority without inventing a programme', () => {
+    const root = project();
+    rmSync(join(root, '.void/program.md'));
+    writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: CONFIG_AUTHORITY }));
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
+    expect(result.exitCode).toBe(0);
+    expect(result.decision.actions).toContainEqual({ kind: 'assign', ticketId: 'DEV-2', footprint: ['packages/dev-2'] });
+    expect(existsSync(join(root, '.void/program.md'))).toBe(false);
   });
 });

@@ -151,3 +151,23 @@ describe('paths accepts a list of globs', () => {
     expect(result.ok === false && result.issues.join(' ')).toContain('paths.business');
   });
 })
+
+
+describe('declared Autopilot authority', () => {
+  const authority = {
+    schemaVersion: 2, enabled: true, base: 'develop', deployBranch: 'main',
+    progress: { provider: 'linear', scope: 'team/project',
+      states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] } },
+  };
+  it('retains explicit authority while a default config grants nothing', () => {
+    expect(configSchema.parse({ autopilot: authority })).toHaveProperty('autopilot.enabled', true);
+    expect(configSchema.parse({})).not.toHaveProperty('autopilot');
+  });
+  it.each([
+    { ...authority, enabled: undefined }, { ...authority, enabled: 'true' },
+    { ...authority, schemaVersion: 1 }, { ...authority, extraPermission: true },
+    { ...authority, progress: { ...authority.progress, order: ['DEV-1'] } },
+  ])('refuses malformed or undeclared authority %j', autopilot => {
+    expect(validateConfig({ autopilot }).ok).toBe(false);
+  });
+});

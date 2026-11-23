@@ -21,7 +21,8 @@ import {
   VOID_MACHINE_DIR,
 } from '@voidcorp/hook-runner';
 import { autopilotPreflight } from '../lib/autopilot/preflight.js';
-import { LEGACY_PROGRAM_PATHS, PROGRAM_PATH, programPath, readProgramDescriptor } from '../lib/autopilot/program.js';
+import { readAutopilotAuthority } from '../lib/autopilot/authority.js';
+import { LEGACY_PROGRAM_PATHS, PROGRAM_PATH } from '../lib/autopilot/program.js';
 import { packsCoherenceIssues, validateConfig } from '../lib/config-schema.js';
 import { applyRepair, conformanceRules, inspectConformance } from '../lib/conformance/run.js';
 import { checkGlyph, checkShowsFix } from '../lib/doctor-render.js';
@@ -69,9 +70,9 @@ function enabledPackNames(plugins: Record<string, unknown>): string[] {
     .filter((name) => name.length > 0 && name !== CORE_PLUGIN_NAME);
 }
 
-function declaresProgram(root: string): boolean {
+function declaresAutopilot(root: string): boolean {
   try {
-    return existsSync(join(root, programPath(root)));
+    return readAutopilotAuthority(root) !== undefined;
   } catch {
     // Ambiguity is still a declaration. The parser owns the actionable error.
     return true;
@@ -323,7 +324,7 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // they do not use. Non-mutating throughout — doctor must stay safe to run
   // while a cluster is in flight, so nothing here touches a tracker, a remote
   // or a git ref, and what it cannot read reports as unknown rather than false.
-  if (declaresProgram(root)) {
+  if (declaresAutopilot(root)) {
     checks.push(...autopilotPreflight(observeAutopilot(root)));
   } else {
     // Naming the path, because silence is the one answer a reader cannot tell
@@ -752,10 +753,10 @@ function observeObservedPaths(root: string, insideRepo: boolean): readonly Obser
  * could ever satisfy here, and operators paid for the detour (#193).
  */
 function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0] {
-  let program: ReturnType<typeof readProgramDescriptor>;
+  let program: ReturnType<typeof readAutopilotAuthority>;
   let malformed: { problem: string; fix: string } | undefined;
   try {
-    program = readProgramDescriptor(root);
+    program = readAutopilotAuthority(root);
   } catch (error) {
     // A malformed program is reported by the check below as a failure of the
     // program, not as a crash of doctor — and as malformed, not as absent.
@@ -780,12 +781,14 @@ function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0
           ? undefined
           : {
               status: program.status,
+              source: program.source,
               autopilotConsentWithheld: program.autopilotConsentWithheld,
               // Absent means the program opted out, which preflight reports as
               // such. Reporting an empty block instead would read as consent.
               ...(program.autopilot === undefined ? {} : {
                 autopilot: {
                   clusterSize: program.autopilot.clusterSize,
+                  schemaVersion: program.autopilot.schemaVersion,
                   ...(program.autopilot.legacyMergeGate === undefined
                     ? {}
                     : { legacyMergeGate: program.autopilot.legacyMergeGate }),

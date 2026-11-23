@@ -780,8 +780,7 @@ describe('autopilot review, around a crash and beside other reviews', () => {
     const repo = repository();
     rmSync(join(repo.root, '.void', 'program.md'));
     const { runners: built, launches } = runners(repo);
-    const output = await reviewCommand(argv(repo.head), built);
-    expect(output.value).toMatchObject({ outcome: 'failed', cause: expect.stringContaining('programme') });
+    await expect(reviewCommand(argv(repo.head), built)).rejects.toThrow(/programme/);
     expect(launches).toHaveLength(0);
   });
 
@@ -826,5 +825,21 @@ describe('reviewBrief', () => {
     const brief = reviewBrief({ ...base, diff: '+x', summarised: false, round: 2, previous });
     expect(brief).toContain('This is round 2');
     expect(brief).toContain('Five slots.');
+  });
+});
+
+
+describe('review authority before remote observation', () => {
+  it.each([nativeReviewCommand, reviewCommand])('refuses malformed config before remote reads or dispatch', async command => {
+    const repo = repository();
+    writeFileSync(join(repo.root, '.void/config.json'), '{broken');
+    const { runners: built, launches } = runners(repo);
+    const calls: string[] = [];
+    await expect(command(argv(repo.head), { ...built, gh: args => {
+      calls.push(args.join(' ')); return built.gh(args);
+    } })).rejects.toThrow(/config.json/);
+    expect(calls).toEqual([]);
+    expect(launches).toEqual([]);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
   });
 });

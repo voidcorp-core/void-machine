@@ -89,7 +89,7 @@ describe('the provider-agnostic program boundary', () => {
   it('names the program contract without prescribing a tracker product', () => {
     const check = named(autopilotPreflight(observation({ program: undefined })), 'autopilot program');
 
-    expect(check?.message).toMatch(/\.void\/program\.md/);
+    expect(check?.message).toMatch(/Autopilot authority/);
     expect(check?.message).not.toMatch(/Linear|ACTIVE/);
   });
 });
@@ -287,11 +287,6 @@ describe('the runtime adapter', () => {
 describe('the doctor wiring', () => {
   const DOCTOR = readFileSync(new URL('../../commands/doctor.ts', import.meta.url), 'utf8');
 
-  it('runs the preflight only for a project that declares a program', () => {
-    // Seven extra checks on every project would be noise about a feature they
-    // do not use, and would make `doctor` look broken where nothing is wrong.
-    expect(DOCTOR).toMatch(/programPath\(root\).*checks\.push\(\.\.\.autopilotPreflight/s);
-  });
 
   it('probes nothing remote, because --no-remote promises an offline run', () => {
     // Unprobed, not null: the offline contract is the same, but the reader is

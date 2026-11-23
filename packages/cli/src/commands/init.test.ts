@@ -124,7 +124,7 @@ describe('sourceRepoVerdict', () => {
 // can prove it wrote. `.void/config.json` is co-owned -- the project tunes its
 // paths, modes and commands, and the harness only adds pack pins. So the flag
 // buys nothing here, and overwriting cost a monorepo its enforcement floor.
-// It stays useful for exactly one case: a config too broken to merge into.
+// Even malformed bytes may contain consent: only a deliberate repair may replace them.
 describe('configWriteVerdict', () => {
   it('writes the seeded scaffold when the project has no config yet', () => {
     expect(configWriteVerdict({ exists: false, readable: false, force: false })).toBe('scaffold');
@@ -142,8 +142,8 @@ describe('configWriteVerdict', () => {
     expect(configWriteVerdict({ exists: true, readable: false, force: false })).toBe('keep-unreadable');
   });
 
-  it('lets --force replace an unparseable config, the one case nothing can be merged', () => {
-    expect(configWriteVerdict({ exists: true, readable: false, force: true })).toBe('overwrite-unreadable');
+  it('preserves an unparseable authority even when --force was supplied', () => {
+    expect(configWriteVerdict({ exists: true, readable: false, force: true })).toBe('keep-unreadable');
   });
 });
 

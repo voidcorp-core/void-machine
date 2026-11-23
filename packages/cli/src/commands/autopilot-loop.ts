@@ -70,7 +70,7 @@ import {
   readSharedState,
   resolveLoopBase,
 } from '../lib/autopilot/loop-observe.js';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { requireAutopilotAuthority } from '../lib/autopilot/authority.js';
 import type {
   SharedStateReading,
   SharedFingerprint,
@@ -261,16 +261,7 @@ function trackerFrom(stdin: string): LoopTracker {
 }
 
 function loopProgram(root: string): LoopProgram {
-  const descriptor = readProgramDescriptor(root);
-  if (descriptor === undefined) {
-    throw autopilotFailure(
-      'AUTOPILOT_PROGRAM',
-      'the loop runs under a programme and this project declares none',
-      '`.void/program.md` is absent',
-      'declare the programme, with its `autopilot` block and `progress` provider',
-    );
-  }
-  return loopProgramOf(descriptor);
+  return loopProgramOf(requireAutopilotAuthority(root));
 }
 
 function renderAction(action: LoopAction, humanWaitLabel: string): string {

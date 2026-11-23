@@ -212,10 +212,10 @@ export function sourceRepoVerdict(input: {
  * monorepo its whole enforcement floor: `paths.business` fell back to the
  * single-app default, the config stayed valid, and nothing went red.
  *
- * It keeps exactly one job here, the case where merging is not possible at all:
- * a config too broken to parse.
+ * An unreadable config may contain consent or restrictions. Even --force cannot
+ * discard that unknown authority and reactivate a legacy programme.
  */
-export type ConfigWriteVerdict = 'scaffold' | 'merge' | 'overwrite-unreadable' | 'keep-unreadable';
+export type ConfigWriteVerdict = 'scaffold' | 'merge' | 'keep-unreadable';
 
 export function configWriteVerdict(input: {
   readonly exists: boolean;
@@ -224,7 +224,7 @@ export function configWriteVerdict(input: {
 }): ConfigWriteVerdict {
   if (!input.exists) return 'scaffold';
   if (input.readable) return 'merge';
-  return input.force ? 'overwrite-unreadable' : 'keep-unreadable';
+  return 'keep-unreadable';
 }
 
 export async function init(args: readonly string[]): Promise<void> {
@@ -496,7 +496,7 @@ async function effectivePacks(
   });
   if (verdict === 'keep-unreadable') {
     throw new Error('Cannot reconcile .void/config.json: unreadable configuration, left untouched. '
-      + 'Restore a JSON object or use --force to overwrite it.');
+      + 'Restore the JSON object explicitly; --force cannot discard unknown Autopilot permissions.');
   }
   const retained = opts.replacePacks ? [] : Object.keys(config?.packs ?? {}).map(key => {
     const pack = findPack(key.replace(/^@voidcorp\//, ''));
@@ -586,17 +586,11 @@ async function writeConfig(
   const verdict = configWriteVerdict({ exists, readable: parsed !== undefined, force: opts.force });
 
   if (verdict === 'keep-unreadable') {
-    line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}unreadable, leaving untouched (use --force to overwrite)`);
+    line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}unreadable, leaving untouched (restore the JSON object explicitly)`);
     return;
   }
 
-  if (verdict === 'scaffold' || verdict === 'overwrite-unreadable') {
-    // Named before the write, never after. This is the one path where --force
-    // replaces a file the project co-owns, and whatever paths or modes it had
-    // tuned are not recoverable from a config nothing could parse.
-    if (verdict === 'overwrite-unreadable') {
-      line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}overwriting unparseable config (--force); hand-tuned keys are lost`);
-    }
+  if (verdict === 'scaffold') {
     const config = buildDefaultConfig(seed);
     for (const pack of packs) config.packs[`@voidcorp/${pack.name}`] = packPin;
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);

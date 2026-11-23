@@ -40,7 +40,10 @@ import {
   ticketIdSchema,
 } from './judgments.js';
 import type { MergeHold } from './merge-hold.js';
-import type { AutopilotConfig, ProgramDescriptor, ProgressStates } from './program.js';
+import type { AutopilotConfig, ProgressStates } from './program.js';
+import type { AutopilotAuthority } from './authority.js';
+import { HUMAN_WAIT_LABEL } from './config.js';
+export { HUMAN_WAIT_LABEL } from './config.js';
 import {
   changedParts,
   fingerprintOf,
@@ -52,12 +55,6 @@ import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 /** A tracker scope larger than this is a backlog dump, not a loop observation. */
 export const TRACKED_TICKETS_MAX = 256;
-/**
- * The tracker label of a ticket handed to a person, unless the programme names
- * another in `autopilot.humanWaitLabel`. One name, so the orchestrator that sets
- * it and the one that reads it back after a restart can never disagree.
- */
-export const HUMAN_WAIT_LABEL = 'void:human-wait';
 /**
  * Paths the loop never merges itself: the machinery that decides whether a
  * change may merge. The workflows and actions run the required checks and
@@ -98,6 +95,9 @@ export const PROTECTED_PATHS_FLOOR = [
   'packages/void-machine/src/**',
   'packages/cli/src/commands/agents.ts',
   'packages/cli/src/lib/autopilot/program.ts',
+  'packages/cli/src/lib/autopilot/authority.ts',
+  'packages/cli/src/lib/autopilot/config.ts',
+  'packages/cli/src/lib/config-schema.ts',
   'packages/cli/src/lib/autopilot/judgments.ts',
   'packages/cli/src/lib/autopilot/merge-hold.ts',
   // The command that delegates the reviewer and records its verdict, the
@@ -430,16 +430,21 @@ export interface LoopDecision {
   readonly merges: 'automatic' | 'by-human';
 }
 
-/** The programme's consent and state roles, or a refusal naming what is missing. */
-export function loopProgramOf(descriptor: ProgramDescriptor): LoopProgram {
+/** Resolved consent and state roles, or a refusal naming what is missing. */
+export function loopProgramOf(descriptor: Omit<AutopilotAuthority, 'source'>): LoopProgram {
+  if (descriptor.status !== 'executing') {
+    throw autopilotFailure('AUTOPILOT_PROGRAM', 'Autopilot is not executing',
+      `the legacy programme status is ${descriptor.status}`,
+      'resume only within an explicitly executing, approved mandate');
+  }
   if (descriptor.autopilot === undefined || descriptor.progress === undefined) {
     throw autopilotFailure(
       'AUTOPILOT_PROGRAM',
-      'the programme does not consent to the autopilot loop',
+      'the project does not consent to the autopilot loop',
       descriptor.autopilotConsentWithheld
         ? '`autopilot.enabled` is false'
-        : 'the programme declares no `autopilot` block or no `progress` source',
-      'declare an `autopilot` block and a `progress` provider in `.void/program.md`',
+        : 'no `autopilot` block or `progress` source is declared',
+      'declare explicit Autopilot authority in `.void/config.json`, or preserve the legacy programme declaration',
     );
   }
   if (descriptor.autopilot.schemaVersion === 1) throw legacyProgramme(descriptor.autopilot);

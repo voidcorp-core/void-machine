@@ -493,14 +493,22 @@ and a silent report is indistinguishable from not having looked.
 The programme is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
 mutate it. A declaration never migrates into a directory the harness ignores: one project's
 programme was moved from `plans/ACTIVE.md` to `.void/machine/ACTIVE.md` by an `update`, taking its
-running order, its human gates and the `autopilot` block that IS the consent to autonomous
-execution out of the repository with it, where nobody could audit or revise them in a PR. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
+running order, its human gates and its legacy `autopilot` consent block
+out of the repository with it, where nobody could audit or revise them in a PR. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
 materialized in a capable progress provider. It stores durable context and routing only: programme,
 plan/spec links, provider scope, ordered unit identifiers, lifecycle-state roles, human gates, and
-the required `autopilot` consent block. Mutable status, assignee, blockers, comments, and review
+the legacy `autopilot` consent block when config has not taken over. Mutable status, assignee, blockers, comments, and review
 evidence live only in the provider.
 
-`packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
+Autopilot authority now has one read boundary, `autopilot/authority.ts`, shared by
+admission, review, fingerprint, publication and doctor. It validates the declared
+`config-schema.ts` block using the same pure grammar as the legacy programme.
+Absent config block preserves legacy behavior; present-invalid never falls back,
+and two declarations must be semantically equivalent across all authority fields.
+`init --force` cannot replace unreadable co-owned config bytes. Local work independent
+of Autopilot remains available. See [the migration contract](AUTOPILOT-AUTHORITY.md).
+
+`packages/cli/src/lib/autopilot/program.ts` remains the parser of programme context. It
 validates every field on read and refuses a file that is present but wrong, rather than falling
 back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
 place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by

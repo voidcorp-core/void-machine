@@ -38,7 +38,7 @@ import {
 } from '../lib/autopilot/judgments.js';
 import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX, REVIEW_RUNNING_MS } from '../lib/autopilot/loop.js';
 import { type GhRunner, type GitRunner, PULL_REQUEST_FIELDS, parsePullRequestView } from '../lib/autopilot/loop-observe.js';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { requireAutopilotAuthority } from '../lib/autopilot/authority.js';
 import { flagValue } from './autopilot-usage.js';
 import { collectNativeReview } from '../lib/autopilot/native-review.js';
 import { inspectMission, loadMissionControllerPlan } from '../lib/runs/store.js';
@@ -441,16 +441,7 @@ function changeOf(runners: ReviewRunners, path: string, base: string): Change {
  * agents, settings, hooks and MCP servers the moment it starts there.
  */
 function protectedPathOf(root: string, paths: readonly string[]): string | undefined {
-  const descriptor = readProgramDescriptor(root);
-  if (descriptor === undefined) {
-    throw autopilotFailure(
-      'AUTOPILOT_PROGRAM',
-      'the loop reviews only under a programme, and this project declares none',
-      '`.void/program.md` is absent, so the protected paths cannot be read',
-      'declare the programme, with its `autopilot` block, before the loop reviews anything',
-    );
-  }
-  const areas = protectedPathsOf(loopProgramOf(descriptor).autopilot).map(compileArea);
+  const areas = protectedPathsOf(loopProgramOf(requireAutopilotAuthority(root)).autopilot).map(compileArea);
   return paths.find((path) => areas.some((area) => areaClaims(area, path)));
 }
 
@@ -614,6 +605,7 @@ async function executeReviewCommand(
   argv: readonly string[], runners: ReviewRunners, legacy: boolean,
 ): Promise<ReviewCommandOutput> {
   const target = targetOf(argv);
+  loopProgramOf(requireAutopilotAuthority(runners.root));
   const fields = PULL_REQUEST_FIELDS.join(',');
   const view = parsePullRequestView(runners.gh(['pr', 'view', String(target.pullRequest), '--json', fields]));
   if (view.state !== 'open' || view.headSha !== target.head) {

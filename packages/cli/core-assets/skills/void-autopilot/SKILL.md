@@ -53,15 +53,19 @@ scope under `void-security-guidance`. Role restrictions, including read-only rev
 
 ## Consent and target
 
-The run takes no argument. `.void/program.md` names the progress provider, its scope, the base and
-the `autopilot` block, so there is nothing to ask: not which ticket, not which provider.
+The run takes no argument. `.void/config.json` may declare `autopilot` with schema 2,
+an explicit boolean `enabled`, existing targets/restrictions, progress provider/scope/states
+and human gates. Only when the block is absent does the legacy programme supply authority.
+`enabled: false` withholds autonomous admission. Enabled declarations must agree after
+normalization. Invalid, unreadable or conflicting authority refuses dependent autonomous operations; unrelated local work remains available.
+Never create consent from a flag, a checkpoint or a repair. `init` and `update` preserve it.
 
-That file is also the consent, and consent is never inferred. An absent `.void/program.md`, a
-`status` other than `executing`, an `autopilot` block that is missing or unreadable, or
-`autopilot.enabled: false` all mean the same thing -- say so and stop. `void-machine autopilot next`
-refuses the same cases; inventing a target claims tickets nobody agreed to hand over. A programme
-still written for the 4.0 merge gate (`autopilot.schemaVersion: 1` with `mergeGate`) is refused
-too, with its migration; a former `mergeGate: human` runs `autopilot merges --by-human` first.
+The programme still supplies plan/spec and selection context during migration. Read that context
+when present; missing information needed to select work is a diagnostic, never an invented order.
+Config alone can authorize operations whose input already supplies the necessary selection.
+`void-machine autopilot next`, review, fingerprint and publication share the authority reader.
+A legacy programme with non-executing status or schema 1 is refused; a former
+`mergeGate: human` runs `autopilot merges --by-human` before any explicit migration.
 
 ---
 

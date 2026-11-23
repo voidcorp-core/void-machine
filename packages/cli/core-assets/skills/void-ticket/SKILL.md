@@ -5,9 +5,9 @@ description: Use when turning a finished brainstorm, plan, or design decision in
 
 # ticket
 
-A ticket an implementation agent can execute with zero follow-up questions. It does NOT invent scope: it ingests what was already decided (the brainstorm, the plan, this conversation, the relevant ADR) and renders it as a complete, estimated, labeled work item in the tracker. Downstream, `void-implement` executes it.
+A ticket an implementation agent can understand and execute within the agreed scope. It does NOT invent scope: it ingests what was already decided (the brainstorm, the plan, this conversation, the relevant ADR) and renders it as a complete, estimated, labeled work item in the tracker. Downstream, `void-implement` executes it.
 
-**Core principle:** the ticket is the contract between the thinking and the building. Every required slot is filled or the ticket is not ready. Estimate and labels are not optional metadata, they are how the backlog stays pilotable.
+**Core principle:** the ticket is the contract between the thinking and the building. State the goal, acceptance and constraints clearly. Native sizing, useful classification and milestones make the backlog pilotable; routine investigation remains with the writer.
 
 **Attribution**: see `.source`.
 
@@ -103,19 +103,14 @@ Thirty results means the terms were too broad, not the backlog too large.
 
 ---
 
-## The ticket: required slots
+## A complete, proportionate ticket
 
-Render into the tracker description. Every slot is REQUIRED unless marked optional. A missing required slot means the ticket is not ready.
-
-- **Title**: `[Verb] [Subject]`, imperative.
-- **Context**: why it exists; link to the broader goal / spec / ADR.
-- **Scope**: in scope / out of scope.
-- **Technical specs**: files and packages touched, applicable ADR, conventions and patterns to follow, third-party docs to ground in. Exhaustive enough that no unknown remains.
-- **Acceptance criteria**: objectively verifiable checkboxes.
-- **Definition of Done**: tests written and green, 0 lint / type errors, 0 regressions, plus ticket-specific items.
-- **Edge cases and gotchas**: boundary behaviors, error / empty / loading states, failure modes. This is the all-angles slot; an empty one means angles were missed.
-- **TDD mode**: defer to `void-tdd`'s path-based auto-selection; note an explicit override to strict only for a business-critical surface (auth, payments, security, money).
-- **Runner passes that apply**: which `void-implement` conditional passes you expect to fire (architecture? migration safety? async/idempotency? E2E? UX/UI? deep security?). This is an accelerator HINT, not authoritative: the runner still evaluates every predicate itself and may add passes you did not list.
+Use the project's template when useful. State the goal, relevant context, observable acceptance
+and Definition of Done, with constraints, known dependencies and useful references. Link existing
+specifications instead of repeating them; state essential information directly when unavailable.
+Include edge cases and technical detail that affect the result. Ordinary investigation and local
+implementation choices stay with the writer. Do not require every generic subsection, predict
+all implementation passes or repeat a TDD label to make a ticket ready.
 
 ### Close the link, both ways
 
@@ -141,11 +136,11 @@ link crosses.
 If the project has no tracker, say so and stop: there is no ticket to write, and
 the spec plus the plan already hold what would have gone in it.
 
-Native tracker fields (REQUIRED, set the real field, not prose):
+Native tracker metadata (use the real fields where available):
 
-- **Estimate** (points / size). Never leave empty.
-- **Labels** (at least one; reuse existing, create if genuinely new).
-- **Parent epic / project** link.
+- **Estimate**: populate the existing native team T-shirt scale; do not change workspace configuration.
+- **Type**: reuse useful existing type labels or equivalent native classification. Add labels only for actual filters/routing; preserve human holds and project taxonomy.
+- **Parent epic / project and milestone** links where applicable; retain native milestone visibility.
 - **Dependencies** (`blockedBy`) in the native field, not just text.
 - **Priority**.
 
@@ -199,42 +194,17 @@ claim automatic continuity.
 
 ---
 
-## All-angles sweep before saving
+## Before saving and sizing
 
-Run a quick expert sweep so nothing is missed, then fold what surfaces into Edge cases or the applicable-passes slot:
+Check that the accepted goal, observable acceptance, material risks, dependencies and useful
+references are clear. Apply technical and security detail proportionately to the affected surface.
+Missing consequential decisions need resolution; an empty generic subsection does not prove a gap.
 
-- **Architecture**: boundaries, data model, public types.
-- **Data / migrations**: schema change, backfill, zero-downtime (flags the runner's migration-safety pass).
-- **Security**: trust boundary, untrusted input, tenancy.
-- **Async / idempotency**: email, webhook, job, single-use token, replay (flags the runner's async pass).
-- **QA**: edge / error / empty states, the end-to-end path.
-- **UX**: if a UI surface is involved.
-- **Perf / observability / docs**: cost, logging, doc updates owed in the same change.
-
-This is the cheap insurance an expert team would not skip. It is what makes a ticket cover the angles the author would not have thought of alone.
-
----
-
-## Sizing
-
-Map T-shirt to the tracker's native scale: XS (<1h, trivial), S (1-3h), M (3-8h, minor unknowns), L (1-2d, real complexity), XL (>2d, split unless truly indivisible).
-
----
-
-## Red flags: STOP, the ticket is not ready
-
-| Rationalization | Reality |
-|-----------------|---------|
-| "I will add the estimate later" | Estimate is a required field. An unestimated backlog cannot be planned. |
-| "Labels do not matter for now" | At least one label, always. Filtering and routing depend on it. |
-| "The agent will figure out the edges" | The edge-cases slot is where all-angles coverage lives. Empty = angles missed. |
-| "Scope is obvious from the title" | The implementation agent has none of this conversation. Spell it out. |
-| "No parent, it is standalone" | Orphan tickets rot. Link the epic or project. |
-
-A ticket missing a required slot or field is not done, however clear it feels.
-
----
+Populate the team's existing T-shirt estimate (XS/S/M/L/XL or its native mapping). It expresses
+relative effort, complexity and uncertainty, not guaranteed duration. Split oversized work when
+that makes execution and review clearer. Keep status, ownership, milestones and dependencies
+truthful; avoid historical relabeling or a new taxonomy.
 
 ## Composition
 
-Upstream: `void-brainstorm` and `void-plan` produced the thinking (or a `source: forge` spec did — see "Ingest first"); this skill captures it. Downstream: `void-implement` consumes the ticket and the passes it declares. On a project, follow that project's tracker doctrine (team, project, label and estimate conventions) rather than re-deciding them here; this skill stays the harness-doctrine layer (ingest, required slots, runner handoff).
+Upstream: `void-brainstorm` and `void-plan` produced the thinking (or a `source: forge` spec did — see "Ingest first"); this skill captures it. Downstream: `void-implement` consumes the accepted task and evaluates applicable passes from the actual change. On a project, follow that project's tracker doctrine (team, project, label and estimate conventions) rather than re-deciding them here; this skill stays the harness-doctrine layer (ingest, clear acceptance, native metadata and execution handoff).

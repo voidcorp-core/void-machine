@@ -72,7 +72,7 @@ If `docs/specs/` holds a spec with `source: forge` in its frontmatter (the forge
 
 ## Pressure-testing a raw idea (upstream mode)
 
-Runs ONLY when the input is a raw *product idea* ("I want to build X"), not an already-scoped feature or a `source: forge` spec (that thinking is done). Before designing the right solution, make sure it is the right *problem*. This is the distilled `gstack:/office-hours` diagnostic, vendored here. Ambition is pushed for every subject in Step 4b, not here. Once premises hold, resume the normal design process (Step 1 onward) in the collaborative voice; this adversarial posture is scoped to this mode only.
+Runs ONLY when the input is a raw *product idea* ("I want to build X"), not an already-scoped feature or a `source: forge` spec (that thinking is done). Before designing the right solution, make sure it is the right *problem*. This is the distilled `gstack:/office-hours` diagnostic, vendored here. Once premises hold, resume the normal design process (Step 1 onward) in the collaborative voice; this adversarial posture is scoped to this mode only.
 
 **Posture: diagnose, don't cheerlead.** Take a position on every answer and say what evidence would change your mind. No "interesting approach", no "that could work", no "you might consider" — say why it works or why it doesn't, and challenge the strongest version of the idea, never a strawman. The first answer is the polished one; push once, then again — the real answer comes on the second or third push. **Pre-empt the easy outs before they're used**: a waitlist signup is not "upset", interest is free, "people would love it" costs nothing. End every turn with one concrete assignment — a thing to go do or find out — not a question left dangling; and when the honest answer is "I haven't watched a real person struggle with this", name *that* as the finding, it is the most valuable output of the session.
 
@@ -132,18 +132,12 @@ Wait for the user's response. If they decline, proceed in text-only.
 - **Five "why" questions must be answered without hand-waving** before design: **who** is affected, the **verified current** behavior, the **desired** behavior, **why now**, and the **observable/measurable** done-signal.
 - **Think in failure modes** as a first-class axis: empty / null / enormous / duplicated / wrong-role / called-twice.
 
-### Step 4b — Push the ambition (the 10x move)
+### Step 5 — Compare useful approaches
 
-Runs on **every brainstorm, whatever the subject** — a product idea, a guard, a contract, a migration. Demand pressure-testing above belongs to a raw product idea, because a merge gate has no market to interrogate; ambition is not scoped that way, since timidity is not a property of product ideas. This pass lived inside the product-idea mode and therefore never fired on a technical subject, which is most of what gets designed here.
-
-Before settling an unresolved design, consider whether a simpler or materially better approach
-changes the outcome. Include an ambitious or lateral option only when it answers that question.
-Do not expand an already accepted scope or reopen a completed decision to manufacture alternatives.
-YAGNI prunes the options before asking the user to evaluate them.
-
-### Step 5 — Propose 2–3 approaches
-
-Present alternatives conversationally with trade-offs. Lead with the recommendation and the reason. Let the user redirect.
+Before accepting scope, compare credible materially different approaches when they help resolve
+an actual choice. Consider a simpler or materially better outcome; include ambitious options
+when useful. Explain trade-offs and recommend one without an alternatives or opportunities quota.
+Confirm consequential chosen scope once and preserve settled decisions.
 
 ### Step 6 — Present the design
 
@@ -155,7 +149,7 @@ Once the intent is clear, present the design in sections:
 - Error handling
 - Testing approach
 - Rollout / phases (if non-trivial)
-- TDD mode per implementation phase (strict / souple / exploratory — composes with `void-tdd` skill)
+- Material testing strategy or exceptions, where needed (`void-tdd` owns the discipline)
 
 Present related decisions together and obtain approval for the unresolved consequential choices. Do not request approval section by section for explanatory prose.
 
@@ -238,7 +232,7 @@ Smaller, well-bounded units are easier to work with — easier for the agent to 
 
 - **Raw product idea** ("I have an idea..."): pressure-test it first via the upstream mode above (the vendored `/office-hours` diagnostic), then design. Broader product *roadmap / strategy* routes to `void-plan-review` (CEO lens — challenges a written plan's premise and ambition).
 - **Downstream**: `void-plan` for dependent work; `void-implement` for a bounded approved unit.
-- **With `void-tdd`**: the spec declares the TDD mode for each major implementation step. Plans then uses this.
+- **With `void-tdd`**: record material testing choices; execution applies the discipline to the actual change.
 - **With `void-hexagonal-architecture` + `void-domain-driven-design`**: these skills inform the design's structure (bounded contexts, ports, aggregates). Brainstorming consumes their vocabulary; does not duplicate their decisions.
 - **With `void-code-review`**: review against the accepted behavior and constraints; an absent spec alone is not a defect.
 

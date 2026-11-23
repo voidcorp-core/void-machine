@@ -456,6 +456,3 @@ edges:
   - { from: hook:protect-sensitive-files, to: skill:void-security-guidance, kind: enforces, evidence: "protect-sensitive-files blocks secrets/keys edits — enforces security-guidance" }
   - { from: hook:secret-in-content, to: skill:void-security-guidance, kind: enforces, evidence: "secret-in-content refuses writes that carry credentials — enforces security-guidance's no-secret boundary" }
   - { from: hook:block-dangerous-bash, to: skill:void-security-guidance, kind: enforces, evidence: "block-dangerous-bash blocks destructive shell — enforces security-guidance" }
-  - { from: hook:refactor-named-grep, to: skill:void-refactor, kind: enforces, evidence: "refactor-named-grep requires named Fowler refactors — enforces refactor" }
-  - { from: hook:tidying-commit-prefix, to: skill:void-refactor, kind: enforces, evidence: "tidying-commit-prefix separates tidyings from behavior — enforces refactor (Tidy-First)" }
-  - { from: hook:pre-PR-review-evidence, to: skill:void-code-review, kind: enforces, evidence: "pre-PR-review-evidence requires review evidence before a PR — enforces code-review" }

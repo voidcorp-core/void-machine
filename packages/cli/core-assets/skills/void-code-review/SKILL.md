@@ -5,7 +5,7 @@ description: Pre-PR critical pass. Six dimensions (correctness, tests, security,
 
 # code-review — voidcorp craftsman edition
 
-A review examines the accepted behavior and the consequences of shipping the change. This skill provides the framework: six dimensions in order, blocker vs nit, evidence block in the PR body, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
+A review examines the accepted behavior and the consequences of shipping the change. This skill provides the framework: six dimensions in order, blocker vs nit, actual review results and useful proofs, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
 
 **Attribution**: see `.source` in this directory.
 
@@ -47,33 +47,12 @@ Use these prefixes to make decisions legible; formatting alone never creates a b
 
 ---
 
-## PR body — review evidence
+## Share the review result
 
-Every PR in strict mode includes a Review Evidence block:
-
-```markdown
-## Review Evidence
-
-- **Mode**: strict
-- **Reviewer runtime**: native independent reviewer or codex CLI (one general pass)
-- **Dimensions covered**:
-  - [x] Correctness — actual RED command/result before implementation, then GREEN on candidate
-  - [x] Tests — 4/4 passing, mutation score 94%, no business mocks
-  - [x] Security — trust boundary validated via Zod at /api/checkout
-  - [x] Structure — services do not touch DB (repository pattern verified)
-  - [x] Readability — typescript-strict clean (no any, no rogue as)
-  - [x] Performance — no measured claim, no obvious smell
-- **Blockers raised**: 0
-- **Nits raised**: 2 (variable rename suggestion, helper extraction suggestion)
-- **Claude vs Codex disagreement**: none
-- **Skipped dimension**: none
-```
-
-If a dimension is skipped, the reason is explicit. If Claude and Codex disagree, the deltas are surfaced — not silently arbitrated.
-
-The companion hook `pre-PR-review-evidence` warns if the PR body lacks this block (strict mode).
-
----
+Summarize the actual review result, unresolved blockers, limitations and useful proof references.
+No heading or checklist template is mandatory. Preserve the authoritative independent reviewer,
+exact subject and evidenced resolutions required by the mission contract; prose never substitutes
+for those receipts.
 
 ## CL Size discipline
 
@@ -87,8 +66,8 @@ requires a line-count justification marker.
 
 | Mode | Trigger | Posture |
 |---|---|---|
-| **strict** | PR targeting `main` / `develop` / release branches. Pre-PR final pass. | All six dimensions checked. Blockers fail. Evidence block REQUIRED. Default effort: native `/void-code-review medium`, escalate to `ultra` for high-stakes diffs. Select one independent reviewer runtime. |
-| **souple** | In-progress feedback on a feature branch during work. WIP commits. | Dimensions checked at user discretion. No evidence block required. Default effort: native `/void-code-review low` or `medium`. |
+| **strict** | PR targeting `main` / `develop` / release branches. Pre-PR final pass. | All six dimensions checked. Blockers fail. Actual results and useful proofs retained. Default effort: native `/void-code-review medium`, escalate to `ultra` for high-stakes diffs. Select one independent reviewer runtime. |
+| **souple** | In-progress feedback on a feature branch during work. WIP commits. | Dimensions checked at user discretion. Record useful findings proportionately. Default effort: native `/void-code-review low` or `medium`. |
 
 ---
 
@@ -199,7 +178,6 @@ Disagreements are surfaced. Not averaged. The user decides.
 
 ## Companion hooks
 
-- **`pre-PR-review-evidence`** (pre-push) — warn if PR body lacks the Review Evidence block (strict mode)
 - **`blocker-prefix-grep`** (post-review) — informational: count BLOCKER vs NIT comments for the evidence block
 
 See `../../hooks/`.

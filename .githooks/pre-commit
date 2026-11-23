@@ -10,7 +10,7 @@
 #   1. CLAUDE.md <-> AGENTS.md sister-doc parity (both-or-neither staged).
 #   2. docs/ <-> packages/core/ PHILOSOPHY.md parity (the read and the shipped
 #      doctrine are the same document).
-#   3. The seven anti-bloat rules (size caps, frontmatter, skill name==folder).
+#   3. Discovery contracts, hook syntax and isolation (frontmatter, skill name==folder).
 #   4. core-assets mirror in sync when a packages/core/ file is staged (#66).
 #   5. Every generated artefact derived when anything it is built from is staged.
 #

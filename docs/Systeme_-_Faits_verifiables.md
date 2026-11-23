@@ -45,15 +45,15 @@ Le trim automatique des sorties a été retiré des deux runtimes ; aucun hook n
 
 ### Huit règles anti-bloat
 
-`CLAUDE.md` énonce huit règles numérotées : ≤ 400 lignes par skill (1), un skill = un sujet (2), pas de recouvrement de responsabilité > 30 % (3), cible éditoriale de 250 caractères et plafond bloquant de 500 pour les descriptions de découverte (4), hooks ≤ 100 lignes (5), périmètre explicite des agents (6), tests de skill verts en CI (7), nom `void-` non ambigu et grammaticalement classé (8).
+`CLAUDE.md` énonce huit règles numérotées : skills concis (1), un skill = un sujet (2), pas de recouvrement de responsabilité > 30 % (3), cible éditoriale de 250 caractères et plafond bloquant de 500 pour les descriptions de découverte (4), hooks ciblés et contexte injecté sobre (5), périmètre explicite des agents (6), tests de skill verts en CI (7), nom `void-` non ambigu et grammaticalement classé (8).
 
 `scripts/anti-bloat-check.sh` applique mécaniquement les seuils et conventions suivants :
 
 | Règle | Seuil | Appliquée par un script |
 |---|---|---|
-| 1 — SKILL.md | ≤ 400 lignes | oui, `scripts/anti-bloat-check.sh:22-31` |
+| 1 — SKILL.md | concision, sans plafond de lignes | revue contextuelle |
 | 4 — description | cible ≤ 250, plafond 500 caractères | oui, sur skills core/packs, agents et spécialistes canoniques |
-| 5 — hooks | ≤ 100 lignes | oui, `scripts/anti-bloat-check.sh:33-43` |
+| 5 — hooks | comportement ciblé, sans plafond de lignes | syntaxe et références exécutables vérifiées |
 | 2 — un skill, un sujet | — | non trouvé dans `scripts/` |
 | 3 — recouvrement > 30 % | — | non trouvé dans `scripts/` |
 | 6 — périmètre des agents | — | non trouvé dans `scripts/` |

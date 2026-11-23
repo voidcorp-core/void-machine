@@ -86,7 +86,7 @@ does not erase the earlier red evidence.
   has no tier or more than one. Any increase to a worker budget requires the complete stress proof,
   not a retry-until-green run.
 - `pnpm lint` and `pnpm typecheck` — zero errors.
-- `pnpm anti-bloat:check` — the eight anti-bloat rules (skill ≤400 LOC, hook ≤100 LOC, discovery description non-blocking target ≤250 chars and hard cap 500, `.source` + audit note per skill, ...).
+- `pnpm anti-bloat:check` — discovery contracts (description target ≤250 chars and hard cap 500, technical skill names, `.source` provenance), agent tool isolation and hook syntax. Skills and hooks stay concise without editorial line caps.
 - `pnpm graph:check` / `pnpm graph:check-bundle` — regenerate `catalog.v3.json`, its `model.json` compatibility projection, and the bundle when graph inputs change.
 - `pnpm conformance:consumer` — pack the local CLI once, then prove account-free install,
   installed-hook execution and the Autopilot public surface for Claude, Codex, and both. The

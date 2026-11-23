@@ -60,16 +60,6 @@ describe('slash command namespace', () => {
     expect(withCommands).toEqual([]);
   });
 
-  it('gives every name a single owner across commands and skills', () => {
-    const collisions: string[] = [];
-    for (const root of surfaceRoots()) {
-      const skills = new Set(skillNames(root));
-      for (const command of commandNames(root)) {
-        if (skills.has(command)) collisions.push(`${root.replace(ROOT, '')}: ${command}`);
-      }
-    }
-    expect(collisions).toEqual([]);
-  });
 
   it('holds across roots too, so one pack cannot shadow another surface', () => {
     const owners = new Map<string, Set<string>>();

@@ -27,7 +27,7 @@ The git log is the project's living narrative. "fix stuff" / "wip" / "asdf" dest
 |---|---|
 | `feat` | New observable behavior (new feature, new endpoint, new component visible to users / consumers) |
 | `fix` | Bug fix. Composes with `void-debug` (the why = the root cause) |
-| `refactor` | Structural change without behavior change. Composes with `void-refactor` (named Fowler move) |
+| `refactor` | Structural change without behavior change. Composes with `void-refactor` (verified structural transformations) |
 | `test` | Add / modify tests without changing production code. Includes `test: reproduce <bug>` from `void-debug` |
 | `docs` | Documentation only |
 | `chore` | Repo maintenance (config, scripts, tooling) without user-visible effect |
@@ -98,7 +98,7 @@ legacy rows.
 Closes #248
 ```
 
-### refactor (named Fowler)
+### refactor
 
 ```
 refactor(checkout): extract calculateDiscount helper
@@ -140,10 +140,9 @@ The author cannot tell, the reviewer cannot tell, future maintainers cannot tell
 ### Mixed-intent commits
 
 - `feat: add discount + fix unrelated bug` — split.
-- `refactor: extract helper and add validation` — split (composes with `void-refactor` Two-Hat).
+- A feature or fix with a small directly necessary extraction uses `feat` or `fix`; separate substantial or independently useful restructuring when it obscures review or rollback.
 - `fix: bug A and bug B` — split.
 
-The companion hook `tidying-commit-prefix` (already shipped) flags `refactor:` with behavior-change keywords in body.
 
 ### Missing "why" for substantive commits
 
@@ -168,8 +167,6 @@ prove that chronology. Retain the actual test commands/results and explain the r
 ## Companion hooks
 
 - `commitlint-precommit` (commit-msg, in `pack-monorepo`) — already in void-starter. Enforces conventional commits.
-- `tidying-commit-prefix` (commit-msg, already shipped in core/hooks) — warns on mixed-intent `refactor:` commits.
-- `refactor-named-grep` (commit-msg, already shipped) — warns on `refactor:` without a Fowler name.
 
 ---
 
@@ -177,7 +174,7 @@ prove that chronology. Retain the actual test commands/results and explain the r
 
 - **Runs AFTER `void-verify`** — the completion handoff produces the "what done"; this skill frames it for git.
 - **With `void-debug`** — observed RED/GREEN proof and root cause; phase commits are optional.
-- **With `void-refactor`** — Two-Hat principle, named Fowler refactors in subjects.
+- **With `void-refactor`** — coherent reviewable and revertible intent; Fowler names are optional references.
 - **With `void-brainstorm` + `void-plan`** — substantive commits link to their spec / plan in the body.
 - **With `void-code-review`** — review comments respect the commit boundaries (do not request mixing intent).
 

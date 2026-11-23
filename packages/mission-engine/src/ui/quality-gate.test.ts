@@ -80,22 +80,35 @@ describe('UI quality gate', () => {
     expect(stale.reasons).toContain('prebuild-stale');
   });
 
-  it('requires a fresh-context craft review with every design dimension at least 8/10', () => {
+  it('requires a fresh-context craft verdict regardless of optional legacy ratings', () => {
+    const original = validInput().postbuild;
+    if (!original?.scores) throw new Error('Expected legacy rating fixture.');
     const reused = assessUiQuality(validInput({
       postbuild: {
-        ...validInput().postbuild!,
+        ...original,
         contextId: 'ctx_experience_001',
       },
     }));
     const weak = assessUiQuality(validInput({
       postbuild: {
-        ...validInput().postbuild!,
-        scores: { ...validInput().postbuild!.scores, distinctiveness: 7 },
+        ...original,
+        scores: { ...original.scores, distinctiveness: 7 },
       },
     }));
 
     expect(reused.reasons).toContain('specialist-context-reused');
-    expect(weak.reasons).toContain('craft-score-below-floor');
+    expect(weak.status).toBe('passed');
+    const blocked = assessUiQuality(validInput({
+      postbuild: { ...original, verdict: 'changes-requested' },
+    }));
+    expect(blocked.reasons).toContain('postbuild-not-passed');
+  });
+
+  it('accepts a current independent verdict without a subjective rating', () => {
+    const input = validInput();
+    if (!input.postbuild) throw new Error('Expected independent verdict fixture.');
+    const { scores: _legacyScores, ...postbuild } = input.postbuild;
+    expect(assessUiQuality({ ...input, postbuild }).status).toBe('passed');
   });
 
   it('blocks missing browser proof and mobile/desktop coverage for every applicable state', () => {

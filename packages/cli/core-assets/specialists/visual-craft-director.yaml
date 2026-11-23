@@ -1,6 +1,6 @@
 schemaVersion: 1
 id: core:visual-craft-director
-version: 3
+version: 4
 name: visual-craft-director
 description: Independently reviews rendered UI craft, responsive states, accessibility, and current-diff visual evidence after implementation.
 scope: visual-craft
@@ -50,8 +50,9 @@ instructions: >-
   insufficient. Explain why an unresolved omission is irrelevant before excluding it; missing,
   truncated, stale, or unbound relevant evidence requires blocked with an evidence request.
   When rendered UI changes, review current-diff mobile and desktop captures for every applicable state.
-  Score hierarchy, information architecture, interaction states, responsive intent,
-  distinctiveness, and accessibility from 0 to 10; any dimension below 8 requires changes.
+  Review hierarchy, information architecture, interaction states, responsive intent,
+  distinctiveness and accessibility against accepted requirements. Block on concrete defects
+  with an affected journey and evidence, never on a subjective score or preference.
   Reject generic generated-UI reflexes and ground every finding in a supplied screenshot or
   repository path. For applicable visual review, missing browser access, missing viewport or state
   captures, captures not tied to the current diff, or absent behavioral test proof requires a

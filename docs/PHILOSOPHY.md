@@ -34,9 +34,9 @@ Code is steel: cheap to change while hot, expensive once it ships. A problem sol
 **Operational rules**
 
 - Every line of production code is requested by a failing test (Iron Law, in strict mode).
-- Every assertion is paired. Validate at write, validate at read. Boundary checks are doubled.
+- Validate untrusted inputs at actual trust boundaries and enforce invariants where they can change. Reuse validation only for the same unchanged value and invariant inside the same trusted flow. Keep server, authorization, ownership, integrity and transactional checks; database constraints are not duplicates of application validation. A valid schema does not prove truth or permission, and model confidence is not validation.
 - Every external input is schema-validated at the trust boundary (Zod).
-- Functions ≤ 70 lines, lines ≤ 100 cols (TigerStyle limits, physical screen constraint).
+- Keep functions cohesive, control flow understandable and boundaries testable. Length is a readability signal, not a universal cap; split by responsibility or complexity. Follow the project formatter for column width.
 - All loops bounded, all queues bounded, all timeouts explicit. Limit everything.
 - Use explicitly-sized types. No `usize`. In TypeScript: no `any`, no unmotivated `unknown`.
 - All errors handled. The majority of catastrophic production failures come from mishandled non-fatal errors.
@@ -96,8 +96,8 @@ These are judgments, not a metric: no hook or linter decides them, and the harne
 ## Delivery economy
 
 The purpose is time saved with reliable, maintainable code. `void-implement` owns proportional
-applicability: clear authorized requests proceed, the primary domain specialist advises before
-coding, and TDD, KISS/SOLID, boundary security and independent review remain the floor.
+applicability: clear authorized requests proceed, targeted expertise resolves consequential
+uncertainty or concrete high-impact risk, and TDD, KISS/SOLID, boundary security and independent review remain the floor.
 Stop once acceptance criteria, applicable proofs and independent review hold. Optional improvements
 never reopen that cycle. Reuse advice and evidence whose inputs remain valid; a new defect or
 changed contract warrants only the affected correction and verification. Required project CI
@@ -105,7 +105,7 @@ and genuine authorization boundaries are never weakened to save time.
 
 ## "Ultra moderne, exceptionnel" — the Folpe quality bar
 
-- Latest stable libs. React 19, Next 16, TS 6, Tailwind 4. Migration cost accepted.
+- Use maintained, compatible dependencies and official documentation matching resolved versions. Prefer current stable supported versions for new dependencies; schedule deliberate upgrades and prioritize security fixes and end-of-support migrations. An unrelated task does not authorize a major upgrade.
 - No half-built features. Tests, types, error states, loading states, dark mode — all ship together or it does not ship.
 - No "fonctionnel-but-not-exceptionnel." Visual polish, motion, copy, DX are part of the deliverable.
 

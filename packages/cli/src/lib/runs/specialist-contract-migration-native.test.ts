@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import { loadProjectPolicies } from '../policy-loader.js';
 import { loadProfiles } from '../profile-loader.js';
 import { loadSpecialists, parseSpecialistYaml } from '../specialists/load.js';
 import { detectProfileInput, detectStack } from '../stack.js';
+import * as paths from '../paths.js';
 import { wireCodexAgents } from '../codex-agents.js';
 import { resolveProjectRoots } from '../project-roots.js';
 import { dispatchMissionSpecialists, migrateMissionSpecialist, planMission, recoverStoppedMission, recordMissionClosure } from '../../commands/mission.js';
@@ -19,13 +20,17 @@ import { appendMissionEvent, createMission, eventLogPath, inspectMission,
 import { recordSpecialistLifecycle, recordSpecialistRequests } from './specialist-lifecycle.js';
 import { requestSpecialistEvidence, recordSpecialistEvidence } from './specialist-evidence.js';
 import { verifyMissionCommand } from './verify.js';
-const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
+const SOURCE_CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
 const ID = 'mis_native_migration_0123456789';
 const VISUAL = 'core:visual-craft-director' as const;
 
 it.each([false, true, 'closed-before-review'] as const)('migrates an isolated native mission and retains the original author obligation (recover after migration: %s)', async (recoverAfterMigration) => {
   const root = await mkdtemp(join(tmpdir(), 'void-native-migration-'));
   vi.stubEnv('CODEX_SESSION_ID', 'fixture-native-migration');
+  const CORE = await mkdtemp(join(tmpdir(), 'void-migration-v3-core-'));
+  await cp(SOURCE_CORE, CORE, { recursive: true });
+  await cp(join(CORE, 'contract-history/visual-craft-director/v3.yaml'), join(CORE, 'specialists/visual-craft-director.yaml'));
+  vi.spyOn(paths, 'findCoreSource').mockResolvedValue(CORE);
   try {
     const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
     git(['init', '--quiet']);
@@ -195,5 +200,7 @@ it.each([false, true, 'closed-before-review'] as const)('migrates an isolated na
   } finally {
     vi.unstubAllEnvs();
     await rm(root, { recursive: true });
+    await rm(CORE, { recursive: true });
+    vi.restoreAllMocks();
   }
 });

@@ -19,8 +19,8 @@ Invoke it for: a monthly deep scan, a high-stakes surface (payments, auth, PII, 
 
 Resolve the scope before scanning. Phases 0, 1, 12, 13 ALWAYS run; phases 2-11 are scope-gated.
 
-- **full** (default) — all phases, 8/10 confidence gate. Zero-noise: report only what you are sure about.
-- **comprehensive** — all phases, 2/10 gate. Surfaces more; anything that MIGHT be real is included, flagged `TENTATIVE`.
+- **full** (default) — all phases, concrete exploitability and supporting evidence required for findings.
+- **comprehensive** — all phases, including plausible unresolved paths explicitly marked `TENTATIVE` with missing evidence named.
 - **scoped** — one focus, mutually exclusive: `infra` (2-6), `code` (7, 9-11), `owasp` (9), `supply-chain` (3), `skills` (8), or a named domain (e.g. `auth`). Passing two scopes is an error — never silently pick one; security tooling must not ignore intent.
 - **diff** — combinable with any of the above: each phase constrains to files/configs changed on the current branch vs base. For git-history scans (Phase 2), limit to this branch's commits.
 
@@ -77,27 +77,27 @@ Run only the phases your resolved scope selected. Each phase below names what to
 
 Zero noise is more important than zero misses. A report with 3 real findings beats one with 3 real + 12 theoretical — users stop reading noisy reports.
 
-**Confidence gate.** Full mode: 8/10 minimum (9-10 = could write a PoC; 8 = clear pattern with known exploitation). Below 8 → do not report. Comprehensive mode: 2/10, filtering only true noise (fixtures, docs, placeholders), the rest flagged `TENTATIVE`.
+**Evidence threshold.** Establish a realistic exploit path and supporting code or observed behavior. Model self-confidence is not proof. Separate verified findings from unresolved hypotheses; comprehensive mode may include the latter as `TENTATIVE`, identifying what remains unverified.
 
 **Discard as noise** (the principle: flag concrete, exploitable vulnerabilities, not absent best practices): pure DoS / resource exhaustion / rate-limiting (EXCEPT LLM cost amplification from P7 — that is financial risk), memory-safety issues in memory-safe languages, findings that live only in unit tests / fixtures not imported by real code, log spoofing, missing audit logs, absent hardening with no concrete exploit path, SSRF where the attacker controls only the path not the host, ReDoS on strings that never touch untrusted input. Security findings in `*.md` are excluded — EXCEPT SKILL.md, which is executable prompt code (P8 findings there NEVER get the docs exclusion). Note the boundary: a P4 unpinned third-party action or missing CODEOWNERS IS a concrete supply-chain risk, not "absent hardening" — do not discard it under this rule.
 
 **Active verification.** For each finding that survives the gate, prove it where safe by tracing code — never by hitting a live endpoint or a real API. Secrets: confirm the key format (prefix + length). Webhooks/SSRF: trace the path. CI/CD: parse the YAML. Dependencies: is the vulnerable function directly called? Mark each `VERIFIED` (confirmed by tracing), `UNVERIFIED` (pattern match only), or `TENTATIVE`.
 
-**Independent verification.** Where the Agent tool is available, spawn a verifier per finding with fresh context — give it the file:line and the FP rules ONLY, no anchoring reasoning: "is there a real vulnerability here? Score 1-10; below 8, explain why not." Discard findings the verifier scores below the gate. When the tool is unavailable, self-verify with a skeptic's eye and say so. `doctrine-critic` (void-machine) also flags trust-boundary code in a diff and routes here.
+**Independent verification.** Where the Agent tool is available, spawn a verifier per finding with fresh context — give it the file:line and the FP rules ONLY, no anchoring reasoning: "is there a real vulnerability here? Trace the exploit path and supporting evidence, or explain what disproves it." Resolve findings from that evidence, never a subjective rating. When the tool is unavailable, self-verify with a skeptic's eye and say so. `doctrine-critic` (void-machine) also flags trust-boundary code in a diff and routes here.
 
 **Variant analysis.** A VERIFIED finding is a pattern — Grep the whole codebase for it. One confirmed SSRF often means five more. Report each as "Variant of Finding #N".
 
 ## Phase 13 — Findings report
 
-**Every finding MUST carry a concrete exploit scenario** — the step-by-step path an attacker walks. "This pattern is insecure" is not a finding. And **quote the motivating line** (file:line + verbatim code); if you cannot quote it, the finding is unverified — force it to low confidence and out of the main report.
+**Every finding MUST carry a concrete exploit scenario** — the step-by-step path an attacker walks. "This pattern is insecure" is not a finding. And **quote the motivating line** (file:line + verbatim code); if you cannot quote it, the finding is unverified — state the missing evidence and keep it out of verified findings.
 
-Report as a table: `# · Severity · Confidence(N/10) · Status · Category · Finding · Phase · File:Line`, most severe first, then per-finding the exploit path and the fix. Severity anchors: CRITICAL needs a realistic exploitation scenario; think like an attacker, report like a defender — show the exploit, then the remediation.
+Report as a table: `# · Severity · Status · Category · Finding · Phase · File:Line`, most severe first, then per-finding the exploit path and the fix. Severity anchors: CRITICAL needs a realistic exploitation scenario; think like an attacker, report like a defender — show the exploit, then the remediation.
 
 ---
 
 ## Discipline rules
 
-- **Zero noise > zero misses.** The confidence gate is absolute: full mode below 8/10 does not ship.
+- **Evidence before conclusions.** A subjective rating never establishes exploitability; unresolved hypotheses remain explicit.
 - **No security theater.** No theoretical risk without a realistic exploit path.
 - **Check the obvious first.** Hardcoded credentials, missing auth, SQL injection are still the top real-world vectors.
 - **Framework-aware.** Know the built-in protections (React escapes by default, Rails ships CSRF tokens) — only flag the escape hatches.
@@ -127,7 +127,7 @@ The posture a finding is judged against has two axes: the mission mode (`fast`, 
 ## Anti-rules
 
 - MUST NOT modify code — findings and recommendations only.
-- MUST NOT report below the mode's confidence gate.
+- MUST NOT present model confidence as evidence of a vulnerability.
 - MUST NOT emit a finding without a concrete exploit scenario and a quoted motivating line.
 - MUST NOT make live requests to endpoints or APIs — trace code, and route a live probe to `void-machine security scan --target`, which refuses an unauthorized one.
 - MUST NOT report a scanner's verdict as its own, nor call a degraded scan clean.

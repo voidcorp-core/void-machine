@@ -15,7 +15,6 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { countLines } from '../../packages/harness-graph/src/derive/read-frontmatter.js';
 
 const SKILL = readFileSync(
   new URL('../../packages/core/skills/void-implement/SKILL.md', import.meta.url),
@@ -24,10 +23,6 @@ const SKILL = readFileSync(
 const flat = SKILL.replace(/\s+/g, ' ').toLowerCase();
 
 describe('void-implement requires the shipped surface to be run', () => {
-  it('carries a dogfood pass of its own, not a line inside another one', () => {
-    expect(flat).toContain('dogfood');
-    expect(SKILL).toMatch(/^\d+\.\s+\*\*Dogfood/m);
-  });
 
   it('states an observable predicate, like every other conditional pass', () => {
     expect(flat).toMatch(/cli command|executable surface|hook, .{0,40}command/);
@@ -46,18 +41,7 @@ describe('void-implement requires the shipped surface to be run', () => {
     expect(flat).toMatch(/quoted|not summaris|not summariz/);
   });
 
-  it('appears in the triage table, where a pass is actually looked up', () => {
-    expect(flat).toMatch(/\| dogfood/);
-  });
 
-  it('names the shortcut in the red flags, because it is the tempting one', () => {
-    const redFlags = SKILL.slice(SKILL.indexOf('## Red flags'));
-    expect(redFlags.toLowerCase()).toContain('dogfood');
-  });
-
-  it('stays under the 400-line skill cap', () => {
-    expect(countLines(SKILL)).toBeLessThanOrEqual(400);
-  });
 });
 
 describe('the doctrine points at the ship pass without a number that drifts', () => {

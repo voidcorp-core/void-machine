@@ -105,7 +105,8 @@ Never invent a durable inbox. Preserve formal receipts separately from working n
 
 ## Short native specialists
 
-`void-implement` owns domain detection and the required primary domain consultation before coding.
+`void-implement` owns applicability of targeted advice for consequential uncertainty, missing expertise
+or concrete high-impact risk; routine work does not require a primary consultation.
 Dispatch that smallest relevant expert set once, collect actual advice and reuse it while its
 inputs hold. This skill owns transport and provenance, not a second applicability policy or
 an all-specialist preparation quorum. Extra experts need a distinct uncovered risk.

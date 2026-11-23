@@ -312,8 +312,8 @@ findings measures nothing; a pass that files four advisories and blocks on none 
 **Advisories** of a merged ticket's verdict go into a single Triage issue per ticket, filed by the
 orchestrator, and never come back into the loop.
 
-**Rounds.** After a correction, round 2 is handed round 1's blocking findings and checks only those
-against the new diff; it opens no new general reading. Still blocking after round 2, the kernel
+**Rounds.** After a correction, round 2 receives round 1's blocking findings and checks the
+corrections, affected behavior and demonstrated regressions against the new diff; it opens no new general reading. Still blocking after round 2, the kernel
 hands the ticket to a human with the finding. The kernel counts rounds from the local records, one
 per head a verdict blocked, not from the round a verdict announces, and a reviewer that failed
 without a verdict is an attempt it delegates again, not a round.

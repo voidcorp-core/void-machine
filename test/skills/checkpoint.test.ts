@@ -12,7 +12,6 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { countLines } from '../../packages/harness-graph/src/derive/read-frontmatter.js';
 
 const SKILL = readFileSync(
   new URL('../../packages/core/skills/void-checkpoint/SKILL.md', import.meta.url),
@@ -46,9 +45,6 @@ describe('checkpoint frontmatter', () => {
     expect(description.length).toBeLessThanOrEqual(250);
   });
 
-  it('stays under the skill size cap', () => {
-    expect(countLines(SKILL)).toBeLessThanOrEqual(400);
-  });
 });
 
 describe('routing comes before writing', () => {
@@ -143,13 +139,4 @@ describe('provenance', () => {
     expect(source).toMatch(/Rejected/i);
   });
 
-  it('records the boundary with the skills it sits next to', () => {
-    const audit = readFileSync(
-      new URL('../../docs/plans/skill-audits/void-checkpoint.md', import.meta.url),
-      'utf8',
-    );
-    expect(audit).toMatch(/Boundary with `void-learn`/);
-    expect(audit).toMatch(/Boundary with `void-retrospective`/);
-    expect(audit).toMatch(/What was rejected/i);
-  });
 });

@@ -32,7 +32,8 @@ export interface UiPrebuildAttestation extends UiSpecialistAttestation {
 export interface UiPostbuildAttestation extends UiSpecialistAttestation {
   readonly specialistId: 'core:visual-craft-director';
   readonly diffHash: string;
-  readonly scores: Readonly<Record<UiDesignDimension, number>>;
+  /** Legacy input accepted for compatibility; ratings do not establish quality. */
+  readonly scores?: Readonly<Record<UiDesignDimension, number>>;
 }
 
 export interface UiScreenshotEvidence {
@@ -77,8 +78,7 @@ export type UiQualityReason =
   | 'screenshot-stale'
   | 'test-evidence-missing'
   | 'test-evidence-stale'
-  | 'keyboard-proof-missing'
-  | 'craft-score-below-floor';
+  | 'keyboard-proof-missing';
 
 export interface UiQualityAssessment {
   readonly status: 'not-applicable' | 'passed' | 'blocked';
@@ -105,14 +105,6 @@ function emptyAssessment(status: 'not-applicable' | 'passed'): UiQualityAssessme
     staleScreenshots: Object.freeze([]),
     missingScreenshotCoverage: Object.freeze([]),
     missingTestKinds: Object.freeze([]),
-  });
-}
-
-function craftBelowFloor(postbuild: UiPostbuildAttestation | undefined): boolean {
-  if (postbuild === undefined) return false;
-  return UI_DESIGN_DIMENSIONS.some((dimension) => {
-    const score = postbuild.scores[dimension];
-    return !Number.isFinite(score) || score < 8 || score > 10;
   });
 }
 
@@ -151,7 +143,6 @@ export function assessUiQuality(input: UiQualityInput): UiQualityAssessment {
   else {
     if (input.postbuild.diffHash !== input.currentDiffHash) reasons.push('postbuild-stale');
     if (input.postbuild.verdict !== 'pass') reasons.push('postbuild-not-passed');
-    if (craftBelowFloor(input.postbuild)) reasons.push('craft-score-below-floor');
   }
   if (
     input.prebuild !== undefined

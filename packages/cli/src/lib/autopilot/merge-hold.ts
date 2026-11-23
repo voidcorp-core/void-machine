@@ -3,7 +3,7 @@
 // `--automatic`.
 //
 // It lives in the machine's local state, not in `.void/program.md`: the
-// programme is protected and versioned, so a hold written there would take
+// config authority is protected and versioned, so a hold written there would take
 // effect only once a person merged a pull request carrying it, and a dirty tree
 // would block the `--ff-only` synchronization. It is read on every tick, so it
 // never depends on what an agent remembers.

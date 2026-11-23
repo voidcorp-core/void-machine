@@ -46,28 +46,11 @@ const FIXTURES = new URL('../lib/autopilot/__fixtures__/gh/', import.meta.url);
 const SESSION = '6d5ea8bb-764f-4463-b733-8b94509eb25e';
 const OTHER_SESSION = '0f0f0f0f-764f-4463-b733-8b94509eb25e';
 
-const PROGRAM = `---
-schemaVersion: 1
-status: executing
-program: loop
-plan: docs/plans/p.md
-spec: docs/specs/s.md
-progress:
-  provider: linear
-  scope: voidcorp/DEV
-  order: [DEV-1]
-  states:
-    ready: [Todo]
-    started: [In Progress]
-    review: [In Review]
-    done: [Done]
-autopilot:
-  schemaVersion: 2
-  clusterSize: 4
-  base: develop
-  deployBranch: main
----
-`;
+const PROGRAM = JSON.stringify({ autopilot: {
+  schemaVersion: 3, enabled: true, clusterSize: 4, base: 'develop', deployBranch: 'main',
+  progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
+    states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] } },
+} });
 
 const scratch: string[] = [];
 afterEach(() => {
@@ -97,7 +80,7 @@ function repository(): Repository {
   writeFileSync(join(root, 'loop.ts'), 'export const slots = 4;\n');
   writeFileSync(join(root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.34.5' }));
   mkdirSync(join(root, '.void'));
-  writeFileSync(join(root, '.void', 'program.md'), PROGRAM);
+  writeFileSync(join(root, '.void', 'config.json'), PROGRAM);
   git(root, 'add', '.');
   git(root, 'commit', '-q', '-m', 'base');
   git(root, 'push', '-q', 'origin', 'HEAD:develop');
@@ -571,7 +554,7 @@ describe('native review routing', () => {
       sourceRoot: resolve('packages/core'), enabledPlugins: ['harness'], enabledPacks: [],
       source: 'local', marketplaceRepo: 'acme/harness', pinVersion: '7.0.0' });
     writeFileSync(join(repo.root, '.void', 'program.md'), 'unreadable installation programme');
-    writeFileSync(join(coordinator, '.void', 'program.md'), PROGRAM.replace('program: loop', 'program: coordinator'));
+    writeFileSync(join(coordinator, '.void', 'config.json'), PROGRAM.replace('program: loop', 'program: coordinator'));
     writeFileSync(join(repo.root, 'unrelated.txt'), 'installation dirt');
     writeFileSync(join(coordinator, 'unrelated.txt'), 'coordinator dirt');
     const ticket = '.void/machine/tickets/DEV-1.md';
@@ -983,9 +966,9 @@ describe('autopilot review, around a crash and beside other reviews', () => {
 
   it('reviews nothing outside a programme, and says that is why', async () => {
     const repo = repository();
-    rmSync(join(repo.root, '.void', 'program.md'));
+    rmSync(join(repo.root, '.void', 'config.json'));
     const { runners: built, launches } = runners(repo);
-    await expect(reviewCommand(argv(repo.head), built)).rejects.toThrow(/programme/);
+    await expect(reviewCommand(argv(repo.head), built)).rejects.toThrow(/config.autopilot/);
     expect(launches).toHaveLength(0);
   });
 

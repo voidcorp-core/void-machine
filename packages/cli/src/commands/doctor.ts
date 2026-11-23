@@ -22,7 +22,6 @@ import {
 } from '@voidcorp/hook-runner';
 import { autopilotPreflight } from '../lib/autopilot/preflight.js';
 import { readAutopilotAuthority } from '../lib/autopilot/authority.js';
-import { LEGACY_PROGRAM_PATHS, PROGRAM_PATH } from '../lib/autopilot/program.js';
 import { packsCoherenceIssues, validateConfig } from '../lib/config-schema.js';
 import { applyRepair, conformanceRules, inspectConformance } from '../lib/conformance/run.js';
 import { checkGlyph, checkShowsFix } from '../lib/doctor-render.js';
@@ -332,10 +331,10 @@ export async function doctor(args: readonly string[]): Promise<void> {
     // eight autopilot lines at one path and none at the other, and the empty
     // report read as "no active programme" rather than "I looked over there".
     checks.push({
-      name: 'program',
+      name: 'autopilot authority',
       ok: true,
       status: 'pass',
-      message: `no active program at ${[PROGRAM_PATH, ...LEGACY_PROGRAM_PATHS].join(' nor ')}, so autopilot's preconditions do not apply`,
+      message: 'no config.autopilot declaration; historical programmes grant no authority; migrate explicitly to schemaVersion: 3 for autonomous work',
     });
   }
 
@@ -765,16 +764,16 @@ function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0
     // exactly the thing the reader needs (#193).
     const failure = (error as { failure?: { problem?: unknown; fix?: unknown } }).failure;
     malformed = {
-      problem: typeof failure?.problem === 'string' ? failure.problem : 'the frontmatter is not readable',
+      problem: typeof failure?.problem === 'string' ? failure.problem : 'config.autopilot is not readable',
       fix:
         typeof failure?.fix === 'string'
           ? failure.fix
-          : 'fix the `---` frontmatter block, then run doctor again',
+          : 'fix the config.autopilot declaration, then run doctor again',
     };
   }
 
   return {
-    program:
+    authority:
       malformed !== undefined
         ? { malformed }
         : program === undefined
@@ -789,9 +788,6 @@ function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0
                 autopilot: {
                   clusterSize: program.autopilot.clusterSize,
                   schemaVersion: program.autopilot.schemaVersion,
-                  ...(program.autopilot.legacyMergeGate === undefined
-                    ? {}
-                    : { legacyMergeGate: program.autopilot.legacyMergeGate }),
                   // Carried so the merge check can name where the loop never
                   // merges; absent, that is the repository default branch.
                   // Spread rather than set: under exactOptionalPropertyTypes an

@@ -8,7 +8,7 @@
 // Offline by construction. No tracker call, no registry fetch, no network: the
 // signals are files and git plumbing, so the answer is the same on a plane.
 
-import type { ProgramSignal, ProjectSummary } from '../lib/projects/summary.js';
+import type { ProjectSummary } from '../lib/projects/summary.js';
 import { banner, blank, c, footer, glyph, line, meta } from '../lib/render.js';
 import { discoveryConfigPath, readProjectsPayload } from '../lib/ui/payload.js';
 
@@ -26,9 +26,6 @@ function decisionsLabel(summary: ProjectSummary): string {
   return `${String(count)} decision(s)${suffix}`;
 }
 
-export function programLabel(program: ProgramSignal): string {
-  return `program ${program.program} (${String(program.unitCount)} units)`;
-}
 
 /**
  * Columns are padded on the VISIBLE text, and long values are cut rather than
@@ -50,7 +47,6 @@ function renderProject(summary: ProjectSummary): void {
 
   const facts: string[] = [decisionsLabel(summary)];
   if (summary.planCount > 0) facts.push(`${String(summary.planCount)} plan(s)`);
-  if (summary.program !== undefined) facts.push(programLabel(summary.program));
   line(c.dim(`     ${facts.join('  ·  ')}`));
 
   if (summary.resumeLine !== undefined) {

@@ -114,7 +114,7 @@ npx voidmachine update            # recompile owned assets from a newer CLI
 ## Manual checkpoint and semantic resume
 
 Use `void-checkpoint` to save useful session residue before leaving or clearing context.
-On Claude Code and Codex, `SessionStart` reads that checkpoint, the programme and Git state.
+On Claude Code and Codex, `SessionStart` reads that checkpoint and Git state.
 It reports missing or stale context without requiring a mechanical block, seal or revision.
 Existing checkpoints remain untouched; legacy mechanical blocks are ignored on reads.
 No continuous context tracker, automatic checkpoint reminder or end-of-session audit runs.

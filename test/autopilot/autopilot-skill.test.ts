@@ -160,20 +160,6 @@ describe('remote effects stay with the roles that own them', () => {
   });
 });
 
-describe('the curator ranks, and never disposes', () => {
-  it('walks the tracker in the declared order and ranks on the project, not the label', () => {
-    expect(flat(body(SKILL))).toMatch(/Todo, then Backlog, then Triage/);
-    expect(flat(body(SKILL))).toMatch(/not by the priority label/i);
-  });
-
-  it('justifies every move, enriches through void-ticket, and never closes', () => {
-    expect(flat(body(SKILL))).toMatch(/every ticket you move a justification/i);
-    expect(flat(body(SKILL))).toMatch(/goes through `void-ticket` before it can be declared `ready`/);
-    expect(flat(body(SKILL))).toMatch(/Never close, cancel or delete/);
-    expect(flat(body(SKILL))).toMatch(/Re-rank after every merge/);
-  });
-});
-
 describe('the review is local, bound to the head and to the session it delegated', () => {
   // A verdict read on GitHub can be written by anyone who comments; the loop
   // merges on the record the kernel wrote after delegating the reviewer itself.

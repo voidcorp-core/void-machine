@@ -1,6 +1,6 @@
 // The deterministic kernel of the continuous loop: what each slot does next.
 //
-// Pure. It reads one complete observation (the programme, the tracker state the
+// Pure. It reads one complete observation (the config authority, the tracker state the
 // orchestrator hands over, GitHub as `gh` reported it, the stop signal) and
 // returns typed actions. It remembers nothing between ticks, so a restart is an
 // ordinary tick: the slots are rebuilt from Linear and GitHub, and a ticket that
@@ -40,7 +40,7 @@ import {
   ticketIdSchema,
 } from './judgments.js';
 import type { MergeHold } from './merge-hold.js';
-import type { AutopilotConfig, ProgressStates } from './program.js';
+import type { AutopilotConfig, ProgressStates } from './config.js';
 import type { AutopilotAuthority } from './authority.js';
 import { HUMAN_WAIT_LABEL } from './config.js';
 export { HUMAN_WAIT_LABEL } from './config.js';
@@ -58,9 +58,9 @@ export const TRACKED_TICKETS_MAX = 256;
 /**
  * Paths the loop never merges itself: the machinery that decides whether a
  * change may merge. The workflows and actions run the required checks and
- * the local review machinery binds its verdict, the programme grants the merge,
+ * the local review machinery binds its verdict, the config authority grants the merge,
  * and the hooks hold the enforcement floor. A change to any of them merged by the loop
- * would be the loop approving its own judge. A programme adds to this floor
+ * would be the loop approving its own judge. Config adds to this floor
  * through `autopilot.protectedPaths`; nothing removes from it.
  */
 export const PROTECTED_PATHS_FLOOR = [
@@ -90,7 +90,7 @@ export const PROTECTED_PATHS_FLOOR = [
   'packages/cli/src/commands/autopilot-loop.ts',
   // The local chain of judgment: the kernel delegates the reviewer and binds
   // its result to the session it launched, the agents command drives it, the
-  // programme grants the merge, `judgments.ts` admits the verdict and the hold
+  // config authority grants the merge, `judgments.ts` admits the verdict and the hold
   // parser decides whether a person keeps the merges.
   'packages/void-machine/src/**',
   'packages/cli/src/commands/agents.ts',
@@ -199,7 +199,7 @@ export interface GithubObservation {
   /** The branch the loop merges into, `auto` already resolved. */
   readonly base: string;
   /**
-   * The repository's default branch, the one that deploys when the programme
+   * The repository's default branch, the one that deploys when the config authority
    * names none. Undefined when GitHub reports none.
    */
   readonly defaultBranch: string | undefined;
@@ -215,7 +215,7 @@ export interface LoopProgram {
 
 const trackerTicketSchema = z.strictObject({
   id: ticketIdSchema,
-  /** The provider-native status, mapped to a role by the programme. */
+  /** The provider-native status, mapped to a role by the config authority. */
   status: z.string().min(1).max(64),
   humanWait: z.boolean(),
   pullRequest: z.int().positive().max(2_147_483_647).optional(),
@@ -433,7 +433,7 @@ export interface LoopDecision {
 export function loopProgramOf(descriptor: Omit<AutopilotAuthority, 'source'>): LoopProgram {
   if (descriptor.status !== 'executing') {
     throw autopilotFailure('AUTOPILOT_PROGRAM', 'Autopilot is not executing',
-      `the legacy programme status is ${descriptor.status}`,
+      `the legacy config authority status is ${descriptor.status}`,
       'resume only within an explicitly executing, approved mandate');
   }
   if (descriptor.autopilot === undefined || descriptor.progress === undefined) {
@@ -443,34 +443,15 @@ export function loopProgramOf(descriptor: Omit<AutopilotAuthority, 'source'>): L
       descriptor.autopilotConsentWithheld
         ? '`autopilot.enabled` is false'
         : 'no `autopilot` block or `progress` source is declared',
-      'declare explicit Autopilot authority in `.void/config.json`, or preserve the legacy programme declaration',
+      'declare explicit schemaVersion: 3 Autopilot authority in `.void/config.json` after reconciling consent and restrictions',
     );
   }
-  if (descriptor.autopilot.schemaVersion === 1) throw legacyProgramme(descriptor.autopilot);
+  if (descriptor.autopilot.schemaVersion !== 3) {
+    throw autopilotFailure('AUTOPILOT_PROGRAM', 'explicit Autopilot migration required',
+      'only config.autopilot schemaVersion: 3 admits autonomous work',
+      'reconcile existing consent, scope and restrictions before explicitly declaring version 3');
+  }
   return { autopilot: descriptor.autopilot, states: descriptor.progress.states };
-}
-
-/**
- * A 4.0 programme, refused with the migration its gate calls for. A former
- * human gate is told to hold the merges first: removing the key alone would
- * hand the next merge to the machine.
- */
-function legacyProgramme(autopilot: AutopilotConfig) {
-  const gate = autopilot.legacyMergeGate;
-  const migrate = 'then set `autopilot.schemaVersion: 2`';
-  const fix = gate === 'union-reviewed'
-    ? 'remove `mergeGate`: the loop now merges on its own into the integration branch, never into '
-      + `\`deployBranch\` or the default branch; ${migrate}`
-    : `first run \`${PRODUCT_COMMAND} autopilot merges --by-human\` to keep every merge yours, then `
-      + `remove \`mergeGate\`, ${migrate.slice('then '.length)}`;
-  return autopilotFailure(
-    'AUTOPILOT_PROGRAM',
-    'the programme is written for the 4.0 merge gate, which no longer exists',
-    gate === undefined
-      ? '`autopilot.schemaVersion` is 1'
-      : `\`autopilot.schemaVersion\` is 1 and \`mergeGate\` is ${gate}`,
-    fix,
-  );
 }
 
 export function admitLoopTracker(value: unknown): Admission<LoopTracker> {
@@ -496,7 +477,7 @@ export function protectedBranches(autopilot: AutopilotConfig): string[] {
   return [...new Set([...bases, ...deploy])];
 }
 
-/** The floor, then what the programme adds to it. */
+/** The floor, then what the config authority adds to it. */
 export function protectedPathsOf(autopilot: AutopilotConfig): string[] {
   return [...new Set([...PROTECTED_PATHS_FLOOR, ...autopilot.protectedPaths])];
 }
@@ -821,7 +802,7 @@ function heldDetail(pr: PullRequestObservation, hold: Extract<MergeHold, { held:
 }
 
 /**
- * Why the base is the branch that deploys, or nothing. The programme names it,
+ * Why the base is the branch that deploys, or nothing. The config authority names it,
  * or the repository's default branch is it. `auto` is only resolved at tick
  * time and can land there; a name that cannot be compared, or no default branch
  * at all, counts as that branch: a false refusal is a merge a person does.
@@ -831,10 +812,10 @@ function deployTargetReason(pr: PullRequestObservation, input: LoopInput): strin
   const declared = input.program.autopilot.deployBranch;
   const deploying = declared ?? defaultBranch;
   if (sameBranch(base, deploying) === 'different') return undefined;
-  if (declared !== undefined) return `#${pr.number} targets ${base}, the branch the programme says deploys`;
+  if (declared !== undefined) return `#${pr.number} targets ${base}, the branch the config authority says deploys`;
   return defaultBranch === undefined
     ? `#${pr.number} targets ${base}, and GitHub reports no default branch to tell the branch that deploys`
-    : `#${pr.number} targets ${base}, the repository default branch, which deploys when the programme `
+    : `#${pr.number} targets ${base}, the repository default branch, which deploys when the config authority `
       + 'names none; declare `autopilot.deployBranch` if another branch ships';
 }
 

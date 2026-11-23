@@ -15,28 +15,11 @@ const FIXTURES = new URL('../lib/autopilot/__fixtures__/gh/', import.meta.url);
 const fixture = (name: string): string => readFileSync(new URL(name, FIXTURES), 'utf8');
 const NOW = '2026-09-22T12:00:00.000Z';
 
-const PROGRAM = `---
-schemaVersion: 1
-status: executing
-program: loop
-plan: docs/plans/p.md
-spec: docs/specs/s.md
-progress:
-  provider: linear
-  scope: voidcorp/DEV
-  order: [DEV-1]
-  states:
-    ready: [Todo]
-    started: [In Progress]
-    review: [In Review]
-    done: [Done]
-autopilot:
-  schemaVersion: 2
-  clusterSize: 4
-  base: develop
-  deployBranch: main
----
-`;
+const PROGRAM = JSON.stringify({ autopilot: {
+  schemaVersion: 3, enabled: true, clusterSize: 4, base: 'develop', deployBranch: 'main',
+  progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
+    states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] } },
+} });
 
 const roots: string[] = [];
 afterEach(() => {
@@ -54,7 +37,7 @@ function project(): string {
   mkdirSync(join(root, '.void'));
   // What the harness install ignores: the loop's local state lives there.
   writeFileSync(join(root, '.gitignore'), '.void/machine/\n');
-  writeFileSync(join(root, '.void', 'program.md'), PROGRAM);
+  writeFileSync(join(root, '.void', 'config.json'), PROGRAM);
   git(root, 'add', '.');
   git(root, 'commit', '-qm', 'init');
   return root;
@@ -281,9 +264,9 @@ describe('autopilot next', () => {
     expect(result.stderr).toMatch(/tracker observation was refused/);
   });
 
-  it('refuses to run without a programme', () => {
+  it('refuses to run without config authority', () => {
     const root = project();
-    rmSync(join(root, '.void', 'program.md'));
+    rmSync(join(root, '.void', 'config.json'));
     const result = next(root, trackerJson([], []));
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toMatch(/AUTOPILOT_PROGRAM/);
@@ -741,15 +724,15 @@ describe('autopilot merge', () => {
     expect(existsSync(armedPath(root))).toBe(false);
   });
 
-  it('refuses a programme still written for the 4.0 merge gate', () => {
+  it('refuses older config authority before attempting a merge', () => {
     const root = project();
     recordLocalVerdict(root);
-    const legacy = PROGRAM.replace('  schemaVersion: 2\n', '  schemaVersion: 1\n').replace('deployBranch: main', 'mergeGate: human');
-    writeFileSync(join(root, '.void', 'program.md'), legacy);
+    const legacy = PROGRAM.replace('"schemaVersion":3', '"schemaVersion":2');
+    writeFileSync(join(root, '.void', 'config.json'), legacy);
     const runner = github({ views: [reviewedPull(), merged()] });
     const result = mergeWith(root, runner);
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toMatch(/autopilot merges --by-human/);
+    expect(result.stderr).toMatch(/migration/);
     expect(runner.calls).toEqual([]);
   });
 });
@@ -969,7 +952,7 @@ describe('guarded publication and human fingerprint renewal', () => {
   it.each(['default-target', 'absent-default', 'unreadable', 'malformed', 'missing-runner'])(
     'does not push when deployment protection is %s', (failure) => {
       const root = candidate();
-      writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+      writeFileSync(join(root, '.void/config.json'), PROGRAM.replace(',"deployBranch":"main"', ''));
       git(root, 'branch', 'main');
       runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
       const spy = publication(root);
@@ -990,7 +973,7 @@ describe('guarded publication and human fingerprint renewal', () => {
 
   it('allows an ordinary candidate after resolving an undeclared deployment branch', () => {
     const root = candidate();
-    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+    writeFileSync(join(root, '.void/config.json'), PROGRAM.replace(',"deployBranch":"main"', ''));
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
     const spy = publication(root);
     const calls: string[][] = [];
@@ -1178,7 +1161,7 @@ describe('guarded publication and human fingerprint renewal', () => {
 });
 
 const CONFIG_AUTHORITY = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   enabled: true,
   clusterSize: 4,
   base: 'develop',
@@ -1194,7 +1177,7 @@ describe('autopilot authority migration', () => {
     ['withheld consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: false } })],
     ['invalid consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: 'true' } })],
     ['unknown field', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, trusted: true } })],
-    ['conflicting target', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, base: 'integration' } })],
+    ['old authority', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, schemaVersion: 2 } })],
     ['unreadable config', '{ unfinished'],
   ])('refuses %s before contacting GitHub despite a legacy grant', (_name, config) => {
     const root = project();
@@ -1209,17 +1192,16 @@ describe('autopilot authority migration', () => {
     expect(calls).toEqual([]);
   });
 
-  it('does not admit work from a completed legacy programme', () => {
+  it('does not let historical programme status veto explicit v3 authority', () => {
     const root = project();
     writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('status: executing', 'status: completed'));
     const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
-    expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain('executing');
+    expect(result.exitCode).toBe(0);
+    expect(result.decision.actions).toContainEqual({ kind: 'assign', ticketId: 'DEV-2', footprint: ['packages/dev-2'] });
   });
 
   it('uses explicit config authority without inventing a programme', () => {
     const root = project();
-    rmSync(join(root, '.void/program.md'));
     writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: CONFIG_AUTHORITY }));
     const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
     expect(result.exitCode).toBe(0);

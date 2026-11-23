@@ -383,7 +383,7 @@ const defaultBranchSchema = z.object({
 });
 
 /**
- * The repository's default branch: the one that deploys when the programme
+ * The repository's default branch: the one that deploys when the config authority
  * names none. An empty name, or none at all, is undefined, and the kernel then
  * refuses to merge anywhere it cannot tell apart from it.
  */
@@ -448,7 +448,7 @@ export interface GithubRequest {
   readonly base: string;
   readonly pullRequests: readonly number[];
   /**
-   * Whether the kernel needs the default branch: only when the programme names
+   * Whether the kernel needs the default branch: only when the config authority names
    * no deploying branch, so a tick depends on nothing it does not use.
    */
   readonly defaultBranch: boolean;
@@ -521,7 +521,7 @@ export function resolveLoopBase(run: GhRunner, requested: string): string {
     'AUTOPILOT_PROGRAM',
     'the loop has no base to merge into',
     selection.detail,
-    'set `autopilot.base` to an existing branch in the programme',
+    'set `autopilot.base` to an existing branch in the config authority',
   );
 }
 
@@ -615,7 +615,7 @@ export function readSharedState(run: GitRunner, request: SharedStateRequest): Sh
       'AUTOPILOT_CONTRACT',
       'the shared Git state was read without a base branch',
       'no base was named, so the local refs a unit must not move are unknown',
-      'pass the loop base candidates from the programme',
+      'pass the loop base candidates from the config authority',
     );
   }
   const commands = sharedStateCommands(request.bases);

@@ -117,14 +117,6 @@ describe('summarizeProject', () => {
     expect(summary.attention).toEqual([]);
   });
 
-  it('surfaces the program when the project declares one', () => {
-    const summary = summarizeProject(input({
-      program: { program: 'knowledge-and-resume', provider: 'linear', unitCount: 11 },
-    }));
-
-    expect(summary.program?.program).toBe('knowledge-and-resume');
-  });
-
   // Phase 1 ships before the session checkpoint exists. Its absence is a fact
   // to display, never an error, and never a reason to demand attention: most
   // projects will not have one on day one.

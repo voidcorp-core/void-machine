@@ -21,7 +21,7 @@ A ticket an implementation agent can understand and execute within the agreed sc
 
 Do NOT use this to execute a ticket (`void-implement`) or to sequence many steps (`void-plan`).
 This skill is not a prerequisite for an explicit user request with clear acceptance criteria;
-create tracker work only when requested or required by the declared programme.
+create tracker work only when requested or required by the authorized scope.
 
 ---
 
@@ -41,7 +41,7 @@ and each one is defensible on its own. A backlog that admits them all stops bein
 the objective recedes while every individual step looks correct.
 
 So a noticed defect is not admitted on its merits. It is compared against **the unit being built
-right now**, judged against the program's stated objective, and there are three outcomes and one
+right now**, judged against the approved objective, and there are three outcomes and one
 slot:
 
 1. **It blocks the current unit** — it is fixed inside that unit. No ticket.
@@ -146,51 +146,25 @@ Native tracker metadata (use the real fields where available):
 
 ---
 
-## Multi-ticket programme handoff
+## Native milestone handoff
 
-After creating a complete pool of two or more tickets intended to run across sessions, create
-`.void/program.md` in the same change. Do this only after the plan and ticket pool are
-human-approved and every native dependency is saved. A single standalone ticket does not need a
-programme descriptor.
+After an approved multi-ticket plan is materialized, keep its units and dependency relations in
+the native project and milestone. That milestone carries the repository link to the approved
+plan and decisions. Use existing native fields; no programme descriptor, extra index or service.
+For a clear approved arrival, write its project and milestone membership and read it back.
+Preserve human priorities and assignments. An ambiguous arrival remains visible and non-admitted;
+independent authorized work continues. A provider failure stops only dependent operations.
 
-Use tracker-agnostic routing frontmatter:
+Automatic selection additionally requires explicit config authority described in
+`docs/AUTOPILOT-AUTHORITY.md`: `schemaVersion: 3`, boolean `enabled`, the existing
+`progress.provider/scope/states` and all approved restrictions. Scope is the native project and
+milestone locator, opaque to the kernel. Membership and checkpoint intent are not consent.
+Do not create or migrate authority merely because tickets were created; old configurations and
+historical programmes are preserved. No automatic priority rewrite or global reranking.
 
-```yaml
----
-schemaVersion: 1
-status: executing
-program: <stable-program-slug>
-plan: <repository-relative-plan-path>
-spec: <repository-relative-spec-path>
-progress:
-  provider: <adapter capability id>
-  scope: <native workspace/project/repository query>
-  order: [<ordered immutable work-unit identifiers>]
-  states:
-    ready: [<native ready states>]
-    started: [<native started states>]
-    review: [<native review states>]
-    done: [<native completed states>]
-humanGates: [<ticket identifiers requiring explicit approval>]
-autopilot:
-  schemaVersion: 2
-  enabled: <true | false>
----
-```
-
-The body states that the plan supplies global intent, the complete provider-native record is the
-executable unit, native blocker relations decide readiness, and `void-implement` owns the per-unit
-lifecycle. `progress.order` is the deterministic tie-break among simultaneously ready units; it is
-scope, not mutable progress. Never store a current or next unit, copied status, assignee, or
-completion checklist in the program or checkpoint.
-
-The example retains legacy consent. If `.void/config.json` already declares `autopilot`, do not create a competing programme grant: retain context and selection only. New config declarations require schema 2 and explicit boolean `enabled`, provider/scope/states and human gates; never infer consent from silence. Two enabled declarations must be semantically equivalent; invalid or conflicting authority stops only dependent autonomous actions. There is no merge gate to declare: the loop merges into the integration branch on a local review verdict, never into the branch that deploys, which `deployBranch` names when it is not the repository's default branch; a person who merges themselves says so with `void-machine autopilot merges --by-human`, local state and not the program. Add `deployBranch`, `clusterSize` (1..4), `base`, `verifyCommands` (argv arrays, run with `shell:false`) and `ownership.sequential` / `ownership.reconcileOnly` only when the program enables autopilot.
-
-Do not replace an unrelated executing programme. Stop and surface the collision. When the same
-programme already has a descriptor, preserve its routing unless the user explicitly changes
-programme scope. Automatic selection requires a provider adapter that can read and update status,
-relations, assignee, comments, and review evidence; if those capabilities are unavailable, do not
-claim automatic continuity.
+The orchestrator verifies complete ticket criteria, actual membership, blockers and holds through
+native tools before passing observations to the kernel. Planned work in the checkpoint is a
+modifiable intention, not remote state; removing it closes no ticket and deletes no worktree.
 
 ---
 

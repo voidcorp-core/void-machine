@@ -112,11 +112,16 @@ describe('--force never seizes a co-owned file', () => {
   it.each([true, false, 'invalid'])('preserves the co-owned authority %s across pack reconciliation and update', async enabled => {
     await init(['--runtime', 'claude', '--no-interactive']);
     const autopilot = { enabled, schemaVersion: 2, customFutureRestriction: ['preserve'] };
+    const historical = join(dir, '.void/program.md');
+    const history = 'Customized programme with old consent; preserve byte for byte.\n';
+    writeFileSync(historical, history);
     writeFileSync(join(dir, '.void/config.json'), JSON.stringify({ ...readConfig(), autopilot }));
     await init(['--runtime', 'claude', '--no-interactive', '--force', '--replace-packs', '--pack', 'react']);
     expect(readConfig()).toHaveProperty('autopilot', autopilot);
+    expect(readFileSync(historical, 'utf8')).toBe(history);
     await update([]);
     expect(readConfig()).toHaveProperty('autopilot', autopilot);
+    expect(readFileSync(historical, 'utf8')).toBe(history);
   });
 
 });

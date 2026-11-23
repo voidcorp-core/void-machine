@@ -71,7 +71,7 @@ export interface ReviewCommandOutput {
 }
 
 export interface ReviewRunners {
-  /** The coordinator checkout, which owns the programme and `.void/machine/autopilot`. */
+  /** The coordinator checkout, which owns the config authority and `.void/machine/autopilot`. */
   readonly root: string;
   readonly gh: GhRunner;
   /** git with argv in one directory, never through a shell. */

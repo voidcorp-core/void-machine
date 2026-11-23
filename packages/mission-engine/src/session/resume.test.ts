@@ -3,34 +3,16 @@ import { parseCheckpoint } from '../test/checkpoint-markers.js';
 import {
   composeResumeBundle,
   type ResumeBundleInput,
-  type ResumeProgramInput,
   renderResumeContext,
 } from './resume.js';
 
 const NOW = Date.parse('2026-08-17T12:00:00Z');
-
-function program(): ResumeProgramInput {
-  return {
-    schemaVersion: 1,
-    status: 'executing',
-    program: 'knowledge-and-resume',
-    plan: 'docs/plans/knowledge.md',
-    spec: 'docs/specs/knowledge.md',
-    progress: {
-      provider: 'jira',
-      scope: 'ACME/KNOW',
-      order: ['KNOW-1'],
-      states: { ready: ['Todo'], started: ['Doing'], review: ['Review'], done: ['Done'] },
-    },
-  };
-}
 
 function input(over: Partial<ResumeBundleInput> = {}): ResumeBundleInput {
   return {
     project: { name: 'alpha', path: '/p/alpha' },
     now: NOW,
     git: { branch: 'main', head: 'abc1234', dirtyFiles: 2 },
-    program: program(),
     checkpoint: parseCheckpoint(
       '---\ndate: 2026-08-17\nbranch: main\nhead: abc1234\n---\n\n## Objective\n\nShip the bundle.\n\n## Next action\n\nWire the CLI.\n',
     ),
@@ -40,30 +22,15 @@ function input(over: Partial<ResumeBundleInput> = {}): ResumeBundleInput {
 }
 
 describe('composeResumeBundle', () => {
-  it('composes program checkpoint and git without remote execution state', () => {
+  it('composes checkpoint and git without remote execution state', () => {
     const bundle = composeResumeBundle(input());
 
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
     expect(bundle.project).toEqual({ name: 'alpha', path: '/p/alpha' });
     expect(bundle.git).toEqual({ branch: 'main', head: 'abc1234', dirtyFiles: 2 });
-    expect(bundle.program).toEqual({
-      status: 'executing',
-      program: 'knowledge-and-resume',
-      plan: 'docs/plans/knowledge.md',
-      spec: 'docs/specs/knowledge.md',
-      progress: { provider: 'jira', scope: 'ACME/KNOW' },
-    });
+    expect(bundle).not.toHaveProperty('program');
     expect(bundle.checkpoint?.nextAction).toBe('Wire the CLI.');
     expect(bundle.gaps).toEqual([]);
-  });
-
-  it('names an absent or invalid program without hiding a useful checkpoint', () => {
-    const absent = composeResumeBundle(input({ program: undefined }));
-    const invalid = composeResumeBundle(input({ program: undefined, programError: 'bad YAML' }));
-
-    expect(absent.gaps.map((gap) => gap.reason)).toContain('program-absent');
-    expect(invalid.gaps).toContainEqual({ reason: 'program-invalid', detail: 'bad YAML' });
-    expect(invalid.checkpoint?.objective).toBe('Ship the bundle.');
   });
 
   it('distinguishes an absent, empty and stale checkpoint', () => {
@@ -93,15 +60,13 @@ describe('renderResumeContext', () => {
   it('renders the local resume data without decisions, tracker output or diffs', () => {
     const context = renderResumeContext(composeResumeBundle(input()));
 
-    expect(context).toContain('Program: knowledge-and-resume');
-    expect(context).toContain('Plan: docs/plans/knowledge.md');
-    expect(context).toContain('Progress: jira at ACME/KNOW');
+    expect(context).not.toMatch(/Program:|Plan:|Progress:/);
     expect(context).toContain('Next action: Wire the CLI.');
     expect(context).not.toMatch(/Recent decisions|remote state|git diff/i);
   });
 
   it('adds no reconstruction instruction when no useful resume context exists', () => {
-    expect(renderResumeContext(composeResumeBundle(input({ program: undefined, checkpoint: undefined })))).toBe('');
+    expect(renderResumeContext(composeResumeBundle(input({ checkpoint: undefined })))).toBe('');
   });
 
   it('stays within the hook context budget', () => {

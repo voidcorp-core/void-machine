@@ -472,58 +472,24 @@ Three rules keep the degradation honest:
 The declaration lives in the mission plan, so no core command learns a runtime
 name — the same seam that already holds for `init`, `doctor` and `status`.
 
-### Consumer programme and session handoff
+### Consumer authority and session handoff
 
-Every generated `CLAUDE.md` or `AGENTS.md` carries the same conditional bootstrap: if
-`.void/program.md` exists with `status: executing`, the runtime reads its plan and spec before
-choosing implementation work. `ResumeBundle` composes that versioned global context with the local
-checkpoint and Git. A plain continue/start/resume request uses the declared progress adapter to
-recover exactly one started scoped unit, or selects the first ready unit from the stable order and
-native blocker relations. More than one started unit is a competing-claim error.
+Generated runtime docs load checkpoint and Git observations. Explicit config `autopilot`
+`schemaVersion: 3` with boolean `enabled` is the sole autonomous authority. The native milestone
+located through `progress.provider/scope/states` links the approved plan and owns membership.
+The orchestrator verifies actual tickets, blockers, holds and workers before selection; the
+kernel consumes observations without claiming independent provider verification.
 
-`.void/program.md` is the only location, and `LEGACY_PROGRAM_PATHS` is the only place the names it
-carried before (`.void/active.md`, `plans/ACTIVE.md`) still appear — read on the way in, never
-written, so a project that has not run `update` is not reported as having no programme at all.
-Two things hold that to one path. A test greps the living surface, everything the harness ships or
-tells an agent to read, for a legacy name; `docs/` is out of scope, since the specs that decided
-this are the record of why. And `doctor` **names the paths it looked at** when it finds nothing,
-because the same programme at one name printed eight autopilot lines and at another printed none,
-and a silent report is indistinguishable from not having looked.
+The single reader `autopilot/authority.ts` serves admission, review, fingerprints, publication
+and doctor. V2 remains readable by general configuration for preservation but never admitted;
+no historical fallback or automatic promotion exists. Historical programme files remain
+project-owned and untouched by init/update/packs. See [migration and public API changes](AUTOPILOT-AUTHORITY.md).
 
-The programme is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
-mutate it. A declaration never migrates into a directory the harness ignores: one project's
-programme was moved from `plans/ACTIVE.md` to `.void/machine/ACTIVE.md` by an `update`, taking its
-running order, its human gates and its legacy `autopilot` consent block
-out of the repository with it, where nobody could audit or revise them in a PR. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
-materialized in a capable progress provider. It stores durable context and routing only: programme,
-plan/spec links, provider scope, ordered unit identifiers, lifecycle-state roles, human gates, and
-the legacy `autopilot` consent block when config has not taken over. Mutable status, assignee, blockers, comments, and review
-evidence live only in the provider.
-
-Autopilot authority now has one read boundary, `autopilot/authority.ts`, shared by
-admission, review, fingerprint, publication and doctor. It validates the declared
-`config-schema.ts` block using the same pure grammar as the legacy programme.
-Absent config block preserves legacy behavior; present-invalid never falls back,
-and two declarations must be semantically equivalent across all authority fields.
-`init --force` cannot replace unreadable co-owned config bytes. Local work independent
-of Autopilot remains available. See [the migration contract](AUTOPILOT-AUTHORITY.md).
-
-`packages/cli/src/lib/autopilot/program.ts` remains the parser of programme context. It
-validates every field on read and refuses a file that is present but wrong, rather than falling
-back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
-place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by
-the loop with its migration, so a former human gate never becomes consent to merge. Paths
-declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
-a YAML syntax.
-
-Automatic continuity is capability-gated rather than Linear-specific: the declared provider
-must support reading and updating status, relations, assignee, comments, and review evidence. If
-that surface is unavailable, the runtime stops the remote action instead of inferring progress
-from local files. The semantic sections of `.void/machine/checkpoint.md` are replaced at a
-deliberate session close and stay readable offline. The checkpoint records observations and
-intentions, not authoritative progress; the programme remains transition context.
-Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch. A standalone ticket or sequential plan keeps using its normal
-ticket or resume-point flow and does not need a programme descriptor.
+A bounded planned selection is refreshed where evidence changed, preserving human priorities
+and assignments. Multiple engaged tickets are reconciled, uncertain workers are not duplicated,
+and ambiguous arrivals do not stop independent authorized work. Missing required provider,
+scope or plan blocks dependent selection only; offline checkpoint and Git remain available.
+Human holds, protected-path changes and deployment promotion remain human.
 
 ### Session update proposal
 
@@ -539,8 +505,8 @@ cached detection and background refresh keep their existing behavior and startup
 
 ### Manual checkpoint and semantic resume
 
-`void-checkpoint` owns semantic residue. `mission-engine` parses it and composes programme,
-Git, freshness and reference diagnostics; `hook-runner` observes and injects the bounded result
+`void-checkpoint` owns semantic residue. `mission-engine` parses it and composes checkpoint,
+Git and freshness diagnostics; `hook-runner` observes and injects the bounded result
 at `SessionStart` in both runtimes. No mechanical revision or seal is required. Legacy mechanical
 blocks are ignored, and hooks never rewrite checkpoint files or acquire checkpoint locks.
 There is no continuous tracker, threshold reminder or end-of-session audit.

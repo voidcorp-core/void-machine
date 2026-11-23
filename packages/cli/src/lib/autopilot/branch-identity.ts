@@ -3,7 +3,7 @@
 // The loop refuses to merge into the branch that deploys, and that refusal is
 // the one that must never be wrong: `target` is resolved from the remote and
 // arrives canonical, while `deployBranch` is typed by a person into the
-// programme. Every error this module makes is therefore a refusal. Moved out of
+// config authority. Every error this module makes is therefore a refusal. Moved out of
 // the cluster engine's union review when that engine was removed; the rules and
 // their history are unchanged.
 
@@ -23,7 +23,7 @@ const CONTROL_OR_FORBIDDEN = new RegExp('[\\u0000-\\u001f\\u007f ~^:?*[\\\\]');
  * One branch name, in the one shape a comparison can be trusted on.
  *
  * `target` is resolved from the remote and arrives canonical. `deployBranch` is
- * typed by a person into a programme descriptor and is validated by nothing --
+ * typed by a person into a config authority descriptor and is validated by nothing --
  * so `origin/main`, `refs/heads/main`, `Main` and `main ` all failed to equal the
  * resolved `main`, and the branch that ships was granted to a machine. The one
  * refusal that must never be wrong was the only input with no shape.

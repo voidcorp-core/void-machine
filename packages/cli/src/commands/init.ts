@@ -213,7 +213,7 @@ export function sourceRepoVerdict(input: {
  * single-app default, the config stayed valid, and nothing went red.
  *
  * An unreadable config may contain consent or restrictions. Even --force cannot
- * discard that unknown authority and reactivate a legacy programme.
+ * discard unknown co-owned authority and restrictions.
  */
 export type ConfigWriteVerdict = 'scaffold' | 'merge' | 'keep-unreadable';
 

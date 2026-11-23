@@ -124,7 +124,6 @@ export const GATES = Object.freeze([
       fix: ['pnpm', '--filter', './packages/cli', 'build:void-graph'],
     },
   ),
-  gate('asset-paths', 'Asset paths', ['pnpm', 'skills:check-paths'], 'contract', 'filesystem', ['docs', 'source']),
   gate(
     'skill-references',
     'Skill references',

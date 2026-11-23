@@ -7,14 +7,15 @@ import { describe, expect, it } from 'vitest';
 function fixture(files: Readonly<Record<string, string>>) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'void-plugin-references-')));
   mkdirSync(join(root, 'scripts'));
-  for (const name of ['check-skill-references.mjs', 'build-skill-references.mjs', 'product-identity.mjs']) {
+  for (const name of ['check-skill-references.mjs', 'product-identity.mjs']) {
     copyFileSync(new URL(`../../scripts/${name}`, import.meta.url), join(root, 'scripts', name));
   }
   // The checker reads the product's own names from the identity, which is never a skill.
   mkdirSync(join(root, 'packages/core/data'), { recursive: true });
   copyFileSync(new URL('../../packages/core/data/identity.json', import.meta.url), join(root, 'packages/core/data/identity.json'));
   for (const [path, content] of Object.entries({
-    'packages/core/data/model.json': JSON.stringify({ nodes: [{ name: 'void-tdd' }] }),
+    'packages/core/data/model.json': JSON.stringify({ nodes: [{ name: 'void-tdd' }, { name: 'void-graph' }] }),
+    'packages/hook-runner/src/retired-skills.ts': "export const retired = { 'void-compounding': 'void-tdd' };",
     ...files,
   })) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -63,5 +64,46 @@ describe('plugin description CLI validation', () => {
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('harness:tdd');
+  });
+});
+
+
+describe('code reference CLI validation', () => {
+  it.each(['packages/probe.ts', 'apps/probe.ts', 'scripts/probe.mjs'])(
+    'rejects an unknown skill in %s', (path) => {
+      const result = fixture({ [path]: "const skill = 'void-does-not-exist';" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(path);
+      expect(result.stderr).toContain('void-does-not-exist');
+    },
+  );
+
+  it('rejects an unprefixed skill path even without a void token', () => {
+    const result = fixture({ 'packages/probe.ts': "const path = 'skills/tdd/SKILL.md';" });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('packages/probe.ts');
+    expect(result.stderr).toContain('skills/tdd/SKILL.md');
+  });
+
+  it('accepts live and retired references, declared machinery and consumer-owned skills', () => {
+    const result = fixture({
+      'packages/probe.ts': "const names = ['void-tdd', 'void-compounding', 'void-tx', 'skills/private/SKILL.md'];",
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
+  it('does not scan tests, historical records or generated copies as live code', () => {
+    const result = fixture(Object.fromEntries([
+      'packages/probe.test.ts',
+      'docs/decisions/old.md',
+      'packages/cli/core-assets/probe.ts',
+      'packages/core/graph/void-graph.mjs',
+      'packages/example/dist/probe.js',
+      'packages/example/node_modules/probe.js',
+      'packages/example/coverage/probe.js',
+    ].map((path) => [path, "const skill = 'void-does-not-exist';"])));
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 });

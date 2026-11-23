@@ -4,7 +4,7 @@
 // Repository projections are generated from skills, agents, hooks, commands,
 // packs and the verification catalogue. They include the graph catalogue and
 // compatibility model, certification manifest, consumer bundle, cheat sheet,
-// npm mirror, skill-reference register and CI gate block. Each once had its own
+// npm mirror and CI gate block. Each once had its own
 // build command or hand-maintained copy, and nothing declared the complete set.
 //
 // The cost of that showed up the day thirteen skills were renamed: the gates
@@ -38,7 +38,6 @@ const STEPS = [
   { label: 'consumer bundle', argv: ['pnpm', '-F', './packages/cli', 'build:void-graph'] },
   { label: 'cheat sheet', argv: ['node', 'scripts/build-cheatsheet.mjs'] },
   { label: 'npm mirror', argv: ['pnpm', '--filter', './packages/cli', 'build:assets'] },
-  { label: 'skill references', argv: ['node', 'scripts/build-skill-references.mjs'] },
 ];
 
 /**

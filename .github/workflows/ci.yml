@@ -339,13 +339,6 @@ jobs:
           --sha "$GATE_SHA"
           --report ".void/machine/gate-reports/consumer-bundle.json"
 
-      - name: "[asset-paths] Asset paths"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate asset-paths
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/asset-paths.json"
-
       - name: "[skill-references] Skill references"
         continue-on-error: true
         run: >-

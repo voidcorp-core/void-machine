@@ -69,18 +69,6 @@
         ]
       },
       {
-        "matcher": "apply_patch|Edit|Write",
-        "hooks": [
-          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" enforce test-name codex" }
-        ]
-      },
-      {
-        "matcher": "apply_patch|Edit|Write",
-        "hooks": [
-          { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" enforce design-slop codex" }
-        ]
-      },
-      {
         "matcher": "*",
         "hooks": [
           { "type": "command", "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" activation codex" }

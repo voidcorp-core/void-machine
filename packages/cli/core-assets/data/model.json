@@ -58,7 +58,7 @@
       "name": "doctrine-critic",
       "pack": null,
       "source": "packages/core/agents/doctrine-critic.md",
-      "staticTokens": 1130,
+      "staticTokens": 1126,
       "type": "agent"
     },
     {
@@ -323,16 +323,6 @@
     },
     {
       "description": "",
-      "id": "hook:no-ai-design-slop",
-      "lines": 10,
-      "name": "no-ai-design-slop",
-      "pack": null,
-      "source": "packages/core/hooks/no-ai-design-slop.sh",
-      "staticTokens": 94,
-      "type": "hook"
-    },
-    {
-      "description": "",
       "id": "hook:no-any-grep",
       "lines": 10,
       "name": "no-any-grep",
@@ -458,16 +448,6 @@
       "name": "tdd-guard",
       "pack": null,
       "source": "packages/core/hooks/tdd-guard.sh",
-      "staticTokens": 94,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:test-name-lint",
-      "lines": 10,
-      "name": "test-name-lint",
-      "pack": null,
-      "source": "packages/core/hooks/test-name-lint.sh",
       "staticTokens": 94,
       "type": "hook"
     },
@@ -2723,7 +2703,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-testing/SKILL.md",
-      "staticTokens": 3097,
+      "staticTokens": 3078,
       "triggers": {
         "globs": [
           "**/*.test.ts",
@@ -2955,13 +2935,6 @@
       "evidence": "migration-pr-template requires the migration checklist — enforces migrations"
     },
     {
-      "from": "hook:no-ai-design-slop",
-      "to": "skill:void-frontend-design",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-ai-design-slop blocks AI-slop UI patterns — enforces frontend-design"
-    },
-    {
       "from": "hook:no-any-grep",
       "to": "skill:void-typescript-strict",
       "kind": "enforces",
@@ -3051,13 +3024,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "tdd-guard requires a test to drive every production change — enforces tdd (Iron Law)"
-    },
-    {
-      "from": "hook:test-name-lint",
-      "to": "skill:void-testing",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "test-name-lint checks behavior-named tests — enforces testing"
     },
     {
       "from": "hook:tidying-commit-prefix",

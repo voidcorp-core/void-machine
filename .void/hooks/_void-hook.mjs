@@ -13577,7 +13577,7 @@ function executeHerdrMetadata(raw, root, env, runtime3, run = runCommand) {
       return { status: "ok", details: { host: "herdr", mission: "absent" }, output: { hookSpecificOutput: {
         hookEventName: "SessionStart",
         additionalContext: `Validated Herdr caller: ${paneId}. No Orchestra mission selected.
-Use void-orchestrate before delegating a ticket: register the mission, create or reuse its worker tab, and launch the worker once. Revalidate live identity before acting; this hook never launches workers.`
+Herdr is optional. Use void-orchestrate for native delegation. Revalidate the target before Herdr operations; this hook never launches workers.`
       } } };
     }
     const workspace = snapshot.coordinator ? record3(record3(JSON.parse(call("herdr", ["workspace", "get", snapshot.pane.workspace_id])))?.["result"]) : void 0;
@@ -13616,17 +13616,8 @@ Read mission.md and the current brief/report before resuming; Herdr IDs are hint
     };
   } catch (error) {
     const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-    return {
-      status: "degraded",
-      details: { reason },
-      diagnostic: `herdr-metadata: ${reason}
-`,
-      ...event === "SessionStart" ? { output: { hookSpecificOutput: {
-        hookEventName: "SessionStart",
-        additionalContext: `Herdr discovery refused: ${reason}.
-Do not act on this host until resolved. Native delegation independent of that action may continue.`
-      } } } : {}
-    };
+    return { status: "degraded", details: { reason }, diagnostic: `herdr-metadata: ${reason}
+` };
   }
 }
 

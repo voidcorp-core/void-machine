@@ -37,7 +37,7 @@ commit `15d6689` ; les règles de garde restent actualisées lorsqu'elles change
 | `SessionStart` | 1 | aucun |
 | `Stop` | 2 | aucun |
 
-Les 12 règles `enforce` câblées en `PreToolUse` : `tdd-order`, `no-any`, `no-as-cast`, `no-console`, `no-null`, `no-focused-test`, `boundary-direction`, `test-name`, `protected-file`, `dangerous-command`, `design-slop`, `secret-content`. Preuve : `packages/core/.claude-plugin/plugin.json`.
+Les 11 règles `enforce` câblées en `PreToolUse` : `tdd-order`, `no-any`, `no-as-cast`, `no-console`, `no-null`, `no-focused-test`, `boundary-direction`, `protected-file`, `dangerous-command`, `secret-content`, `control-character`. Preuve : `packages/core/.claude-plugin/plugin.json`.
 
 La 13e entrée `PreToolUse` (matcher `*`) appelle `activation`, non `enforce`. Preuve : `packages/core/.claude-plugin/plugin.json`.
 

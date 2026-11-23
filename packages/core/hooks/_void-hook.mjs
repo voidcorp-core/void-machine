@@ -7392,7 +7392,6 @@ var GOVERNING_SKILL = {
   // fixture practice, and void-testing is the only skill that already carries it.
   "control-character": "void-testing",
   "dangerous-command": "void-security-guidance",
-  "design-slop": "void-frontend-design",
   "no-any": "void-typescript-strict",
   "no-as-cast": "void-typescript-strict",
   "no-console": "void-observability",
@@ -7400,14 +7399,12 @@ var GOVERNING_SKILL = {
   "no-null": "void-functional",
   "protected-file": "void-security-guidance",
   "secret-content": "void-security-guidance",
-  "tdd-order": "void-tdd",
-  "test-name": "void-testing"
+  "tdd-order": "void-tdd"
 };
 var RULE_NAMES = [
   "boundary-direction",
   "control-character",
   "dangerous-command",
-  "design-slop",
   "no-any",
   "no-as-cast",
   "no-console",
@@ -7415,8 +7412,7 @@ var RULE_NAMES = [
   "no-null",
   "protected-file",
   "secret-content",
-  "tdd-order",
-  "test-name"
+  "tdd-order"
 ];
 function governingSkill(rule) {
   return GOVERNING_SKILL[rule];
@@ -7630,36 +7626,6 @@ function dangerousCommand(command) {
     "DANGEROUS_COMMAND",
     "refusing a destructive command; use the reviewed one-shot override only when deliberate",
     [evidence]
-  );
-}
-
-init_define_VOID_SYNTAX_WORKER_IDENTITY();
-var INTER = /font-family[^;]*\bInter\b|font-\[.?Inter|fontFamily[^,]*\bInter\b/i;
-var GRADIENT = /(?:from|to)-(?:purple|indigo|violet|fuchsia)-\d+[^"' ]*[^"']*(?:from|to)-(?:blue|cyan|teal|sky|indigo)-\d+|linear-gradient\([^)]*(?:purple|indigo|violet)[^)]*(?:blue|cyan|teal)/i;
-var GREY_ON_COLOR = /\btext-(?:gray|grey|slate|zinc|neutral)-\d+\b[^"']*\bbg-(?:indigo|purple|blue|violet|fuchsia|emerald|rose|pink)-\d+\b/i;
-var NESTED_CARD = /class(?:Name)?="[^"]*\bcard\b[^"]*"[^>]*>[^<]*<[^>]*class(?:Name)?="[^"]*\bcard\b/i;
-function designSlop(edits) {
-  const evidence = [];
-  for (const edit of edits) {
-    const path2 = normalizedPath(edit.path);
-    if (!/\.(?:tsx|jsx|css|scss)$/.test(path2) || isTestPath(path2) || isGeneratedPath(path2)) {
-      continue;
-    }
-    edit.addedContent.split(/\r?\n/).forEach((line, index) => {
-      if (/allow-design-slop:/.test(line)) return;
-      const code2 = line.replace(/`[^`]*`|\/\*.*?\*\/|\/\/.*$/g, "");
-      if (INTER.test(code2)) evidence.push(`${path2}:${index + 1}: default Inter font`);
-      if (GRADIENT.test(code2)) evidence.push(`${path2}:${index + 1}: clich\xE9 gradient`);
-      if (GREY_ON_COLOR.test(code2)) evidence.push(`${path2}:${index + 1}: grey text on color`);
-    });
-    if (NESTED_CARD.test(edit.addedContent) && !edit.addedContent.includes("allow-design-slop:")) {
-      evidence.push(`${path2}: card nested directly inside card`);
-    }
-  }
-  return evidenceVerdict(
-    "GENERIC_AI_DESIGN_TELL",
-    "conservative generic-design tell detected; apply the project visual language",
-    evidence
   );
 }
 
@@ -8147,16 +8113,6 @@ function tddOrder(input) {
     message: "warning: souple mode, sibling test missing",
     evidence: warnings
   };
-}
-
-init_define_VOID_SYNTAX_WORKER_IDENTITY();
-var GENERIC_NAME = /\b(?:it|test)\(\s*['"]should\s|\b(?:it|test)\(\s*['"]works?\b|\b(?:it|test)\(\s*['"]test['"]/;
-function testName(edits) {
-  return evidenceVerdict(
-    "GENERIC_TEST_NAME",
-    "generic test name must describe observable behavior",
-    lineEvidence(edits, isTestPath, (line) => GENERIC_NAME.test(line))
-  );
 }
 
 init_define_VOID_SYNTAX_WORKER_IDENTITY();
@@ -9169,8 +9125,6 @@ function evaluateRule(rule, rawInput, options) {
   if (rule === "no-console") return noConsole(edits, options.root);
   if (rule === "no-null") return noNull(edits);
   if (rule === "boundary-direction") return boundaryDirection(edits, options.root);
-  if (rule === "test-name") return testName(edits);
-  if (rule === "design-slop") return designSlop(edits);
   rule;
   throw new Error("UNKNOWN_ENFORCEMENT_RULE");
 }
@@ -13836,7 +13790,7 @@ function executeHerdrMetadata(raw, root, env, runtime3, run = runCommand) {
       return { status: "ok", details: { host: "herdr", mission: "absent" }, output: { hookSpecificOutput: {
         hookEventName: "SessionStart",
         additionalContext: `Validated Herdr caller: ${paneId}. No Orchestra mission selected.
-Use void-orchestrate before delegating a ticket: register the mission, create or reuse its worker tab, and launch the worker once. Revalidate live identity before acting; this hook never launches workers.`
+Herdr is optional. Use void-orchestrate for native delegation. Revalidate the target before Herdr operations; this hook never launches workers.`
       } } };
     }
     const workspace = snapshot.coordinator ? record3(record3(JSON.parse(call("herdr", ["workspace", "get", snapshot.pane.workspace_id])))?.["result"]) : void 0;
@@ -13875,17 +13829,8 @@ Read mission.md and the current brief/report before resuming; Herdr IDs are hint
     };
   } catch (error) {
     const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-    return {
-      status: "degraded",
-      details: { reason },
-      diagnostic: `herdr-metadata: ${reason}
-`,
-      ...event === "SessionStart" ? { output: { hookSpecificOutput: {
-        hookEventName: "SessionStart",
-        additionalContext: `Herdr discovery refused: ${reason}.
-Do not act on this host until resolved. Native delegation independent of that action may continue.`
-      } } } : {}
-    };
+    return { status: "degraded", details: { reason }, diagnostic: `herdr-metadata: ${reason}
+` };
   }
 }
 

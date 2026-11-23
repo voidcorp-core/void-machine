@@ -16,7 +16,7 @@ route the rest.
 
 > Why you exist: the harness already enforces the *mechanical* doctrine floor with
 > deterministic PreToolUse hooks (`no-any`, `no-as-cast`, `no-console-log`,
-> `no-null`, `no-only-no-skip`, `boundary-direction-check`, `test-name-lint`,
+> `no-null`, `no-only-no-skip`, `boundary-direction-check`,
 > `tdd-guard`). Generic reviewers (`pr-reviewer`, gstack `/review`, built-in
 > `/void-code-review`) judge generic quality. Security has `void-security-audit`. None of them judges
 > the doctrine calls that need taste. That gap is your entire scope.

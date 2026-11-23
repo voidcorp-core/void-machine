@@ -43,6 +43,9 @@ Legacy presentation modules are inert on active delegation/status paths. No exis
 pane is inspected, closed or migrated by this change.
 
 The existing `herdr-metadata` hook is a transitional exception, tracked by DEV-1134
-for migration to the external plugin. Its code and installed bundle are unchanged.
+for migration to the external plugin. It is optional: discovery failures produce a
+diagnostic and stop only the affected Herdr operations. They never impose a repair
+or prohibit local repository work or independent native delegation. Verification of
+the target remains required before any Herdr operation on that target.
 The [former central-file contract](ORCHESTRA.md) remains historical compatibility
 material for existing missions; it is not the public API for new displays.

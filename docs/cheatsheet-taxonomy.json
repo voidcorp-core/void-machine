@@ -96,7 +96,6 @@
       "hooks": {
         "tdd-guard": "Refuses production code with no failing test behind it, at the strictness the project declared.",
         "no-only-no-skip": "Refuses a focused or skipped test reaching a commit, where it would silently shrink the suite.",
-        "test-name-lint": "Refuses a test name that describes the implementation instead of the behaviour.",
         "pre-PR-review-evidence": "Requires the review evidence a pull request claims to have.",
         "stop-typecheck": "Typechecks at the end of a session, so a green run cannot end on a broken tree."
       }
@@ -126,7 +125,6 @@
       "title": "Frontend and design",
       "blurb": "The interface floor a screenshot would not catch.",
       "hooks": {
-        "no-ai-design-slop": "Refuses the generated-UI tells: gradient hero, mid hierarchy, decorative motion.",
         "anti-ai-slop-grep": "The same judgement at the text level, on copy that reads as generated.",
         "axe-precommit": "Runs accessibility checks before the commit, not at review time.",
         "viewport-screenshot-gate": "Optional PR-text heuristic for mobile/desktop references; not a native or CI gate and does not inspect images."

@@ -128,7 +128,8 @@ Describe the behavior. Imperative. Specific.
 - `it should retry` (the "should" is fluff)
 </Bad>
 
-The `test-name-lint` write hook blocks detected generic names: exactly `test`, or names starting with `should `, `work` or `works`. The owning rule defines the lexical scope.
+Judge names by the observable behavior they describe during review. A prefix such as
+`should` or `works` does not determine whether a test is meaningful and never blocks a write.
 
 ---
 
@@ -260,7 +261,6 @@ Use pglite or dev branch. Mocking Drizzle breaks at every schema change while pr
 ## Companion hooks
 
 - **`no-only-no-skip`** — blocks focused/skipped calls on supported test writes; no path exemption
-- **`test-name-lint`** — blocks the generic test-name patterns described above
 - **`no-business-mock`** — warn on `vi.mock\('@/(services|domain)/...'\)` patterns
 - **`no-snapshot-default`** — warn on new `.toMatchSnapshot()` outside `**/__visual__/**` whitelist
 

@@ -38,6 +38,34 @@ in total (initial review plus at most one corrected head), as specified by
 It does not inherit two additional correction batches. Exhaustion routes unresolved
 work to a human; neither mode resets the other's consumed budget.
 
+## Optional review before draft readiness
+
+The coordinator can explicitly request `autopilot review` with the existing mission, assigned
+worktree, ticket, PR, exact head and round while a completed candidate remains draft. Read-only
+admission reuses the mission controller: authenticated plan and frozen criteria, open intact
+journal, completed valid writer lifecycle without a pending correction, clean committed subject,
+and applicable fresh successful verification on that tree. Outstanding evidence obligations
+still refuse admission; an unrelated green command is insufficient. Current remote base is read
+without fetching or changing local refs. Missing local base objects require synchronization first.
+
+Admission is repeated before the attempt, and concurrent subject/journal changes refuse it.
+A completed review is reusable only for the unchanged subject; a pending attempt retains its
+original deadline. Collection can retain a real blocking result of that pending review without
+opening another attempt while correction is due. No draft is implicitly marked ready.
+`merge` and `arm` independently reject draft, even with PASS, and the loop waits for a reviewed
+draft instead of sending it through another writer or reviewer.
+
+Coordination inspection may explain or dispatch the task, but never supplies the independent
+verdict. The coordinator passes the complete current ticket and observed claim to an immediately
+dispatched worker; delayed, resumed or uncertain inputs require relevant refreshes. Advisories
+remain in results without automatic issue creation. Routine same-workspace pauses use the local
+checkpoint; material shared changes and actual external handoffs retain concise tracker updates.
+Multiple unrelated human waits preserve their recap and scope without draining independent work.
+Explicit stop/drain, quota, correction budgets, dependency/collision checks and unavailable shared
+capabilities keep their existing boundaries. Accepted decisions resolve conflicts when possible;
+unresolved incompatible intentions still need the human. Fingerprint drift blocks publication,
+preserves its baseline and does not establish which worker caused it.
+
 ## Preparation is advice
 
 Normal `mission dispatch` starts the lead writer without a compulsory preparation panel.

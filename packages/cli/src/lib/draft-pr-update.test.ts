@@ -56,11 +56,6 @@ it('updates old managed PR guidance in both installed runtimes without overwriti
       for (const name of SKILLS) {
         const installed = readFileSync(join(project, runtime, 'skills', name, 'SKILL.md'), 'utf8');
         expect(installed).toBe(readFileSync(join(ROOT, 'packages/core/skills', name, 'SKILL.md'), 'utf8'));
-        expect(installed).toContain('coordinator may create or reuse a draft pull request');
-        expect(installed).toContain('mark the same pull request ready');
-        expect(installed).toContain('commit-only');
-        expect(installed).not.toContain('ready for review rather than as a draft');
-        expect(installed).not.toContain('worker pushes its own branch and opens the PR');
       }
       expect(readFileSync(join(project, runtime, 'skills/private/SKILL.md'), 'utf8')).toBe(privateRule);
     }

@@ -561,6 +561,13 @@ function guardedMerge(target: MergeTarget, context: LoopRunners) {
       'ask `autopilot next` again; it merges only the head it just read',
     );
   }
+  if (view.draft) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT', `#${number} is still a draft`,
+      'an independent review does not authorize preparation or merging of a draft',
+      'wait for the authorized owner to mark the pull request ready',
+    );
+  }
   // A check registered since the tick read the head: a failing one goes back
   // to the worker, a pending one is waited for, never merged past.
   if (view.checks === 'failing' || view.checks === 'pending') {

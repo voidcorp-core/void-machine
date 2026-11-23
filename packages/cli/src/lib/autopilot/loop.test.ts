@@ -691,8 +691,15 @@ describe('a held ticket and its pull request', () => {
     expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'wait', reason: 'worker-active' });
   });
 
+  it('waits for a reviewed draft to become ready without another writer or reviewer', () => {
+    expect(one({}, { draft: true, ...reviewed('DEV-1', 11) })).toMatchObject({
+      kind: 'wait', reason: 'draft',
+    });
+  });
+
   it('resumes a draft nobody is working on', () => {
-    expect(one({}, { draft: true })).toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
+    expect(one({}, { draft: true }, { reviews: { 'DEV-1': [] } }))
+      .toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
   });
 
   it('hands failing checks back to the worker', () => {
@@ -944,7 +951,7 @@ describe('a held ticket and its pull request', () => {
 
     it('keeps a draft, a conflict, a failing check and a protected path ahead of the hold', () => {
       const hold = { hold: true };
-      expect(one({}, { draft: true }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
+      expect(one({}, { draft: true }, hold)).toMatchObject({ kind: 'wait', reason: 'draft' });
       expect(one({}, { mergeState: 'DIRTY' }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'conflict' });
       expect(one({}, { failingCheck: true }, hold)).toMatchObject({
         kind: 'hand-back-to-worker',
@@ -1482,7 +1489,7 @@ describe('stopping', () => {
     expect(actions).toContainEqual({ kind: 'drain', reason: 'quota-low' });
   });
 
-  it('drains after three consecutive tickets sent to a human', () => {
+  it('admits independent work after three tickets sent to a human', () => {
     const recent = [
       { ticketId: 'DEV-7', outcome: 'merged' as const },
       { ticketId: 'DEV-8', outcome: 'human-wait' as const, reason: 'semantic-conflict' },
@@ -1491,14 +1498,14 @@ describe('stopping', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
     const actions = decide({ tickets, recent }, { pulls });
-    expect(actions).toContainEqual({ kind: 'drain', reason: 'human-wait-streak' });
-    expect(assigned(actions)).toEqual([]);
+    expect(actions.some(action => action.kind === 'drain')).toBe(false);
+    expect(assigned(actions)).toEqual(['DEV-2']);
     // Two in a row is not three: a merge in between resets the count.
     const broken = [...recent.slice(1), { ticketId: 'DEV-6', outcome: 'merged' as const }];
     expect(assigned(decide({ tickets, recent: broken }, { pulls }))).toEqual(['DEV-2']);
   });
 
-  it('does not count a pull request that only waits for a human merge in the streak', () => {
+  it('keeps admitting work across human merge holds and unrelated waits', () => {
     // Under a human hold every reviewed pull request waits for a person by
     // design; counting those would stop the loop after three good tickets.
     const gate = (ticketId: string) => ({ ticketId, outcome: 'human-wait' as const, reason: 'human-merge-hold' });
@@ -1506,19 +1513,16 @@ describe('stopping', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull(reviewed('DEV-1', 11))];
     const actions = decide({ tickets, recent }, { pulls, hold: true });
-    expect(actions).not.toContainEqual({ kind: 'drain', reason: 'human-wait-streak' });
+    expect(actions.some(action => action.kind === 'drain')).toBe(false);
     expect(assigned(actions)).toEqual(['DEV-2']);
-    // A wait for any other reason still counts, around the merge gates.
+    // Other waits also retain their scope instead of stopping independent work.
     const mixed = [
       { ticketId: 'DEV-6', outcome: 'human-wait' as const, reason: 'semantic-conflict' },
       gate('DEV-7'),
       { ticketId: 'DEV-8', outcome: 'human-wait' as const, reason: 'github-unreadable' },
     ];
     const closed = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
-    expect(decide({ tickets, recent: mixed }, { pulls: closed })).toContainEqual({
-      kind: 'drain',
-      reason: 'human-wait-streak',
-    });
+    expect(assigned(decide({ tickets, recent: mixed }, { pulls: closed }))).toEqual(['DEV-2']);
   });
 
   it('drains when no queued ticket is ready or can be made ready', () => {

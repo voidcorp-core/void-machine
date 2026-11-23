@@ -7372,6 +7372,44 @@ function controlCharacter(edits) {
 
 import { basename } from "node:path";
 
+function ansiWord(source) {
+  const match = /^\$'((?:\\[\s\S]|[^'\\])*)'/.exec(source);
+  if (!match) return void 0;
+  const escapes = {
+    a: "\x07",
+    b: "\b",
+    e: "\x1B",
+    E: "\x1B",
+    f: "\f",
+    n: "\n",
+    r: "\r",
+    t: "	",
+    v: "\v",
+    "\\": "\\",
+    "'": "'",
+    '"': '"',
+    "?": "?"
+  };
+  let supported = true;
+  const value = (match[1] ?? "").replace(
+    /\\([0-7]{1,3}|x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|c[\s\S]|[\s\S])/g,
+    (raw, sequence) => {
+      if (escapes[sequence] !== void 0) return escapes[sequence];
+      if (sequence[0] === "c") return String.fromCharCode(
+        sequence[1] === "?" ? 127 : sequence.toUpperCase().charCodeAt(1) & 31
+      );
+      if (!/^(?:[0-7]|[xuU][\da-fA-F])/.test(sequence)) return raw;
+      const octal = /^[0-7]/.test(sequence);
+      const code2 = Number.parseInt(octal ? sequence : sequence.slice(1), octal ? 8 : 16);
+      if (code2 > 1114111) {
+        supported = false;
+        return "";
+      }
+      return String.fromCodePoint(octal ? code2 & 255 : code2);
+    }
+  );
+  return supported ? { value: value.split("\0", 1)[0] ?? "", length: match[0].length } : void 0;
+}
 function heredoc(source, start) {
   const header = /^<<(-?)[ \t]*('[^']+'|"[^"]+"|[\w]+)[ \t]*\n/.exec(source.slice(start));
   if (!header) return void 0;
@@ -7443,7 +7481,14 @@ function scanShell(source, start = 0, closing = "", depth = 0, text3 = false) {
       if (child.unsupported) return result(i, true);
       continue;
     }
-    if (!quote && char === "$" && next === "'") return result(i, true);
+    if (!quote && char === "$" && next === "'") {
+      const literal2 = ansiWord(source.slice(i));
+      if (!literal2) return result(i, true);
+      value += literal2.value;
+      started = true;
+      i += literal2.length - 1;
+      continue;
+    }
     if (!quote && source.startsWith("<<", i) && source[i + 2] !== "<") {
       const document = heredoc(source, i);
       if (!document) return result(i, true);
@@ -7502,20 +7547,29 @@ var SQL = /\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i;
 var SHELLS = /* @__PURE__ */ new Set(["sh", "bash", "dash", "zsh", "ksh"]);
 var SQL_CLIENTS = /* @__PURE__ */ new Set(["psql", "mysql", "mariadb", "sqlite3", "sqlcmd"]);
 var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "env", "command", "builtin", "exec", "nohup", "time"]);
-var WRAPPER_VALUES = /* @__PURE__ */ new Set([
-  "-u",
-  "-g",
-  "-h",
-  "-p",
-  "-C",
-  "-T",
-  "--user",
-  "--group",
-  "--host",
-  "--prompt",
-  "--chdir",
-  "--unset"
-]);
+var WRAPPER_VALUES = {
+  sudo: [
+    "-u",
+    "-g",
+    "-h",
+    "-p",
+    "-C",
+    "-D",
+    "-R",
+    "-T",
+    "--user",
+    "--group",
+    "--host",
+    "--prompt",
+    "--close-from",
+    "--chdir",
+    "--chroot",
+    "--command-timeout"
+  ],
+  env: ["-u", "-C", "-P", "--unset", "--chdir"],
+  exec: ["-a"],
+  time: ["-f", "-o", "--format", "--output"]
+};
 function commandWords(words2) {
   let index = 0;
   while (index < words2.length) {
@@ -7534,16 +7588,54 @@ function commandWords(words2) {
         return ["eval", attached, ...words2.slice(index + 1)];
       }
       if (wrapper === "sudo" && (/^-[^-]*[si]/.test(flag) || flag === "--shell" || flag === "--login")) return ["eval", ...words2.slice(index + 1)];
-      index += WRAPPER_VALUES.has(flag) ? 2 : 1;
+      index += WRAPPER_VALUES[wrapper]?.includes(flag) ? 2 : 1;
       if (flag === "--") break;
     }
   }
   return words2.slice(index);
 }
+function psqlCommands(args) {
+  const commands = [];
+  const longValues = /* @__PURE__ */ new Set([
+    "--command",
+    "--dbname",
+    "--file",
+    "--field-separator",
+    "--host",
+    "--log-file",
+    "--output",
+    "--port",
+    "--pset",
+    "--record-separator",
+    "--table-attr",
+    "--username",
+    "--set",
+    "--variable"
+  ]);
+  for (let i = 0; i < args.length && args[i] !== "--"; i += 1) {
+    const arg = args[i] ?? "";
+    if (arg.startsWith("--")) {
+      const [flag = "", attached] = arg.split(/=(.*)/s);
+      if (flag === "--command") commands.push(attached ?? args[i + 1] ?? "");
+      if (longValues.has(flag) && attached === void 0) i += 1;
+    } else if (arg.startsWith("-")) {
+      for (let j = 1; j < arg.length; j += 1) {
+        const option = arg[j] ?? "";
+        if (!"cdfFhLopPRTUv".includes(option)) continue;
+        const attached = arg.slice(j + 1);
+        if (option === "c") commands.push(attached || args[i + 1] || "");
+        if (!attached) i += 1;
+        break;
+      }
+    }
+  }
+  return commands.join(" ");
+}
 function sqlArguments(name, args) {
+  if (name === "psql") return psqlCommands(args);
   if (name === "sqlite3") return args.slice(1).join(" ");
-  const short = name === "psql" ? "c" : name === "sqlcmd" ? "Qq" : "e";
-  const long = name === "psql" ? "--command" : "--execute";
+  const short = name === "sqlcmd" ? "Qq" : "e";
+  const long = "--execute";
   return args.flatMap((arg, i) => {
     if (arg === long || arg.length === 2 && short.includes(arg[1] ?? "") && arg[0] === "-") {
       return [args[i + 1] ?? ""];

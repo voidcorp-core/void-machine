@@ -12,8 +12,13 @@ const SQL = /\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i;
 const SHELLS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
 const SQL_CLIENTS = new Set(['psql', 'mysql', 'mariadb', 'sqlite3', 'sqlcmd']);
 const WRAPPERS = new Set(['sudo', 'env', 'command', 'builtin', 'exec', 'nohup', 'time']);
-const WRAPPER_VALUES = new Set(['-u', '-g', '-h', '-p', '-C', '-T', '--user', '--group',
-  '--host', '--prompt', '--chdir', '--unset']);
+const WRAPPER_VALUES: Readonly<Record<string, readonly string[]>> = {
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-D', '-R', '-T', '--user', '--group',
+    '--host', '--prompt', '--close-from', '--chdir', '--chroot', '--command-timeout'],
+  env: ['-u', '-C', '-P', '--unset', '--chdir'],
+  exec: ['-a'],
+  time: ['-f', '-o', '--format', '--output'],
+};
 
 function commandWords(words: readonly string[]): readonly string[] {
   let index = 0;
@@ -32,17 +37,43 @@ function commandWords(words: readonly string[]): readonly string[] {
       }
       if (wrapper === 'sudo' && (/^-[^-]*[si]/.test(flag)
         || flag === '--shell' || flag === '--login')) return ['eval', ...words.slice(index + 1)];
-      index += WRAPPER_VALUES.has(flag) ? 2 : 1;
+      index += WRAPPER_VALUES[wrapper]?.includes(flag) ? 2 : 1;
       if (flag === '--') break;
     }
   }
   return words.slice(index);
 }
 
+function psqlCommands(args: readonly string[]): string {
+  const commands: string[] = [];
+  const longValues = new Set(['--command', '--dbname', '--file', '--field-separator', '--host',
+    '--log-file', '--output', '--port', '--pset', '--record-separator', '--table-attr',
+    '--username', '--set', '--variable']);
+  for (let i = 0; i < args.length && args[i] !== '--'; i += 1) {
+    const arg = args[i] ?? '';
+    if (arg.startsWith('--')) {
+      const [flag = '', attached] = arg.split(/=(.*)/s);
+      if (flag === '--command') commands.push(attached ?? args[i + 1] ?? '');
+      if (longValues.has(flag) && attached === undefined) i += 1;
+    } else if (arg.startsWith('-')) {
+      for (let j = 1; j < arg.length; j += 1) {
+        const option = arg[j] ?? '';
+        if (!'cdfFhLopPRTUv'.includes(option)) continue;
+        const attached = arg.slice(j + 1);
+        if (option === 'c') commands.push(attached || args[i + 1] || '');
+        if (!attached) i += 1;
+        break;
+      }
+    }
+  }
+  return commands.join(' ');
+}
+
 function sqlArguments(name: string, args: readonly string[]): string {
+  if (name === 'psql') return psqlCommands(args);
   if (name === 'sqlite3') return args.slice(1).join(' ');
-  const short = name === 'psql' ? 'c' : name === 'sqlcmd' ? 'Qq' : 'e';
-  const long = name === 'psql' ? '--command' : '--execute';
+  const short = name === 'sqlcmd' ? 'Qq' : 'e';
+  const long = '--execute';
   return args.flatMap((arg, i) => {
     if (arg === long || (arg.length === 2 && short.includes(arg[1] ?? '') && arg[0] === '-')) {
       return [args[i + 1] ?? ''];

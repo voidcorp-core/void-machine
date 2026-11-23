@@ -56,15 +56,25 @@ Preserve the installation, rollback and user-file ownership proofs.
 executable basenames, ordinary `sudo`/`env`/`command`/`exec` wrappers and literal
 assignments. Quotes and escapes preserve argument boundaries: searching for or
 printing destructive shell or SQL text does not itself execute that text.
+Wrapper options consume operands only for their own executable: `command -p`
+leaves the following program in command position, while `sudo -p` consumes a
+prompt and `exec -a` consumes an argv name.
 Tool payloads supplied as argv retain each literal argument, including empty
 arguments, apostrophes and dollar signs, before lexical inspection.
 Unquoted operators and pipelines start commands; redirections to raw devices
 are checked independently of the executable. Shell `-c`, `eval`, visible shell
 stdin, command/process substitutions and backticks are inspected recursively.
 Single quotes suppress shell substitutions; double quotes do not.
+ANSI-C quotes decode character escapes into one literal argument without running
+its substitutions or treating its separators as shell operators. When that
+argument becomes shell code, SQL, an option or an operation target, inspection
+uses its decoded value, including numeric escapes and NUL termination.
 
 Destructive SQL is checked in command arguments to `psql`, `mysql`/`mariadb`,
 `sqlite3` and `sqlcmd`, or visible pipeline/here-string input to those clients.
+For `psql`, short-option groups such as `-Xc` retain the command argument;
+operand-taking options such as `-d` and `-v` consume their remainder or following
+argument instead of treating that data as another executable option.
 One here-document at the end of a command line is supported, with quoted
 delimiter suppression of substitutions. Its body is inspected as code only
 when the receiving command executes it. Git rebase `--rebase-merges` and
@@ -75,7 +85,7 @@ This is a bounded lexical guard, not a shell or SQL interpreter and not a
 security boundary. It does not resolve aliases, variables, external scripts,
 SQL files or generated output. SQL matching does not parse SQL string literals
 or comments. Pipeline text is conservative evidence, not evaluated output.
-Unclosed syntax, unsupported here-document layouts, ANSI-C quoting and dynamic
+Unclosed syntax, unsupported here-document layouts, invalid ANSI-C code points and dynamic
 command names refuse explicitly instead of being treated as safe quoted data;
 recursive inspection is limited to eight levels. Other shell dialects, arbitrary
 wrapper options and indirect execution remain outside its proven coverage.

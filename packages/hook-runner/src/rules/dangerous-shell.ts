@@ -11,6 +11,32 @@ export interface ShellScan {
   readonly unsupported: boolean;
 }
 
+// ANSI-C quotes produce one literal word: decoding never re-enters shell scanning.
+function ansiWord(source: string) {
+  const match = /^\$'((?:\\[\s\S]|[^'\\])*)'/.exec(source);
+  if (!match) return undefined;
+  const escapes: Readonly<Record<string, string>> = {
+    a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r',
+    t: '\t', v: '\v', '\\': '\\', "'": "'", '"': '"', '?': '?',
+  };
+  let supported = true;
+  const value = (match[1] ?? '').replace(
+    /\\([0-7]{1,3}|x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|c[\s\S]|[\s\S])/g,
+    (raw: string, sequence: string) => {
+      if (escapes[sequence] !== undefined) return escapes[sequence];
+      if (sequence[0] === 'c') return String.fromCharCode(
+        sequence[1] === '?' ? 127 : (sequence.toUpperCase().charCodeAt(1) & 31));
+      if (!/^(?:[0-7]|[xuU][\da-fA-F])/.test(sequence)) return raw;
+      const octal = /^[0-7]/.test(sequence);
+      const code = Number.parseInt(octal ? sequence : sequence.slice(1), octal ? 8 : 16);
+      if (code > 0x10ffff) { supported = false; return ''; }
+      return String.fromCodePoint(octal ? code & 255 : code);
+    },
+  );
+  // Bash cannot carry NUL in a word; the ANSI-C fragment ends at its first NUL.
+  return supported ? { value: value.split('\0', 1)[0] ?? '', length: match[0].length } : undefined;
+}
+
 function heredoc(source: string, start: number) {
   const header = /^<<(-?)[ \t]*('[^']+'|"[^"]+"|[\w]+)[ \t]*\n/.exec(source.slice(start));
   if (!header) return undefined;
@@ -69,7 +95,11 @@ export function scanShell(source: string, start = 0, closing = '', depth = 0, te
       if (child.unsupported) return result(i, true);
       continue;
     }
-    if (!quote && char === '$' && next === "'") return result(i, true);
+    if (!quote && char === '$' && next === "'") {
+      const literal = ansiWord(source.slice(i));
+      if (!literal) return result(i, true);
+      value += literal.value; started = true; i += literal.length - 1; continue;
+    }
     if (!quote && source.startsWith('<<', i) && source[i + 2] !== '<') {
       const document = heredoc(source, i);
       if (!document) return result(i, true);

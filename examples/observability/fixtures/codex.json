@@ -1,0 +1,452 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "0.171.0"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "codex_exec"
+            }
+          }
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "scope": {},
+          "metrics": [
+            {
+              "name": "codex.turn.e2e_duration_ms",
+              "unit": "ms",
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 3513.0,
+                    "bucketCounts": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      1250.0,
+                      1500.0,
+                      1750.0,
+                      2000.0,
+                      2250.0,
+                      2500.0,
+                      3000.0,
+                      3500.0,
+                      4000.0,
+                      4500.0,
+                      5000.0,
+                      6000.0,
+                      7000.0,
+                      7500.0,
+                      8000.0,
+                      9000.0,
+                      10000.0,
+                      12000.0,
+                      15000.0,
+                      20000.0,
+                      30000.0,
+                      60000.0,
+                      120000.0
+                    ],
+                    "flags": 0,
+                    "min": 3513.0,
+                    "max": 3513.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "0.171.0"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "codex_exec"
+            }
+          }
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "scope": {},
+          "metrics": [
+            {
+              "name": "codex.turn.token_usage",
+              "unit": "",
+              "histogram": {
+                "dataPoints": [
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      },
+                      {
+                        "key": "token_type",
+                        "value": {
+                          "stringValue": "input"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 26340.0,
+                    "bucketCounts": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "flags": 0,
+                    "min": 26340.0,
+                    "max": 26340.0
+                  },
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      },
+                      {
+                        "key": "token_type",
+                        "value": {
+                          "stringValue": "total"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 26345.0,
+                    "bucketCounts": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "flags": 0,
+                    "min": 26345.0,
+                    "max": 26345.0
+                  },
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      },
+                      {
+                        "key": "token_type",
+                        "value": {
+                          "stringValue": "output"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 5.0,
+                    "bucketCounts": [
+                      0,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "flags": 0,
+                    "min": 5.0,
+                    "max": 5.0
+                  },
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      },
+                      {
+                        "key": "token_type",
+                        "value": {
+                          "stringValue": "reasoning_output"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 0.0,
+                    "bucketCounts": [
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "flags": 0,
+                    "min": 0.0,
+                    "max": 0.0
+                  },
+                  {
+                    "attributes": [
+                      {
+                        "key": "app.version",
+                        "value": {
+                          "stringValue": "0.171.0"
+                        }
+                      },
+                      {
+                        "key": "token_type",
+                        "value": {
+                          "stringValue": "cached_input"
+                        }
+                      }
+                    ],
+                    "startTimeUnixNano": "1700000000000000000",
+                    "timeUnixNano": "1700000001000000000",
+                    "count": 1,
+                    "sum": 13440.0,
+                    "bucketCounts": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1
+                    ],
+                    "explicitBounds": [
+                      0.0,
+                      5.0,
+                      10.0,
+                      25.0,
+                      50.0,
+                      75.0,
+                      100.0,
+                      250.0,
+                      500.0,
+                      750.0,
+                      1000.0,
+                      2500.0,
+                      5000.0,
+                      7500.0,
+                      10000.0
+                    ],
+                    "flags": 0,
+                    "min": 13440.0,
+                    "max": 13440.0
+                  }
+                ],
+                "aggregationTemporality": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

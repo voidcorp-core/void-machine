@@ -41,7 +41,9 @@ describe.each(['claude', 'codex'] as const)('%s installed style-gate retirement'
           type: 'command',
           command: `node "$CLAUDE_PROJECT_DIR/.void/hooks/_void-hook.mjs" enforce ${rule} ${runtime}`,
         }] }));
-        writeFileSync(settings, JSON.stringify({ hooks: { PreToolUse: [userHook, ...hooks] } }));
+        // wire compiles a stage; only Claude settings are co-owned.
+        const existing = runtime === 'claude' ? [userHook, ...hooks] : hooks;
+        writeFileSync(settings, JSON.stringify({ hooks: { PreToolUse: existing } }));
       }
       await adapterFor(runtime).wire({ stageRoot: root, installRoot: root,
         sourceRoot: resolve('packages/cli/core-assets'), enabledPlugins: ['harness'], enabledPacks: [],

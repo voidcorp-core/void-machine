@@ -225,6 +225,14 @@ a CLI upgrade, `void-machine update` re-stages the floor to the running CLI's
 version (only on real drift), so a Codex project catches floor-script updates the
 same way the Claude side catches marketplace bumps.
 
+The Codex manifest is exclusively managed once the install receipt claims it;
+editing it does not create a supported user extension of the safety floor. A
+pre-existing project-owned `.codex/hooks.json` is preserved byte-for-byte by local
+`init` and `update`, withheld from the staged transaction and never claimed by
+its receipt or manifest. In that case its hooks remain the project's responsibility;
+the preserved file is not evidence that the generated floor was activated.
+Claude's co-owned settings follow their separate merge contract.
+
 The former manual copy is no longer needed. `packages/core/codex/hooks.json`
 remains the single source `init` compiles from. Its top level uses only the
 Codex-supported `description` and `hooks` fields; a live `--strict-config` smoke

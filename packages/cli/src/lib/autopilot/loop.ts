@@ -147,8 +147,6 @@ export const REVIEW_ATTEMPTS_MAX = 2;
  * interrupted, and counts as failed.
  */
 export const REVIEW_RUNNING_MS = 45 * 60_000;
-/** Three tickets in a row handed to a human means the loop is no longer helping. */
-const HUMAN_WAIT_STREAK_MAX = 3;
 
 export type StopSignal = 'none' | 'drain' | 'now';
 export type QueueEvent = 'none' | 'queued' | 'ejected';
@@ -258,7 +256,7 @@ export const HUMAN_WAIT_REASONS = [
 export type HumanWaitReason = (typeof HUMAN_WAIT_REASONS)[number];
 
 // The reason a ticket went to a human is required: the recap repeats it, and
-// the streak skips only the waits a human hold asks for.
+// each wait retains its cause without stopping unrelated work.
 const recentOutcomeSchema = z.discriminatedUnion('outcome', [
   z.strictObject({ ticketId: ticketIdSchema, outcome: z.literal('merged') }),
   z.strictObject({
@@ -295,6 +293,7 @@ export type LoopTracker = z.infer<typeof loopTrackerSchema>;
 type TrackerTicket = LoopTracker['tickets'][number];
 
 export type WaitReason =
+  | 'draft'
   | 'worker-active'
   | 'awaiting-review'
   | 'merging'
@@ -312,7 +311,7 @@ export interface HumanWaitEntry {
   readonly reason: HumanWaitReason;
 }
 
-export type DrainReason = 'requested' | 'quota-low' | 'human-wait-streak' | 'backlog-exhausted';
+export type DrainReason = 'requested' | 'quota-low' | 'backlog-exhausted';
 
 export type LoopAction =
   | { readonly kind: 'assign'; readonly ticketId: string; readonly footprint: readonly string[] }
@@ -778,7 +777,7 @@ function sharedStateOutcome(
   if (current === undefined) return toHuman(ticket.id, 'shared-state-changed', 'the retained v3 policy was not observed');
   const changed = changedParts(before, fingerprintOf(current, before.protectedBranches, before.schemaVersion));
   if (changed.length === 0) return undefined;
-  const detail = `the unit changed the shared Git state: ${changed.join(', ')}`;
+  const detail = `shared Git state differs from the retained baseline: ${changed.join(', ')}`;
   return toHuman(ticket.id, 'shared-state-changed', detail);
 }
 
@@ -964,7 +963,8 @@ function openPullOutcome(
       `the tracker names ${ticket.branch} for the ticket, #${pr.number} comes from ${pr.headRef}`;
     return toHuman(ticket.id, 'tracker-github-mismatch', detail);
   }
-  if (pr.draft) return handBack(ticket.id, 'resume', pr.number);
+  if (pr.draft) return holdsCleanVerdict(ticket, pr, context.input)
+    ? wait(ticket.id, 'draft') : handBack(ticket.id, 'resume', pr.number);
   if (pr.conflicted) return conflictOutcome(ticket, pr);
   if (pr.checks === 'failing') return handBack(ticket.id, 'checks-failed', pr.number);
   return localReviewOutcome(ticket, pr, context);
@@ -1086,25 +1086,6 @@ function assignSlots(
   return { actions, exhausted: !open };
 }
 
-interface Outcome {
-  readonly outcome: 'merged' | 'human-wait';
-  readonly reason?: HumanWaitReason | undefined;
-}
-
-/**
- * Tickets sent to a human since the last merge. A pull request that only waits
- * for a person holding the merges is neither: the loop did its part, the person
- * asked to merge themselves, so it neither counts nor resets the streak.
- */
-function trailingHumanWaits(outcomes: readonly Outcome[]): number {
-  let count = 0;
-  for (const entry of [...outcomes].reverse()) {
-    if (entry.outcome === 'merged') return count;
-    if (entry.reason !== 'human-merge-hold') count += 1;
-  }
-  return count;
-}
-
 export function decideLoop(input: LoopInput): LoopDecision {
   const humanWaitLabel = input.program.autopilot.humanWaitLabel ?? HUMAN_WAIT_LABEL;
   const merges = input.mergeHold.held ? 'by-human' : 'automatic';
@@ -1145,15 +1126,9 @@ export function decideLoop(input: LoopInput): LoopDecision {
   const waited: HumanWaitEntry[] = slotActions.flatMap((action) =>
     action.kind === 'mark-human-wait' ? [{ ticketId: action.ticketId, reason: action.reason }] : [],
   );
-  const history: Outcome[] = [
-    ...recent,
-    ...merged.map(() => ({ outcome: 'merged' as const })),
-    ...waited.map(({ reason }) => ({ outcome: 'human-wait' as const, reason })),
-  ];
   let drain: DrainReason | undefined;
   if (input.signal === 'drain') drain = 'requested';
   else if (input.tracker.quota === 'low') drain = 'quota-low';
-  else if (trailingHumanWaits(history) >= HUMAN_WAIT_STREAK_MAX) drain = 'human-wait-streak';
   const actions: LoopAction[] = [...slotActions];
   if (drain === undefined) {
     const heldIds = new Set(holding.map((ticket) => ticket.id));

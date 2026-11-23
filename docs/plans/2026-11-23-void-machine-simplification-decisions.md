@@ -3,7 +3,7 @@ title: "Épuration de Void Machine : décisions approuvées"
 date: 2026-11-23
 status: approved-scope-record
 source: conversation-maintainer-2026-11-20-2026-11-23
-tickets: [DEV-1372, DEV-1373, DEV-1374, DEV-1375, DEV-1376, DEV-1393, DEV-1394, DEV-1395, DEV-1396, DEV-1397, DEV-1398, DEV-1399]
+tickets: [DEV-1372, DEV-1373, DEV-1374, DEV-1375, DEV-1376, DEV-1393, DEV-1394, DEV-1395, DEV-1396, DEV-1397, DEV-1398, DEV-1399, DEV-1400]
 ---
 
 # Décisions approuvées pour l’épuration de Void Machine

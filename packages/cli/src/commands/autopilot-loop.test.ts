@@ -352,6 +352,19 @@ describe('autopilot arm and disarm', () => {
     call.includes(`id=${PULL_NODE_ID}`) &&
     call.some((arg) => arg.includes('dequeuePullRequest'));
 
+  it.each(['merge', 'arm'])('refuses %s when the approved ready head is now draft, without mutation', command => {
+    const root = project();
+    recordLocalVerdict(root);
+    const draft = JSON.stringify({ ...JSON.parse(reviewedPull()), isDraft: true });
+    const gh = sequence([draft]);
+    const result = runAutopilotCommand([command, '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD],
+      '', { ...context(root), gh: gh.run });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/draft/);
+    expect(gh.writes()).toEqual([]);
+    expect(existsSync(armedPath(root))).toBe(false);
+  });
+
   it('records the head, arms on exactly that head, and checks GitHub armed it', () => {
     const root = project();
     recordLocalVerdict(root);

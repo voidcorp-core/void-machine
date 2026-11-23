@@ -1542,7 +1542,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-autopilot/SKILL.md",
-      "staticTokens": 7486,
+      "staticTokens": 7859,
       "type": "skill"
     },
     {
@@ -2034,7 +2034,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-implement/SKILL.md",
-      "staticTokens": 6696,
+      "staticTokens": 6833,
       "type": "skill"
     },
     {

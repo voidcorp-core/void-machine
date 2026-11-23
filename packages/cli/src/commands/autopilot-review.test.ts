@@ -9,6 +9,9 @@ import { pathToFileURL } from 'node:url';
 import { currentChecksFixture, noWorkflowRuns } from '../test/fixtures/loop-checks.js';
 import { runAutopilotCommand } from './autopilot.js';
 import { mergeCommand } from './autopilot-loop.js';
+import { dispatchMissionSpecialists, recordLeadWriterCompletion, recordMissionClosure } from './mission.js';
+import { verifyMissionCommand } from '../lib/runs/verify.js';
+import { writeSequencedEvent } from '@voidcorp/hook-runner';
 import { adapterFor } from '../lib/runtime-adapters.js';
 import {
   type AgentsContext,
@@ -258,7 +261,209 @@ function reviewCli(cwd: string, args: readonly string[], repo: Repository) {
     { cwd, env: { ...process.env, VOID_WORKTREES: repo.worktrees }, encoding: 'utf8', timeout: 15000 });
 }
 
+async function matureDraft() {
+  const repo = repository();
+  const assigned = join(repo.worktrees, 'assigned');
+  git(repo.root, 'worktree', 'add', '-q', '--detach', assigned, repo.base);
+  await adapterFor('codex').wire({ stageRoot: repo.root, installRoot: repo.root,
+    sourceRoot: resolve('packages/core'), enabledPlugins: ['harness'], enabledPacks: [],
+    source: 'local', marketplaceRepo: 'acme/harness', pinVersion: '7.0.0' });
+  const ticket = '.void/machine/tickets/DEV-1.md';
+  mkdirSync(join(assigned, '.void/machine/tickets'), { recursive: true });
+  writeFileSync(join(assigned, ticket), '# DEV-1\nAcceptance: slots are five.\n');
+  const started = missionCli(assigned, ['start', '--title', 'DEV-1', '--ticket', ticket, '--json']);
+  expect(started.status, started.stderr).toBe(0);
+  const { missionId } = JSON.parse(started.stdout) as { missionId: string };
+  const roots = { workRoot: assigned, installRoot: repo.root };
+  await dispatchMissionSpecialists(roots, { kind: 'dispatch', missionId, json: true });
+  git(assigned, 'checkout', '-q', '--detach', repo.head);
+  await recordLeadWriterCompletion(repo.root, { kind: 'writer-event', missionId, json: true });
+  const verify = () => verifyMissionCommand({ roots, missionId, shell: false, echo: false,
+    command: [process.execPath, '-e', "require('node:assert/strict').match(require('node:fs').readFileSync('loop.ts','utf8'), /slots = 5/)"] });
+  await verify();
+  const { runners: built } = runners(repo);
+  const native = { ...built, now: Date.now, gh: (args: readonly string[]) => {
+    const value = built.gh(args);
+    return args[1] === 'view' ? JSON.stringify({ ...JSON.parse(value), isDraft: true }) : value;
+  } };
+  const args = [...argv(repo.head), '--mission', missionId, '--worktree', assigned];
+  const journal = join(repo.root, '.void/machine/runs', missionId, 'events.jsonl');
+  return { repo, roots, missionId, native, args, journal, ticket, verify };
+}
+
 describe('native review routing', () => {
+  it.each(['pass', 'changes-requested', 'obligation'] as const)
+  ('collects a real %s draft review, reuses only its unchanged subject and never opens another attempt', async verdict => {
+    const { repo, roots, missionId, native, args } = await matureDraft();
+    await nativeReviewCommand(args, native);
+    const pending = recorded(repo);
+    const dispatched = await dispatchMissionSpecialists(roots, { kind: 'dispatch', missionId, json: true });
+    const envelope = dispatched.envelopes[0];
+    if (envelope?.reviewSubject === undefined) throw Error('fixture needs the canonical review envelope');
+    const contextId = '/root/review/draft';
+    await recordSpecialistLifecycle(repo.root, missionId,
+      parseSpecialistLifecycleInput('started', { envelope, contextId }));
+    await recordSpecialistLifecycle(repo.root, missionId,
+      parseSpecialistLifecycleInput('completed', { envelope, contextId, completion: {
+        ...clean, contractVersion: envelope.contractVersion, verdict: verdict === 'obligation' ? 'pass' : verdict,
+        evidenceRequests: verdict === 'obligation' ? ['Prove the configured capacity path.'] : [],
+        findings: verdict !== 'changes-requested' ? [] : [{ id: 'slots', severity: 'high', classification: 'blocking',
+          summary: 'Wrong slot count', evidence: [{ path: 'loop.ts', line: 1, detail: 'Count is fixed' }],
+          recommendation: 'Read the configured count', criterion: 'Configured capacity is honored',
+          consequence: 'Capacity is ignored', resolutionCondition: 'Configured count is used', basis: 'initial-scope-defect' }],
+        review: { ...envelope.reviewSubject, writerId: 'writer:primary', reviewerId: 'reviewer:draft',
+          readOnly: true, scope: { kind: 'general' }, proofIds: [], resolutions: [],
+          provenance: { kind: 'native-context', contextId } },
+      } }));
+    if (verdict === 'obligation') {
+      await expect(nativeReviewCommand(args, native)).rejects.toThrow(/NATIVE_DRAFT_REVIEW_REFUSED/);
+      expect(recorded(repo)).toEqual(pending);
+      return;
+    }
+    const result = await nativeReviewCommand(args, native);
+    expect(result.value).toMatchObject({ verdict: { verdict: { blocking: verdict === 'pass' ? [] : [expect.anything()] } } });
+    const collected = recorded(repo);
+    expect(collected.attempts).toHaveLength(1);
+    expect(collected.attempts[0]?.startedAt).toBe(pending.attempts[0]?.startedAt);
+    if (verdict === 'pass') {
+      expect((await nativeReviewCommand(args, native)).value).toEqual(collected);
+      writeFileSync(join(roots.workRoot, 'loop.ts'), 'export const slots = 6;\n');
+      await expect(nativeReviewCommand(args, native)).rejects.toThrow(/UNCOMMITTED/);
+    } else {
+      await expect(nativeReviewCommand(args, native)).rejects.toThrow(/NATIVE_DRAFT_REVIEW_REFUSED/);
+    }
+    expect(recorded(repo)).toEqual(collected);
+  });
+
+  it('admits a mature draft read-only and preserves its one pending attempt and deadline', async () => {
+    const { repo, native, args, journal } = await matureDraft();
+    const before = readFileSync(journal, 'utf8');
+    const gitCalls: string[][] = [];
+    const observed = { ...native, git: (root: string) => (args: readonly string[]) => {
+      gitCalls.push([...args]);
+      return native.git(root)(args);
+    } };
+    expect((await nativeReviewCommand(args, observed)).value).toMatchObject({ outcome: 'awaiting-native-review' });
+    const pending = recorded(repo);
+    expect((await nativeReviewCommand(args, native)).value).toMatchObject({ outcome: 'awaiting-native-review' });
+    expect(recorded(repo).attempts).toEqual(pending.attempts);
+    expect(gitCalls.some(call => call[0] === 'fetch')).toBe(false);
+    expect(readFileSync(journal, 'utf8')).toBe(before);
+  });
+
+  it.each(['writer-active', 'closed', 'corrupt', 'dirty', 'untracked', 'head', 'base', 'criteria',
+    'absent-proof', 'stale-proof', 'failed-proof', 'nonapplicable-proof', 'tampered-proof', 'writer-unbound'] as const)
+  ('refuses a %s draft without creating an attempt, checkout or journal event', async mode => {
+    const fixture = await matureDraft();
+    const { repo, roots, missionId, native, args, journal, ticket } = fixture;
+    if (mode === 'writer-active') await writeSequencedEvent({ root: repo.root, missionId,
+      draft: { source: 'void-harness:mission.dispatch', kind: 'lead-writer.requested',
+        subject: 'writer:primary', correlationId: missionId,
+        payload: { writerId: 'writer:primary', implementationRound: 2, actionKind: 'run-correction' } } });
+    if (mode === 'tampered-proof' || mode === 'writer-unbound') {
+      const events = readFileSync(journal, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+      if (mode === 'tampered-proof') events.at(-1).payload.evidence.output.stdout = 'forged output';
+      else events.find(event => event.kind === 'lead-writer.completed').payload.requestEventId = 'evt_unknown';
+      writeFileSync(journal, `${events.map(event => JSON.stringify(event)).join('\n')}\n`);
+    }
+    if (mode === 'closed') await recordMissionClosure(repo.root, missionId, 'controller-stop');
+    if (mode === 'corrupt') writeFileSync(journal, `${readFileSync(journal, 'utf8')}broken\n`);
+    if (mode === 'dirty') writeFileSync(join(roots.workRoot, 'loop.ts'), 'export const slots = 6;\n');
+    if (mode === 'untracked') writeFileSync(join(roots.workRoot, 'partial.ts'), 'export const partial = true;\n');
+    if (mode === 'head') git(roots.workRoot, 'checkout', '-q', '--detach', repo.base);
+    if (mode === 'base') git(join(repo.root, '..', 'origin.git'), 'update-ref', 'refs/heads/develop', repo.head);
+    if (mode === 'criteria') writeFileSync(join(roots.workRoot, ticket), '# DEV-1\nChanged criteria.\n');
+    if (['absent-proof', 'stale-proof', 'nonapplicable-proof'].includes(mode)) {
+      const events = readFileSync(journal, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+      // Keep canonical sequence/integrity intact: the last event is this fixture's real verification.
+      const last = events.at(-1);
+      expect(last.kind).toBe('evidence.recorded');
+      events.pop();
+      writeFileSync(journal, `${events.map(event => JSON.stringify(event)).join('\n')}\n`);
+      if (mode !== 'absent-proof') {
+        const { proofHash: _proofHash, ...proof } = last.payload.evidence;
+        const stale = `sha256:${'f'.repeat(64)}`;
+        await recordMissionEvidence(repo.root, sealEvidence({ ...proof,
+          ...(mode === 'stale-proof' ? { diffHash: stale, dependencies: [{ kind: 'diff', key: 'git:working-tree', hash: stale }] }
+            : { diffHash: stale, dependencies: [] }),
+        }));
+      }
+    }
+    if (mode === 'failed-proof') await verifyMissionCommand({ roots, missionId, shell: false, echo: false,
+      command: [process.execPath, '-e', 'process.exit(1)'] });
+    const before = readFileSync(journal, 'utf8');
+    await expect(nativeReviewCommand(args, native)).rejects.toThrow();
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(worktreeOf(repo))).toBe(false);
+    expect(readFileSync(journal, 'utf8')).toBe(before);
+  });
+
+  it('refuses journal drift during draft admission before starting an attempt', async () => {
+    const { repo, native, args, journal, missionId, verify } = await matureDraft();
+    let enter: () => void = () => undefined;
+    let release: () => void = () => undefined;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const resumed = new Promise<void>(resolve => { release = resolve; });
+    const originalOpen = filesystem.open;
+    let reads = 0;
+    const opening = vi.spyOn(filesystem, 'open').mockImplementation(async (...args) => {
+      if (args[0] === join(repo.root, '.void/machine/runs', missionId, 'controller-plan.json') && ++reads === 3) {
+        enter();
+        await resumed;
+      }
+      return originalOpen(...args);
+    });
+    syncBuiltinESMExports();
+    const reviewing = nativeReviewCommand(args, native).then(
+      value => ({ ok: true, value }), error => ({ ok: false, error: String(error) }));
+    try {
+      await entered;
+      await verify();
+      const before = readFileSync(journal, 'utf8');
+      release();
+      expect(await reviewing).toMatchObject({ ok: false, error: expect.stringContaining('changed during admission') });
+      expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+      expect(existsSync(worktreeOf(repo))).toBe(false);
+      expect(readFileSync(journal, 'utf8')).toBe(before);
+    } finally {
+      release();
+      await reviewing;
+      opening.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  it('refuses a GitHub head change during draft admission before creating an attempt', async () => {
+    const { repo, native, args } = await matureDraft();
+    let views = 0;
+    const changed = { ...native, gh: (args: readonly string[]) => {
+      const value = native.gh(args);
+      return args[1] === 'view' && ++views > 1
+        ? JSON.stringify({ ...JSON.parse(value), headRefOid: repo.base }) : value;
+    } };
+    await expect(nativeReviewCommand(args, changed)).rejects.toThrow(/changed during admission/);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(worktreeOf(repo))).toBe(false);
+  });
+
+  it('refuses a draft with no completed writer or proof before creating an attempt', async () => {
+    const repo = repository();
+    git(repo.root, 'checkout', '-q', '--detach', repo.head);
+    const mission = 'mis_partial_draft';
+    await boundNativeMission(repo, mission);
+    const { runners: built, launches } = runners(repo);
+    const draft = { ...built, gh: (args: readonly string[]) =>
+      JSON.stringify({ ...JSON.parse(built.gh(args)), isDraft: true }) };
+    const journal = join(repo.root, '.void/machine/runs', mission, 'events.jsonl');
+    const before = readFileSync(journal, 'utf8');
+    await expect(nativeReviewCommand([...argv(repo.head), '--mission', mission, '--worktree', repo.root], draft))
+      .rejects.toThrow(/NATIVE_DRAFT_REVIEW_REFUSED/);
+    expect(existsSync(reviewPath(repo.root, 'DEV-1', repo.head))).toBe(false);
+    expect(existsSync(worktreeOf(repo))).toBe(false);
+    expect(launches).toEqual([]);
+    expect(readFileSync(journal, 'utf8')).toBe(before);
+  });
+
   it.each(['pending', 'failed', 'subject', 'verdict'] as const)
   ('retains an intervening %s record when an overlapping preflight resumes', async mode => {
     const repo = repository();

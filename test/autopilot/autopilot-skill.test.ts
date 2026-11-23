@@ -194,7 +194,6 @@ describe('the review is local, bound to the head and to the session it delegated
 
   it('blocks only on a scenario and files advisories once', () => {
     expect(flat(body(SKILL))).toMatch(/Only what is wrong or dangerous, with a concrete scenario/);
-    expect(flat(body(SKILL))).toMatch(/single Triage issue per ticket/);
   });
 });
 

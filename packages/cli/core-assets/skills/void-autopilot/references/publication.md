@@ -41,7 +41,8 @@ its policy or accepting actual drift still requires the explicit human renewal b
 
 ## Explicit human renewal
 
-Stop publication. Inspect the failure and the actual shared-state changes. A
+Stop the affected publication; unrelated authorized local work can continue. Inspect the failure
+and actual shared-state changes without attributing them to a worker without evidence. A
 person must authorize the exact repair or policy transition and affected candidate;
 the ticket's implementation mandate alone is not that authorization.
 

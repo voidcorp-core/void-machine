@@ -731,6 +731,7 @@ async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
 }
 
 /**
+ * Read controller inputs without dispatching work or closing the mission.
  * Two roots, on purpose. The ticket, the diff and the context pack are read
  * from the tree the command runs in; the mission journal, the controller plan
  * and the installed specialists belong to the repository and are read from
@@ -738,34 +739,19 @@ async function evidenceRuntime(roots: ProjectRoots, missionId: string) {
  * a linked worktree the panel would otherwise be looked for where `git
  * worktree add` never put it (DEV-732).
  */
-export async function dispatchMissionSpecialists(
-  roots: ProjectRoots,
-  input: Extract<MissionArgs, { readonly kind: 'dispatch' }>,
-  generatedAt = new Date().toISOString(),
+export async function observeMissionTeam(
+  roots: ProjectRoots, missionId: string, generatedAt = new Date().toISOString(),
   capabilityOverride?: SpecialistRuntimeCapability,
-  orchestrationOverride?: OrchestrationCapability,
-): Promise<{
-  readonly planHash: string;
-  readonly phase: string;
-  readonly action: MissionTeamAction;
-  readonly nextWriterRound?: number;
-  readonly envelopes: readonly SpecialistDispatchEnvelope[];
-  /**
-   * How wide to run the envelopes, and what the runtime could actually carry.
-   *
-   * A ceiling, never a truncation: every envelope is still returned, because the
-   * controller returns `verified` only once every applicable completion is in.
-   */
-  readonly lensPlan?: LensPlan;
-}> {
+) {
   const { workRoot, installRoot } = roots;
   const [stored, initialInspection] = await Promise.all([
-    loadMissionControllerPlan(installRoot, input.missionId),
-    inspectMission(installRoot, input.missionId, { dependencies: {} }),
+    loadMissionControllerPlan(installRoot, missionId),
+    inspectMission(installRoot, missionId, { dependencies: {} }, { quarantine: false }),
   ]);
   const current = initialInspection.stream.events.some(event => event.kind === 'evidence.recorded')
-    ? await inspectCurrentMission(roots, input.missionId, collectKnownSecrets()) : undefined;
+    ? await inspectCurrentMission(roots, missionId, collectKnownSecrets(), { quarantine: false }) : undefined;
   const inspected = current?.inspected ?? initialInspection;
+  if (inspected.stream.issues.length > 0) throw new Error('MISSION_JOURNAL_INVALID: incomplete or invalid journal');
   requireOpenMission(inspected.stream.events);
   const implemented = inspected.stream.events.some((event) =>
     event.kind === 'lead-writer.completed'
@@ -854,7 +840,7 @@ export async function dispatchMissionSpecialists(
     ? rawCapability
     : constrainCapabilityByAttestation(runtimeIdentity, rawCapability);
   const reviewBinding = reviewSubject?.reviewedCommit === undefined || reviewSubject.baseCommit === undefined
-    ? undefined : { taskId: input.missionId, baseCommit: reviewSubject.baseCommit,
+    ? undefined : { taskId: missionId, baseCommit: reviewSubject.baseCommit,
       reviewedCommit: reviewSubject.reviewedCommit, acceptanceCriteriaHash: stored.ticket.contentHash };
   const decision = orchestrateMissionTeam({
     ...(reviewBinding === undefined ? {} : { reviewSubject: reviewBinding }),
@@ -869,6 +855,35 @@ export async function dispatchMissionSpecialists(
     maxReviewRounds: 2,
     specialistRuntime,
   });
+  return { stored, current, inspected, reviewSubject, livePlan, migration, runtime,
+    reviewBinding, preImplementationInputHashes, currentInputHashes, decision };
+}
+
+export async function dispatchMissionSpecialists(
+  roots: ProjectRoots,
+  input: Extract<MissionArgs, { readonly kind: 'dispatch' }>,
+  generatedAt = new Date().toISOString(),
+  capabilityOverride?: SpecialistRuntimeCapability,
+  orchestrationOverride?: OrchestrationCapability,
+): Promise<{
+  readonly planHash: string;
+  readonly phase: string;
+  readonly action: MissionTeamAction;
+  readonly nextWriterRound?: number;
+  readonly envelopes: readonly SpecialistDispatchEnvelope[];
+  /**
+   * How wide to run the envelopes, and what the runtime could actually carry.
+   *
+   * A ceiling, never a truncation: every envelope is still returned, because the
+   * controller returns `verified` only once every applicable completion is in.
+   */
+  readonly lensPlan?: LensPlan;
+}> {
+  const { workRoot, installRoot } = roots;
+  const { stored, inspected, reviewSubject, livePlan, migration, runtime, reviewBinding,
+    preImplementationInputHashes, currentInputHashes, decision } = await observeMissionTeam(
+      roots, input.missionId, generatedAt, capabilityOverride,
+    );
   const envelopes = decision.action.kind === 'invoke-specialists' && runtime !== undefined
     ? createSpecialistDispatch({
         missionId: input.missionId,

@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:3e4c8586e7350d14816eb50b6e54ff5d92bdf457a677911f0e17cb2209b419c6"
+    "rootHash": "sha256:4903c9a8d130ef4f7df966d5ca4b8ded868a0bde73face4c4549853e18b33b16"
   },
   "nodes": [
     {
@@ -2619,7 +2619,7 @@
             }
           ],
           "id": "skill:pack-server/void-env-validation",
-          "lines": 131,
+          "lines": 135,
           "name": "void-env-validation",
           "owner": "folpe",
           "pack": "pack-server",
@@ -2628,7 +2628,7 @@
             "codex"
           ],
           "source": "packages/packs/pack-server/skills/void-env-validation/SKILL.md",
-          "staticTokens": 1407,
+          "staticTokens": 1620,
           "type": "skill"
         }
       },
@@ -4543,7 +4543,7 @@
             }
           ],
           "id": "skill:void-security-guidance",
-          "lines": 294,
+          "lines": 302,
           "name": "void-security-guidance",
           "owner": "folpe",
           "pack": null,
@@ -4552,7 +4552,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-security-guidance/SKILL.md",
-          "staticTokens": 3199,
+          "staticTokens": 3359,
           "type": "skill"
         }
       },

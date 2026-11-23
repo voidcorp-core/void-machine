@@ -1239,7 +1239,7 @@
         }
       ],
       "id": "skill:pack-server/void-env-validation",
-      "lines": 131,
+      "lines": 135,
       "name": "void-env-validation",
       "owner": "folpe",
       "pack": "pack-server",
@@ -1248,7 +1248,7 @@
         "codex"
       ],
       "source": "packages/packs/pack-server/skills/void-env-validation/SKILL.md",
-      "staticTokens": 1407,
+      "staticTokens": 1620,
       "type": "skill"
     },
     {
@@ -2461,7 +2461,7 @@
         }
       ],
       "id": "skill:void-security-guidance",
-      "lines": 294,
+      "lines": 302,
       "name": "void-security-guidance",
       "owner": "folpe",
       "pack": null,
@@ -2470,7 +2470,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-security-guidance/SKILL.md",
-      "staticTokens": 3199,
+      "staticTokens": 3359,
       "type": "skill"
     },
     {

@@ -83,25 +83,29 @@ Or split into `env-client.ts` and `env-server.ts` exports if your stack needs Ed
 - `<DOMAIN>_<NAME>` for server-only (e.g., `STRIPE_SECRET_KEY`, not `SECRET_KEY`)
 - Never use single-word ambiguous names (`API_KEY` — for what?)
 
-## The `.env.example` discipline
+## Document configuration without secrets
 
-Every env added to the schema MUST be added to `.env.example` (committed):
+For each variable added to the schema, document its name, constraints and whether it is
+required in the project's existing onboarding, schema documentation or secret-free example.
+Keep public configuration and non-sensitive manager references there; do not require a new
+`.env.example` when the existing support already covers them. Examples contain no secret values.
 
-```bash
-# .env.example
-DATABASE_URL=postgresql://user:pass@localhost:5432/dev
-STRIPE_SECRET_KEY=sk_test_REPLACE_ME
-STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
-SENTRY_DSN=                         # optional
-```
+## Onboard with the project's adopted secret manager
 
-New developer clones → `cp .env.example .env` → fill values → boot. If `.env.example` is incomplete, onboarding breaks for 30 minutes per dev.
+Apply the runtime-secret policy in `void-security-guidance`. When a manager is already adopted,
+use its established runtime injection into the process validated by `@repo/core/env`, in local
+development as well as staging and production. Do not copy an example to `.env` and fill secrets,
+or export plaintext values to files, prompts, command arguments/history, logs or temporary files.
+Use the project's documented secure authentication flow; provisioning and rotation follow the
+separate scoped-authorization rules in `void-security-guidance`.
 
-## What goes in `.env` vs secrets manager
+If the manager is unavailable or a required secure flow is missing, pause only the operations
+that depend on those secrets. Continue independent work; do not create a plaintext fallback or
+make manager repair a prerequisite for the whole task.
 
-- `.env.local` (gitignored): local dev secrets, test keys, dev DB
-- Vercel/Doppler/etc. env settings: staging + production secrets
-- Never commit `.env` (only `.env.example`)
+Existing legacy `.env` setups remain supported and protected. Do not read or rewrite their
+secrets, commit them, or require a migration for unrelated work. Secret-free examples, public
+configuration and non-sensitive references remain permitted under the existing guards.
 
 ## Anti-patterns
 

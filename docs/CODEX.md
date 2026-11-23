@@ -137,6 +137,12 @@ guessed windows. The handler does not invoke `/clear`, `/compact`, or a semantic
 
 ### Secret environment reads
 
+The runtime-secret policy in
+[`void-security-guidance`](../packages/core/skills/void-security-guidance/SKILL.md)
+uses the project's adopted manager for runtime injection and preserves protected legacy `.env`
+setups. The [server onboarding guide](../packages/packs/pack-server/skills/void-env-validation/SKILL.md)
+documents configuration without requiring a plaintext secret file.
+
 The existing `protected-file` PreToolUse handler also refuses direct reads of
 `.env` and `.env.*`, before its write-only gate or `ALLOW_SECRET_EDIT` override.
 It covers `Read`/`Grep` paths and direct shell `cat`, `head`, `tail`, `sed`,

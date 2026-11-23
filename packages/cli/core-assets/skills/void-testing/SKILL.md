@@ -232,7 +232,7 @@ Each snapshot has a reason. No `.toMatchSnapshot()` outside the whitelist withou
 
 Banned in committed code. They mean "I will not run this." If you mean "this case is intentionally not yet tested," write a `it.todo('description')` — the test runner reports todos.
 
-The `no-only-no-skip` write hook rejects focused and skipped calls in proposed test files, including `fit`, `fdescribe`, `xit`, `xdescribe` and suite `.skip`. There is no path whitelist; use an explicit `todo` for pending coverage.
+Temporary focusing or exclusion is allowed while editing. Before accepting test evidence, run the project's configured check for focused/skipped tests; in this repository Biome `noFocusedTests` and `noSkippedTests` are errors. Verify the actual test files and forms covered. Report platform exclusions, conditional skips and todos accurately; a partial run is not proof that the complete applicable suite passed. Consumer projects use their existing linter or equivalent validation, verified before enforcement is claimed.
 
 ### Implementation spies as primary assertion
 
@@ -260,7 +260,6 @@ Use pglite or dev branch. Mocking Drizzle breaks at every schema change while pr
 
 ## Companion hooks
 
-- **`no-only-no-skip`** — blocks focused/skipped calls on supported test writes; no path exemption
 - **`no-business-mock`** — warn on `vi.mock\('@/(services|domain)/...'\)` patterns
 - **`no-snapshot-default`** — warn on new `.toMatchSnapshot()` outside `**/__visual__/**` whitelist
 

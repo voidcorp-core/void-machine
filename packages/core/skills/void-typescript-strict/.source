@@ -7,4 +7,4 @@ Sources for `void-typescript-strict` skill (see `docs/plans/skill-audits/void-ty
 - type-fest — https://github.com/sindresorhus/type-fest — utility library referenced, NOT vendored as default dep
 - Zod — https://zod.dev — boundary validation library composed with this skill
 
-Strategy: distill. Author from first principles; rules are common knowledge, discipline is in enforcement (hooks: tsc-noemit-precommit, no-any-grep, no-as-cast-grep).
+Strategy: distill. Author from first principles; rules are common knowledge, validation uses the existing project compiler/linter; assertions are reviewed against their guarantees.

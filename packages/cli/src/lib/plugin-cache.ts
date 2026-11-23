@@ -7,7 +7,6 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { syntaxWorkerHealth } from './syntax-worker-health.js';
 
 interface PluginManifest {
   readonly hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
@@ -31,12 +30,6 @@ export function wiredHooks(manifest: PluginManifest): readonly string[] {
   return [...found].sort();
 }
 
-/** The syntax worker is a runtime dependency, not a separately invoked hook. */
-export function requiredHookAssets(wired: readonly string[]): readonly string[] {
-  return wired.includes('hooks/_void-hook.mjs')
-    ? [...new Set([...wired, 'hooks/_syntax-worker.cjs'])].sort() : wired;
-}
-
 /**
  * Problems with the wired hooks under `pluginDir`: each must exist and be
  * executable when launched directly (owner/group/other x bit). Node `.mjs`
@@ -45,7 +38,7 @@ export function requiredHookAssets(wired: readonly string[]): readonly string[] 
  */
 export function hookHealthIssues(pluginDir: string, manifest: PluginManifest): readonly string[] {
   const issues: string[] = [];
-  for (const rel of requiredHookAssets(wiredHooks(manifest))) {
+  for (const rel of wiredHooks(manifest)) {
     const abs = join(pluginDir, rel);
     if (!existsSync(abs)) {
       issues.push(`${rel}: wired in plugin.json but missing from the plugin cache`);
@@ -55,10 +48,6 @@ export function hookHealthIssues(pluginDir: string, manifest: PluginManifest): r
     if (rel.endsWith('.sh') && (statSync(abs).mode & 0o111) === 0) {
       issues.push(`${rel}: present but not executable (chmod +x)`);
     }
-  }
-  if (wiredHooks(manifest).includes('hooks/_void-hook.mjs')) {
-    const issue = syntaxWorkerHealth(join(pluginDir, 'hooks'));
-    if (issue !== undefined) issues.push(issue);
   }
   return issues;
 }

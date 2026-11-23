@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
+import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 
 const TEMPLATE = resolve(
@@ -24,11 +25,18 @@ const TEMPLATE = resolve(
 
 const SOURCE = readFileSync(TEMPLATE, 'utf8');
 
-function workflow(): Record<string, any> {
+function workflow() {
   const document = parseDocument(SOURCE, { strict: true, uniqueKeys: true, version: '1.2' });
 
   expect(document.errors.map((error) => error.message)).toEqual([]);
-  return document.toJS({ maxAliasCount: 0 }) as Record<string, any>;
+  return z.object({
+    jobs: z.object({ baseline: z.object({
+      steps: z.array(z.object({ uses: z.string().optional() })),
+      'timeout-minutes': z.number(),
+    }) }),
+    on: z.object({ schedule: z.array(z.object({ cron: z.string() })), workflow_dispatch: z.unknown() }),
+    permissions: z.record(z.string(), z.string()),
+  }).parse(document.toJS({ maxAliasCount: 0 }));
 }
 
 describe('the shipped CI template', () => {
@@ -41,7 +49,7 @@ describe('the shipped CI template', () => {
   it('offers a schedule and a manual trigger, so the cadence can be changed and forced', () => {
     // `on` is the YAML 1.1 boolean `true` in some parsers; 1.2 keeps it a string.
     const parsed = workflow();
-    const triggers = parsed.on ?? parsed[true as unknown as string];
+    const triggers = parsed.on;
 
     expect(Object.keys(triggers)).toEqual(expect.arrayContaining(['schedule', 'workflow_dispatch']));
     expect(triggers.schedule[0]?.cron).toMatch(/^\S+ \S+ \S+ \S+ \S+$/);
@@ -50,7 +58,7 @@ describe('the shipped CI template', () => {
   it('pins every action by commit SHA, because a tag is mutable', () => {
     // Whoever can move a tag can choose what runs with this job's token.
     const parsed = workflow();
-    const uses = (parsed.jobs.baseline.steps as { uses?: string }[])
+    const uses = parsed.jobs.baseline.steps
       .map((step) => step.uses)
       .filter((entry): entry is string => entry !== undefined);
 

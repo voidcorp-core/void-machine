@@ -44,7 +44,6 @@ const GENERATED = [
   /^\.void\/knowledge\.json$/,
   /^packages\/cli\/core-assets\//,
   /^packages\/core\/hooks\/_void-hook\.mjs$/,
-  /^packages\/core\/hooks\/_syntax-worker\.cjs$/,
   /^packages\/core\/graph\/void-graph\.mjs$/,
 ];
 

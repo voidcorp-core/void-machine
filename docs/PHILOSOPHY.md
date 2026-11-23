@@ -123,12 +123,12 @@ A throwaway implementation is not an acceptable initial state. It is debt that h
 
 These rules apply to ALL my projects regardless of stack. Project-specific exceptions go in `.void/PROJECT-DOCTRINE.md` with an ADR.
 
-- **No `console.log` in committed business code.** Use the project logger (`@repo/core/logger` via `pack-monorepo`). Enforced by `no-console-log-grep` hook + `void-observability` skill.
+- **Use the project logger in application code.** Reject console calls through the existing project linter; limit exceptions to legitimate CLI/script output and the logger transport. Verify configuration and coverage before claiming enforcement. See `void-observability`.
 - **No em dashes or emojis as AI-slop filler.** Both are allowed where they carry meaning (typographic separators in prose, glyphs in code such as the render layer); just do not sprinkle them decoratively. A taste rule carried by the `void-commit-discipline` skill, deliberately **not** a hard CI gate (DECISIONS.md, 2026-06-01).
 - **No `process.env.*` directly in business code.** Use Zod-validated `@repo/core/env` (`void-security-guidance` skill). This governs the app's OWN secrets; a customer-provided credential (BYO key) is application data — store it encrypted at rest per tenant (master key in env), not in env itself.
 - **Read the official documentation of any third-party tool BEFORE writing its config or wrapping its SDK.** Shortcuts based on assumed semantics produce subtle bugs that take hours to find. (Anti-rustine, formalized.)
 - **Match file naming exactly** per the convention of the active pack (e.g. `Name.tsx`, `Name.helper.ts`, `Name.test.ts`).
-- **No `any` in committed TypeScript.** `unknown` + narrowing is the escape valve. Enforced by `no-any-grep` hook + `void-typescript-strict` skill.
+- **No unverified escape from TypeScript checks.** Reject explicit `any` through the existing syntax-aware linter and implicit `any` through strict typechecking. Prefer `unknown` plus narrowing; assertions need an identifiable guarantee. See `void-typescript-strict`.
 - **No raw SQL string concatenation.** Parameterized queries via Drizzle. (`void-security-guidance` skill.)
 - **Auth via Better-Auth (or Clerk opt-in).** Never hand-rolled password hashing, session tokens, or CSRF.
 - **Server Actions live in `apps/<app>/src/actions/`** (or framework equivalent). Never in shared packages.

@@ -25,6 +25,7 @@ describe('admitting an output schema', () => {
   });
 
   it('refuses a construct the checker cannot evaluate, rather than never checking it', () => {
+    // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a thenable.
     expect(outputSchemaRefusal({ if: { type: 'string' }, then: { minLength: 1 } })).toMatch(/cannot be checked/);
   });
 
@@ -60,6 +61,7 @@ describe('checking a final message against its schema', () => {
   });
 
   it('never calls unchecked output valid when the recorded schema no longer compiles', () => {
+    // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a thenable.
     expect(checkConformance({ if: {}, then: {} }, '{}', false).state).toBe('unchecked');
   });
 });

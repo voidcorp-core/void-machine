@@ -54,11 +54,11 @@
     {
       "description": "Judges a diff against VoidCorp doctrine that hooks/reviewers miss: weak tests, over-abstraction, broken boundaries, anti-bloat. Read-only; routes security to security-audit, bugs to /void-code-review.",
       "id": "agent:doctrine-critic",
-      "lines": 91,
+      "lines": 89,
       "name": "doctrine-critic",
       "pack": null,
       "source": "packages/core/agents/doctrine-critic.md",
-      "staticTokens": 1126,
+      "staticTokens": 1094,
       "type": "agent"
     },
     {
@@ -263,16 +263,6 @@
     },
     {
       "description": "",
-      "id": "hook:boundary-direction-check",
-      "lines": 10,
-      "name": "boundary-direction-check",
-      "pack": null,
-      "source": "packages/core/hooks/boundary-direction-check.sh",
-      "staticTokens": 96,
-      "type": "hook"
-    },
-    {
-      "description": "",
       "id": "hook:control-character-grep",
       "lines": 10,
       "name": "control-character-grep",
@@ -319,56 +309,6 @@
       "pack": null,
       "source": "packages/core/hooks/migration-pr-template.sh",
       "staticTokens": 426,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:no-any-grep",
-      "lines": 10,
-      "name": "no-any-grep",
-      "pack": null,
-      "source": "packages/core/hooks/no-any-grep.sh",
-      "staticTokens": 93,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:no-as-cast-grep",
-      "lines": 10,
-      "name": "no-as-cast-grep",
-      "pack": null,
-      "source": "packages/core/hooks/no-as-cast-grep.sh",
-      "staticTokens": 94,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:no-console-log-grep",
-      "lines": 10,
-      "name": "no-console-log-grep",
-      "pack": null,
-      "source": "packages/core/hooks/no-console-log-grep.sh",
-      "staticTokens": 94,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:no-null-grep",
-      "lines": 10,
-      "name": "no-null-grep",
-      "pack": null,
-      "source": "packages/core/hooks/no-null-grep.sh",
-      "staticTokens": 93,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:no-only-no-skip",
-      "lines": 10,
-      "name": "no-only-no-skip",
-      "pack": null,
-      "source": "packages/core/hooks/no-only-no-skip.sh",
-      "staticTokens": 95,
       "type": "hook"
     },
     {
@@ -439,16 +379,6 @@
       "pack": null,
       "source": "packages/core/hooks/stop-typecheck.sh",
       "staticTokens": 84,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:tdd-guard",
-      "lines": 10,
-      "name": "tdd-guard",
-      "pack": null,
-      "source": "packages/core/hooks/tdd-guard.sh",
-      "staticTokens": 94,
       "type": "hook"
     },
     {
@@ -792,7 +722,7 @@
       "type": "skill"
     },
     {
-      "description": "Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or fixing boundary-direction-check.",
+      "description": "Declare cross-package dependencies explicitly and preserve domain-owned ports. Use when crossing a workspace package boundary or investigating undeclared dependencies.",
       "enforcement": {
         "floor": "ci",
         "inline": {
@@ -809,7 +739,7 @@
         }
       ],
       "id": "skill:pack-monorepo/void-dependency-direction",
-      "lines": 41,
+      "lines": 47,
       "name": "void-dependency-direction",
       "owner": "folpe",
       "pack": "pack-monorepo",
@@ -818,7 +748,7 @@
         "codex"
       ],
       "source": "packages/packs/pack-monorepo/skills/void-dependency-direction/SKILL.md",
-      "staticTokens": 535,
+      "staticTokens": 599,
       "type": "skill"
     },
     {
@@ -2016,7 +1946,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-domain-driven-design/SKILL.md",
-      "staticTokens": 3182,
+      "staticTokens": 3186,
       "type": "skill"
     },
     {
@@ -2074,7 +2004,7 @@
         }
       ],
       "id": "skill:void-functional",
-      "lines": 312,
+      "lines": 299,
       "name": "void-functional",
       "owner": "folpe",
       "pack": null,
@@ -2083,7 +2013,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-functional/SKILL.md",
-      "staticTokens": 2813,
+      "staticTokens": 2743,
       "type": "skill"
     },
     {
@@ -2144,7 +2074,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-hexagonal-architecture/SKILL.md",
-      "staticTokens": 2797,
+      "staticTokens": 2806,
       "type": "skill"
     },
     {
@@ -2355,7 +2285,7 @@
         }
       ],
       "id": "skill:void-observability",
-      "lines": 245,
+      "lines": 250,
       "name": "void-observability",
       "owner": "folpe",
       "pack": null,
@@ -2364,7 +2294,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-observability/SKILL.md",
-      "staticTokens": 2277,
+      "staticTokens": 2382,
       "type": "skill"
     },
     {
@@ -2424,7 +2354,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-plan/SKILL.md",
-      "staticTokens": 2797,
+      "staticTokens": 2810,
       "type": "skill"
     },
     {
@@ -2663,7 +2593,7 @@
         }
       ],
       "id": "skill:void-tdd",
-      "lines": 343,
+      "lines": 340,
       "name": "void-tdd",
       "owner": "folpe",
       "pack": null,
@@ -2672,7 +2602,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-tdd/SKILL.md",
-      "staticTokens": 3712,
+      "staticTokens": 3609,
       "type": "skill"
     },
     {
@@ -2694,7 +2624,7 @@
         }
       ],
       "id": "skill:void-testing",
-      "lines": 301,
+      "lines": 300,
       "name": "void-testing",
       "owner": "folpe",
       "pack": null,
@@ -2703,7 +2633,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-testing/SKILL.md",
-      "staticTokens": 3078,
+      "staticTokens": 3126,
       "triggers": {
         "globs": [
           "**/*.test.ts",
@@ -2761,7 +2691,7 @@
         }
       ],
       "id": "skill:void-typescript-strict",
-      "lines": 294,
+      "lines": 291,
       "name": "void-typescript-strict",
       "owner": "folpe",
       "pack": null,
@@ -2770,7 +2700,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-typescript-strict/SKILL.md",
-      "staticTokens": 2733,
+      "staticTokens": 2840,
       "triggers": {
         "extensions": [
           "ts",
@@ -2893,13 +2823,6 @@
       "evidence": "block-dangerous-bash blocks destructive shell — enforces security-guidance"
     },
     {
-      "from": "hook:boundary-direction-check",
-      "to": "skill:void-hexagonal-architecture",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "boundary-direction-check enforces the import direction — enforces hexagonal-architecture"
-    },
-    {
       "from": "hook:control-character-grep",
       "to": "skill:void-testing",
       "kind": "enforces",
@@ -2933,41 +2856,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "migration-pr-template requires the migration checklist — enforces migrations"
-    },
-    {
-      "from": "hook:no-any-grep",
-      "to": "skill:void-typescript-strict",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-any-grep blocks the `any` type — enforces typescript-strict's zero-any budget"
-    },
-    {
-      "from": "hook:no-as-cast-grep",
-      "to": "skill:void-typescript-strict",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-as-cast-grep blocks `as Foo` casts — enforces typescript-strict (satisfies over as)"
-    },
-    {
-      "from": "hook:no-console-log-grep",
-      "to": "skill:void-observability",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-console-log-grep bans console.log — enforces observability (use the logger)"
-    },
-    {
-      "from": "hook:no-null-grep",
-      "to": "skill:void-functional",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-null-grep prefers undefined/Option over null — enforces functional"
-    },
-    {
-      "from": "hook:no-only-no-skip",
-      "to": "skill:void-testing",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "no-only-no-skip bans .only/.skip — enforces testing (no silently disabled tests)"
     },
     {
       "from": "hook:outcome-meter",
@@ -3017,13 +2905,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "stop-typecheck typechecks the touched TypeScript surface before session end — enforces typescript-strict"
-    },
-    {
-      "from": "hook:tdd-guard",
-      "to": "skill:void-tdd",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "tdd-guard requires a test to drive every production change — enforces tdd (Iron Law)"
     },
     {
       "from": "hook:tidying-commit-prefix",
@@ -3254,7 +3135,7 @@
       "to": "skill:void-hexagonal-architecture",
       "kind": "composes",
       "origin": "declared",
-      "evidence": "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture and the boundary-direction-check hook."
+      "evidence": "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture."
     },
     {
       "from": "skill:pack-monorepo/void-package-extraction",

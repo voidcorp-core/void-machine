@@ -37,7 +37,8 @@ describe.each(['claude', 'codex'] as const)('%s installed style-gate retirement'
     try {
       mkdirSync(dirname(settings), { recursive: true });
       if (mode === 'update') {
-        const hooks = ['test-name', 'design-slop'].map(rule => ({ matcher: 'Write', hooks: [{
+        const hooks = ['test-name', 'design-slop', 'no-any', 'no-console', 'no-as-cast', 'no-null',
+          'boundary-direction', 'tdd-order', 'no-focused-test'].map(rule => ({ matcher: 'Write', hooks: [{
           type: 'command',
           command: `node "$CLAUDE_PROJECT_DIR/.void/hooks/_void-hook.mjs" enforce ${rule} ${runtime}`,
         }] }));
@@ -57,14 +58,20 @@ describe.each(['claude', 'codex'] as const)('%s installed style-gate retirement'
         content: 'body { font-family: Inter, sans-serif; color: #111; background: #fff; }',
       })).toEqual([]);
       const commands = manifest.hooks.PreToolUse.flatMap(entry => entry.hooks.map(hook => hook.command));
-      expect(commands.join('\n')).not.toMatch(/enforce (test-name|design-slop)\b/);
+      expect(commands.join('\n')).not.toMatch(/enforce (test-name|design-slop|no-any|no-console|no-as-cast|no-null|boundary-direction|tdd-order|no-focused-test)\b/);
       if (runtime === 'claude' && mode === 'update') expect(manifest.hooks.PreToolUse).toContainEqual(userHook);
 
       for (const modifier of ['only', 'skip']) {
         const refused = runHooks(root, manifest, 'Write', { file_path: testPath,
           content: `test.${modifier}("rejects expired tokens", () => {});` });
-        expect(refused.join('\n')).toMatch(/FOCUSED|SKIPPED/);
+        expect(refused).toEqual([]);
       }
+      expect(runHooks(root, manifest, 'Write', { file_path: join(root, 'src/new-feature.ts'),
+        content: 'export const value: any = null; console.log(value as Result);',
+      })).toEqual([]);
+      expect(runHooks(root, manifest, 'Write', { file_path: join(root, 'pnpm-lock.yaml'),
+        content: 'handwritten dependency graph',
+      }).join('\n')).toContain('PROTECTED');
       expect(runHooks(root, manifest, 'Bash', { command: 'git push --force' }).join('\n'))
         .toContain('DANGEROUS');
       expect(runHooks(root, manifest, 'Write', { file_path: join(root, 'notes.txt'),

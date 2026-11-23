@@ -241,7 +241,7 @@ The anti-corruption layer (adapter) is mandatory. No direct import.
 
 - **`ubiquitous-language-lint`** (advisory) — flags code terms not in `docs/DOMAIN.md` (per-context glossary), and glossary terms not present in code. Informational; HITL decides. See `../../hooks/`.
 
-(The structural rules surface through `void-code-review` flags and `void-hexagonal-architecture`'s `boundary-direction-check` hook.)
+(Review checks domain boundaries with `void-code-review` and `void-hexagonal-architecture`; package dependency linting alone does not prove them.)
 
 ---
 

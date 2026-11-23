@@ -286,45 +286,6 @@ describe('bundled co-owned enforcement', () => {
   });
 });
 
-describe('CI TDD source evidence', () => {
-  it('accepts the generated worker identity with its actual syntax inspection coverage', () => {
-    const root = join(here, '../../..');
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order',
-      'packages/hook-runner/src/enforcement/syntax-worker-identity.generated.ts'], {
-      input: '', encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toContain('TDD_DECLARED_TEST');
-  });
-
-  it('can inspect the real Autopilot command without exceeding the bounded source reader', () => {
-    const root = join(here, '../../..');
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order',
-      'packages/cli/src/commands/autopilot.ts'], {
-      input: '', encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.stderr).not.toContain('TDD_DECLARATION_UNVERIFIED');
-    expect(result.status).toBe(0);
-  });
-
-  it.each([true, false])('judges the checked-out declaration instead of diff fragments: %s', (declared) => {
-    const root = mkdtempSync(join(tmpdir(), 'void-ci-tdd-'));
-    mkdirSync(join(root, 'apps/web/src'), { recursive: true });
-    mkdirSync(join(root, 'tests'));
-    writeFileSync(join(root, 'tests/page.spec.ts'), 'test("page", () => {});');
-    const header = '// tdd-cover: e2e tests/page.spec.ts\n';
-    writeFileSync(join(root, 'apps/web/src/page.ts'), `${declared ? header : ''}export const value = 1;`);
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order', 'apps/web/src/page.ts'], {
-      input: `${declared ? '' : header}export const added = 2;`, encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.status).toBe(declared ? 0 : 2);
-    expect(result.stderr).toContain(declared ? 'TDD_DECLARED_TEST' : 'TDD_SIBLING_TEST_MISSING');
-  });
-});
-
 describe('CI content transport', () => {
   const ci = (input: string | Buffer) => {
     const path = join(workspace, 'ci-input');
@@ -408,33 +369,33 @@ function stageLifecycle(
 
 describe('enforce', () => {
   it('names the doctrine a refusal comes from, so the skill can be reached from the message', () => {
-    const { code, stderr } = enforce('no-any', write('src/x.ts', 'const a: any = 1;'));
+    const { code, stderr } = enforce('secret-content', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     expect(code).toBe(2);
-    expect(stderr).toContain('TYPESCRIPT_ANY:');
-    expect(stderr).toContain('(doctrine: the void-typescript-strict skill)');
+    expect(stderr).toContain('SECRET_IN_CONTENT:');
+    expect(stderr).toContain('(doctrine: the void-security-guidance skill)');
   });
 
   it('keeps the evidence under the named doctrine rather than inside the sentence', () => {
-    const { stderr } = enforce('no-console', write('src/x.ts', 'console.log("x");'));
+    const { stderr } = enforce('secret-content', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     const [first] = stderr.split('\n');
-    expect(first).toMatch(/\(doctrine: the void-observability skill\)$/);
-    expect(stderr).toContain('\n- console.* in src/x.ts:1');
+    expect(first).toMatch(/\(doctrine: the void-security-guidance skill\)$/);
+    expect(stderr).toContain('\n- ');
   });
 
   it('stays silent and allows when the rule finds nothing', () => {
-    const { code, stderr } = enforce('no-any', write('src/x.ts', 'const a: number = 1;'));
+    const { code, stderr } = enforce('secret-content', write('src/x.ts', 'const a: number = 1;'));
     expect(code).toBe(0);
     expect(stderr).toBe('');
   });
 
   it('refuses an unknown rule rather than failing open on it', () => {
-    const { code, stderr } = enforce('no-such-rule', write('src/x.ts', 'const a: any = 1;'));
+    const { code, stderr } = enforce('no-such-rule', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     expect(code).toBe(2);
     expect(stderr).toContain('HOOK_INPUT_REJECTED: UNKNOWN_ENFORCEMENT_RULE');
   });
 
   it('refuses a payload it cannot parse rather than letting the write through', () => {
-    const result = spawnSync(process.execPath, [hook, 'enforce', 'no-any'], {
+    const result = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
       input: 'not json',
       encoding: 'utf8',
       env: { ...process.env, VOID_PROJECT_ROOT: workspace },
@@ -469,24 +430,24 @@ describe('enforce', () => {
 
   it('refuses a Codex tool call with a denial every shell passes through intact', () => {
     const { code, stdout } = enforceCodex(
-      'no-any',
-      JSON.stringify(write('src/café.ts', 'const a: any = 1;')),
+      'secret-content',
+      JSON.stringify(write('src/café.ts', `const token = 'ghp_${'a'.repeat(36)}';`)),
     );
     expect(code).toBe(0);
     expect(stdout).toMatch(/^[\x20-\x7e]*\n$/);
-    expectCodexDenial(stdout, 'TYPESCRIPT_ANY:');
+    expectCodexDenial(stdout, 'SECRET_IN_CONTENT:');
     expectCodexDenial(stdout, 'src/café.ts');
   });
 
   it('refuses a Codex payload it cannot parse through the same denial', () => {
-    const { code, stdout } = enforceCodex('no-any', 'not json');
+    const { code, stdout } = enforceCodex('secret-content', 'not json');
     expect(code).toBe(0);
     expectCodexDenial(stdout, 'HOOK_INPUT_REJECTED:');
   });
 
   it('lets a clean Codex tool call through without any decision', () => {
     const { code, stdout } = enforceCodex(
-      'no-any',
+      'secret-content',
       JSON.stringify(write('src/x.ts', 'const a: number = 1;')),
     );
     expect(code).toBe(0);
@@ -936,7 +897,7 @@ describe('a hook fired from a worktree', () => {
     if (explicit) env['VOID_MISSION_ID'] = 'mis_ffffffffffffffff';
     const jobs = [worktree, nested, second].flatMap((cwd) => [
       { cwd, args: ['activation', 'codex'] },
-      { cwd, args: ['enforce', 'tdd-order', 'codex'] },
+      { cwd, args: ['enforce', 'secret-content', 'codex'] },
       { cwd, args: ['lifecycle', 'checkpoint-reminder', 'codex'] },
     ]);
     await Promise.all(jobs.map(({ cwd, args }) => new Promise<void>((resolveJob, rejectJob) => {
@@ -1027,7 +988,7 @@ describe('a hook fired from a worktree', () => {
     }
   });
 
-  it.each([false, true])('keeps enforcement local with nested configuration: %s', (nested) => {
+  it.each([false, true])('keeps secret enforcement local with nested configuration: %s', (nested) => {
     const { main, worktree } = repositoryWithWorktree();
     const workingDirectory = nested ? join(worktree, 'app') : worktree;
     try {
@@ -1037,12 +998,12 @@ describe('a hook fired from a worktree', () => {
       const env: NodeJS.ProcessEnv = { ...process.env, VOID_MISSION_ID: 'mis_cccccccccccccccc' };
       delete env['VOID_PROJECT_ROOT'];
       delete env['CLAUDE_PROJECT_DIR'];
-      const done = spawnSync(process.execPath, [hook, 'enforce', 'tdd-order'], {
+      const done = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
         cwd: workingDirectory, env, encoding: 'utf8',
-        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), 'export const answer = 42;')),
+        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), `const token = 'ghp_${'a'.repeat(36)}';`)),
       });
       expect(done.status).toBe(2);
-      expect(done.stderr).toContain('void-tdd');
+      expect(done.stderr).toContain('void-security-guidance');
       expect(runsIn(main)).toContain('mis_cccccccccccccccc');
       expect(runsIn(worktree)).toEqual([]);
       expect(runsIn(workingDirectory)).toEqual([]);
@@ -1061,13 +1022,13 @@ describe('a hook fired from a worktree', () => {
       const env: NodeJS.ProcessEnv = { ...process.env, PATH: '', VOID_MISSION_ID: 'mis_dddddddddddddddd' };
       delete env['VOID_PROJECT_ROOT'];
       delete env['CLAUDE_PROJECT_DIR'];
-      const done = spawnSync(process.execPath, [hook, 'enforce', 'tdd-order'], {
+      const done = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
         cwd: workingDirectory, env, encoding: 'utf8',
-        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), 'export const answer = 42;')),
+        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), `const token = 'ghp_${'a'.repeat(36)}';`)),
       });
       expect(done.status).toBe(2);
       expect(done.stderr).toContain('TELEMETRY_ROOT_UNRESOLVED');
-      expect(done.stderr).toContain('void-tdd');
+      expect(done.stderr).toContain('void-security-guidance');
       expect(done.stdout).toBe('');
       expect(runsIn(main)).toEqual([]);
       expect(runsIn(worktree)).toEqual([]);

@@ -22,7 +22,6 @@ const SUITES = Object.freeze({
   install: join(HERE, 'conformance-install.mjs'),
   hooks: join(HERE, 'conformance-hooks.mjs'),
   autopilot: join(HERE, 'conformance-autopilot.mjs'),
-  latency: join(HERE, 'conformance-latency.mjs'),
 });
 
 function fail(message) {

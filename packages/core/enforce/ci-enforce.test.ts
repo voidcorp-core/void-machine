@@ -81,16 +81,6 @@ afterEach(() => {
 });
 
 describe('ci-enforce — violations become red annotations', () => {
-  it('flags an undeclared @repo import at the added line', () => {
-    write(repo, 'packages/foo/package.json', JSON.stringify({ name: '@repo/foo' }) + '\n');
-    write(repo, 'packages/foo/src/index.ts', "export const x = 1;\nimport { a } from '@repo/bar';\n");
-    git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'boundary violation');
-    const { code, stdout } = run(repo, base);
-    expect(code).not.toBe(0);
-    expect(stdout).toMatch(/::error file=packages\/foo\/src\/index\.ts,line=2/);
-  });
-
   it('scans a file whose name has non-ASCII bytes (quotepath must not hide it)', () => {
     // Under git's default core.quotepath, `café.ts` is octal-escaped + quoted in
     // name-status; a naive driver then scans nothing and passes the leak green.
@@ -123,37 +113,10 @@ describe('ci-enforce — violations become red annotations', () => {
     expect(stdout).toMatch(/::error file=src\/config\.ts/);
   });
 
-  it.each([false, true])('checks removal-only declarations with sibling=%s', (sibling) => {
-    const path = 'apps/web/src/page.ts';
-    const body = 'export const page = 1;\n';
-    write(repo, path, '// tdd-cover: e2e tests/page.spec.ts\n' + body);
-    write(repo, 'tests/page.spec.ts', 'test("page", () => {});\n');
-    if (sibling) write(repo, 'apps/web/src/page.test.ts', 'test("page", () => {});\n');
-    git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'covered baseline');
-    const covered = git(repo, 'rev-parse', 'HEAD').trim();
-    write(repo, path, body);
-    git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'remove declaration only');
-    const result = run(repo, covered);
-    expect(result.code).toBe(sibling ? 0 : 1);
-    if (!sibling) expect(result.stdout).toContain('TDD_SIBLING_TEST_MISSING');
-  });
-
-  it('flags frontend production code with no sibling test', () => {
-    write(repo, 'apps/web/src/Card.tsx', 'export const Card = () => null;\n');
-    git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'skip red');
-    const { code, stdout } = run(repo, base);
-    expect(code).not.toBe(0);
-    expect(stdout).toMatch(/TDD_SIBLING_TEST_MISSING/);
-    expect(stdout).toMatch(/apps\/web\/src\/Card\.tsx/);
-  });
-
   it('reports every distinct violation in one run', () => {
     write(repo, 'pnpm-lock.yaml', 'lockfileVersion: 9\n');
     write(repo, 'packages/foo/package.json', JSON.stringify({ name: '@repo/foo' }) + '\n');
-    write(repo, 'packages/foo/src/index.ts', "import { a } from '@repo/bar';\n");
+    write(repo, 'packages/foo/src/index.ts', `export const token = "${AWS_KEY}";\n`);
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'two violations');
     const { stdout } = run(repo, base);
@@ -163,19 +126,13 @@ describe('ci-enforce — violations become red annotations', () => {
 });
 
 describe('ci-enforce — clean diff is green', () => {
-  it.each([false, true])('requires evidence for an otherwise clean root-src change: sibling=%s', (sibling) => {
-    write(repo, 'src/app.ts', 'export const ok = 2;\nexport const more = 3;\n');
-    if (sibling) write(repo, 'src/app.test.ts', 'test("app", () => {});\n');
+  it('leaves source quality and test coverage to project validation', () => {
+    write(repo, 'src/app.ts', 'export const ok = 2;\n');
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'root source change');
     const { code, stdout } = run(repo, base);
-    expect(code, stdout).toBe(sibling ? 0 : 1);
-    if (sibling) {
-      expect(stdout).not.toMatch(/::error/);
-    } else {
-      expect(stdout).toContain('::error file=src/app.ts,line=1::TDD_SIBLING_TEST_MISSING');
-      expect(stdout).toContain('src/app.ts -> src/app.test.ts');
-    }
+    expect(code, stdout).toBe(0);
+    expect(stdout).not.toMatch(/::error/);
   });
 
   it('does not flag a secret added to a test fixture', () => {
@@ -190,14 +147,6 @@ describe('ci-enforce — clean diff is green', () => {
     write(repo, 'packages/foo/src/index.ts', "import { a } from '@repo/core';\nimport { b } from '@repo/foo';\n");
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'legit imports');
-    expect(run(repo, base).code).toBe(0);
-  });
-
-  it('allows frontend production code when its sibling test exists', () => {
-    write(repo, 'apps/web/src/Card.tsx', 'export const Card = () => null;\n');
-    write(repo, 'apps/web/src/Card.test.tsx', 'test("Card", () => {});\n');
-    git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'red green');
     expect(run(repo, base).code).toBe(0);
   });
 

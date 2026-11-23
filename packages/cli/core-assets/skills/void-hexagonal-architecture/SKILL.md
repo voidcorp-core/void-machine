@@ -33,7 +33,7 @@ The domain decides; the world translates. Ports are interfaces the domain owns. 
 
 Read it: the domain depends on its own port interfaces. Adapters depend on the port interfaces and on infrastructure. The domain never imports concrete infrastructure. Adapters may depend on domain-owned ports.
 
-Review enforces this architectural direction. The `boundary-direction-check` hook checks declared package dependencies; it does not infer domain/adapters layers from paths.
+Review checks this architectural direction. A configured dependency linter checks its supported package imports; it does not infer domain/adapters layers from paths.
 
 ---
 
@@ -151,7 +151,7 @@ The `pack-monorepo` enforces import direction via tsconfig `paths`:
 - `services/` can import from `domain/` only
 - `adapters/` can import from `domain/`, `services/` (for port interfaces), `infrastructure/`
 
-The companion hook `boundary-direction-check` greps cross-layer violations as a belt-and-suspenders.
+Verify this direction through the actual imports, contracts and review. A declared dependency alone does not establish a valid layer boundary.
 
 ---
 
@@ -235,9 +235,9 @@ Review rejects this dependency direction; a package-manifest check alone cannot 
 
 ---
 
-## Companion hooks
+## Validation
 
-- **`boundary-direction-check`** (PreToolUse) checks scoped package imports against the nearest package manifest. It does not validate internal layer imports. See `void-dependency-direction` for the pack convention.
+Use the project's existing dependency linter and verify its coverage before claiming enforcement. Internal layer boundaries remain a separate architectural check. See `void-dependency-direction` for the pack convention.
 
 ---
 

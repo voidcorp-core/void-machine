@@ -13,12 +13,15 @@ Turborepo monorepo conventions for the [void-machine](https://github.com/voidcor
 ### Shared configs
 
 - **`tsconfig.strict.json`** — the strict TypeScript baseline mandated by the `void-typescript-strict` skill (strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes + verbatimModuleSyntax). Extend it in your consumer `tsconfig.json`.
-- **`biome.json`** _(Phase E follow-up)_ — Biome shared config with the lint rules expected by `void-typescript-strict` (`@typescript-eslint/switch-exhaustiveness-check` equivalent, `no-enum`, etc.).
+
+No shared Biome configuration is shipped by this pack. Configure and verify the
+required rules in the consumer's existing linter; the root repository config does
+not become consumer enforcement through `init`.
 
 ### Claude / Codex modules (`@voidcorp/pack-monorepo/claude/*`)
 
 - **`modules/`** — CLAUDE.md / AGENTS.md fragments that explain the harness-monorepo conventions to the agent (Turbo task graph, workspace layout, `@repo/*` package boundaries, ADR workflow, 5+5 service layout).
-- **`skills/`** — pack-specific skills that EXTEND core skills with monorepo conventions (e.g., the path defaults used by `tdd-guard`).
+- **`skills/`** — pack-specific skills that EXTEND core skills with monorepo conventions (e.g., declared workspace dependencies and domain-owned ports).
 - **`hooks/`** — pack-installed hooks (commitlint, gitleaks, etc.) that the consumer's lefthook.yml composes.
 
 ## Install

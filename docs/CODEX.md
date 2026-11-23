@@ -98,11 +98,12 @@ are enforcement on top. Codex and Claude share the lifecycle events used here:
 runner. The continuity path depends only on observing `PreCompact`; it never
 depends on Codex's ability to block that event.
 
-Codex used to receive only two guardrails where Claude received eighteen. It now
-receives the **same enforcement surface**: the blocking greps (`no-any`,
-`no-console-log`, `secret-in-content`, `boundary-direction-check`, `tdd-guard`,
-…), plus `auto-format` on `PostToolUse`, `sessionstart-context`, and the
-`stop-typecheck` gate on `Stop`.
+Codex and Claude receive the same targeted write protections: secret content,
+protected files, dangerous shell commands and invalid control characters. The
+manifests also retain the lifecycle hooks still shipped, including formatting and
+Stop typechecking. Syntax and test-selection checks use the project's configured
+validation tooling, not lexical write refusals. A consumer's lint configuration
+is not installed or activated by this runtime wiring.
 
 ### The one real difference: `apply_patch`
 

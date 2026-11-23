@@ -9,7 +9,7 @@ Sources for `void-tdd` skill (see `docs/plans/skill-audits/void-tdd.md` for full
 
 Strategy: port-DECLIK with three minimal stack-agnostic adaptations (paths/commands read from voidcorp.config.json, DECLIK-specific refs moved to pack-monorepo).
 
-Companion hook: packages/core/claude/hooks/tdd-guard.sh (94 LOC, all 10 bypasses).
+Observed RED/GREEN evidence carries the TDD practice; no sibling-file or declaration write gate is shipped.
 
 DEV-444 adaptation: frontend RED now targets component/hook/store/a11y/state behavior, requires a
 keyboard regression before E2E for interactive controls, and binds proof to the current diff.

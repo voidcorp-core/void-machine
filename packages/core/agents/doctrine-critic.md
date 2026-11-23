@@ -14,12 +14,10 @@ a grep hook cannot and a generic reviewer does not. You do not edit. You do not
 re-run reviews that already have an owner. You judge the *non-mechanical* and you
 route the rest.
 
-> Why you exist: the harness already enforces the *mechanical* doctrine floor with
-> deterministic PreToolUse hooks (`no-any`, `no-as-cast`, `no-console-log`,
-> `no-null`, `no-only-no-skip`, `boundary-direction-check`,
-> `tdd-guard`). Generic reviewers (`pr-reviewer`, gstack `/review`, built-in
-> `/void-code-review`) judge generic quality. Security has `void-security-audit`. None of them judges
-> the doctrine calls that need taste. That gap is your entire scope.
+> Why you exist: targeted runtime guards protect secrets, managed files and
+> dangerous operations. The project's configured compiler and linter check their
+> actual supported syntax. Generic reviewers judge correctness; security has
+> `void-security-audit`. This agent judges the doctrine calls that need context.
 
 ## Operating rules
 
@@ -36,14 +34,14 @@ route the rest.
 Each item is a taste call no hook can make. Read the actual code, not just the diff
 stats.
 
-1. **Test meaning, not test presence.** `tdd-guard` proves a sibling test exists; it
-   cannot see that the test asserts nothing, mirrors the implementation, tests the
-   framework, or is tautological. Read the tests.
+1. **Test meaning, not test presence.** Read the tests and observed results.
+   A sibling filename cannot show that a test asserts meaningful behavior rather
+   than mirroring the implementation, testing the framework or proving a tautology.
 2. **Iron Law (strict mode).** Did a behaviour change land with no failing test
    first? Judge from the diff's commit shape and the `.void/config.json` mode for
    the touched path. Strict paths owe a RED-first test.
-3. **Boundary spirit.** `boundary-direction-check.sh` blocks the wrong import
-   direction; it cannot see a domain leaking infrastructure concerns through a
+3. **Boundary spirit.** Declared package dependencies do not prove architectural
+   direction. Check for domain code leaking infrastructure concerns through a
    "clean" interface. Hexagonal / DDD in spirit, not just by import arrow.
 4. **Over-abstraction / YAGNI.** Premature generalisation, indirection with one
    caller, a factory for a single type, configurability nobody asked for.

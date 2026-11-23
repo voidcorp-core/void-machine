@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,64 +10,12 @@ import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import {
   conformanceFixtureEnvironment,
   packageManagerCommand,
-  runConformanceProcess,
   runConformanceStep,
 } from './conformance-process.mjs';
 
 async function run(label, command, args, cwd, env) {
   return runConformanceStep(`install conformance ${label}`, { command, args, cwd, env });
 }
-
-// The installed syntax worker is proven, not measured: it must be the bytes the runtime verifies
-// and answer representative requests exactly, or the install fails. Its latency campaign is an
-// observation: the worker contract makes 5 s a bounded refusal, not a latency target.
-const SYNTAX_WORKER_IDENTITY_SOURCE = new URL(
-  '../../hook-runner/src/enforcement/syntax-worker-identity.generated.ts', import.meta.url);
-const SYNTAX_WORKER_BUDGET_MS = 5_000;
-const SYNTAX_WORKER_REQUESTS = [
-  { input: { version: 1, path: 'view.test.ts', source: 'test.only("case", () => {});', purpose: 'focused-tests' },
-    answer: { version: 1, kind: 'inspected', lines: [1] } },
-  { input: { version: 1, path: 'view.test.ts', source: 'const = ;', purpose: 'focused-tests' },
-    answer: { version: 1, kind: 'invalid-source' } },
-];
-
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-export function expectedSyntaxWorkerIdentity(source) {
-  const match = /SYNTAX_WORKER_IDENTITY\s*=\s*(\{[^}]*\})/.exec(source);
-  let identity;
-  try { identity = match === null ? undefined : JSON.parse(match[1]); } catch { identity = undefined; }
-  if (identity === undefined || !/^[a-f0-9]{64}$/.test(identity.sha256 ?? '')
-    || !Number.isSafeInteger(identity.bytes) || identity.bytes < 1) {
-    throw new Error('SYNTAX_WORKER_IDENTITY: the generated worker identity is unreadable');
-  }
-  return { sha256: identity.sha256, bytes: identity.bytes };
-}
-
-export async function proveInstalledSyntaxWorker({ worker, identity, execute }) {
-  if (!existsSync(worker)) throw new Error(`SYNTAX_WORKER_ABSENT: ${worker}`);
-  const bytes = await readFile(worker);
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
-  if (bytes.length !== identity.bytes || sha256 !== identity.sha256) {
-    throw new Error(`SYNTAX_WORKER_IDENTITY: installed ${sha256} (${bytes.length} bytes), expected ${identity.sha256}`);
-  }
-  for (const request of SYNTAX_WORKER_REQUESTS) {
-    const result = await execute(JSON.stringify(request.input));
-    let answer;
-    try { answer = JSON.parse(result.stdout); } catch { answer = undefined; }
-    if (result.outcome.kind !== 'exited' || result.outcome.code !== 0 || canonical(answer) !== canonical(request.answer)) {
-      throw new Error(`SYNTAX_WORKER_ANSWER: ${result.outcome.kind} ${result.outcome.code ?? ''}, expected ${canonical(request.answer)}`);
-    }
-  }
-  return { worker, sha256, answers: SYNTAX_WORKER_REQUESTS.length };
-}
-
 
 function requirePath(path, label) {
   if (!existsSync(path)) throw new Error(`conformance missing ${label}: ${path}`);
@@ -176,13 +123,6 @@ export async function exerciseRuntime(temporary, bin, runtime) {
 
   requirePath(join(fixture, '.void', 'machine', 'receipts', 'install-v1.json'), `${runtime} receipt`);
   requirePath(join(fixture, '.void', 'hooks', '_void-hook.mjs'), `${runtime} hook runner`);
-  const syntaxWorker = join(fixture, '.void', 'hooks', '_syntax-worker.cjs');
-  requirePath(syntaxWorker, `${runtime} syntax worker`);
-  await proveInstalledSyntaxWorker({ worker: syntaxWorker,
-    identity: expectedSyntaxWorkerIdentity(await readFile(SYNTAX_WORKER_IDENTITY_SOURCE, 'utf8')),
-    execute: (input) => runConformanceProcess({ command: process.execPath,
-      args: ['--max-old-space-size=128', syntaxWorker], cwd: fixture, env: {}, input,
-      timeoutMs: SYNTAX_WORKER_BUDGET_MS }) });
   if (runtime !== 'codex') {
     requirePath(join(fixture, '.claude', 'skills', 'void-tdd', 'SKILL.md'), `${runtime} Claude skill`);
     requirePath(join(fixture, '.claude', 'agents', 'doctrine-critic.md'), `${runtime} Claude agent`);

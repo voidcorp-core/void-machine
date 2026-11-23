@@ -41,12 +41,6 @@ describe('floor shell adapters', () => {
       message: /lockfile/,
     },
     {
-      name: 'boundary direction',
-      hook: 'boundary-direction-check.sh',
-      payload: edit('apps/web/index.ts', "import { a } from '@repo/bar';"),
-      message: /does not declare/,
-    },
-    {
       name: 'secret content',
       hook: 'secret-in-content.sh',
       payload: edit('src/config.ts', 'const k = "AKIAIOSFODNN7EXAMPLE1";'),
@@ -67,13 +61,6 @@ describe('floor shell adapters', () => {
 
   it.each([
     ['protect-sensitive-files.sh', edit('src/index.ts', 'x')],
-    [
-      'boundary-direction-check.sh',
-      edit(
-        'packages/foo/src/index.ts',
-        "import { a } from '@repo/bar'; // allow-boundary: bootstrap",
-      ),
-    ],
     ['secret-in-content.sh', edit('src/config.ts', 'const k = process.env.API_KEY;')],
     ['block-dangerous-bash.sh', bash('ls -la')],
   ])('maps an allowed %s call to exit 0', (hook, payload) => {

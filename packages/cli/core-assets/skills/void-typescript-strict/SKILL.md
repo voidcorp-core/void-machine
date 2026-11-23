@@ -5,7 +5,7 @@ description: TS strict baseline. Zero any budget, branded types for domain primi
 
 # typescript-strict — voidcorp craftsman edition
 
-Types describe truth. The compiler runs first. `any` is banned. `as` is rejected outside narrow exceptions. Non-interchangeable domain primitives use branded types. Discriminated unions model state. Exhaustive switches are verified by `never`. This skill is the language baseline — every other skill composes on top of it.
+Types describe truth. The compiler runs first. `any` is banned. Assertions require an identifiable guarantee; they never replace missing verification. Non-interchangeable domain primitives use branded types. Discriminated unions model state. Exhaustive switches are verified by `never`. This skill is the language baseline — every other skill composes on top of it.
 
 **Attribution**: see `.source` in this directory.
 
@@ -47,27 +47,24 @@ function parsePayload(raw: unknown): UserCommand {
 
 `unknown` forces narrowing before use. `any` silently propagates everywhere.
 
-The companion hook `no-any-grep` blocks commits that introduce `: any` or `as any` outside whitelisted paths (`**/__fixtures__/**`, `**/__tests__/**`). See `../../hooks/no-any-grep.sh`.
+Configure the existing project linter to reject explicit `any` during validation; TypeScript strict checking catches implicit `any`. In this repository, Biome `noExplicitAny` is configured as an error. Confirm the equivalent rule, severity and file coverage in a consumer before claiming enforcement. Intentional negative fixtures need narrowly scoped handling, not a blanket test-directory exemption.
 
 ---
 
-## `as` cast — rejected by default
+## Assertions need a verified guarantee
 
-The `as` cast tells the compiler to trust you. Trust is the bug.
+A type assertion changes what the compiler accepts; it does not validate a value.
+Prefer inference, generics and narrowing. Use `satisfies` for a known structure and
+runtime validation for external data.
 
-Allowed forms (the only ones):
-
-- **`as const`** — pin a literal type. Always allowed.
-- **`as unknown`** as a stepping stone to a deliberate narrowing chain. Use sparingly.
-- **`as <Type>` after Zod schema validation** — preferred form: do not need `as` because `schema.parse()` returns the typed value. Use `parse`, not `as`.
-
-Banned forms:
-
-- `as <Type>` to "fix" a type error
-- `as any` to escape narrowing
-- Chained `as unknown as <Type>` to bypass exhaustive checks
-
-The companion hook `no-as-cast-grep` warns (not blocks) on `as <Type>` outside the allowed set — false positives are common, the user confirms.
+- `as const` preserves literal information and is allowed.
+- A local assertion may bridge a verified interoperability constraint or construct
+  a branded value after its invariant has been checked. Keep the guarantee
+  identifiable in the code or the owning contract.
+- Do not assert unvalidated external data into a trusted type, or use a double
+  assertion to hide an unexplained incompatibility.
+- Review the guarantee and its scope. No lexical assertion ban, per-assertion
+  approval procedure or new hook is required.
 
 ---
 
@@ -183,7 +180,7 @@ type Email = Brand<string, 'Email'>;
 // smart constructor
 function createUserId(raw: string): UserId {
   if (!raw.startsWith('usr_')) throw new ValidationError('invalid UserId');
-  return raw as UserId; // <-- only allowed `as`: post-validation in the constructor
+  return raw as UserId; // the constructor has checked the brand invariant
 }
 ```
 
@@ -233,7 +230,7 @@ A function signature `parse(raw: unknown): Result<UserCommand, ValidationError>`
 
 - `tsconfig.json` extends `@voidcorp/pack-monorepo/tsconfig.strict.json`
 - Zero `any` in committed code. Use `unknown` and narrow.
-- No `as <Type>` outside the allowed set (`as const`, post-Zod, smart constructors)
+- Assertions stay local and backed by a verified guarantee; `as const` is allowed.
 - No `enum` keyword. Use `as const` objects + derived union.
 - Every switch over a union has a `default: never` exhaustiveness check
 - Branded types for IDs / Email / Money / IsoDate / any semantic primitive
@@ -242,13 +239,13 @@ A function signature `parse(raw: unknown): Result<UserCommand, ValidationError>`
 
 ---
 
-## Companion hooks
+## Validation
 
-- **`tsc-noemit-precommit`** — `tsc --noEmit` must pass before commit. Composed with `pre-commit typecheck+test`.
-- **`no-any-grep`** — blocks `: any` and `as any` in staged diff outside fixtures/tests whitelist.
-- **`no-as-cast-grep`** — warns (not blocks) on `as <Type>` outside the allowed set.
-
-See `../../hooks/`.
+Use the project's configured typecheck and syntax-aware linter after coherent
+changes and before accepting their results as delivery evidence. The root Biome
+configuration of void-machine is not installed into consumer projects. Configure
+and verify equivalent checks in their existing tooling; report missing coverage
+without blocking unrelated local work or installing another checker automatically.
 
 ---
 
@@ -280,7 +277,7 @@ See `../../hooks/`.
 | Library has wrong types | Wrap with a typed adapter at the boundary (do not patch with `as`). |
 | Generic too complex | Split. Type-level computation > 3 nesting levels is a smell. |
 | `exactOptionalPropertyTypes` complains on spread | Build the literal explicitly without `undefined` properties. |
-| Need to bypass for a fixture | Use the `**/__fixtures__/**` whitelist + explain in fixture file header. |
+| Need intentionally invalid fixture code | Keep it as test data where possible; scope any necessary lint exception to that fixture and explain the scenario. |
 
 ---
 

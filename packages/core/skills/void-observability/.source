@@ -9,4 +9,4 @@ Sources for `void-observability` skill (see `docs/plans/skill-audits/void-observ
 
 Strategy: distill. Stack-specific integration code in pack-nextjs-pwa (Sentry + pino + Vercel Analytics defaults). Skill mandates the discipline.
 
-Companion hook: no-console-log-grep.
+Console validation belongs to the existing project linter; the application uses its own logger.

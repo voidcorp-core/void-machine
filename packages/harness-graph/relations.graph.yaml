@@ -3,7 +3,7 @@
 # Every edge carries evidence: the verbatim phrase that justifies it.
 # Regenerate model.json after editing: `void-machine graph build`.
 # Allowed kinds: routes-to, composes, conflicts, overlaps, companion-of, invokes, extends, enforces
-# (enforces = a hook enforcing a skill's doctrine, e.g. no-any-grep enforces typescript-strict).
+# (enforces = a hook enforcing a skill's doctrine, e.g. protect-sensitive-files enforces security-guidance).
 edges:
   # --- Routing (sequential handoff required by the skill prose) ---
   - from: skill:void-brainstorm
@@ -301,7 +301,7 @@ edges:
   - from: skill:pack-monorepo/void-dependency-direction
     to: skill:void-hexagonal-architecture
     kind: composes
-    evidence: "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture and the boundary-direction-check hook."
+    evidence: "pack-monorepo/dependency-direction SKILL.md description: Composes with core:hexagonal-architecture."
 
   - from: skill:pack-monorepo/void-package-extraction
     to: skill:pack-monorepo/void-service-package
@@ -447,14 +447,8 @@ edges:
   - { from: agent:migration-planner, to: skill:void-plan, kind: routes-to, evidence: "migration-planner: Planning only ... routes execution to tdd/plan" }
 
   # --- Hooks enforcing skill doctrine (enforces: mechanical guard for a skill's rule) ---
-  - { from: hook:tdd-guard, to: skill:void-tdd, kind: enforces, evidence: "tdd-guard requires a test to drive every production change — enforces tdd (Iron Law)" }
-  - { from: hook:no-any-grep, to: skill:void-typescript-strict, kind: enforces, evidence: "no-any-grep blocks the `any` type — enforces typescript-strict's zero-any budget" }
-  - { from: hook:no-as-cast-grep, to: skill:void-typescript-strict, kind: enforces, evidence: "no-as-cast-grep blocks `as Foo` casts — enforces typescript-strict (satisfies over as)" }
   - { from: hook:tsc-noemit-precommit, to: skill:void-typescript-strict, kind: enforces, evidence: "tsc-noemit-precommit gates on a clean typecheck — enforces typescript-strict" }
-  - { from: hook:no-null-grep, to: skill:void-functional, kind: enforces, evidence: "no-null-grep prefers undefined/Option over null — enforces functional" }
   - { from: hook:control-character-grep, to: skill:void-testing, kind: enforces, evidence: "control-character-grep refuses an invisible control byte in a source file — enforces testing's rule that a fixture needing one builds it rather than holding it literally" }
-  - { from: hook:no-console-log-grep, to: skill:void-observability, kind: enforces, evidence: "no-console-log-grep bans console.log — enforces observability (use the logger)" }
-  - { from: hook:no-only-no-skip, to: skill:void-testing, kind: enforces, evidence: "no-only-no-skip bans .only/.skip — enforces testing (no silently disabled tests)" }
   - { from: hook:migration-lint, to: skill:void-migrations, kind: enforces, evidence: "migration-lint flags banned DDL patterns — enforces migrations" }
   - { from: hook:migration-pr-template, to: skill:void-migrations, kind: enforces, evidence: "migration-pr-template requires the migration checklist — enforces migrations" }
   - { from: hook:llm-cost-precommit, to: skill:void-llm-cost-discipline, kind: enforces, evidence: "llm-cost-precommit checks LLM call-site discipline — enforces llm-cost-discipline" }
@@ -468,5 +462,4 @@ edges:
   - { from: hook:tidying-commit-prefix, to: skill:void-refactor, kind: enforces, evidence: "tidying-commit-prefix separates tidyings from behavior — enforces refactor (Tidy-First)" }
   - { from: hook:pre-PR-review-evidence, to: skill:void-code-review, kind: enforces, evidence: "pre-PR-review-evidence requires review evidence before a PR — enforces code-review" }
   - { from: hook:large-cl-grep, to: skill:void-commit-discipline, kind: enforces, evidence: "large-cl-grep warns on oversized changelists — enforces commit-discipline (small commits)" }
-  - { from: hook:boundary-direction-check, to: skill:void-hexagonal-architecture, kind: enforces, evidence: "boundary-direction-check enforces the import direction — enforces hexagonal-architecture" }
   - { from: hook:stop-typecheck, to: skill:void-typescript-strict, kind: enforces, evidence: "stop-typecheck typechecks the touched TypeScript surface before session end — enforces typescript-strict" }

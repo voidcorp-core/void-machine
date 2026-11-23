@@ -25,7 +25,7 @@ void-machine/
 │   │   ├── agents/                # doctrine-critic and peers + generated specialist agents
 │   │   ├── specialists/           # canonical, runtime-neutral specialist YAML
 │   │   ├── profiles/              # versioned stack expertise and applicability selectors
-│   │   └── hooks/                 # tdd-guard.sh, no-any-grep.sh, no-console-log-grep.sh
+│   │   └── hooks/                 # portable runner and targeted security guards
 │   ├── mission-engine/            # pure event/evidence contracts and verdict reducers
 │   ├── hook-runner/               # Node adapter compiled into the portable hook asset
 │   ├── harness-graph/             # graph kernel + telemetry projections
@@ -731,25 +731,20 @@ failure reset never manufactures a `runtime.tool.completed` receipt. Source: the
 Slim's [tool-loop guard](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/hooks/tool-loop-guard/hook.ts)
 informed the identical-result check; its blocking and task/wait heuristics are not adopted.
 
-Context-sensitive focused-test checks reconstruct the complete proposed file
-before inspecting syntax. They use the official harness-owned TypeScript 6 API in a
-bounded child process. The hook invokes a companion `_syntax-worker.cjs` whose
-size and SHA-256 identity it verifies before execution. Only the worker loads
-TypeScript. No consumer compiler, configuration, plugin
-or import is resolved or executed, and no compiler is downloaded. Ordinary tests
-without suspicious tokens and an unambiguous prohibited call at the start of a
-file retain their inexpensive paths. Missing context or parser failure is
-`TEST_SYNTAX_UNVERIFIED`, a refusal rather than an assertion that code was
-checked. See [hook test evidence](HOOK-TEST-EVIDENCE.md) for
-limits, supported edits and the structural E2E declaration contract.
+Test focusing, explicit `any`, console usage and undeclared package imports are
+validated through the project's existing syntax-aware linter. TDD evidence comes
+from relevant observed tests, not from a sibling-file or declaration write gate.
+The former TypeScript syntax worker and its paired-asset health requirement are
+removed. Both runtimes still execute the same portable hook runner for targeted
+security checks. See [test evidence and validation](HOOK-TEST-EVIDENCE.md).
 
-The boundary has five responsibilities: the rule reconstructs proposed source;
-the process adapter enforces isolation and validates the versioned protocol;
-the worker validates requests; the TypeScript adapter returns syntax facts;
-the pure policy maps those facts to existing verdicts. Both runtime installers
-and source self-host use the same paired-asset builder. Installation health
-refuses missing or incompatible workers. No extraction cache, dynamic evaluation
-or persistent compiler process is involved.
+An update uses the existing receipt-backed transaction to retire an unchanged
+owned worker file. Locally modified or unowned files are preserved; adding one
+runtime may retain an older inert asset owned by the other installation. Health
+checks must not require that obsolete worker for the new runner. Installation
+proofs still cover runner execution, owned-file integrity, preservation of user
+files and rollback. Existing released installations retain their behavior until
+updated; rebuilding sources does not activate them in the repository root.
 
 Every active hook records a bounded, redacted `hook.completed` event. Lifecycle
 states distinguish `ok`, `skipped` and `degraded`; enforcement additionally
@@ -1784,13 +1779,10 @@ bundle, whose size exceeds the bounded hook protocol; `graph:check-bundle`
 proves its source/model correspondence. Broad generated-directory globs remain
 forbidden.
 `void-machine doctor` reports (advisory, never blocking) whether a project has
-adopted the workflow. v1 replays three checks: sensitive-path, secret-content,
-boundary-direction. `boundary-direction` reads each package's own
-`package.json`: an import of a workspace package the importer declares is
-legitimate, an undeclared one is a phantom dependency and is refused. It does
-not impose a topology of its own, and it allows whenever no manifest is
-readable — a rule that blocks on what it could not determine turns every
-unusual layout into a wall. Destructive-shell stays a local runtime guard only — a
+adopted the workflow. It replays sensitive-path and secret-content checks.
+Undeclared package imports belong to the project's configured linter, with
+its real manifest and alias coverage verified. This Action does not install or
+configure a consumer linter. Destructive-shell stays a local runtime guard only — a
 committed pattern self-matches the detector/docs/fixtures, a net-negative false
 positive for a floor check (see DECISIONS). The project test gate stays the
 consumer's own CI (this Action enforces the doctrine floor, not general quality —

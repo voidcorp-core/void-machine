@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { chmod, cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { isCodexEligible, packSkillsDir, readHarnessMeta } from './codex-skills.js';
-import { requiredHookAssets, wiredHooks } from './plugin-cache.js';
+import { wiredHooks } from './plugin-cache.js';
 import { compileClaudeSpecialist } from './specialists/compile-claude.js';
 import { loadSpecialists } from './specialists/load.js';
 
@@ -165,7 +165,7 @@ export async function wireClaudeLocalAssets(
     await readFile(join(sourceRoot, '.claude-plugin', 'plugin.json'), 'utf8'),
   ) as { hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>> };
   if (manifest.hooks === undefined) throw new Error('core Claude manifest has no hooks');
-  const hookAssets = requiredHookAssets(wiredHooks({ hooks: manifest.hooks }));
+  const hookAssets = wiredHooks({ hooks: manifest.hooks });
   // No `commands` here on purpose. Claude Code merged custom commands into
   // skills, and `commands/` was staged to `.claude/commands/` and nowhere else,
   // which made every gesture living there Claude-only while the harness targets

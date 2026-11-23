@@ -60,8 +60,8 @@ Un seuil de contexte franchi n'a pas cette ambiguïté — c'est un fait observa
 inférence. Le refus ne s'étend donc pas mécaniquement au nouveau déclencheur.
 
 Mais tu ne passes pas outre en silence. Soit tu montres que le nouveau déclencheur échappe au
-motif du refus, soit tu renonces. Dans le premier cas, la décision est écrite avec
-`void-machine decisions new` et **supersede** explicitement la position de la note d'audit, qui
+motif du refus, soit tu renonces. Dans le premier cas, la décision est écrite en Markdown avec frontmatter léger via
+`void-decide` et **supersede** explicitement la position de la note d'audit, qui
 doit être mise à jour dans le même commit.
 
 ---

@@ -7,7 +7,7 @@ The working rules for this repo live in `CLAUDE.md` (mirrored as `AGENTS.md` for
 1. Read `CLAUDE.md` — the anti-bloat discipline (eight hard rules), sourcing discipline, and hard rules for any added code. A PR that violates the anti-bloat rules is blocked.
 2. Read `docs/PHILOSOPHY.md` — the three pillars (safety / performance / DX) and why they win.
 3. Read `docs/ARCHITECTURE.md` — package boundaries and dependency direction.
-4. Skim `docs/DECISIONS.md`, then use `void-machine decisions render` for the current decision projection. Do not re-litigate a settled call without superseding it.
+4. Read the relevant Markdown records in `docs/decisions-log/`; `docs/DECISIONS.md` preserves the older history. Link a new record to its predecessor when materially changing a settled choice.
 
 ## Running the CLI you just changed
 
@@ -143,7 +143,7 @@ never carries the current or next unit.
 
 ## Commits
 
-Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Create each non-obvious decision with `void-machine decisions new`; accepted decision content is immutable and changes supersede it. The only in-place exception is a bounded repository-local reference migration whose surrounding text is unchanged and whose new target exists inside the repository. Never delete or rename an accepted file, and never edit a shared index. `pnpm decisions:check` validates the records and this narrow immutability exception.
+Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Write lasting structural decisions as short Markdown records with light frontmatter through `void-decide`. Keep stable unique names and IDs, historical metadata and replacement links. Ordinary corrections use normal Git commits; material changes create a linked new decision. `void-learn` still requires human agreement for doctrine changes.
 
 ## Filing a gap
 

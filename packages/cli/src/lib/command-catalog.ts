@@ -169,15 +169,6 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
-  "decisions": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "decisions <sub>",
-        "description": "Create, validate, or render one-file ADRs without a shared counter or index."
-      }
-    ]
-  },
   "mission": {
     "aliases": [],
     "help": [

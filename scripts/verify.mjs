@@ -31,7 +31,7 @@ const RESOURCES = new Set([
  *   tier: 'pure'|'contract'|'consumer'|'system'|'certification',
  *   resource: 'cpu'|'filesystem'|'subprocess'|'network-browser'|'external-state',
  *   required: boolean,
- *   impacts: readonly ('docs'|'decisions'|'source'|'tests')[],
+ *   impacts: readonly ('docs'|'source'|'tests')[],
  *   artifact?: boolean,
  *   fix?: readonly string[],
  *   drift?: readonly string[],
@@ -45,20 +45,6 @@ export const GATES = Object.freeze([
   gate('philosophy', 'Doctrine parity', ['pnpm', 'sync:philosophy'], 'contract', 'filesystem', ['source']),
   gate('version-lockstep', 'Version lockstep', ['pnpm', 'version:check'], 'contract', 'filesystem', ['source']),
   gate('anti-bloat', 'Anti-bloat', ['pnpm', 'anti-bloat:check'], 'contract', 'subprocess', ['source']),
-  gate(
-    'decisions',
-    'Decision records',
-    ['pnpm', 'decisions:check'],
-    'contract',
-    'subprocess',
-    ['decisions', 'source'],
-    {
-      ciEnv: {
-        DECISIONS_BASE:
-          '${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}',
-      },
-    },
-  ),
   gate(
     'hook-runner-current',
     'Generated hook runner',
@@ -229,7 +215,6 @@ export function selectGates(changes) {
   const impacts = new Set();
   for (const path of paths) {
     if (path.startsWith('docs/')) impacts.add('docs');
-    if (path.startsWith('docs/decisions-log/')) impacts.add('decisions');
     if (path.startsWith('test/') || path.endsWith('.test.ts')) impacts.add('tests');
     if (path.startsWith('apps/') || path.startsWith('packages/') || path.startsWith('scripts/')) {
       impacts.add('source');

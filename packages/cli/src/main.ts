@@ -21,7 +21,6 @@ import { projects } from './commands/projects.js';
 import { ui } from './commands/ui.js';
 import { resume } from './commands/resume.js';
 import { adoption } from './commands/adoption.js';
-import { decisions } from './commands/decisions.js';
 import { mission } from './commands/mission.js';
 import { agents } from './commands/agents.js';
 import { security } from './commands/security.js';
@@ -37,7 +36,7 @@ import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
  * failure it prevents is silent: a command missing from it does not lose its
  * help, it MUTATES the project when asked to explain itself.
  */
-const SELF_DOCUMENTING = new Set(['autopilot', 'decisions', 'mission', 'security']);
+const SELF_DOCUMENTING = new Set(['autopilot', 'mission', 'security']);
 
 /** Did the caller ask for help rather than for the command to run? */
 export function asksForHelp(cmd: string | undefined, rest: readonly string[]): boolean {
@@ -105,7 +104,6 @@ const HANDLERS = {
   'resume': resume,
   'ui': ui,
   'adoption': adoption,
-  'decisions': decisions,
   'mission': mission,
   'agents': agents,
   'security': security,

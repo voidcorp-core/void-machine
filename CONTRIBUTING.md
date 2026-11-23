@@ -20,7 +20,6 @@ These are not style preferences. A PR violating them fails `validate`:
 | Skills ≤ 400 lines, hooks ≤ 100 lines, discovery `description` target ≤250 and hard cap 500 across core, packs, agents, and canonical specialists | `pnpm anti-bloat:check` |
 | `CLAUDE.md` and `AGENTS.md` stay in section parity | `pnpm sync:docs` |
 | Every version-carrying manifest at the same version | `pnpm version:check` |
-| Decision schemas, links, cycles and accepted-record immutability | `pnpm decisions:check` |
 | `packages/cli/core-assets` mirrors `packages/core` | rebuild with `pnpm --filter ./packages/cli build:assets` |
 | `model.json` and the embedded consumer bundle current | `pnpm graph:check`, `pnpm graph:check-bundle` |
 
@@ -36,7 +35,7 @@ and commit the result. Editing a hook also changes its line count, which the gra
 
 - **Conventional Commits, and the PR title matters.** PRs are squash-merged, so the *PR title* becomes the commit release-please reads. A non-conventional title is silently ignored and your change vanishes from the changelog. This has happened twice; do not make it three.
 - **Every commit message ends with *why*, not just *what*.** The git log is documentation.
-- **Any non-obvious decision** gets its own collision-free file through `void-machine decisions new`. Never edit an accepted record or `docs/DECISIONS.md`; supersede the record instead.
+- **Lasting structural decisions** use short Markdown records with light frontmatter through `void-decide`. Preserve existing files, IDs and links. Ordinary corrections use Git commits; material changes create a new decision linked to its predecessor. Doctrine changes retain human agreement through `void-learn`.
 - **Any new convention** must land in `docs/*.md` in the same commit.
 - **TDD is not optional** for logic. Write the failing test first; `tdd-guard` blocks production files without a sibling test.
 

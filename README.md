@@ -265,6 +265,10 @@ makes no claim about a consumer's invoice savings.
   `/plugin marketplace add voidcorp-core/void-machine`. The bundled local
   assets remain the default.
 
+Decision records are authored directly as Markdown with light frontmatter through
+`void-decide`. The public `decisions new`, `decisions check` and `decisions render`
+commands have been removed; see the [migration note](packages/cli/README.md#decision-records-breaking-command-removal). Historical records and their readers remain available.
+
 ## Contributing
 
 Source maintainers: consult the [Linear idea index](docs/LINEAR-INDEX.md) before

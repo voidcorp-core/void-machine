@@ -18,14 +18,6 @@ function triggers(source: string): string {
   return source.split(/^jobs:/m)[0] ?? '';
 }
 
-function job(source: string, name: string): string {
-  const start = source.indexOf(`\n  ${name}:\n`);
-  if (start < 0) return '';
-  const rest = source.slice(start + 1);
-  const next = rest.slice(1).search(/\n {2}[a-z][a-z-]*:\n/);
-  return next < 0 ? rest : rest.slice(0, next + 1);
-}
-
 // A GitHub Actions expression, spelled out so the source holds no `${` literal.
 function expression(inner: string): string {
   return ['$', '{{ ', inner, ' }}'].join('');
@@ -39,15 +31,6 @@ describe('merge queue readiness on develop', () => {
   // `enforce` in void-enforce.yml retain the queue checks.
   it.each(['ci.yml', 'void-enforce.yml'])('%s answers merge groups on develop', (name) => {
     expect(triggers(read(`.github/workflows/${name}`))).toMatch(MERGE_GROUP);
-  });
-
-  it('proves decision immutability against the merge group base', () => {
-    const decisions = job(read('.github/workflows/ci.yml'), 'validate');
-    expect(decisions).toContain(
-      `DECISIONS_BASE: ${expression(
-        'github.event.pull_request.base.sha || github.event.merge_group.base_sha',
-      )}`,
-    );
   });
 
   it('diffs enforce against the merge group base instead of failing on no base', () => {

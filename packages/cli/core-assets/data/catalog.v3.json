@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:febc0ebd8c3e8fae175913cc8ecebb8ef1baad4830052ab8ebd73a5b93ffee98"
+    "rootHash": "sha256:22ce4165bf6a5b0fe574f534142c79e92a3592a3507afff42f297bc2ef911e68"
   },
   "nodes": [
     {
@@ -3444,7 +3444,7 @@
       "label": "void-decide",
       "data": {
         "legacy": {
-          "description": "Capture structural choices as one immutable ADR file with collision-free identity, explicit alternatives, reversal cost, and supersession. Use when future code depends on why.",
+          "description": "Record structural choices in short Markdown with light frontmatter, alternatives, reversal cost and replacement links. Use when future code depends on why.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3461,7 +3461,7 @@
             }
           ],
           "id": "skill:void-decide",
-          "lines": 147,
+          "lines": 110,
           "name": "void-decide",
           "owner": "folpe",
           "pack": null,
@@ -3470,7 +3470,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-decide/SKILL.md",
-          "staticTokens": 1168,
+          "staticTokens": 1078,
           "type": "skill"
         }
       },
@@ -3912,7 +3912,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-learn/SKILL.md",
-          "staticTokens": 3311,
+          "staticTokens": 3361,
           "type": "skill"
         }
       },

@@ -14,7 +14,7 @@ describe('asksForHelp', () => {
 
   it('lets a command with its own help print it', () => {
     // These render a more specific usage than the global reference.
-    for (const cmd of ['mission', 'security', 'decisions', 'autopilot']) {
+    for (const cmd of ['mission', 'security', 'autopilot']) {
       expect(asksForHelp(cmd, ['--help']), cmd).toBe(false);
     }
   });

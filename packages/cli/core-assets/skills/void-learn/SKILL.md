@@ -199,7 +199,7 @@ A clean doctrine is the asset. Every entry earns its place by changing what happ
 - **`void-commit-discipline`** — a captured project rule commits as `docs(doctrine):`; a recurring review finding is a strong deja-vu signal.
 - **`void-code-review`** — a finding that recurs across PRs wants capturing; the reviewer flags PRs violating a fresh rule.
 - **`void-claude-md`** — governs the doc a rule lands in.
-- **`void-decide`** — a structural decision with a rejected alternative is an ADR, not a doctrine line.
+- **`void-decide`** — a structural decision with a rejected alternative is a short Markdown ADR with light frontmatter. Ordinary record corrections use normal Git commits; a material change links a new decision to its predecessor. Neither replaces the human agreement required here for doctrine updates.
 
 ---
 

@@ -43,8 +43,9 @@ describe('printHelp', () => {
     expect(capture()).toContain(PRODUCT_IDENTITY.repositorySlug);
   });
 
-  it('exposes conflict-free decision authoring', () => {
-    expect(capture()).toContain('decisions <sub>');
+  it('omits the retired decisions command from public help', () => {
+    expect(capture()).not.toContain('decisions <sub>');
+    expect(capture()).not.toContain('decisions new');
   });
 
   it('exposes the local mission evidence lifecycle', () => {

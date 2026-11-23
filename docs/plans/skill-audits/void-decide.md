@@ -18,7 +18,7 @@ coordination.
 
 **Load-bearing principles retained.**
 
-- Nygard's Context / Decision / Consequences and immutable record lifecycle.
+- Nygard's Context / Decision / Consequences and preservation of earlier reasoning.
 - MADR status and explicit supersession.
 - Terse records with accountable deciders.
 - Credible rejected alternatives and explicit reversal cost.
@@ -28,16 +28,15 @@ coordination.
 - Promoted from monorepo-specific to universal core in 2026-06-04.
 - Replaced `NNNN` allocation with `adr:<uuid>` identity and a readable
   date/slug/UUID filename.
-- One decision owns one file; projections are stdout-only and never merge
-  artifacts.
-- Accepted decision content cannot be edited, renamed or deleted. Reversal
-  creates a new record with `supersedes`.
-- Since 2026-08-26, the CLI permits only a bounded repository-local reference
-  substitution whose target exists and whose frontmatter, headings, structure
-  and surrounding prose stay unchanged. This keeps moved paths usable without
-  manufacturing an ADR about each rename or weakening semantic immutability.
-- The Markdown + YAML contract remains usable without void-harness or a specific
-  model runtime; the CLI adds exclusive creation and deterministic validation.
+- One decision owns one Markdown file with light frontmatter; no generated index.
+- Since the approved 2026-11-23 simplification, ordinary typo, link and wording
+  corrections use normal Git commits. Material changes create a new decision
+  linking the previous one. Historical files, IDs, metadata and links stay intact.
+- The former custom CLI, schema validator, text immutability gate and mechanical
+  reference exception are removed. The Markdown format works with ordinary
+  repository tools, without a required authoring command or history service.
+- Existing metadata readers keep their historical compatibility and parsing
+  bounds; they are not a mandatory authoring schema.
 
 **Rejected.**
 

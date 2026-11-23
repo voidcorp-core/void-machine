@@ -25,6 +25,7 @@ target of a redirection, and a sibling test already asserts each one still ships
 | --- | --- |
 | `void-autopilot` | `packages/cli/scripts/conformance-autopilot.mjs`<br>`packages/cli/src/commands/autopilot-usage.ts`<br>`packages/cli/src/lib/autopilot/judgment-comment.ts` |
 | `void-checkpoint` | `packages/mission-engine/src/session/resume.ts` |
+| `void-decide` | `packages/cli/src/lib/conformance/decisions-format.ts` |
 | `void-graph` | `apps/graph-studio/scripts/prepare-data.ts`<br>`apps/graph-studio/vite.config.ts`<br>`packages/cli/scripts/build-void-graph.ts`<br>`packages/cli/scripts/copy-core-assets.mjs`<br>`packages/cli/src/commands/graph.ts`<br>`packages/cli/src/lib/build-bundle.ts`<br>`packages/cli/src/lib/bundled-model.ts`<br>`packages/cli/src/lib/self-host/compile.ts`<br>`packages/cli/src/void-graph.ts`<br>`scripts/build-skill-references.mjs`<br>`scripts/derive.mjs`<br>`scripts/verify.mjs` |
 | `void-implement` | `packages/cli/src/lib/claude-md.ts` |
 | `void-learn` | `packages/cli/src/lib/claude-md.ts`<br>`packages/hook-runner/src/rules/protected-file.ts` |

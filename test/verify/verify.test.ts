@@ -98,7 +98,7 @@ describe('gate catalogue', () => {
       selectGates([{ path: 'docs/guides/consumer.md', status: 'modified' }]).map(
         (gate: Gate) => gate.id,
       ),
-    ).toEqual(['asset-paths', 'skill-references']);
+    ).toEqual(['skill-references']);
   });
 
   it.each([

@@ -1674,7 +1674,15 @@ Maintainer reference checks also inspect descriptions in core, mirrored and pack
 `plugin.json` manifests. Explicit `void-` skill names resolve against the live
 catalogue; ordinary English prose, pack names and the exact product name
 `void-machine` are not skill references. Historical decisions and plans remain
-outside this live-description check.
+outside this live-description check. The same checker validates prefixed names and
+`skills/<name>/SKILL.md` segments in source code, preserving explicit allowances
+for retired names, internal identifiers and consumer-owned skills. Repository
+search replaces the generated skill-reference inventory.
+
+Paths cited only in prose have no dedicated gate. A worker that encounters a stale
+path reports it, searches for the actual target and proposes a correction. An
+uncertain destination grants no additional permission. Executable manifest and
+installation path checks remain in their existing owners.
 
 Roadmap (documented intent, not yet wired): skill front-matter schema check,
 per-hook smoke tests on a sample repo, CLI integration tests on a fresh fixture.

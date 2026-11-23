@@ -63,10 +63,7 @@
     "cheatsheet:check": "node scripts/build-cheatsheet.mjs --check",
     "derive": "node scripts/derive.mjs",
     "derive:check": "node scripts/derive.mjs --check",
-    "skills:check-references": "node scripts/check-skill-references.mjs",
-    "skills:register": "node scripts/build-skill-references.mjs",
-    "skills:register-check": "node scripts/build-skill-references.mjs --check",
-    "skills:check-paths": "node scripts/check-asset-paths.mjs"
+    "skills:check-references": "node scripts/check-skill-references.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",

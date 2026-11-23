@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   prefixedTokens,
-  renderRegister,
   skillDirectorySegments,
   unresolvedTokens,
-} from '../../scripts/build-skill-references.mjs';
+} from '../../scripts/check-skill-references.mjs';
 
 // The `void-` prefix exists so a reference to a shipped skill is greppable. This
-// register is what turns that property into a gate: every prefixed token written
-// anywhere in the harness must resolve, and every place code names a skill is
-// listed so a rename is a mechanical sweep rather than an act of vigilance.
+// checker makes every prefixed token in code resolve, so renames cannot leave
+// a runtime pointing at a skill directory that no longer exists.
 //
 // The failure it targets happened: `runtime-adapters.ts` probed
 // `.claude/skills/tdd/SKILL.md` to decide whether a local install had
@@ -65,31 +63,6 @@ describe('unresolvedTokens', () => {
 
   it('reports each unresolved token once, sorted', () => {
     expect(unresolvedTokens(['void-b', 'void-a', 'void-b'], resolvable)).toEqual(['void-a', 'void-b']);
-  });
-});
-
-describe('renderRegister', () => {
-  const rendered = renderRegister({
-    named: [{ name: 'void-tdd', files: ['packages/cli/src/lib/runtime-adapters.ts'] }],
-    declared: [{ name: 'void-tx', reason: 'transaction scratch prefix' }],
-  });
-
-  it('warns that the file is generated, so nobody edits the copy', () => {
-    expect(rendered).toMatch(/scripts\/build-skill-references\.mjs/);
-  });
-
-  it('lists every file that names a skill, under that skill', () => {
-    expect(rendered).toMatch(/void-tdd/);
-    expect(rendered).toMatch(/packages\/cli\/src\/lib\/runtime-adapters\.ts/);
-  });
-
-  it('lists the declared identifiers with what each one is', () => {
-    expect(rendered).toMatch(/void-tx/);
-    expect(rendered).toMatch(/transaction scratch prefix/);
-  });
-
-  it('ends with a newline, so the file compares clean', () => {
-    expect(rendered.endsWith('\n')).toBe(true);
   });
 });
 

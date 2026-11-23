@@ -17,7 +17,7 @@ These are not style preferences. A PR violating them fails `validate`:
 
 | Rule | Gate |
 | --- | --- |
-| Skills ≤ 400 lines, hooks ≤ 100 lines, discovery `description` target ≤250 and hard cap 500 across core, packs, agents, and canonical specialists | `pnpm anti-bloat:check` |
+| Discovery `description` target ≤250 and hard cap 500; valid skill identity, agent tool isolation and hook syntax | `pnpm anti-bloat:check` |
 | `CLAUDE.md` and `AGENTS.md` stay in section parity | `pnpm sync:docs` |
 | Every version-carrying manifest at the same version | `pnpm version:check` |
 | `packages/cli/core-assets` mirrors `packages/core` | rebuild with `pnpm --filter ./packages/cli build:assets` |
@@ -41,23 +41,26 @@ and commit the result. Editing a hook also changes its line count, which the gra
 
 ## Adding a skill
 
-Read `CLAUDE.md` ("Anti-bloat discipline" and "Sourcing discipline") before writing one. In short: one skill, one subject; no more than 30% responsibility overlap with an existing skill; distilled and adapted from its sources, never vendored verbatim; a `.source` sidecar next to it and an audit note in `docs/plans/skill-audits/`.
+Read `CLAUDE.md` ("Anti-bloat discipline" and "Sourcing discipline") before writing one. In short: one skill, one subject; no more than 30% responsibility overlap with an existing skill; distilled and adapted from its sources, never vendored verbatim; a `.source` sidecar with useful adaptation rationale. Historical audit notes remain available; no second document is required for every skill.
 
 Name it `void-<what someone would type looking for it without knowing it exists>`,
 and declare which grammar applies to the part after the prefix in the frontmatter.
 `kind: action` is a thing you run and takes the bare verb (`void-plan`,
 `void-verify`, `void-implement`); `kind: standard` governs how code is written and
-takes the subject it governs (`void-tdd`, `void-observability`). No gerund on an
-action, no agent-noun for a mechanism, no filler suffix. The prefix is not
+takes the subject it governs (`void-tdd`, `void-observability`). Prefer clear
+action verbs and meaningful subjects; assess ambiguous names in context. The prefix is not
 decoration: a runtime resolves skills from several providers, and the level this
 harness installs into loses every collision it enters, silently.
 
-`pnpm anti-bloat:check` refuses all four shapes. `pnpm skills:check-references`
-proves that nothing points at a name that stopped existing, and
-`pnpm skills:register-check` refuses any `void-` token or any
-`skills/<name>/SKILL.md` path that resolves to nothing — read
-`docs/SKILL-REFERENCES.md` before renaming one, it lists every place code names a
-skill. The reasoning, and the alternatives that were rejected, are in
+`pnpm anti-bloat:check` enforces technical names, prefix, kind and directory
+identity. `pnpm skills:check-references` validates namespaces and plugin references
+on shipped surfaces, plus skill names and directory paths in code. Use repository
+search to find call sites before a rename; there is no generated reference register.
+Paths mentioned only in prose have no dedicated gate. If one is wrong during work,
+report it, find the real target and propose the correction; an ambiguous target
+never permits a fabricated path or a relaxed permission.
+
+The reasoning, and the alternatives that were rejected, are in
 `docs/decisions-log/2026-08-18-skill-naming-rule-three-families--c109429b-480e-48a9-baba-93f644f9e9e1.md`
 and in the decision on prefixing every shipped skill.
 

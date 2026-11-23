@@ -59,12 +59,11 @@ describe('resume command', () => {
     expect(capture.output().length).toBeLessThanOrEqual(4_000);
   });
 
-  it('keeps degraded recovery visible without a program or useful checkpoint', async () => {
+  it('emits no automatic recovery instruction without useful resume context', async () => {
     const capture = project(false);
 
     await resume(['--context']);
 
-    expect(capture.output()).toContain('Context continuity: degraded');
-    expect(capture.output()).toContain('Reconstruct context before any mutation.');
+    expect(capture.output()).toBe('');
   });
 });

@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as z from 'zod/mini';
-import { measureHerdrContext } from './context-continuity-executor.js';
+import { measureHerdrContext } from './herdr-context.js';
 import { type Environment, type LifecycleExecution, record } from './executor-shared.js';
 import { metadataCommands, metadataSequence } from './herdr-metadata.js';
 import { foreground, proveOwnership } from './herdr-ownership.js';
@@ -34,7 +34,6 @@ export function executeHerdrMetadata(
   run: MetadataRun = runCommand,
 ): Execution {
   if (env['HERDR_ENV'] !== '1') return { status: 'skipped', details: { reason: 'outside-herdr' } };
-  const now = Date.now();
   const seq = metadataSequence(performance.timeOrigin, performance.now());
   const deadline = performance.now() + 2000;
   const input = record(raw);
@@ -83,7 +82,7 @@ export function executeHerdrMetadata(
       ? record(record(JSON.parse(call('herdr', ['workspace', 'get', snapshot.pane.workspace_id])))?.['result'])
       : undefined;
     const workspaceMission = record(record(workspace?.['workspace'])?.['tokens'])?.['mission'];
-    const percent = measureHerdrContext(input, root, runtime, now);
+    const percent = measureHerdrContext(input, root, runtime);
     const commands = metadataCommands(snapshot, { hook_event_name: String(event),
       ...(typeof input['source'] === 'string' ? { source: input['source'] } : {}) }, seq, percent,
     typeof workspaceMission === 'string' ? workspaceMission : undefined);

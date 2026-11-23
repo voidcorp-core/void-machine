@@ -1,5 +1,5 @@
 {
-  "description": "Codex CLI hooks manifest \u2014 the Codex-side mirror of the Claude Code hooks wired in ../.claude-plugin/plugin.json. Both runtimes invoke the same portable Node rules; the runner normalizes Claude single-file Edit/Write and Codex multi-file apply_patch. `void-machine init` stages the runner and compiles each command into a Node bootstrap that finds it from the session directory, so the versioned manifest holds no machine path. NOT mirrored, deliberately: trim-large-output, whose PostToolUse output rewriting is unconfirmed on Codex. See ../../../docs/CODEX.md.",
+  "description": "Codex CLI hooks manifest — the Codex-side mirror of the Claude Code hooks wired in ../.claude-plugin/plugin.json. Both runtimes invoke the same portable Node rules; the runner normalizes Claude single-file Edit/Write and Codex multi-file apply_patch. `void-machine init` stages the runner and compiles each command into a Node bootstrap that finds it from the session directory, so the versioned manifest holds no machine path.",
   "hooks": {
     "PreToolUse": [
       {
@@ -54,35 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex"
-          }
-        ]
-      },
-      {
-        "matcher": "apply_patch|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle format codex"
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
             "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" outcome codex"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex"
           }
         ]
       }
@@ -93,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex"
+            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context codex"
           }
         ]
       },
@@ -106,33 +78,7 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle context-continuity codex"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-reminder codex"
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle checkpoint-audit codex"
-          }
-        ]
-      },
       {
         "hooks": [
           {
@@ -148,14 +94,6 @@
           {
             "type": "command",
             "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" stop codex"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${VOID_HOOKS_DIR}/_void-hook.mjs\" lifecycle typecheck codex"
           }
         ]
       },

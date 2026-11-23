@@ -77,12 +77,9 @@ The companion hook `pre-PR-review-evidence` warns if the PR body lacks this bloc
 
 ## CL Size discipline
 
-PRs larger than ~400 LOC of diff should either:
-
-- Be split into multiple PRs each focused on one concern
-- Or include a `large-cl-justification: <reason>` marker in a commit message
-
-Review quality decays after ~400 added LOC. The optional `large-cl-grep` adapter warns without blocking when a branch exceeds the threshold. It reads Git only: no forge, `gh`, or `jq` dependency.
+Keep changes focused enough to review. Split independent concerns when that improves review;
+explain genuinely atomic changes in the PR. Size alone is not a correctness signal, and no hook
+requires a line-count justification marker.
 
 ---
 
@@ -203,7 +200,6 @@ Disagreements are surfaced. Not averaged. The user decides.
 ## Companion hooks
 
 - **`pre-PR-review-evidence`** (pre-push) — warn if PR body lacks the Review Evidence block (strict mode)
-- **`large-cl-grep`** (optional pre-push) — warn if the branch adds > 400 LOC without a commit-message `large-cl-justification:` marker
 - **`blocker-prefix-grep`** (post-review) — informational: count BLOCKER vs NIT comments for the evidence block
 
 See `../../hooks/`.
@@ -228,7 +224,7 @@ See `../../hooks/`.
 |---|---|
 | Review feels shallow | You skipped a dimension. Walk all six in order. |
 | Cannot tell BLOCKER from NIT | A demonstrated defect or missing proof of a concrete risk blocks; optional improvement is advisory. |
-| Diff is too large to review | Ask the author to split, or invoke `large-cl-justification:` if truly atomic. |
+| Diff is too large to review | Split independent concerns, or explain why the change is atomic. |
 | Found a structural rot beyond the diff | `QUESTION:` + suggest follow-up issue. Do not block this PR on it. |
 | Claude and Codex disagree | Surface the delta. Let the author/user decide. |
 | Diagnostics remain | Resolve actionable defects; name unrelated warnings without restarting review. |

@@ -64,7 +64,6 @@ export const configSchema = z.object({
   context: z
     .object({
       windowTokens: z.number().int().positive().optional(),
-      checkpointThresholdPercent: z.number().int().min(40).max(60).default(50),
     })
     .optional(),
 });

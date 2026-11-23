@@ -175,5 +175,5 @@ Distribution measurement (DEV-1016): pnpm pack initially 2232.4 kB; using Zod
 Mini instead of the full runtime reduced the final pack to 2128.0 kB. The old
 2095 kB ceiling becomes 2173 kB, retaining approximately 45 kB headroom for the
 official YAML parser, strict schemas and native receipt collection. No payload or
-license was omitted. Hook performance is checked by the existing context-continuity
-benchmark; its historic global startup baseline remains separately tracked DEV-662.
+license was omitted. The context-continuity feature and its exclusive benchmark have since
+been retired. Global hook startup optimization remains separately tracked by DEV-662.

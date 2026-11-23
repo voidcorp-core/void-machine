@@ -338,7 +338,6 @@ plainly is the point — this is the only place where "prerequisite" keeps meani
 | --- | --- | --- |
 | claude-in-chrome MCP | a Claude-bound browser extension | `void-qa`, `void-ui-review` live browser passes |
 | `@voidcorp/make-pdf` | package not published | the `void-make-pdf` skill |
-| `trim-large-output` hook | its `PostToolUse` output rewriting (`updatedToolOutput`) is unconfirmed on Codex, and a sibling field is documented as failing there | token-frugality trimming only; deliberately not wired rather than shipped dead |
 | enforced specialist read-only isolation | parent sandbox overrides and no per-agent process allowlist | native agents work, but team mode stays degraded |
 
 ## Status (verified vs pending)

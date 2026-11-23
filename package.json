@@ -21,7 +21,6 @@
     "cli": "pnpm build:cli >/dev/null && node packages/cli/bin/void-machine.mjs",
     "benchmark:project": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph/run.mjs",
     "benchmark:query": "pnpm --filter @voidcorp/harness-graph build && node packages/harness-graph/benchmarks/project-graph-query/run.mjs",
-    "benchmark:hooks": "pnpm hooks:build && pnpm --filter @voidcorp/hook-runner benchmark",
     "test": "pnpm test:cpu && pnpm test:filesystem && pnpm test:subprocess && pnpm test:network",
     "test:fast": "vitest run --project=pure:cpu --project=contract:cpu --maxWorkers=4",
     "test:component": "pnpm test:filesystem && pnpm test:subprocess",

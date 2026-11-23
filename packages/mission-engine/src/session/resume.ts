@@ -42,7 +42,6 @@ export interface ResumeBundleInput {
   readonly programError?: string;
   readonly checkpoint: Checkpoint | undefined;
   readonly checkpointWrittenAt?: number;
-  readonly resumeSource?: 'startup' | 'resume' | 'clear' | 'compact' | 'fork';
 }
 
 export type ResumeGapReason =
@@ -52,19 +51,7 @@ export type ResumeGapReason =
   | 'checkpoint-empty'
   | 'checkpoint-stale'
   | 'checkpoint-branch-moved'
-  | 'checkpoint-head-moved'
-  | 'mechanical-block-absent'
-  | 'mechanical-block-invalid'
-  | 'checkpoint-semantic-stale'
-  | 'precompact-seal-unconfirmed'
-  | 'clear-unreconciled';
-
-export type ContinuityReason =
-  | 'mechanical-block-absent'
-  | 'mechanical-block-invalid'
-  | 'semantic-revision-behind'
-  | 'precompact-seal-unconfirmed'
-  | 'clear-not-reconciled';
+  | 'checkpoint-head-moved';
 
 export interface ResumeGap {
   readonly reason: ResumeGapReason;
@@ -82,10 +69,7 @@ export interface ResumeBundle {
     readonly dirtyFiles: number;
   };
   readonly gaps: readonly ResumeGap[];
-  readonly continuity: {
-    readonly status: 'complete' | 'degraded';
-    readonly reasons: readonly ContinuityReason[];
-  };
+
 }
 
 const DAY_MS = 86_400_000;
@@ -171,68 +155,11 @@ function treeGaps(input: ResumeBundleInput): readonly ResumeGap[] {
   return gaps;
 }
 
-function continuityFor(input: ResumeBundleInput): ResumeBundle['continuity'] {
-  if (input.resumeSource === 'clear') {
-    return { status: 'degraded', reasons: ['clear-not-reconciled'] };
-  }
-  const checkpoint = input.checkpoint;
-  if (checkpoint?.mechanicalBlockStatus === 'invalid') {
-    return { status: 'degraded', reasons: ['mechanical-block-invalid'] };
-  }
-  const mechanical = checkpoint?.mechanicalContext;
-  if (mechanical === undefined) {
-    return { status: 'degraded', reasons: ['mechanical-block-absent'] };
-  }
-  const reasons: ContinuityReason[] = [];
-  if (mechanical.semanticRevision < mechanical.workRevision) {
-    reasons.push('semantic-revision-behind');
-  }
-  if (
-    input.resumeSource === 'compact'
-    && mechanical.sealedWorkRevision !== mechanical.workRevision
-  ) {
-    reasons.push('precompact-seal-unconfirmed');
-  }
-  if (mechanical.clearPending) reasons.push('clear-not-reconciled');
-  return reasons.length === 0
-    ? { status: 'complete', reasons }
-    : { status: 'degraded', reasons };
-}
-
-function continuityGaps(continuity: ResumeBundle['continuity']): readonly ResumeGap[] {
-  return continuity.reasons.map((reason) => {
-    switch (reason) {
-      case 'mechanical-block-absent':
-        return { reason, detail: 'the mechanical context block is absent' };
-      case 'mechanical-block-invalid':
-        return { reason, detail: 'the mechanical context block is ambiguous or malformed' };
-      case 'semantic-revision-behind':
-        return {
-          reason: 'checkpoint-semantic-stale',
-          detail: 'the semantic revision is behind mechanical work',
-        };
-      case 'precompact-seal-unconfirmed':
-        return {
-          reason,
-          detail: 'the pre-compaction seal is not confirmed for the latest work revision',
-        };
-      case 'clear-not-reconciled':
-        return { reason: 'clear-unreconciled', detail: 'the last clear is not reconciled' };
-      default: {
-        const exhaustive: never = reason;
-        return exhaustive;
-      }
-    }
-  });
-}
-
 export function composeResumeBundle(input: ResumeBundleInput): ResumeBundle {
-  const continuity = continuityFor(input);
   const gaps = [
     programGap(input),
     checkpointGap(input),
     ...treeGaps(input),
-    ...continuityGaps(continuity),
   ].filter(
     (gap): gap is ResumeGap => gap !== undefined,
   );
@@ -247,18 +174,10 @@ export function composeResumeBundle(input: ResumeBundleInput): ResumeBundle {
       dirtyFiles: input.git.dirtyFiles,
     },
     gaps,
-    continuity,
   };
 }
 
 function checkpointContext(checkpoint: Checkpoint): readonly string[] {
-  const mechanical = checkpoint.mechanicalContext;
-  const readOverflow = mechanical === undefined || mechanical.readFilesOverflow === 0
-    ? ''
-    : ` (+${String(mechanical.readFilesOverflow)} older)`;
-  const modifiedOverflow = mechanical === undefined || mechanical.modifiedFilesOverflow === 0
-    ? ''
-    : ` (+${String(mechanical.modifiedFilesOverflow)} older)`;
   return [
     checkpoint.date === undefined ? undefined : `Checkpoint date: ${checkpoint.date}`,
     checkpoint.objective === undefined ? undefined : `Objective: ${checkpoint.objective}`,
@@ -274,12 +193,6 @@ function checkpointContext(checkpoint: Checkpoint): readonly string[] {
     checkpoint.assumptions.length === 0
       ? undefined
       : `Unverified assumptions: ${checkpoint.assumptions.join('; ')}`,
-    mechanical === undefined || mechanical.readFiles.length === 0
-      ? undefined
-      : `Read files: ${mechanical.readFiles.join(', ')}${readOverflow}`,
-    mechanical === undefined || mechanical.modifiedFiles.length === 0
-      ? undefined
-      : `Modified files: ${mechanical.modifiedFiles.join(', ')}${modifiedOverflow}`,
   ].filter((line): line is string => line !== undefined);
 }
 
@@ -301,30 +214,13 @@ function boundedResumeLines(
 
 export function renderResumeContext(bundle: ResumeBundle): string {
   const usefulCheckpoint = bundle.checkpoint !== undefined && !bundle.checkpoint.isEmpty;
-  if (
-    bundle.program === undefined
-    && !usefulCheckpoint
-    && bundle.continuity.status === 'complete'
-  ) return '';
-
-  const continuityReasons = new Set<ResumeGapReason>([
-    'mechanical-block-absent',
-    'mechanical-block-invalid',
-    'checkpoint-semantic-stale',
-    'precompact-seal-unconfirmed',
-    'clear-unreconciled',
-  ]);
-  const required = [
-    '[void-machine resume]',
-    `Project: ${bundle.project.name}`,
-    `Context continuity: ${bundle.continuity.status}`,
-    ...(bundle.continuity.status === 'degraded'
-      ? ['Reconstruct context before any mutation.']
-      : []),
-    ...bundle.gaps
-      .filter((gap) => continuityReasons.has(gap.reason))
-      .map((gap) => `Gap: ${gap.detail}`),
-  ];
+  if (bundle.program === undefined && !usefulCheckpoint) {
+    const invalidProgram = bundle.gaps.filter((gap) => gap.reason === 'program-invalid');
+    return invalidProgram.length === 0
+      ? ''
+      : boundedResumeLines(['[void-machine resume]'], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
+  }
+  const required = ['[void-machine resume]', `Project: ${bundle.project.name}`];
   const optional: string[] = [];
   if (bundle.git.branch !== undefined) optional.push(`Branch: ${bundle.git.branch}`);
   if (bundle.git.head !== undefined) optional.push(`HEAD: ${bundle.git.head}`);
@@ -343,9 +239,7 @@ export function renderResumeContext(bundle: ResumeBundle): string {
     optional.push(...checkpointContext(bundle.checkpoint));
   }
   optional.push(
-    ...bundle.gaps
-      .filter((gap) => !continuityReasons.has(gap.reason))
-      .map((gap) => `Gap: ${gap.detail}`),
+    ...bundle.gaps.map((gap) => `Gap: ${gap.detail}`),
   );
   return boundedResumeLines(required, optional);
 }

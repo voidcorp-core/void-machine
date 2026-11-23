@@ -180,13 +180,9 @@ is a different question from *what was I doing*, and nothing else in the repo an
 Write it with `void-machine resume` in mind — that command reads this file, and reading your own
 checkpoint back is the cheapest test of whether it was worth writing.
 
-Before every semantic rewrite, read the current file and preserve the single delimited mechanical
-block from `<!-- void-machine:context-continuity:begin -->` through its matching end marker
-byte-for-byte. A checkpoint written before the product was renamed carries the same block under
-its former name: preserve it just the same, since the hook rewrites it in place on its next write.
-Require exactly one mechanical block; refuse the rewrite when more than one block exists or either
-marker is ambiguous.
-The lifecycle hook owns that block; this skill owns every semantic section around it.
+Read the existing checkpoint before a semantic rewrite and retain relevant manual residue.
+Legacy mechanical blocks are ignored by the resume parser; they are not required for a valid
+checkpoint. No automatic context tracker writes, locks, seals, or revises this file.
 
 ---
 
@@ -197,12 +193,10 @@ shutdown artefact. Do not move provider state as a side effect of closing a sess
 ending is not a unit completing. Never write a checkpoint that claims work is done when it is
 merely stopped.
 
-**The hook boundary.** `UserPromptSubmit` detects explicit close intent and can remind the model to
-invoke this skill before the closing response. `SessionEnd` can only audit checkpoint presence,
-freshness, branch and HEAD after the model is gone. Both stay advisory. `PreCompact` may preserve
-only the delimited mechanical block before known context loss. Hooks never invent or change dead
-ends, assumptions or a next action. A command such as `/clear` can still bypass the prompt hook;
-invoke this skill first.
+**The hook boundary.** Checkpoint creation is explicit. Invoke this skill before `/clear`,
+compaction, or closing a session when useful residue needs saving. There is no automatic reminder
+or end-of-session audit. `SessionStart` reads semantic residue and surfaces freshness, branch,
+HEAD, programme and reference gaps; it never invents dead ends, assumptions or a next action.
 
 ---
 

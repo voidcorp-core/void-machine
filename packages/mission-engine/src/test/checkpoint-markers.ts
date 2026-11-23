@@ -24,7 +24,4 @@ export const CHECKPOINT_MARKERS: CheckpointMarkers = {
 
 export const {
   parseCheckpoint,
-  parseMechanicalContextBlock,
-  renderMechanicalContextBlock,
-  mergeMechanicalContextBlock,
 } = checkpointCodec(CHECKPOINT_MARKERS);

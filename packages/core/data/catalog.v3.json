@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:9a9f285272a76c92b18ac706fc4f9dfe77ff46c305ecda757aebdc3d9c13e745"
+    "rootHash": "sha256:830df80a2f09e7b5a3bd1e0d20cc9b1ed5f7ad47cf3c8692dd996d932f31cf32"
   },
   "nodes": [
     {
@@ -653,34 +653,6 @@
       }
     },
     {
-      "id": "catalog:hook:hook:auto-format",
-      "kind": "hook",
-      "label": "auto-format",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:auto-format",
-          "lines": 9,
-          "name": "auto-format",
-          "pack": null,
-          "source": "packages/core/hooks/auto-format.sh",
-          "staticTokens": 84,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/auto-format.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:hook:hook:axe-precommit",
       "kind": "hook",
       "label": "axe-precommit",
@@ -759,34 +731,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/control-character-grep.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:large-cl-grep",
-      "kind": "hook",
-      "label": "large-cl-grep",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:large-cl-grep",
-          "lines": 9,
-          "name": "large-cl-grep",
-          "pack": null,
-          "source": "packages/core/hooks/large-cl-grep.sh",
-          "staticTokens": 83,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/large-cl-grep.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -1028,34 +972,6 @@
           "name": "sessionstart-context",
           "pack": null,
           "source": "packages/core/hooks/sessionstart-context.sh",
-          "staticTokens": 87,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/sessionstart-context.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:stop-typecheck",
-      "kind": "hook",
-      "label": "stop-typecheck",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:stop-typecheck",
-          "lines": 9,
-          "name": "stop-typecheck",
-          "pack": null,
-          "source": "packages/core/hooks/stop-typecheck.sh",
           "staticTokens": 84,
           "type": "hook"
         }
@@ -1066,7 +982,7 @@
         "sources": [
           {
             "kind": "path",
-            "ref": "packages/core/hooks/stop-typecheck.sh",
+            "ref": "packages/core/hooks/sessionstart-context.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -1095,34 +1011,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/tidying-commit-prefix.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:trim-large-output",
-      "kind": "hook",
-      "label": "trim-large-output",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:trim-large-output",
-          "lines": 9,
-          "name": "trim-large-output",
-          "pack": null,
-          "source": "packages/core/hooks/trim-large-output.sh",
-          "staticTokens": 83,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/trim-large-output.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -3367,7 +3255,7 @@
             }
           ],
           "id": "skill:void-checkpoint",
-          "lines": 227,
+          "lines": 221,
           "name": "void-checkpoint",
           "owner": "folpe",
           "pack": null,
@@ -3376,7 +3264,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-checkpoint/SKILL.md",
-          "staticTokens": 2858,
+          "staticTokens": 2743,
           "type": "skill"
         }
       },
@@ -3464,7 +3352,7 @@
             }
           ],
           "id": "skill:void-code-review",
-          "lines": 245,
+          "lines": 241,
           "name": "void-code-review",
           "owner": "folpe",
           "pack": null,
@@ -3473,7 +3361,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-code-review/SKILL.md",
-          "staticTokens": 3443,
+          "staticTokens": 3369,
           "type": "skill"
         }
       },
@@ -3570,7 +3458,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-context/SKILL.md",
-          "staticTokens": 2865,
+          "staticTokens": 2834,
           "type": "skill"
         }
       },
@@ -5340,32 +5228,6 @@
           "kind": "companion-of",
           "origin": "declared",
           "to": "skill:void-migrations"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:companion-of:c3877aec8f3eefa2155f90594aaaad2b",
-      "from": "catalog:hook:hook:auto-format",
-      "to": "catalog:skill:skill:void-commit-discipline",
-      "kind": "companion-of",
-      "data": {
-        "legacy": {
-          "evidence": "CHEATSHEET: auto-format formats on write, so formatting never appears in a behavioural diff",
-          "from": "hook:auto-format",
-          "kind": "companion-of",
-          "origin": "declared",
-          "to": "skill:void-commit-discipline"
         }
       },
       "provenance": {
@@ -9307,32 +9169,6 @@
       }
     },
     {
-      "id": "catalog:edge:enforces:17176d2ba008ecd3afc3ab9fcd88cb54",
-      "from": "catalog:hook:hook:trim-large-output",
-      "to": "catalog:skill:skill:void-context",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "CHEATSHEET: trim-large-output bounds oversized tool output before it consumes the context window",
-          "from": "hook:trim-large-output",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-context"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:edge:enforces:271defecf38c5e96373025c5db336ae1",
       "from": "catalog:hook:hook:migration-pr-template",
       "to": "catalog:skill:skill:void-migrations",
@@ -9656,58 +9492,6 @@
           "kind": "enforces",
           "origin": "declared",
           "to": "skill:void-security-guidance"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:de8185e29ce95ef86245c1d1c3393828",
-      "from": "catalog:hook:hook:large-cl-grep",
-      "to": "catalog:skill:skill:void-commit-discipline",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "large-cl-grep warns on oversized changelists — enforces commit-discipline (small commits)",
-          "from": "hook:large-cl-grep",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-commit-discipline"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:ea559ecce9137da9f436de135b2e1761",
-      "from": "catalog:hook:hook:stop-typecheck",
-      "to": "catalog:skill:skill:void-typescript-strict",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "stop-typecheck typechecks the touched TypeScript surface before session end — enforces typescript-strict",
-          "from": "hook:stop-typecheck",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-typescript-strict"
         }
       },
       "provenance": {

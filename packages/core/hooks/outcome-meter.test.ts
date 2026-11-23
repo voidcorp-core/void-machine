@@ -52,20 +52,10 @@ const post = (
   ...(toolResponse !== undefined ? { tool_response: toolResponse } : {}),
 });
 
-// The compatibility wrapper has no runtime identity in these fixtures. Its new
-// advice receipt must therefore report degraded, while preserving the real tool outcome.
 function completion(events: Record<string, unknown>[]): Record<string, unknown> | undefined {
-  expect(events).toHaveLength(2);
-  const receipts = events.filter(event => event.kind === 'hook.completed');
-  const outcomes = events.filter(event => event.kind === 'runtime.tool.completed');
-  expect(receipts).toHaveLength(1);
-  expect(outcomes).toHaveLength(1);
-  expect(receipts[0]).toMatchObject({
-    schemaVersion: 1, seq: 1, source: 'runtime:unknown', subject: 'hook:outcome-meter',
-    payload: { status: 'degraded', reason: 'read-loop-unavailable' },
-  });
-  expect(outcomes[0]).toMatchObject({ schemaVersion: 1, seq: 2, source: 'runtime:unknown' });
-  return outcomes[0];
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ schemaVersion: 1, seq: 1, source: 'runtime:unknown', kind: 'runtime.tool.completed' });
+  return events[0];
 }
 
 describe('outcome-meter', () => {
@@ -122,4 +112,9 @@ describe('outcome-meter', () => {
     expect(JSON.stringify(events)).not.toContain('SECRET_TOKEN');
     expect(existsSync(join(dir, '.void', 'outcomes.jsonl'))).toBe(false);
   });
+});
+
+it('does not misreport a PostToolUseFailure as successful completion', () => {
+  const { events } = runHook({ ...post('Read', { file_path: 'missing.ts' }), hook_event_name: 'PostToolUseFailure' });
+  expect(events).toEqual([]);
 });

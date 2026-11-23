@@ -156,7 +156,7 @@ describe('hooklib_edits — without jq', () => {
       });
   }
 
-  // The PATH-only hooks (auto-format) must keep enforcing on a
+  // The PATH-only consumers must keep enforcing on a
   // jq-less machine exactly as they did before this stream existed. The
   // content-scanning hooks are unaffected: they fail closed via
   // hooklib_require_jq before ever reading a record (#63).

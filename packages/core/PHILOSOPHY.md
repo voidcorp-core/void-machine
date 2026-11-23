@@ -82,7 +82,7 @@ Maximum efficiency, minimum motion. Every dependency, every layer, every file ea
 - Runtime feature flag services — env vars and build-time activation suffice
 - Hand-rolled accessibility — wrap Radix, do not re-derive ARIA
 
-A lasting structural choice with a credible alternative is logged as one immutable file under `docs/decisions/` (or the detected equivalent), per `void-decide`. Routine reversible implementation choices need no ADR.
+A lasting structural choice with a credible alternative is logged as a short Markdown file with light frontmatter under `docs/decisions/` (or the established equivalent), per `void-decide`. Ordinary corrections use normal Git commits; a material change creates a new decision linking the previous one. Routine reversible implementation choices need no ADR.
 
 Every change is judged against four questions, in this order:
 

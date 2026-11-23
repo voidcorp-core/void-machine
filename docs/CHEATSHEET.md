@@ -39,7 +39,7 @@ Where the boundaries are, and who owns which type.
 | `void-functional` | Pure-by-default, errors as values (Result<T, E>), discriminated unions for state, immutability defaults, functional core / imperative shell. |
 | `void-api-and-interface-design` | Contract-first design of any public interface — package exports, HTTP/REST, RPC/tRPC, SDK, module boundary. |
 | `void-typescript-strict` | TS strict baseline. Zero any budget, branded types for domain primitives, discriminated unions over enums, exhaustive switches via never, satisfies over as. |
-| `void-decide` | Capture structural choices as one immutable ADR file with collision-free identity, explicit alternatives, reversal cost, and supersession. |
+| `void-decide` | Record structural choices in short Markdown with light frontmatter, alternatives, reversal cost and replacement links. |
 
 ### Boundaries and production
 

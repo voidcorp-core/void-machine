@@ -89,23 +89,19 @@ npx voidmachine doctor [--no-remote]
 
 `list` shows packs and their detection status; `check` reports version drift; `update` refreshes pinned versions.
 
-### `decisions`
+### Decision records: breaking command removal
 
-Creates, validates and projects ADRs without a shared counter or generated
-index. Existing decision directories are preserved; new projects default to
-`docs/decisions/`.
+`decisions new`, `decisions check` and `decisions render` have been removed.
+Remove calls to them from scripts and CI. Write Markdown files with light YAML
+frontmatter directly, following `void-decide`: a stable unique `id`, `title`,
+`createdAt` or `date`, `status`, and optional `supersedes` references.
+No replacement CLI, schema gate or generated index is required.
 
-```bash
-npx voidmachine decisions new --title "Use X" --slug use-x
-npx voidmachine decisions check [--base <git-ref>]
-npx voidmachine decisions render --format markdown|json
-```
-
-Accepted decision content is immutable. Reverse it with a new record and
-`--supersedes <adr:id>`. A proven repository-local path substitution is the
-only in-place exception; the new target must exist and the surrounding record
-must remain unchanged. Rendered views expose both declared and effective status
-and identify the records that supersede an older decision.
+Keep existing records, IDs, metadata and links. Ordinary wording and link corrections
+use normal Git commits; a material change creates a new record linking its
+predecessor. Established directories remain valid; new projects may use
+`docs/decisions/`. The projects view, declared graph/why readers and separate
+conformance capability remain available with their existing parsing limits.
 
 ### `install --global`
 

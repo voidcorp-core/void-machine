@@ -111,4 +111,4 @@ Folpe l'a explicitement classé en dernier. **Ne le commence pas.**
 Les points 1 à 3 sont assez cadrés pour aller directement en `void-implement`, une unité chacun.
 Le point 4 passe par `void-brainstorm` et une spec validée avant tout code.
 
-Toute décision non triviale s'écrit avec `void-machine decisions new`.
+Toute décision structurelle durable s'écrit en Markdown avec frontmatter léger via `void-decide`.

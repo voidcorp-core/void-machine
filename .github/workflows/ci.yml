@@ -211,8 +211,6 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          # decisions:check compares accepted records with the PR base SHA.
-          # checkout fetches one commit by default, so retain the base history.
           fetch-depth: 0
           ref: ${{ env.GATE_SHA }}
 
@@ -263,15 +261,6 @@ jobs:
           node scripts/verify.mjs --gate anti-bloat
           --sha "$GATE_SHA"
           --report ".void/machine/gate-reports/anti-bloat.json"
-
-      - name: "[decisions] Decision records"
-        continue-on-error: true
-        env:
-          DECISIONS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        run: >-
-          node scripts/verify.mjs --gate decisions
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/decisions.json"
 
       - name: "[hook-runner-current] Generated hook runner"
         continue-on-error: true

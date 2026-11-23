@@ -1,6 +1,6 @@
 ---
 name: void-decide
-description: Capture structural choices as one immutable ADR file with collision-free identity, explicit alternatives, reversal cost, and supersession. Use when future code depends on why.
+description: Record structural choices in short Markdown with light frontmatter, alternatives, reversal cost and replacement links. Use when future code depends on why.
 ---
 
 # decide
@@ -9,67 +9,43 @@ Use when a structural choice changes how future code is written and a future
 contributor would otherwise ask "why?". ADRs are codebase-scoped. Product or
 cross-organization strategy belongs in the product's decision system.
 
-This composes with `void-plan`: plans describe work; ADRs preserve
-the decisions behind it.
+Plans describe work; decisions preserve the reasons behind it.
 
-## Write an ADR when
+## Write a decision when
 
 - A library or platform choice creates material lock-in.
 - A naming, layout or dependency convention affects the codebase broadly.
 - Ownership, trust or deployment boundaries change.
 - A performance, availability, privacy or security trade-off is accepted.
-- A previous accepted ADR must be reversed or narrowed.
+- A previous accepted decision must be reversed or materially changed.
 
-Do not write one for bug fixes, preference, pure refactors or choices reversible
-in one small PR. If no credible alternative was rejected, the record is usually
-ceremony rather than a decision.
+Bug fixes, preferences, pure refactors and choices reversible in one small PR
+usually need no ADR. If no credible alternative was rejected, the record is
+usually ceremony rather than a decision.
 
-## Storage contract
+## Write Markdown directly
 
-One decision owns one Markdown file. Never append to, number from, or regenerate
-a shared index.
-
-Default location:
+Use the project's established directory, such as `docs/decisions-log/` or
+`decisions/`; `docs/decisions/` is a useful default for a new project. One decision
+owns one file. Choose a stable unique filename and identity, for example a date,
+readable slug and locally generated UUID:
 
 ```text
-docs/decisions/
-  2026-07-24-use-drizzle--018f43f4-3ac4-7c40-8000-000000000001.md
+docs/decisions/2026-07-24-use-drizzle--018f43f4-3ac4-7c40-8000-000000000001.md
 ```
 
-An existing project may keep an established equivalent such as
-`docs/decisions-log/` or `decisions/`.
+Never allocate a shared sequential counter or overwrite another record. Preserve
+existing files, IDs, metadata and links; no bulk rewrite is needed. Do not maintain
+a generated index. Read the source records directly with ordinary repository tools.
 
-The filename contains:
-
-- an ISO date for scanning;
-- a readable slug describing the chosen direction;
-- a collision-resistant UUID used by the ADR identity.
-
-Prefer the project command when present:
-
-```sh
-void-machine decisions new \
-  --title "Adopt Server Actions for UI mutations" \
-  --slug adopt-server-actions \
-  --decider folpe
-```
-
-Without the CLI, generate a UUID locally and create the same standalone contract.
-Never inspect sibling files to allocate `NNNN`; parallel workers must not share a
-counter.
-
-## Format
-
-Keep the record terse, normally under 100 lines:
+Light YAML frontmatter is enough. This is an example, not a blocking schema:
 
 ```md
 ---
-schemaVersion: 1
 id: "adr:018f43f4-3ac4-7c40-8000-000000000001"
-createdAt: "2026-07-24T10:15:00.000Z"
 title: "Adopt Server Actions for UI mutations"
-status: proposed
-deciders: [folpe]
+createdAt: "2026-07-24"
+status: accepted
 supersedes: []
 ---
 
@@ -77,71 +53,58 @@ supersedes: []
 
 ## Context
 
-What forces, constraints and pain make the choice necessary?
+The forces and constraints that make this choice necessary.
 
 ## Decision
 
-We will <one sentence>.
+We will use Server Actions for UI mutations.
 
 ## Consequences
 
-Positive:
-
-- ...
-
-Negative:
-
-- ...
+Benefits, costs and negative consequences.
 
 ## Alternatives considered
 
-- **tRPC mutations**: rejected because ...
-- **REST endpoints**: rejected because ...
+Credible alternatives and why they were rejected, with useful evidence.
 
 ## Reversal cost
 
-Low, Medium or High, with the concrete migration cost.
+The concrete migration required to change course.
 ```
 
-## Lifecycle
+Use `createdAt` or `date` for the date. Add deciders or other useful metadata when
+needed; retain metadata already present in historical records. Common statuses are
+`proposed`, `accepted`, `deprecated` and `superseded`. A `supersedes` list carries
+stable predecessor IDs when a record replaces earlier choices. Existing readers
+may recognize a bounded subset of metadata; that does not make their parser an
+authoring gate. No dedicated CLI, validator or history engine is required.
 
-- `proposed`: open for review and editable.
-- `accepted`: merged and binding for new work.
-- `deprecated`: retained for history but discouraged for new work.
-- `superseded`: replaced by a newer record.
+## Preserve the reasoning and its history
 
-Accepted decision content is immutable. To reverse, clarify or partially replace
-one, create a new ADR whose `supersedes` contains the old `id`. Never delete or
-rename the accepted file. This preserves evidence and prevents parallel branches
-from rewriting the same history.
+Ordinary typo, link and wording corrections can be committed in place. A reversal
+or material change creates a new short decision linking the previous record via
+`supersedes`; keep the previous record readable and its identity stable. Explain
+the changed choice rather than silently rewriting its rationale.
 
-One mechanical exception keeps references usable without diluting the journal:
-an accepted file may replace a bounded repository-local path when frontmatter,
-headings, Markdown structure and surrounding prose stay byte-for-byte stable and
-the new target exists inside the repository. `void-machine decisions check`
-proves that narrow shape and fails closed on a missing target, path escape or
-symlink escape. A change to wording, reasoning, scope, consequences or identity
-is not a reference migration; it requires supersession. Do not create a new ADR
-merely to record a proven file move or rename.
+Git preserves committed revisions, not unsaved or uncommitted intermediate edits.
+It is not an absolute retention guarantee against history rewriting. No duplicate
+ledger, snapshot generator or CI gate is needed.
 
 ## Workflow
 
 1. State the decision in one sentence before expanding it.
-2. Record forces and constraints, not a chronology of discussion.
-3. Name at least two credible alternatives and reject them with evidence.
-4. State negative consequences and concrete reversal cost.
-5. Let the accountable decider accept it through normal review.
-6. Run `void-machine decisions check` when available.
-7. Link foundational ADRs from project doctrine by their source file or stable
-   `adr:<uuid>` identity.
-
-Do not commit a rendered Markdown or JSON projection. Generate it on demand with
-`void-machine decisions render`; source files alone participate in merges.
+2. Record the relevant forces and constraints, not a chronology of discussion.
+3. Name credible alternatives and why they were rejected.
+4. State negative consequences and the concrete reversal cost.
+5. Have the accountable decider accept the choice through normal review; reuse
+   approval already given for the same choice.
+6. Link foundational decisions from project doctrine by source file or stable ID.
+   Doctrine changes still require the human agreement owned by `void-learn`.
 
 ## Composition
 
 - `void-plan`: plans cover work; ADRs cover durable decisions.
 - `void-source-driven-development`: alternatives cite primary documentation.
 - `void-commit-discipline`: a long commit rationale can expose ADR-worthy work.
-- `void-learn`: recurring lessons become doctrine; structural
-  choices become ADRs.
+- `void-learn`: recurring lessons become doctrine with human agreement; structural
+  choices become decision records.

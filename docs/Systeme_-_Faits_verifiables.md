@@ -65,7 +65,7 @@ Les fichiers de hook préfixés par `_` sont exclus du plafond de la règle 5. P
 ### Autres règles écrites dans CLAUDE.md
 
 - Toute convention ajoutée dans un commit doit être reflétée dans `docs/*.md` dans le même commit.
-- Toute décision non évidente doit exister comme fichier dédié créé par `void-machine decisions new` ; les enregistrements `accepted` sont immuables et une modification les supersede.
+- Les décisions structurelles durables sont des fichiers Markdown avec frontmatter léger via `void-decide`. Les corrections ordinaires utilisent Git ; un changement matériel crée une nouvelle décision liée à la précédente. Accord humain via `void-learn` conservé.
 - `docs/DECISIONS.md` est déclaré page d'atterrissage figée.
 - Les versions ne sont pas éditées à la main ; `release-please` les bump et `pnpm version:check` échoue en cas de dérive.
 - `AGENTS.md` est le miroir de `CLAUDE.md` ; toute modification de l'un doit être portée dans l'autre dans le même commit.
@@ -123,8 +123,7 @@ Deux jobs : `release-please` et `publish`. `publish` est conditionné à `releas
 - 132 fichiers dans `docs/decisions-log/`, tous avec frontmatter YAML.
 - Deux formats coexistent : 96 fichiers avec `date` + `title`, 36 avec `schemaVersion`, `id`, `status`, `deciders`, `supersedes`.
 - Parmi les 36 : 31 `status: accepted`, 5 `status: proposed`.
-- `pnpm decisions:check` exécute `scripts/build-decisions-index.mjs --check`. Preuve : `package.json:28`.
-- En CI, l'étape reçoit `DECISIONS_BASE` depuis `github.event.pull_request.base.sha` et est nommée « Decision records valid and accepted records immutable ». Preuve : `.github/workflows/ci.yml:83-88`.
+- Depuis le lot DEV-1376, le moteur CLI ADR et son contrôle CI sont retirés. Les fichiers et métadonnées historiques restent lisibles ; voir `docs/ARCHITECTURE.md`, section « Decision records ».
 
 ## Enforcement déclaré par les skills
 

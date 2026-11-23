@@ -19,7 +19,6 @@
 
 import { observeDecisions } from '../projects/decisions-source.js';
 import type { ConformanceFinding, Mutation } from './rule.js';
-import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 export interface DecisionsInput {
   /** Raw `docs/DECISIONS.md`, or undefined when absent. */
@@ -127,9 +126,9 @@ function entriesOf(monolith: string): readonly Entry[] {
 function freeze(monolith: string): string {
   return `# Decisions log
 
-Each current decision is an immutable file under \`${RECORDS_DIR}/\`. Create one with
-\`${PRODUCT_COMMAND} decisions new\`, and render the current projection with
-\`${PRODUCT_COMMAND} decisions render\`.
+Each current decision is a Markdown file under \`${RECORDS_DIR}/\` with light YAML
+frontmatter. Follow the \`void-decide\` skill to write a short record and link any
+material replacement to its predecessor.
 
 > **Frozen legacy snapshot.** The entries below are preserved as written. They were migrated
 > into ${RECORDS_DIR}/ and are no longer the source; edit the records, not this file.

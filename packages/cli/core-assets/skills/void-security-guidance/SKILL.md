@@ -56,6 +56,14 @@ The validated output is a typed value (often a branded type). No `as` cast requi
 
 ## Application secrets — env vars, validated, never logged
 
+Here, env means the runtime process environment, not a required `.env` file. Use the project's
+already-adopted secret manager to inject application secrets at runtime without plaintext
+exports to files or model-visible surfaces. An unavailable manager blocks only dependent
+operations, with no plaintext fallback; independent work can continue. Existing legacy `.env`
+setups stay supported and protected, with no migration required for unrelated work. Secret-free
+examples, public configuration and non-sensitive references remain allowed by the existing
+guards. `void-env-validation` in the server pack covers validation and onboarding.
+
 ### Allowed
 
 ```typescript

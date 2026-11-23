@@ -56,17 +56,31 @@ A missing sum or zero count stays unavailable:
 ## Timestamp and age of every displayed signal
 
 Timestamp table, display Unix milliseconds as date/time; preserve metric and
-category labels so freshness cannot be mistaken for a single global heartbeat:
+category labels so freshness cannot be mistaken for a single global heartbeat.
+Apply `timestamp` directly to source selectors before relabeling: a calculated
+vector can carry the evaluation time. Codex duration sum/count share the native
+`source` label, so select them separately and assign distinct signal labels before
+union. The other series are already distinct by source/category.
+See [Prometheus timestamp/label functions](https://prometheus.io/docs/prometheus/3.16/querying/functions/)
+and [set union semantics](https://prometheus.io/docs/prometheus/3.16/querying/operators/#logicalset-binary-operators).
 
 ```promql
-timestamp(label_replace({runtime=~"claude_code|codex"}, "signal", "$1", "__name__", "(.*)")) * 1000
+(
+  label_replace(timestamp({runtime=~"claude_code|codex",source!="codex.turn.e2e_duration_ms"}), "signal", "$1", "source", "(.*)")
+  or label_replace(timestamp(codex_turn_e2e_duration_ms_delta_sum_milliseconds{runtime="codex"}), "signal", "$1.sum", "source", "(.*)")
+  or label_replace(timestamp(codex_turn_e2e_duration_ms_delta_count{runtime="codex"}), "signal", "$1.count", "source", "(.*)")
+) * 1000
 ```
 
 Age table, display seconds. An old value should remain visibly old, and absent
 signals should remain unavailable:
 
 ```promql
-time() - timestamp(label_replace({runtime=~"claude_code|codex"}, "signal", "$1", "__name__", "(.*)"))
+time() - (
+  label_replace(timestamp({runtime=~"claude_code|codex",source!="codex.turn.e2e_duration_ms"}), "signal", "$1", "source", "(.*)")
+  or label_replace(timestamp(codex_turn_e2e_duration_ms_delta_sum_milliseconds{runtime="codex"}), "signal", "$1.sum", "source", "(.*)")
+  or label_replace(timestamp(codex_turn_e2e_duration_ms_delta_count{runtime="codex"}), "signal", "$1.count", "source", "(.*)")
+)
 ```
 
 Do not apply rate, increase or temporal sums to these gauges. Changing the dashboard

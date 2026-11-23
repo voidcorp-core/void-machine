@@ -202,6 +202,13 @@ class Pipeline(unittest.TestCase):
         time.sleep(.3)
         self.receive()
         payloads = list(Sink.payloads)
+        evaluation_seconds = int(time.time())
+        source_seconds = evaluation_seconds - 120
+        for data in payloads:
+            for metric in metrics(data):
+                for point in metric['gauge']['dataPoints']:
+                    point['startTimeUnixNano'] = str((source_seconds - 1) * 1_000_000_000)
+                    point['timeUnixNano'] = str(source_seconds * 1_000_000_000)
         with tempfile.TemporaryDirectory(prefix='observability-prometheus-') as directory:
             temp = Path(directory)
             config = temp / 'prometheus.yml'
@@ -233,7 +240,7 @@ class Pipeline(unittest.TestCase):
                     queries = re.findall(r'```promql\n(.*?)\n```', (HERE / 'queries.md').read_text(), re.S)
                     self.assertEqual(len(queries), 7)
                     for index, query in enumerate(queries):
-                        url = 'http://127.0.0.1:14321/api/v1/query?' + urllib.parse.urlencode({'query': query})
+                        url = 'http://127.0.0.1:14321/api/v1/query?' + urllib.parse.urlencode({'query': query, 'time': evaluation_seconds})
                         try:
                             with urllib.request.urlopen(url, timeout=2) as response:
                                 result = json.load(response)
@@ -245,7 +252,14 @@ class Pipeline(unittest.TestCase):
                         self.assertEqual(len(rows), [4, 5, 1, 1, 1, 14, 14][index])
                         if index == 4:
                             self.assertEqual(float(rows[0]['value'][1]), 3513)
-                    print('Verified 7 Grafana queries against Prometheus; 14 observed series')
+                        if index in (5, 6):
+                            expected = source_seconds * 1000 if index == 5 else 120
+                            with self.subTest(query=index + 1):
+                                self.assertEqual([float(row['value'][1]) for row in rows],
+                                                 [expected] * 14)
+                                labels = {json.dumps(row['metric'], sort_keys=True) for row in rows}
+                                self.assertEqual(len(labels), 14)
+                    print('Queried 7 Grafana expressions; checked timestamps and age for all 14 series')
                 finally:
                     process.terminate()
                     process.wait(timeout=5)

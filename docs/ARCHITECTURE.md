@@ -520,8 +520,8 @@ Automatic continuity is capability-gated rather than Linear-specific: the declar
 must support reading and updating status, relations, assignee, comments, and review evidence. If
 that surface is unavailable, the runtime stops the remote action instead of inferring progress
 from local files. The semantic sections of `.void/machine/checkpoint.md` are replaced at a
-deliberate session close and stay readable offline; neither the checkpoint nor the programme stores
-a current or next unit.
+deliberate session close and stay readable offline. The checkpoint records observations and
+intentions, not authoritative progress; the programme remains transition context.
 Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch. A standalone ticket or sequential plan keeps using its normal
 ticket or resume-point flow and does not need a programme descriptor.
 
@@ -544,6 +544,21 @@ Git, freshness and reference diagnostics; `hook-runner` observes and injects the
 at `SessionStart` in both runtimes. No mechanical revision or seal is required. Legacy mechanical
 blocks are ignored, and hooks never rewrite checkpoint files or acquire checkpoint locks.
 There is no continuous tracker, threshold reminder or end-of-session audit.
+
+Optional `Engaged work` and `Planned work` sections use the shared multiline prose codec, preserving
+exact references and intended order without the older list fields' 200-character item limit.
+They count as useful checkpoint content even alone. Objective/Position identify the project and
+milestone, State carries evidence and dirty files, and date/branch/head bind observations to Git.
+CLI human/JSON output preserves the work; the injected resume summary stays within 4,000 characters,
+reserving the observed full checkpoint's project-relative path and a no-authorization notice before
+optional content. Truncation is explicit and never changes the source file; legacy paths remain read-only.
+
+The orchestrator reads the full handoff needed, verifies tickets/PRs/Git and reconciles workers before
+resuming or delegating. Saved intentions may be reordered; actual dependencies still apply. Completed
+work is removed only after observation. Removing planned work neither closes a remote ticket nor
+deletes a worktree. Offline checkpoints name unavailable evidence; only dependent provider actions wait.
+No decisions after the last checkpoint are recoverable from it. Programme context remains until fresh
+native resume proof on Claude and Codex; installed-hook subprocess tests prove wiring, not that proof.
 
 Herdr's read-only context measurement is isolated in `herdr-context.ts`. It reads at most
 1,048,576 bytes from the tail of a regular transcript using no-follow descriptors, canonical

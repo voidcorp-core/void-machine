@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -116,4 +117,21 @@ describe('observeResume', () => {
     expect(observed.context).toBe('');
     expect(observed.bundle.gaps.map(gap => gap.reason)).toContain('checkpoint-absent');
   });
+});
+
+
+it('reads full handoff from a legacy path while bounding injected context without rewriting', () => {
+  const root = project();
+  mkdirSync(join(root, '.void', 'session'));
+  const path = join(root, '.void', 'session', 'current.md');
+  const raw = `## Engaged work\n\n${'worker uncertain; '.repeat(300)}\n\n## Planned work\n\nA-3\nA-2\n`;
+  writeFileSync(path, raw);
+  const observed = observeResume(root, Date.now());
+  expect(observed.bundle).toHaveProperty('checkpointPath', '.void/session/current.md');
+  expect(observed.bundle.checkpoint).toHaveProperty('plannedWork', 'A-3\nA-2');
+  expect(observed.context).toContain('Full checkpoint: .void/session/current.md');
+  expect(observed.context).toContain('Observations and intentions to verify; no authorization.');
+  expect(observed.context).toContain('Summary truncated; read the full checkpoint before resuming work.');
+  expect(observed.context.length).toBeLessThanOrEqual(4_000);
+  expect(readFileSync(path, 'utf8')).toBe(raw);
 });

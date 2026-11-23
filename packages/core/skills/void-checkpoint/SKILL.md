@@ -1,6 +1,6 @@
 ---
 name: void-checkpoint
-description: Write .void/machine/checkpoint.md before a clear, an interruption, or the end of a day, so the next session resumes without re-deriving anything. Keeps only what no other artefact holds.
+description: Write .void/machine/checkpoint.md before a clear, an interruption, or the end of a day, so the next session resumes without re-deriving anything. Keeps local observations, intentions and exact work references.
 ---
 
 # checkpoint
@@ -48,7 +48,7 @@ So the first move is triage. For every fact you are tempted to write down:
 
 | The fact is… | It belongs in | Never in the checkpoint |
 |---|---|---|
-| Execution state — status, assignee, blockers, links | the declared **progress source** | a hand-maintained current or next unit |
+| Execution state — status, assignee, blockers, links | the declared **progress source** | an authoritative current or next unit |
 | Global programme context, phase, plan and spec | **`.void/program.md`** | a session observation |
 | What the code now does | the **diff and its commit messages** | a prose summary of the change |
 | A durable rule, preference, or convention | **doctrine** (via `void-learn`) | a paragraph the next session must re-read forever |
@@ -56,7 +56,8 @@ So the first move is triage. For every fact you are tempted to write down:
 
 What survives that filter is the checkpoint's actual subject: **the things no artefact holds** —
 the dead ends, the unproven assumptions, the freshness of your evidence, and the exact next
-move. That list is short. A checkpoint that is long has failed the triage.
+move, plus references needed to reconcile engaged work and intended work. Keep prose concise;
+never shorten an identifier, URL or worktree path to fit a list limit.
 
 If routing sends something to a shared owner, propose that write and get the required human
 approval before applying it. When the owner is available, write it there **first**, then reference
@@ -97,8 +98,7 @@ one with who or what unblocks it.
 **6. The next action.** Exactly one, exact enough to execute: a command to run, a file and line
 to open, a specific question to ask. "Continue the ticket" is not a next action. "Run
 `pnpm vitest run x.test.ts`; it fails on the third case because the fixture has no `id`" is.
-This is the first physical move for the next session, never a duplicated current or next unit and
-never a priority decision.
+This is the first physical move for the next session, not authoritative progress or a priority decision.
 
 ---
 
@@ -122,7 +122,7 @@ Read what you wrote as if you had never seen this work. Then:
 
 1. **Can a stranger take the next action without asking a question?** If not, the next action is
    not specific enough.
-2. **Does any line duplicate the progress source, program, diff, or doctrine?** Delete it and link instead.
+2. **Does any line claim authority over the progress source, program, diff, or doctrine?** Link the owner; label saved observations with their date and limits.
 3. **Is every claim either proven-with-evidence or labelled as an assumption?**
 4. **Would someone reading only this repeat one of your dead ends?** If yes, the dead end is
    missing or too vague.
@@ -146,9 +146,10 @@ unavailable, record that unresolved gap when it matters and still write
 session residue.
 
 `.void/program.md` remains the versioned global view: programme identity, plan, spec and optional
-progress locator. The program and checkpoint never store a current or next unit. Mutable progress
-stays with the declared provider; the checkpoint's exact next action is only a local physical
-resume move.
+progress locator during the transition; retain it until fresh native resume proof on both runtimes.
+The checkpoint carries observations and intentions, never authoritative current or next unit
+state. Mutable progress stays with the declared provider; the exact next action is a local
+physical resume move. No decisions after the last successful checkpoint can be recovered from it.
 
 One destination per fact. If you cannot decide, the fact probably failed Step 0.
 
@@ -164,18 +165,55 @@ branch: folpe/dev-621-resume
 head: a1b2c3d
 ---
 
-## Objective        What this session was for. One line.
-## Position         Where that sits in the arc - what is done, what remains.
-## State            What is proven, and against which commit.
-## Next action      Exactly one, exact enough to execute.
-## Open loops       - one per line
-## Dead ends        - what was tried, what happened, why you stopped
-## Assumptions      - each labelled unverified
-## Working set      - the paths that were in hand
+## Objective
+Continue the approved project milestone; link its plan.
+
+## Position
+Milestone phase and remaining outcome.
+
+## State
+Repository/worktree, uncommitted files and why; command/proof links and observed commit.
+
+## Engaged work
+- Exact ticket/project URL, PR URL, branch/worktree path, worker identity and mission reference.
+  Last observed activity/date; uncertainty or inaccessibility; dirty files and proof references.
+- Another engaged ticket, with its own references and observed state.
+
+## Planned work
+1. Exact ticket reference, intended order and known dependency.
+2. Another intended ticket; additions, removals and reordered intentions may change next session.
+
+## Next action
+Read the referenced work and reconcile actual tickets, PRs, Git and workers before continuing.
+
+## Open loops
+- Unresolved question and who or what unblocks it.
+
+## Dead ends
+- What was tried, what happened, why it stopped.
+
+## Assumptions
+- Explicitly unverified belief and what would falsify it.
+
+## Working set
+- A short file reference; keep long exact work references in the prose sections above.
 ```
 
 Position is the section people skip and then miss: returning after days, *how far along is this*
 is a different question from *what was I doing*, and nothing else in the repo answers it.
+
+`Engaged work` and `Planned work` are optional multiline prose, not a ticket schema. Preserve
+order, URLs, identifiers, paths and wrapped lines verbatim; do not put long references in the
+200-character list fields. Reuse Objective/Position for project and milestone, State for evidence,
+and frontmatter for the observed date/branch/head. Several activities must remain visible.
+
+At resume, the orchestrator reads the full checkpoint needed for the task, even when SessionStart
+shows only a 4,000-character summary. Verify tickets, PRs and Git; reconcile existing workers
+before delegation. An uncertain worker is not known stopped: do not duplicate it. Remove completed
+work only after observing completion; honor changed intended order and actual dependencies.
+Removing a planned ticket closes nothing remotely and deletes no worktree. An unavailable provider
+blocks only actions needing its verification; writing an offline checkpoint still proceeds with
+that limit explicit. Neither section grants consent, overrides holds or proves current activity.
 
 Write it with `void-machine resume` in mind — that command reads this file, and reading your own
 checkpoint back is the cheapest test of whether it was worth writing.

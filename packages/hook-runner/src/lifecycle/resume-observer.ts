@@ -8,6 +8,7 @@ import {
 import { basename, join } from 'node:path';
 import {
   composeResumeBundle,
+  type CheckpointPath,
   type ResumeBundle,
   type ResumeProgramInput,
   renderResumeContext,
@@ -19,10 +20,10 @@ const PROGRAM_PATHS = [
   join('.void', 'active.md'),
   join('plans', 'ACTIVE.md'),
 ] as const;
-const CHECKPOINT_PATHS = [
-  join('.void', 'machine', 'checkpoint.md'),
-  join('.void', 'local', 'checkpoint.md'),
-  join('.void', 'session', 'current.md'),
+const CHECKPOINT_PATHS: readonly CheckpointPath[] = [
+  '.void/machine/checkpoint.md',
+  '.void/local/checkpoint.md',
+  '.void/session/current.md',
 ] as const;
 const MAX_READ_BYTES = 500_000;
 const GIT_TIMEOUT_MS = 200;
@@ -151,6 +152,7 @@ function gitObservation(root: string): {
 
 function checkpointObservation(root: string): {
   readonly checkpoint?: ReturnType<typeof parseCheckpoint>;
+  readonly checkpointPath?: CheckpointPath;
   readonly checkpointWrittenAt?: number;
 } {
   for (const relative of CHECKPOINT_PATHS) {
@@ -158,9 +160,9 @@ function checkpointObservation(root: string): {
     const raw = readBounded(path);
     if (raw === undefined) continue;
     try {
-      return { checkpoint: parseCheckpoint(raw), checkpointWrittenAt: statSync(path).mtimeMs };
+      return { checkpoint: parseCheckpoint(raw), checkpointPath: relative, checkpointWrittenAt: statSync(path).mtimeMs };
     } catch {
-      return { checkpoint: parseCheckpoint(raw) };
+      return { checkpoint: parseCheckpoint(raw), checkpointPath: relative };
     }
   }
   return {};
@@ -177,6 +179,7 @@ export function observeResume(
     git: gitObservation(root),
     ...observeProgram(root),
     checkpoint: checkpoint.checkpoint,
+    ...(checkpoint.checkpointPath === undefined ? {} : { checkpointPath: checkpoint.checkpointPath }),
     ...(checkpoint.checkpointWrittenAt === undefined
       ? {}
       : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }),

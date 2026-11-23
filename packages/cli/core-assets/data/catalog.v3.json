@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:e2f475437c37e72854b60449f02158ee9494ff2a3d643a2961cb9d647fa624c0"
+    "rootHash": "sha256:3e4c8586e7350d14816eb50b6e54ff5d92bdf457a677911f0e17cb2209b419c6"
   },
   "nodes": [
     {
@@ -3075,7 +3075,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 404,
+          "lines": 399,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3084,7 +3084,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7324,
+          "staticTokens": 7486,
           "type": "skill"
         }
       },
@@ -3154,7 +3154,7 @@
       "label": "void-checkpoint",
       "data": {
         "legacy": {
-          "description": "Write .void/machine/checkpoint.md before a clear, an interruption, or the end of a day, so the next session resumes without re-deriving anything. Keeps only what no other artefact holds.",
+          "description": "Write .void/machine/checkpoint.md before a clear, an interruption, or the end of a day, so the next session resumes without re-deriving anything. Keeps local observations, intentions and exact work references.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -3171,7 +3171,7 @@
             }
           ],
           "id": "skill:void-checkpoint",
-          "lines": 221,
+          "lines": 259,
           "name": "void-checkpoint",
           "owner": "folpe",
           "pack": null,
@@ -3180,7 +3180,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-checkpoint/SKILL.md",
-          "staticTokens": 2743,
+          "staticTokens": 3248,
           "type": "skill"
         }
       },

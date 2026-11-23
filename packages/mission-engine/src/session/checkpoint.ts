@@ -20,6 +20,10 @@ export interface Checkpoint {
   readonly position?: string;
   /** What is actually done and proven, and against which commit. */
   readonly state?: string;
+  /** Observed work and exact references; reconcile before resuming. */
+  readonly engagedWork?: string;
+  /** Mutable intentions, never progress or authorization. */
+  readonly plannedWork?: string;
   /** Exactly one, exact enough to execute. */
   readonly nextAction?: string;
   readonly openLoops: readonly string[];
@@ -36,11 +40,13 @@ export interface Checkpoint {
 }
 
 /** Section titles, normalised. Anything else is ignored rather than rejected. */
-const PROSE_SECTIONS: Readonly<Record<string, 'objective' | 'position' | 'state' | 'nextAction'>> =
+const PROSE_SECTIONS: Readonly<Record<string, 'objective' | 'position' | 'state' | 'nextAction' | 'engagedWork' | 'plannedWork'>> =
   {
     objective: 'objective',
     position: 'position',
     state: 'state',
+    'engaged work': 'engagedWork',
+    'planned work': 'plannedWork',
     'where you are': 'state',
     'next action': 'nextAction',
     next: 'nextAction',
@@ -221,12 +227,16 @@ function parseCheckpoint(raw: string, markers: CheckpointMarkers): Checkpoint {
     && nextAction === undefined
     && proseFields['state'] === undefined
     && proseFields['position'] === undefined
+    && proseFields['engagedWork'] === undefined
+    && proseFields['plannedWork'] === undefined
     && Object.values(listFields).every((items) => items.length === 0);
 
   return {
     ...(objective === undefined ? {} : { objective }),
     ...(proseFields['position'] === undefined ? {} : { position: proseFields['position'] }),
     ...(proseFields['state'] === undefined ? {} : { state: proseFields['state'] }),
+    ...(proseFields['engagedWork'] === undefined ? {} : { engagedWork: proseFields['engagedWork'] }),
+    ...(proseFields['plannedWork'] === undefined ? {} : { plannedWork: proseFields['plannedWork'] }),
     ...(nextAction === undefined ? {} : { nextAction }),
     openLoops: listFields['openLoops'] ?? [],
     deadEnds: listFields['deadEnds'] ?? [],

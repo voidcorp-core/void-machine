@@ -110,8 +110,11 @@ describe('program and checkpoint ownership', () => {
     expect(flat(body(SKILL))).toMatch(/still write[\s\S]{0,100}\.void\/machine\/checkpoint\.md/i);
   });
 
-  it('keeps current and next units out of both durable files', () => {
-    expect(flat(body(SKILL))).toMatch(/program[\s\S]{0,120}checkpoint[\s\S]{0,160}current or next unit/i);
+  it('carries work observations and intentions without making them authoritative progress', () => {
+    expect(flat(body(SKILL))).toMatch(/observations and intentions, never authoritative current or next unit/i);
+    expect(SKILL).toContain('## Engaged work');
+    expect(SKILL).toContain('## Planned work');
+    expect(flat(body(SKILL))).toMatch(/Removing a planned ticket closes nothing remotely and deletes no worktree/i);
   });
 
   it('binds the checkpoint to both branch and HEAD', () => {

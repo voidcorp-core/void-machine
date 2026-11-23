@@ -11509,6 +11509,8 @@ var PROSE_SECTIONS = {
   objective: "objective",
   position: "position",
   state: "state",
+  "engaged work": "engagedWork",
+  "planned work": "plannedWork",
   "where you are": "state",
   "next action": "nextAction",
   next: "nextAction"
@@ -11631,11 +11633,13 @@ function parseCheckpoint(raw, markers2) {
   const branch = frontmatterField(bounded, "branch");
   const head = frontmatterField(bounded, "head");
   const date3 = frontmatterField(bounded, "date");
-  const isEmpty = objective === void 0 && nextAction === void 0 && proseFields["state"] === void 0 && proseFields["position"] === void 0 && Object.values(listFields).every((items) => items.length === 0);
+  const isEmpty = objective === void 0 && nextAction === void 0 && proseFields["state"] === void 0 && proseFields["position"] === void 0 && proseFields["engagedWork"] === void 0 && proseFields["plannedWork"] === void 0 && Object.values(listFields).every((items) => items.length === 0);
   return {
     ...objective === void 0 ? {} : { objective },
     ...proseFields["position"] === void 0 ? {} : { position: proseFields["position"] },
     ...proseFields["state"] === void 0 ? {} : { state: proseFields["state"] },
+    ...proseFields["engagedWork"] === void 0 ? {} : { engagedWork: proseFields["engagedWork"] },
+    ...proseFields["plannedWork"] === void 0 ? {} : { plannedWork: proseFields["plannedWork"] },
     ...nextAction === void 0 ? {} : { nextAction },
     openLoops: listFields["openLoops"] ?? [],
     deadEnds: listFields["deadEnds"] ?? [],
@@ -11655,6 +11659,7 @@ function checkpointCodec(markers2) {
 var DAY_MS = 864e5;
 var STALE_DAYS = 7;
 var CONTEXT_CHARS_MAX = 4e3;
+var CHECKPOINT_NOTICE = "Observations and intentions to verify; no authorization.";
 function summarizeProgram(descriptor) {
   return {
     status: descriptor.status,
@@ -11729,7 +11734,11 @@ function composeResumeBundle(input) {
     schemaVersion: 1,
     project: input.project,
     ...input.program === void 0 ? {} : { program: summarizeProgram(input.program) },
-    ...input.checkpoint === void 0 ? {} : { checkpoint: input.checkpoint },
+    ...input.checkpoint === void 0 ? {} : {
+      checkpoint: input.checkpoint,
+      checkpointPath: input.checkpointPath ?? ".void/machine/checkpoint.md",
+      checkpointNotice: CHECKPOINT_NOTICE
+    },
     git: {
       ...input.git.branch === void 0 ? {} : { branch: input.git.branch },
       ...input.git.head === void 0 ? {} : { head: input.git.head },
@@ -11744,6 +11753,8 @@ function checkpointContext(checkpoint) {
     checkpoint.objective === void 0 ? void 0 : `Objective: ${checkpoint.objective}`,
     checkpoint.position === void 0 ? void 0 : `Position: ${checkpoint.position}`,
     checkpoint.state === void 0 ? void 0 : `State: ${checkpoint.state}`,
+    checkpoint.engagedWork === void 0 ? void 0 : `Engaged work: ${checkpoint.engagedWork}`,
+    checkpoint.plannedWork === void 0 ? void 0 : `Planned work: ${checkpoint.plannedWork}`,
     checkpoint.nextAction === void 0 ? void 0 : `Next action: ${checkpoint.nextAction}`,
     checkpoint.openLoops.length === 0 ? void 0 : `Open loops: ${checkpoint.openLoops.join("; ")}`,
     checkpoint.deadEnds.length === 0 ? void 0 : `Dead ends: ${checkpoint.deadEnds.join("; ")}`,
@@ -11752,16 +11763,18 @@ function checkpointContext(checkpoint) {
 }
 function boundedResumeLines(required2, optional2) {
   const requiredText = required2.join("\n");
-  const remaining = CONTEXT_CHARS_MAX - requiredText.length - 1;
-  if (remaining <= 0 || optional2.length === 0) {
-    return `${requiredText.slice(0, CONTEXT_CHARS_MAX - 1)}
-`;
-  }
   const optionalText = optional2.join("\n");
-  const boundedOptional = optionalText.length <= remaining ? optionalText : `${optionalText.slice(0, Math.max(0, remaining - 3))}...`;
-  return `${requiredText}
-${boundedOptional}
-`.slice(0, CONTEXT_CHARS_MAX);
+  const complete = `${requiredText}
+${optionalText}
+`;
+  if (complete.length <= CONTEXT_CHARS_MAX)
+    return complete;
+  const notice = "Summary truncated; read the full checkpoint before resuming work.";
+  const prefix = `${requiredText}
+${notice}
+`;
+  return `${prefix}${optionalText.slice(0, CONTEXT_CHARS_MAX - prefix.length - 4)}...
+`;
 }
 function renderResumeContext(bundle) {
   const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
@@ -11769,8 +11782,12 @@ function renderResumeContext(bundle) {
     const invalidProgram = bundle.gaps.filter((gap) => gap.reason === "program-invalid");
     return invalidProgram.length === 0 ? "" : boundedResumeLines(["[void-machine resume]"], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
   }
-  const required2 = ["[void-machine resume]", `Project: ${bundle.project.name}`];
-  const optional2 = [];
+  const required2 = ["[void-machine resume]"];
+  if (usefulCheckpoint) {
+    required2.push(`Full checkpoint: ${bundle.checkpointPath ?? ".void/machine/checkpoint.md"} (project-relative)`);
+    required2.push(CHECKPOINT_NOTICE);
+  }
+  const optional2 = [`Project: ${bundle.project.name}`];
   if (bundle.git.branch !== void 0)
     optional2.push(`Branch: ${bundle.git.branch}`);
   if (bundle.git.head !== void 0)
@@ -11802,9 +11819,9 @@ var PROGRAM_PATHS = [
   join15("plans", "ACTIVE.md")
 ];
 var CHECKPOINT_PATHS = [
-  join15(".void", "machine", "checkpoint.md"),
-  join15(".void", "local", "checkpoint.md"),
-  join15(".void", "session", "current.md")
+  ".void/machine/checkpoint.md",
+  ".void/local/checkpoint.md",
+  ".void/session/current.md"
 ];
 var MAX_READ_BYTES = 5e5;
 var GIT_TIMEOUT_MS = 200;
@@ -11905,9 +11922,9 @@ function checkpointObservation(root) {
     const raw = readBounded(path2);
     if (raw === void 0) continue;
     try {
-      return { checkpoint: parseCheckpoint2(raw), checkpointWrittenAt: statSync6(path2).mtimeMs };
+      return { checkpoint: parseCheckpoint2(raw), checkpointPath: relative6, checkpointWrittenAt: statSync6(path2).mtimeMs };
     } catch {
-      return { checkpoint: parseCheckpoint2(raw) };
+      return { checkpoint: parseCheckpoint2(raw), checkpointPath: relative6 };
     }
   }
   return {};
@@ -11920,6 +11937,7 @@ function observeResume(root, now) {
     git: gitObservation(root),
     ...observeProgram(root),
     checkpoint: checkpoint.checkpoint,
+    ...checkpoint.checkpointPath === void 0 ? {} : { checkpointPath: checkpoint.checkpointPath },
     ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }
   });
   return {

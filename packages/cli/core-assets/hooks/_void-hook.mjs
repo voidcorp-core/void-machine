@@ -7320,7 +7320,7 @@ import {
   realpathSync as realpathSync2
 } from "node:fs";
 import {
-  basename as basename4,
+  basename as basename5,
   dirname,
   join,
   resolve as resolve4
@@ -7370,6 +7370,161 @@ function controlCharacter(edits) {
   );
 }
 
+import { basename } from "node:path";
+
+function ansiWord(source) {
+  const match = /^\$'((?:\\[\s\S]|[^'\\])*)'/.exec(source);
+  if (!match) return void 0;
+  const escapes = {
+    a: "\x07",
+    b: "\b",
+    e: "\x1B",
+    E: "\x1B",
+    f: "\f",
+    n: "\n",
+    r: "\r",
+    t: "	",
+    v: "\v",
+    "\\": "\\",
+    "'": "'",
+    '"': '"',
+    "?": "?"
+  };
+  let supported = true;
+  const value = (match[1] ?? "").replace(
+    /\\([0-7]{1,3}|x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|c[\s\S]|[\s\S])/g,
+    (raw, sequence) => {
+      if (escapes[sequence] !== void 0) return escapes[sequence];
+      if (sequence[0] === "c") return String.fromCharCode(
+        sequence[1] === "?" ? 127 : sequence.toUpperCase().charCodeAt(1) & 31
+      );
+      if (!/^(?:[0-7]|[xuU][\da-fA-F])/.test(sequence)) return raw;
+      const octal = /^[0-7]/.test(sequence);
+      const code2 = Number.parseInt(octal ? sequence : sequence.slice(1), octal ? 8 : 16);
+      if (code2 > 1114111) {
+        supported = false;
+        return "";
+      }
+      return String.fromCodePoint(octal ? code2 & 255 : code2);
+    }
+  );
+  return supported ? { value: value.split("\0", 1)[0] ?? "", length: match[0].length } : void 0;
+}
+function heredoc(source, start) {
+  const header = /^<<(-?)[ \t]*('[^']+'|"[^"]+"|[\w]+)[ \t]*\n/.exec(source.slice(start));
+  if (!header) return void 0;
+  const raw = header[2] ?? "";
+  const delimiter2 = raw.replace(/['"]/g, "");
+  const bodyStart = start + header[0].length;
+  let end = bodyStart;
+  while (end <= source.length) {
+    const next = source.indexOf("\n", end);
+    const line = source.slice(end, next < 0 ? source.length : next);
+    if ((header[1] ? line.replace(/^\t+/, "") : line) === delimiter2) {
+      return {
+        body: source.slice(bodyStart, end),
+        end: next < 0 ? source.length : next,
+        expands: !/['"]/.test(raw)
+      };
+    }
+    if (next < 0) break;
+    end = next + 1;
+  }
+  return void 0;
+}
+function scanShell(source, start = 0, closing = "", depth = 0, text3 = false) {
+  const tokens = [];
+  const substitutions = [];
+  let value = "";
+  let started = false;
+  let quote = text3 ? '"' : "";
+  let groups = 0;
+  const flush = () => {
+    if (started) tokens.push({ value, control: false });
+    value = "";
+    started = false;
+  };
+  const result = (end, unsupported) => {
+    flush();
+    return { tokens, substitutions, end, unsupported };
+  };
+  if (depth > 8) return result(source.length, true);
+  for (let i = start; i < source.length; i += 1) {
+    const char = source[i] ?? "";
+    const next = source[i + 1] ?? "";
+    if (!quote && char === closing && (closing !== ")" || groups === 0)) return result(i, false);
+    if (!quote && /[()]/.test(char)) groups += char === "(" ? 1 : -1;
+    if (quote === "'") {
+      if (char === quote) quote = "";
+      else value += char;
+      continue;
+    }
+    if (char === "\\" && (!quote || /[$`"\\\n]/.test(next))) {
+      if (next !== "\n") {
+        value += next;
+        started = true;
+      }
+      i += 1;
+      continue;
+    }
+    if (!text3 && (!quote && char === "'" || char === '"')) {
+      quote = quote === char ? "" : char;
+      started = true;
+      continue;
+    }
+    if (char === "$" && next === "(" || char === "`" || !quote && /[<>]/.test(char) && next === "(") {
+      const child = scanShell(source, i + (char === "`" ? 1 : 2), char === "`" ? "`" : ")", depth + 1);
+      substitutions.push(child);
+      value += "$()";
+      started = true;
+      i = child.end;
+      if (child.unsupported) return result(i, true);
+      continue;
+    }
+    if (!quote && char === "$" && next === "'") {
+      const literal2 = ansiWord(source.slice(i));
+      if (!literal2) return result(i, true);
+      value += literal2.value;
+      started = true;
+      i += literal2.length - 1;
+      continue;
+    }
+    if (!quote && source.startsWith("<<", i) && source[i + 2] !== "<") {
+      const document = heredoc(source, i);
+      if (!document) return result(i, true);
+      flush();
+      tokens.push({ value: "<<<", control: true }, { value: document.body, control: false });
+      if (document.expands) {
+        const expanded = scanShell(document.body, 0, "", depth + 1, true);
+        if (expanded.unsupported) return result(i, true);
+        substitutions.push(...expanded.substitutions);
+      }
+      i = document.end - 1;
+      continue;
+    }
+    if (!quote && char === "#" && !started) {
+      const newline = source.indexOf("\n", i);
+      i = newline < 0 ? source.length : newline - 1;
+      continue;
+    }
+    if (!quote && (/[\s;|&<>()]/.test(char) || !started && /[{}]/.test(char))) {
+      flush();
+      if (/[^\s]|\n/.test(char)) {
+        let operator = char;
+        while (/[|&<>]/.test(char) && source[i + 1] === char) {
+          operator += char;
+          i += 1;
+        }
+        tokens.push({ value: operator, control: true });
+      }
+    } else {
+      value += char;
+      started = true;
+    }
+  }
+  return result(source.length, Boolean(quote && !text3 || closing || groups));
+}
+
 var BRACED_HOME = `$${"{"}HOME}`;
 var ROOT_TARGETS = /* @__PURE__ */ new Set([
   "/",
@@ -7388,45 +7543,188 @@ var ROOT_TARGETS = /* @__PURE__ */ new Set([
   "./*",
   "*"
 ]);
-function unquote(command) {
-  return command.replaceAll('"', "").replaceAll("'", "");
-}
-function shellSegments(command) {
-  return command.split(/&&|\|\||[;\n]/).map((segment2) => segment2.trim()).filter(Boolean);
-}
-function recursiveRootOperation(segment2, operation) {
-  const tokens = unquote(segment2).split(/\s+/);
-  const index = tokens.indexOf(operation);
-  if (index < 0) return false;
-  const args = tokens.slice(index + 1);
-  const recursive = args.some(
-    (token) => token === "--recursive" || /^-[A-Za-z]*R[A-Za-z]*$/.test(token) || /^-[A-Za-z]*r[A-Za-z]*$/.test(token)
-  );
-  if (!recursive) return false;
-  return args.some((target) => ROOT_TARGETS.has(target));
-}
-function violation(command) {
-  if (/:\(\)\s*\{\s*:\s*\|\s*:/.test(command)) return "fork bomb";
-  if (/(^|\s)mkfs(?:\.[a-z0-9]+)?(?:\s|$)/i.test(command)) return "filesystem / raw-device write";
-  if (/(^|\s)dd\b[^|]*\bof=\/dev\//i.test(command) || />\s*\/dev\/(?:sd|nvme|hd|disk)/i.test(command)) {
-    return "raw-device write";
+var SQL = /\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i;
+var SHELLS = /* @__PURE__ */ new Set(["sh", "bash", "dash", "zsh", "ksh"]);
+var SQL_CLIENTS = /* @__PURE__ */ new Set(["psql", "mysql", "mariadb", "sqlite3", "sqlcmd"]);
+var WRAPPERS = /* @__PURE__ */ new Set(["sudo", "env", "command", "builtin", "exec", "nohup", "time"]);
+var WRAPPER_VALUES = {
+  sudo: [
+    "-u",
+    "-g",
+    "-h",
+    "-p",
+    "-C",
+    "-D",
+    "-R",
+    "-T",
+    "--user",
+    "--group",
+    "--host",
+    "--prompt",
+    "--close-from",
+    "--chdir",
+    "--chroot",
+    "--command-timeout"
+  ],
+  env: ["-u", "-C", "-P", "--unset", "--chdir"],
+  exec: ["-a"],
+  time: ["-f", "-o", "--format", "--output"]
+};
+function commandWords(words2) {
+  let index = 0;
+  while (index < words2.length) {
+    const word = words2[index] ?? "";
+    if (/^[A-Za-z_][A-Za-z_0-9]*=/.test(word) || ["then", "do", "else", "if", "while", "until", "!"].includes(word)) {
+      index += 1;
+      continue;
+    }
+    const wrapper = basename(word);
+    if (!WRAPPERS.has(wrapper)) break;
+    index += 1;
+    while (words2[index]?.startsWith("-")) {
+      const flag = words2[index] ?? "";
+      if (wrapper === "env" && (flag === "-S" || /^--split-string(?:=|$)/.test(flag))) {
+        const attached = flag.startsWith("--split-string=") ? flag.slice(15) : "";
+        return ["eval", attached, ...words2.slice(index + 1)];
+      }
+      if (wrapper === "sudo" && (/^-[^-]*[si]/.test(flag) || flag === "--shell" || flag === "--login")) return ["eval", ...words2.slice(index + 1)];
+      index += WRAPPER_VALUES[wrapper]?.includes(flag) ? 2 : 1;
+      if (flag === "--") break;
+    }
   }
-  if (/\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i.test(command)) {
-    return "destructive SQL (DROP / TRUNCATE)";
+  return words2.slice(index);
+}
+function psqlCommands(args) {
+  const commands = [];
+  const longValues = /* @__PURE__ */ new Set([
+    "--command",
+    "--dbname",
+    "--file",
+    "--field-separator",
+    "--host",
+    "--log-file",
+    "--output",
+    "--port",
+    "--pset",
+    "--record-separator",
+    "--table-attr",
+    "--username",
+    "--set",
+    "--variable"
+  ]);
+  for (let i = 0; i < args.length && args[i] !== "--"; i += 1) {
+    const arg = args[i] ?? "";
+    if (arg.startsWith("--")) {
+      const [flag = "", attached] = arg.split(/=(.*)/s);
+      if (flag === "--command") commands.push(attached ?? args[i + 1] ?? "");
+      if (longValues.has(flag) && attached === void 0) i += 1;
+    } else if (arg.startsWith("-")) {
+      for (let j = 1; j < arg.length; j += 1) {
+        const option = arg[j] ?? "";
+        if (!"cdfFhLopPRTUv".includes(option)) continue;
+        const attached = arg.slice(j + 1);
+        if (option === "c") commands.push(attached || args[i + 1] || "");
+        if (!attached) i += 1;
+        break;
+      }
+    }
   }
-  for (const segment2 of shellSegments(command)) {
-    if (recursiveRootOperation(segment2, "rm")) return "recursive delete of a root path";
-    if (recursiveRootOperation(segment2, "chmod") || recursiveRootOperation(segment2, "chown")) {
-      return "recursive permission/ownership change on a root path";
+  return commands.join(" ");
+}
+function sqlArguments(name, args) {
+  if (name === "psql") return psqlCommands(args);
+  if (name === "sqlite3") return args.slice(1).join(" ");
+  const short = name === "sqlcmd" ? "Qq" : "e";
+  const long = "--execute";
+  return args.flatMap((arg, i) => {
+    if (arg === long || arg.length === 2 && short.includes(arg[1] ?? "") && arg[0] === "-") {
+      return [args[i + 1] ?? ""];
     }
-    if (/\bgit\s+push\b/.test(segment2) && /(?:^|\s)(?:--force(?:\s|$)|-f(?:\s|$))/.test(segment2) && !/--force-with-lease/.test(segment2)) {
-      return "git push --force (use --force-with-lease)";
-    }
-    if (/\bgit(?:\s+-\S+)*\s+(?:rebase|am|apply|cherry-pick)\b/.test(segment2) && /(?:--exec(?:\s|=|$)|--rebase-merges|--strategy-option|--unsafe-paths)/.test(segment2)) {
-      return "git command-execution / unsafe-path flag";
-    }
+    if (arg.startsWith(`${long}=`)) return [arg.slice(long.length + 1)];
+    if (arg[0] === "-" && short.includes(arg[1] ?? "") && arg.length > 2) return [arg.slice(2)];
+    return [];
+  }).join(" ");
+}
+function gitViolation(args) {
+  let index = 0;
+  while (args[index]?.startsWith("-")) {
+    index += ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"].includes(args[index] ?? "") ? 2 : 1;
+  }
+  const operation = args[index];
+  const options = [];
+  const values = new Set(operation === "rebase" ? ["--onto", "--strategy", "-s", "--strategy-option", "-X"] : operation === "push" ? ["--repo", "--receive-pack", "--exec", "--push-option", "-o"] : ["--include", "--exclude", "--directory", "--whitespace"]);
+  for (let i = index + 1; i < args.length && args[i] !== "--"; i += 1) {
+    const arg = args[i] ?? "";
+    options.push(arg);
+    if (values.has(arg)) i += 1;
+  }
+  if (operation === "push" && options.some((arg) => arg === "--force" || /^-[^-]*f/.test(arg)) && !options.some((arg) => /^--force-with-lease(?:=|$)/.test(arg))) {
+    return "git push --force (use --force-with-lease)";
+  }
+  if (operation === "rebase" && options.some((arg) => /^--exec(?:=|$)|^-x/.test(arg))) {
+    return "git command-execution flag";
+  }
+  if (["am", "apply"].includes(operation ?? "") && options.includes("--unsafe-paths")) {
+    return "git unsafe-path flag";
   }
   return void 0;
+}
+function operationViolation(words2, input, depth) {
+  const [executable = "", ...args] = commandWords(words2);
+  const name = basename(executable);
+  if (["rm", "chmod", "chown"].includes(name) && args.some((arg) => arg === "--recursive" || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(arg)) && args.some((arg) => ROOT_TARGETS.has(arg))) {
+    return name === "rm" ? "recursive delete of a root path" : "recursive permission/ownership change on a root path";
+  }
+  if (/^mkfs(?:\.[a-z0-9]+)?$/i.test(name)) return "filesystem / raw-device write";
+  if (name === "dd" && args.some((arg) => /^of=\/dev\//.test(arg))) return "raw-device write";
+  if (name === "git") return gitViolation(args);
+  if (SQL_CLIENTS.has(name) && SQL.test(`${input} ${sqlArguments(name, args)}`)) {
+    return "destructive SQL (DROP / TRUNCATE)";
+  }
+  if (name === "eval") return violation(args.join(" "), depth + 1);
+  if (SHELLS.has(name)) {
+    const index = args.findIndex((arg) => /^-[^-]*c/.test(arg));
+    if (index >= 0) return violation(args[index + 1] ?? "", depth + 1);
+    if (input) return violation(input, depth + 1);
+  }
+  if (/[$`]/.test(executable)) return "unsupported dynamic command";
+  return void 0;
+}
+function scanViolation(scan, depth) {
+  if (scan.unsupported) return "unsupported executable shell syntax";
+  for (const child of scan.substitutions) {
+    const found = scanViolation(child, depth + 1);
+    if (found) return found;
+  }
+  let words2 = [];
+  let input = "";
+  const tokens = scan.tokens;
+  for (let i = 0; i <= tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token && !token.control) {
+      words2.push(token.value);
+      continue;
+    }
+    if (token && /^[<>]/.test(token.value)) {
+      const target = tokens[i + 1]?.value ?? "";
+      if (token.value.startsWith(">") && /^\/dev\/(sd|nvme|hd|disk)/.test(target)) {
+        return "raw-device write";
+      }
+      if (token.value === "<<<") input += ` ${target}`;
+      i += 1;
+      continue;
+    }
+    if (words2[0] === ":" && token?.value === "(" && tokens[i + 1]?.value === ")" && tokens[i + 2]?.value === "{" && tokens[i + 3]?.value === ":" && tokens[i + 4]?.value === "|" && tokens[i + 5]?.value === ":") return "fork bomb";
+    const found = operationViolation(words2, input, depth);
+    if (found) return found;
+    input = token?.value === "|" ? `${input} ${words2.slice(1).join(" ")}` : "";
+    words2 = [];
+  }
+  return void 0;
+}
+function violation(command, depth = 0) {
+  if (depth > 8) return "shell inspection nesting limit";
+  return scanViolation(scanShell(command), depth);
 }
 function dangerousCommand(command) {
   const evidence = violation(command);
@@ -7438,7 +7736,7 @@ function dangerousCommand(command) {
 }
 
 import { readFileSync } from "node:fs";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { basename as basename2, isAbsolute, relative, resolve } from "node:path";
 
 var PROJECT_DOCTRINE_PATH = ".void/PROJECT-DOCTRINE.md";
 var CO_OWNED_FILES = [
@@ -7455,7 +7753,7 @@ function isCoOwned(path2) {
 }
 
 function isSecretEnvironment(path2) {
-  const base = basename(path2.replaceAll("\\", "/").toLowerCase());
+  const base = basename2(path2.replaceAll("\\", "/").toLowerCase());
   return /^\.env(?:\..+)?$/.test(base) && !/\.(?:example|sample|template|dist)$/.test(base);
 }
 function manifestOwnedPaths(root) {
@@ -7486,7 +7784,7 @@ function protectedReason(path2, root, shellWrite) {
     }
   }
   const normalized = path2.replaceAll("\\", "/").toLowerCase();
-  const base = basename(normalized);
+  const base = basename2(normalized);
   if (isSecretEnvironment(path2)) {
     return "environment file with secrets";
   }
@@ -7569,7 +7867,7 @@ function secretContent(edits) {
 
 var REDIRECTION = /(?:^|\s)(?:\d*|&)>{1,2}\s*("[^"]*"|'[^']*'|[^\s;|&<>]+)/g;
 var TEE = /(?:^|[\s|])tee\s+(?:-a\s+)?("[^"]*"|'[^']*'|[^\s;|&<>-][^\s;|&<>]*)/g;
-function unquote2(target) {
+function unquote(target) {
   const quoted = /^(["'])(.*)\1$/.exec(target);
   return quoted?.[2] ?? target;
 }
@@ -7579,14 +7877,14 @@ function shellWriteTargets(command) {
     for (const match of command.matchAll(pattern2)) {
       const target = match[1];
       if (target === void 0) continue;
-      const path2 = unquote2(target);
+      const path2 = unquote(target);
       if (path2 !== "") targets.add(path2);
     }
   }
   return [...targets].sort();
 }
 
-import { basename as basename2 } from "node:path";
+import { basename as basename3 } from "node:path";
 function isShellTool(tool) {
   return ["Bash", "shell", "shell_command", "exec_command"].includes(tool);
 }
@@ -7724,7 +8022,7 @@ function shellReadTargets(command) {
   let unsafeSearch = false;
   let segment2 = [];
   const inspect = () => {
-    const name = basename2(segment2[0] ?? "");
+    const name = basename3(segment2[0] ?? "");
     if (READERS.has(name)) {
       const read = readArguments(name, segment2.slice(1));
       paths.push(...read.paths);
@@ -7774,7 +8072,7 @@ function safeString(value, label, limit = MAX_FIELD_BYTES) {
   return value;
 }
 function commandText(value) {
-  if (Array.isArray(value)) return value.map((part) => safeString(part, "command")).join(" ");
+  if (Array.isArray(value)) return value.map((part) => `'${safeString(part, "command").replaceAll("'", "'\\''")}'`).join(" ");
   return safeString(value, "command");
 }
 function patchText(input) {
@@ -7784,7 +8082,7 @@ function patchText(input) {
     input["content"],
     input["command"]
   ];
-  return candidates.map((value) => commandText(value)).filter((value) => value.includes("*** Begin Patch")).join("\n");
+  return candidates.map((value) => Array.isArray(value) ? value.map((part) => safeString(part, "patch")).join("\n") : safeString(value, "patch")).filter((value) => value.includes("*** Begin Patch")).join("\n");
 }
 function parsePatchEdits(patch) {
   const edits = [];
@@ -7863,9 +8161,9 @@ function normalizeReadCall(value, root) {
 }
 
 import { realpathSync, statSync } from "node:fs";
-import { basename as basename3, resolve as resolve3 } from "node:path";
+import { basename as basename4, resolve as resolve3 } from "node:path";
 function secretTarget(path2) {
-  return isSecretEnvironment(path2) || /^\.env[^/]*[*?{[]/i.test(basename3(path2.replaceAll("\\", "/")));
+  return isSecretEnvironment(path2) || /^\.env[^/]*[*?{[]/i.test(basename4(path2.replaceAll("\\", "/")));
 }
 function regularFile(path2, cwd) {
   try {
@@ -8064,7 +8362,7 @@ function physicalPath(path2) {
     } catch {
       const parent = dirname(existing);
       if (parent === existing) return absolute;
-      suffix.unshift(basename4(existing));
+      suffix.unshift(basename5(existing));
       existing = parent;
     }
   }
@@ -8887,10 +9185,10 @@ function resolveInstall(root, env) {
 
 import { randomUUID } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync7, readdirSync as readdirSync3, realpathSync as realpathSync3, renameSync as renameSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { basename as basename6, dirname as dirname5, isAbsolute as isAbsolute3, join as join10 } from "node:path";
+import { basename as basename7, dirname as dirname5, isAbsolute as isAbsolute3, join as join10 } from "node:path";
 
 import { spawnSync } from "node:child_process";
-import { basename as basename5, dirname as dirname4, join as join9 } from "node:path";
+import { basename as basename6, dirname as dirname4, join as join9 } from "node:path";
 function machineRootOf(cwd) {
   const result = spawnSync(
     "git",
@@ -8898,7 +9196,7 @@ function machineRootOf(cwd) {
     { cwd, shell: false, encoding: "utf8", timeout: 5e3 }
   );
   const common = result.status === 0 ? result.stdout.replace(/\r?\n$/, "") : "";
-  return common !== "" && basename5(common) === ".git" ? join9(dirname4(common), ".void", "machine") : void 0;
+  return common !== "" && basename6(common) === ".git" ? join9(dirname4(common), ".void", "machine") : void 0;
 }
 
 var SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -8911,7 +9209,7 @@ function claimedPath(root, sessionId) {
     const claim2 = record2(JSON.parse(readFileSync7(join10(root, "agents", "sessions", `${sessionId}.json`), "utf8")));
     const path2 = claim2?.["resultPath"];
     if (claim2?.["schemaVersion"] !== 1 || typeof path2 !== "string" || !isAbsolute3(path2)) return void 0;
-    if (path2.length > MAX_CLAIM_BYTES || basename6(path2) !== "result.json") return void 0;
+    if (path2.length > MAX_CLAIM_BYTES || basename7(path2) !== "result.json") return void 0;
     const runs = join10(root, "runs");
     if (!within(runs, path2) || lstatSync2(dirname5(path2), { throwIfNoEntry: false })?.isDirectory() !== true) {
       return void 0;
@@ -10787,7 +11085,7 @@ function duration2(params) {
 
 import { closeSync, constants as constants2, fstatSync, lstatSync as lstatSync3, openSync, readSync, realpathSync as realpathSync4, statSync as statSync4 } from "node:fs";
 import { homedir } from "node:os";
-import { basename as basename7, isAbsolute as isAbsolute4, join as join11, resolve as resolve5 } from "node:path";
+import { basename as basename8, isAbsolute as isAbsolute4, join as join11, resolve as resolve5 } from "node:path";
 var MAX_TRANSCRIPT_BYTES = 1048576;
 var MAX_CONFIG_BYTES = 65536;
 function canonicalDirectory(path2) {
@@ -10818,7 +11116,7 @@ function runtimeSessionId(input) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{8,200}$/.test(value) ? value : void 0;
 }
 function isExternalTranscriptBound(path2, runtime3, sessionId) {
-  return runtime3 === "claude" && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId) && basename7(path2) === `${sessionId}.jsonl`;
+  return runtime3 === "claude" && /^[A-Za-z0-9_-]{8,200}$/.test(sessionId) && basename8(path2) === `${sessionId}.jsonl`;
 }
 function openBoundedRegularFile(path2, maxBytes, allowedRoots) {
   let descriptor;
@@ -11503,7 +11801,7 @@ import {
   readFileSync as readFileSync8,
   statSync as statSync6
 } from "node:fs";
-import { basename as basename8, join as join15 } from "node:path";
+import { basename as basename9, join as join15 } from "node:path";
 
 var PROSE_SECTIONS = {
   objective: "objective",
@@ -11932,7 +12230,7 @@ function checkpointObservation(root) {
 function observeResume(root, now) {
   const checkpoint = checkpointObservation(root);
   const bundle = composeResumeBundle({
-    project: { name: basename8(root), path: root },
+    project: { name: basename9(root), path: root },
     now,
     git: gitObservation(root),
     ...observeProgram(root),
@@ -12066,7 +12364,7 @@ function resolveTelemetryRoot(cwd, query = git2) {
 
 import { createHash as createHash2 } from "node:crypto";
 import {
-  basename as basename9,
+  basename as basename10,
   extname,
   isAbsolute as isAbsolute8,
   relative as relative4,
@@ -12111,7 +12409,7 @@ function nameFor(tool, category, input) {
     const explicit = text2(input["name"]);
     if (explicit !== "") return explicit;
     const script = text2(input["scriptPath"]);
-    return script === "" || script.endsWith("/") ? "inline" : basename9(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
+    return script === "" || script.endsWith("/") ? "inline" : basename10(script).replace(/(?:\.workflow)?\.js$/, "") || "inline";
   }
   return tool || "unknown";
 }

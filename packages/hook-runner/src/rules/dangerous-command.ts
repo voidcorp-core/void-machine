@@ -1,72 +1,186 @@
+import { basename } from 'node:path';
 import type { RuleVerdict } from '../enforcement/types.js';
+import { scanShell, type ShellScan } from './dangerous-shell.js';
 import { allow, block } from './verdict.js';
 
 const BRACED_HOME = `$${'{'}HOME}`;
 const ROOT_TARGETS = new Set([
-  '/', '/*', '~', '~/', '~/*',
-  '$HOME', '$HOME/', '$HOME/*',
-  BRACED_HOME, `${BRACED_HOME}/`, `${BRACED_HOME}/*`,
-  '.', './', './*', '*',
+  '/', '/*', '~', '~/', '~/*', '$HOME', '$HOME/', '$HOME/*',
+  BRACED_HOME, `${BRACED_HOME}/`, `${BRACED_HOME}/*`, '.', './', './*', '*',
 ]);
+const SQL = /\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i;
+const SHELLS = new Set(['sh', 'bash', 'dash', 'zsh', 'ksh']);
+const SQL_CLIENTS = new Set(['psql', 'mysql', 'mariadb', 'sqlite3', 'sqlcmd']);
+const WRAPPERS = new Set(['sudo', 'env', 'command', 'builtin', 'exec', 'nohup', 'time']);
+const WRAPPER_VALUES: Readonly<Record<string, readonly string[]>> = {
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-D', '-R', '-T', '--user', '--group',
+    '--host', '--prompt', '--close-from', '--chdir', '--chroot', '--command-timeout'],
+  env: ['-u', '-C', '-P', '--unset', '--chdir'],
+  exec: ['-a'],
+  time: ['-f', '-o', '--format', '--output'],
+};
 
-function unquote(command: string): string {
-  return command.replaceAll('"', '').replaceAll("'", '');
-}
-
-function shellSegments(command: string): string[] {
-  return command.split(/&&|\|\||[;\n]/).map((segment) => segment.trim()).filter(Boolean);
-}
-
-function recursiveRootOperation(segment: string, operation: 'rm' | 'chmod' | 'chown'): boolean {
-  const tokens = unquote(segment).split(/\s+/);
-  const index = tokens.indexOf(operation);
-  if (index < 0) return false;
-  const args = tokens.slice(index + 1);
-  const recursive = args.some((token) =>
-    token === '--recursive' || /^-[A-Za-z]*R[A-Za-z]*$/.test(token) || /^-[A-Za-z]*r[A-Za-z]*$/.test(token)
-  );
-  if (!recursive) return false;
-  return args.some((target) => ROOT_TARGETS.has(target));
-}
-
-function violation(command: string): string | undefined {
-  if (/:\(\)\s*\{\s*:\s*\|\s*:/.test(command)) return 'fork bomb';
-  if (/(^|\s)mkfs(?:\.[a-z0-9]+)?(?:\s|$)/i.test(command)) return 'filesystem / raw-device write';
-  if (/(^|\s)dd\b[^|]*\bof=\/dev\//i.test(command) || />\s*\/dev\/(?:sd|nvme|hd|disk)/i.test(command)) {
-    return 'raw-device write';
+function commandWords(words: readonly string[]): readonly string[] {
+  let index = 0;
+  while (index < words.length) {
+    const word = words[index] ?? '';
+    if (/^[A-Za-z_][A-Za-z_0-9]*=/.test(word)
+      || ['then', 'do', 'else', 'if', 'while', 'until', '!'].includes(word)) { index += 1; continue; }
+    const wrapper = basename(word);
+    if (!WRAPPERS.has(wrapper)) break;
+    index += 1;
+    while (words[index]?.startsWith('-')) {
+      const flag = words[index] ?? '';
+      if (wrapper === 'env' && (flag === '-S' || /^--split-string(?:=|$)/.test(flag))) {
+        const attached = flag.startsWith('--split-string=') ? flag.slice(15) : '';
+        return ['eval', attached, ...words.slice(index + 1)];
+      }
+      if (wrapper === 'sudo' && (/^-[^-]*[si]/.test(flag)
+        || flag === '--shell' || flag === '--login')) return ['eval', ...words.slice(index + 1)];
+      index += WRAPPER_VALUES[wrapper]?.includes(flag) ? 2 : 1;
+      if (flag === '--') break;
+    }
   }
-  if (/\b(?:drop\s+(?:database|table|schema)|truncate\s+table)\b/i.test(command)) {
-    return 'destructive SQL (DROP / TRUNCATE)';
+  return words.slice(index);
+}
+
+function psqlCommands(args: readonly string[]): string {
+  const commands: string[] = [];
+  const longValues = new Set(['--command', '--dbname', '--file', '--field-separator', '--host',
+    '--log-file', '--output', '--port', '--pset', '--record-separator', '--table-attr',
+    '--username', '--set', '--variable']);
+  for (let i = 0; i < args.length && args[i] !== '--'; i += 1) {
+    const arg = args[i] ?? '';
+    if (arg.startsWith('--')) {
+      const [flag = '', attached] = arg.split(/=(.*)/s);
+      if (flag === '--command') commands.push(attached ?? args[i + 1] ?? '');
+      if (longValues.has(flag) && attached === undefined) i += 1;
+    } else if (arg.startsWith('-')) {
+      for (let j = 1; j < arg.length; j += 1) {
+        const option = arg[j] ?? '';
+        if (!'cdfFhLopPRTUv'.includes(option)) continue;
+        const attached = arg.slice(j + 1);
+        if (option === 'c') commands.push(attached || args[i + 1] || '');
+        if (!attached) i += 1;
+        break;
+      }
+    }
   }
-  for (const segment of shellSegments(command)) {
-    if (recursiveRootOperation(segment, 'rm')) return 'recursive delete of a root path';
-    if (recursiveRootOperation(segment, 'chmod') || recursiveRootOperation(segment, 'chown')) {
-      return 'recursive permission/ownership change on a root path';
+  return commands.join(' ');
+}
+
+function sqlArguments(name: string, args: readonly string[]): string {
+  if (name === 'psql') return psqlCommands(args);
+  if (name === 'sqlite3') return args.slice(1).join(' ');
+  const short = name === 'sqlcmd' ? 'Qq' : 'e';
+  const long = '--execute';
+  return args.flatMap((arg, i) => {
+    if (arg === long || (arg.length === 2 && short.includes(arg[1] ?? '') && arg[0] === '-')) {
+      return [args[i + 1] ?? ''];
     }
-    if (
-      /\bgit\s+push\b/.test(segment)
-      && /(?:^|\s)(?:--force(?:\s|$)|-f(?:\s|$))/.test(segment)
-      && !/--force-with-lease/.test(segment)
-    ) {
-      return 'git push --force (use --force-with-lease)';
-    }
-    if (
-      /\bgit(?:\s+-\S+)*\s+(?:rebase|am|apply|cherry-pick)\b/.test(segment)
-      && /(?:--exec(?:\s|=|$)|--rebase-merges|--strategy-option|--unsafe-paths)/.test(segment)
-    ) {
-      return 'git command-execution / unsafe-path flag';
-    }
+    if (arg.startsWith(`${long}=`)) return [arg.slice(long.length + 1)];
+    if (arg[0] === '-' && short.includes(arg[1] ?? '') && arg.length > 2) return [arg.slice(2)];
+    return [];
+  }).join(' ');
+}
+
+function gitViolation(args: readonly string[]): string | undefined {
+  let index = 0;
+  while (args[index]?.startsWith('-')) {
+    index += ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env']
+      .includes(args[index] ?? '') ? 2 : 1;
+  }
+  const operation = args[index];
+  const options: string[] = [];
+  const values = new Set(operation === 'rebase'
+    ? ['--onto', '--strategy', '-s', '--strategy-option', '-X']
+    : operation === 'push' ? ['--repo', '--receive-pack', '--exec', '--push-option', '-o']
+    : ['--include', '--exclude', '--directory', '--whitespace']);
+  for (let i = index + 1; i < args.length && args[i] !== '--'; i += 1) {
+    const arg = args[i] ?? '';
+    options.push(arg);
+    if (values.has(arg)) i += 1;
+  }
+  if (operation === 'push' && options.some((arg) => arg === '--force' || /^-[^-]*f/.test(arg))
+    && !options.some((arg) => /^--force-with-lease(?:=|$)/.test(arg))) {
+    return 'git push --force (use --force-with-lease)';
+  }
+  if (operation === 'rebase' && options.some((arg) => /^--exec(?:=|$)|^-x/.test(arg))) {
+    return 'git command-execution flag';
+  }
+  if (['am', 'apply'].includes(operation ?? '') && options.includes('--unsafe-paths')) {
+    return 'git unsafe-path flag';
   }
   return undefined;
 }
 
+function operationViolation(words: readonly string[], input: string, depth: number): string | undefined {
+  const [executable = '', ...args] = commandWords(words);
+  const name = basename(executable);
+  if (['rm', 'chmod', 'chown'].includes(name)
+    && args.some((arg) => arg === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(arg))
+    && args.some((arg) => ROOT_TARGETS.has(arg))) {
+    return name === 'rm' ? 'recursive delete of a root path'
+      : 'recursive permission/ownership change on a root path';
+  }
+  if (/^mkfs(?:\.[a-z0-9]+)?$/i.test(name)) return 'filesystem / raw-device write';
+  if (name === 'dd' && args.some((arg) => /^of=\/dev\//.test(arg))) return 'raw-device write';
+  if (name === 'git') return gitViolation(args);
+  if (SQL_CLIENTS.has(name) && SQL.test(`${input} ${sqlArguments(name, args)}`)) {
+    return 'destructive SQL (DROP / TRUNCATE)';
+  }
+  if (name === 'eval') return violation(args.join(' '), depth + 1);
+  if (SHELLS.has(name)) {
+    const index = args.findIndex((arg) => /^-[^-]*c/.test(arg));
+    if (index >= 0) return violation(args[index + 1] ?? '', depth + 1);
+    if (input) return violation(input, depth + 1);
+  }
+  // Dynamic command names and unsupported executable quoting cannot become literal data.
+  if (/[$`]/.test(executable)) return 'unsupported dynamic command';
+  return undefined;
+}
+
+function scanViolation(scan: ShellScan, depth: number): string | undefined {
+  if (scan.unsupported) return 'unsupported executable shell syntax';
+  for (const child of scan.substitutions) {
+    const found = scanViolation(child, depth + 1);
+    if (found) return found;
+  }
+  let words: string[] = [];
+  let input = '';
+  const tokens = scan.tokens;
+  for (let i = 0; i <= tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token && !token.control) { words.push(token.value); continue; }
+    if (token && /^[<>]/.test(token.value)) {
+      const target = tokens[i + 1]?.value ?? '';
+      if (token.value.startsWith('>') && /^\/dev\/(sd|nvme|hd|disk)/.test(target)) {
+        return 'raw-device write';
+      }
+      if (token.value === '<<<') input += ` ${target}`;
+      i += 1; continue;
+    }
+    if (words[0] === ':' && token?.value === '(' && tokens[i + 1]?.value === ')'
+      && tokens[i + 2]?.value === '{' && tokens[i + 3]?.value === ':'
+      && tokens[i + 4]?.value === '|' && tokens[i + 5]?.value === ':') return 'fork bomb';
+    const found = operationViolation(words, input, depth);
+    if (found) return found;
+    input = token?.value === '|' ? `${input} ${words.slice(1).join(' ')}` : '';
+    words = [];
+  }
+  return undefined;
+}
+
+function violation(command: string, depth = 0): string | undefined {
+  if (depth > 8) return 'shell inspection nesting limit';
+  return scanViolation(scanShell(command), depth);
+}
+
 export function dangerousCommand(command: string): RuleVerdict {
   const evidence = violation(command);
-  return evidence === undefined
-    ? allow()
-    : block(
-        'DANGEROUS_COMMAND',
-        'refusing a destructive command; use the reviewed one-shot override only when deliberate',
-        [evidence],
-      );
+  return evidence === undefined ? allow() : block(
+    'DANGEROUS_COMMAND',
+    'refusing a destructive command; use the reviewed one-shot override only when deliberate',
+    [evidence],
+  );
 }

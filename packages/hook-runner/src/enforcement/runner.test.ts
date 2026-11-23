@@ -257,6 +257,17 @@ describe('evaluateRule', () => {
     expect(verdict.allow).toBe(false);
   });
 
+  it.each([
+    ['printf', '%s', 'rm -rf /; DROP TABLE users'],
+    ['rg', '$(rm -rf /)', 'docs'],
+    ['printf', '%s', "literal 'quote'; rm -rf /\n$(rm -rf /)"],
+    ['sh', '-c', '', 'rm -rf /'],
+  ])('preserves literal argv data for %s', (...command) => {
+    expect(evaluateRule('dangerous-command', {
+      tool_name: 'shell', tool_input: { command },
+    }, { root: process.cwd() }).allow).toBe(true);
+  });
+
   it('honors only the rule-specific one-shot overrides', () => {
     expect(evaluateRule('dangerous-command', {
       tool_name: 'Bash',

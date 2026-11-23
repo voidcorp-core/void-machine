@@ -1,0 +1,365 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "headRefOid": "337641aff1fda56b427254d39741230d153e86c8",
+        "commits": {
+          "nodes": [
+            {
+              "commit": {
+                "oid": "337641aff1fda56b427254d39741230d153e86c8",
+                "statusCheckRollup": {
+                  "contexts": {
+                    "totalCount": 16,
+                    "pageInfo": {
+                      "hasNextPage": false,
+                      "endCursor": "MTY"
+                    },
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0BStA",
+                        "name": "enforce",
+                        "status": "COMPLETED",
+                        "conclusion": "FAILURE",
+                        "startedAt": "2026-11-05T19:54:40Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3mDXw",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4SfQrZ"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0BcHA",
+                        "name": "packed consumer artifact",
+                        "status": "COMPLETED",
+                        "conclusion": "SKIPPED",
+                        "startedAt": "2026-11-05T19:54:38Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3l_VA",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4ma7g",
+                        "name": "packed consumer artifact",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:26Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4mUBQ",
+                        "name": "enforce",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:25Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7OuDQ",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4SfQrZ"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0BciA",
+                        "name": "project graph conformance (${{ matrix.os }})",
+                        "status": "COMPLETED",
+                        "conclusion": "SKIPPED",
+                        "startedAt": "2026-11-05T19:54:38Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3l_VA",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4mcjw",
+                        "name": "project graph conformance (ubuntu-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:25Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4mdIQ",
+                        "name": "project graph conformance (macos-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:26Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4meiQ",
+                        "name": "project graph conformance (windows-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:26Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0BS1Q",
+                        "name": "validate",
+                        "status": "COMPLETED",
+                        "conclusion": "FAILURE",
+                        "startedAt": "2026-11-05T19:54:40Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3l_VA",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr4mdJg",
+                        "name": "validate",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:03:25Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0BkmQ",
+                        "name": "browser conformance",
+                        "status": "COMPLETED",
+                        "conclusion": "SKIPPED",
+                        "startedAt": "2026-11-05T19:54:38Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3l_VA",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr47cWQ",
+                        "name": "browser conformance",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:04:02Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr0Bi4A",
+                        "name": "install conformance (${{ matrix.os }})",
+                        "status": "COMPLETED",
+                        "conclusion": "SKIPPED",
+                        "startedAt": "2026-11-05T19:54:38Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj3l_VA",
+                          "createdAt": "2026-11-05T19:54:37Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr47czw",
+                        "name": "install conformance (ubuntu-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:04:03Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr47dJg",
+                        "name": "install conformance (macos-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:04:04Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "id": "CR_kwDOSrTydc8AAAAdr47c5A",
+                        "name": "install conformance (windows-latest)",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-11-05T20:04:03Z",
+                        "checkSuite": {
+                          "id": "CS_kwDOSrTydc8AAAAaj7Ow8g",
+                          "createdAt": "2026-11-05T20:03:22Z",
+                          "app": {
+                            "id": "MDM6QXBwMTUzNjg="
+                          },
+                          "workflowRun": {
+                            "event": "pull_request",
+                            "workflow": {
+                              "id": "W_kwDOSrTydc4RBrvE"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

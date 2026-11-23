@@ -365,6 +365,12 @@ co-owned path skips only that ownership refusal; nested namesakes and prefixes
 do not qualify. Lexical secret, credential, key, lockfile and Git metadata checks
 remain active, as do independent content scans. Claude and Codex share this rule.
 
+The same handler checks a separate read-intent model before write-only dispatch
+and edit overrides. Only the environment filename classifier is shared with
+write protection: reading lockfiles or installed assets remains allowed. Native
+read/search scopes and a bounded direct-shell subset are checked without reading
+target contents or walking directories. See [the read boundary and its limits](CODEX.md#secret-environment-reads).
+
 The credential-name heuristic permits source filenames ending in `.js`, `.jsx`,
 `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts` or `.cts` (case-insensitive), such as
 `client-secrets.mjs` and `client-secrets.test.mjs`. A source module need not be a
@@ -1561,6 +1567,32 @@ never implied: rewriting a project's index is the project's call, not a side
 effect of updating. `doctor` reports the count as **advisory** (nothing is
 broken) with that command as its fix.
 
+## Consumer analyzer diagnostics
+
+`doctor` and a successful bundled `init`/`update` inspect the installation's
+attested files against project analyzer configuration. Installation advice runs
+once after publication, so a first install and Codex-only installations use the
+same manifest/receipt evidence as later health checks. Diagnostics never edit
+project configuration or execute it.
+
+The ownership reader is shared with Git hygiene, but the policies differ: lint
+also considers load-bearing `.void/hooks/` scripts that Git must retain. Only
+present analyzer-relevant files classified as derived are considered. Co-owned
+configuration and project-authored neighbors remain in project scope. Reports
+count exposed assets and show at most five examples with file-specific repair
+suggestions; they never recommend excluding an entire shared runtime directory.
+
+Biome inspection retains the bounded plain-JSON/local-extends resolver and checks
+`files.includes` separately for each file. Knip inspection supports plain JSON in
+its standard config locations or `package.json#knip`, with unconditional `ignore`
+and `ignoreFiles` arrays. `ignoreFiles` suppresses unused-file findings only, so it
+does not prove exclusion from all analysis. Executable configuration, workspaces,
+other Knip options, mode-specific patterns and unreadable evidence report unknown
+and request manual inspection. These are conservative static configuration
+checks, not execution of an analyzer or proof of every invocation's effective scope.
+See [Biome configuration](https://biomejs.dev/reference/configuration/#filesincludes)
+and [Knip configuration](https://knip.dev/reference/configuration).
+
 ## Exact rehydration: the manifest and `hydrate`
 
 `.void/config.json` cannot answer "which bytes". `core` is a caret RANGE, and
@@ -1607,8 +1639,18 @@ The `packs` field pins the **marketplace plugins** that were enabled, keyed
 `@voidcorp/<plugin-name>` (the plugin name, e.g. `harness-nextjs`, scoped under
 `@voidcorp/`), each mapped to the version it was pinned at. These are plugin
 references, not npm package names: the npm packages are `@voidcorp/pack-<stack>`,
-the plugins they pair with are `harness-<stack>`. `doctor` reads this field to
-detect version drift against the marketplace HEAD.
+the plugins they pair with are `harness-<stack>`. `doctor` reads this field for marketplace installs to
+detect version drift against the marketplace HEAD. `check` follows the update
+channel: an explicit receipt wins; without a receipt, a manifest selects the
+bundled channel, otherwise legacy marketplace behavior applies. Bundled checks
+compare the receipt version (or the clone's valid manifest version) with npm,
+never stale plugin pins. Unreadable version evidence or registry failures remain
+unknown. An existing damaged receipt without a manifest cannot prove a legacy
+marketplace install: `check` reports an unknown channel without a remote version
+lookup. A valid manifest still supplies the bundled fallback. Ordinary bundled
+checks need no marketplace access or `gh` authentication;
+`--doctrine` explicitly retains the marketplace doctrine comparison. Neither check
+rewrites pins, and remedies from linked worktrees name the installation root.
 
 ```json
 {
@@ -1623,9 +1665,12 @@ detect version drift against the marketplace HEAD.
     "e2eRunner": "playwright"
   },
   "paths": {
-    "src": "apps/*/src/**",
-    "tests": "apps/*/src/**/*.test.{ts,tsx}",
-    "spikes": "apps/*/scripts/spike-*"
+    "business": ["src/**", "apps/*/src/**"],
+    "tests": ["src/**/*.test.{ts,tsx}", "apps/*/src/**/*.test.{ts,tsx}"],
+    "spikes": ["scripts/spike-*", "apps/*/scripts/spike-*"],
+    "serverActions": ["src/app/(api|actions)/**", "apps/*/src/app/(api|actions)/**"],
+    "contracts": ["src/lib/contracts/**", "apps/*/src/lib/contracts/**"],
+    "e2e": ["tests/e2e/**", "apps/*/tests/e2e/**"]
   },
   "modes": {
     "tdd": "auto"
@@ -1634,6 +1679,25 @@ detect version drift against the marketplace HEAD.
 ```
 
 Skills and hooks read this file to adapt to the consumer's conventions without hardcoding.
+
+Fresh installs seed both root `src/` applications and `apps/*/src/` applications,
+regardless of package manager, from the shared `DEFAULT_PROJECT_PATHS` contract.
+The TDD runner uses those same business and spike defaults when optional config
+is absent or unreadable; missing paths, unsupported values and lists without
+strings also use these defaults. It does not widen to arbitrary nested `src/`
+directories. Test files, declarations, generated files
+and configured spikes retain the TDD rule's existing exemptions. The business
+and spike matcher supports `*` and `**`; use an array for alternative roots,
+not braces or extglobs. The other seeded paths remain skill configuration.
+
+An existing readable config is project-owned: `init`, `update` and `--force`
+preserve its explicit string or array paths, including the previous
+`"business": "apps/*/src/**"` default. That exact value does not prove consent to
+broaden enforcement. For an existing mono-app, explicitly amend
+`.void/config.json` to `"business": "src/**"`, or to the two-root array above if
+both layouts are wanted; review the associated paths at the same time. No
+consumer file is automatically migrated. These defaults change TDD scope, not
+TypeScript compiler settings or the separate static guards.
 
 ## Versioning
 

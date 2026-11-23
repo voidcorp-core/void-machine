@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
+import { readCurrentChecks } from './loop-checks.js';
 import { selectBase } from './base-selection.js';
 import { autopilotFailure } from './errors.js';
 import { latestJudgment } from './judgment-comment.js';
@@ -195,7 +196,9 @@ function readPullRequestFiles(run: GhRunner, number: number, changedFiles: numbe
 
 /**
  * One `gh pr view --json <PULL_REQUEST_FIELDS>` answer, without its GraphQL and
- * REST parts.
+ * REST parts. This pure formatter retains raw historical checks for legacy
+ * captures; admission must use readPullRequest, which replaces them with the
+ * complete current observation.
  */
 export function parsePullRequestView(
   text: string,
@@ -217,6 +220,13 @@ export function parsePullRequestView(
     checks: checksOf(view.statusCheckRollup),
     changedFiles: view.changedFiles,
   };
+}
+
+/** Metadata plus current checks: the shared authority for next, merge and arm reads. */
+export function readPullRequest(run: GhRunner, number: number) {
+  const args = ['pr', 'view', String(number), '--json', PULL_REQUEST_FIELDS.join(',')];
+  const view = parsePullRequestView(run(args));
+  return { ...view, checks: readCurrentChecks(run, view) };
 }
 
 const graphqlErrors = z.array(z.object({ message: z.string() })).max(64).optional();
@@ -466,8 +476,7 @@ export function observeGithub(run: GhRunner, request: GithubRequest): GithubObse
     : undefined;
   const pullRequests = new Map<number, PullRequestObservation>();
   for (const number of request.pullRequests) {
-    const viewArgs = ['pr', 'view', String(number), '--json', PULL_REQUEST_FIELDS.join(',')];
-    const view = observed(`#${number}`, () => parsePullRequestView(run(viewArgs)));
+    const view = observed(`#${number}`, () => readPullRequest(run, number));
     const timelineArgs = ['api', 'graphql', ...REPOSITORY_FIELDS, '-F', `number=${number}`];
     const timeline = observed(`#${number}`, () =>
       run([...timelineArgs, '-f', `query=${TIMELINE_QUERY}`]),
@@ -553,7 +562,7 @@ const SHARED_FILES_MAX = 512;
  * One line per file, `<sha256> <path>`, sorted: the content is hashed here and
  * never leaves this function. A symbolic link is read as its target, not followed.
  */
-function directoryDigests(directory: string): string {
+function directoryDigests(directory: string, omitServerRefs = false): string {
   if (!existsSync(directory)) return '';
   const entries = readdirSync(directory, { recursive: true, encoding: 'utf8' });
   if (entries.length > SHARED_FILES_MAX) {
@@ -564,6 +573,8 @@ function directoryDigests(directory: string): string {
       const path = join(directory, entry);
       const stat = lstatSync(path);
       if (stat.isDirectory()) return [];
+      // Git rebuilds this transport cache; only this regular root file is exempt.
+      if (omitServerRefs && entry === 'refs' && stat.isFile()) return [];
       const content = stat.isSymbolicLink() ? `link:${readlinkSync(path)}` : readFileSync(path);
       const hash = createHash('sha256').update(content).digest('hex');
       return [`${hash} ${relative(directory, path)}`];
@@ -573,6 +584,8 @@ function directoryDigests(directory: string): string {
 }
 
 export interface SharedStateRequest {
+  /** Retained baselines are compared using their original policy. New reads default to v4. */
+  readonly schemaVersion?: 3 | 4;
   /** The local branches units must not move: the loop's base candidates. */
   readonly bases: readonly string[];
 }
@@ -619,7 +632,7 @@ export function readSharedState(run: GitRunner, request: SharedStateRequest): Sh
     bases: read('bases'),
     replace: read('replace'),
     hooks: attempt('reading hooks/', () => directoryDigests(join(common, 'hooks'))),
-    info: attempt('reading info/', () => directoryDigests(join(common, 'info'))),
+    info: attempt('reading info/', () => directoryDigests(join(common, 'info'), request.schemaVersion !== 3)),
   };
 }
 

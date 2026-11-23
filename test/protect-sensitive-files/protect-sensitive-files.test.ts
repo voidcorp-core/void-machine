@@ -4,7 +4,8 @@
  * PreToolUse hook (https://code.claude.com/docs/en/hooks): reads the tool-call
  * JSON from stdin and blocks Edit/Write to files that must never be hand-edited
  * by the agent (private keys, credential files, lockfiles, .git/ internals,
- * .env with secrets). Exit 0 allow, exit 2 block. Tests run it as a subprocess.
+ * .env with secrets), plus direct reads of secret environment files.
+ * Exit 0 allow, exit 2 block. Tests run the compatibility adapter as a subprocess.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -75,8 +76,21 @@ describe('protect-sensitive-files.sh', () => {
     expect(r.code).toBe(0);
   });
 
-  it('ignores non-edit tools (exit 0)', () => {
-    expect(runHook({ tool: 'Read', file: '.env' }).code).toBe(0);
+  it('BLOCKS reading a .env file before execution (exit 2)', () => {
+    const result = runHook({ tool: 'Read', file: '.env' });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('SECRET_FILE_READ');
+  });
+
+  it.each(['src/feature.ts', '.env.example', 'pnpm-lock.yaml'])(
+    'allows reading %s (exit 0)', (file) => {
+      expect(runHook({ tool: 'Read', file }).code).toBe(0);
+    },
+  );
+
+  it('allows Glob to enumerate environment filenames without reading contents (exit 0)', () => {
+    const input = JSON.stringify({ tool_name: 'Glob', tool_input: { pattern: '.env*' } });
+    expect(spawnSync('bash', [HOOK], { input, encoding: 'utf8' }).status).toBe(0);
   });
 
   // Codex parity: edits arrive via apply_patch, the path is in the patch

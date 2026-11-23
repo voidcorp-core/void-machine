@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:e9a5d76905d505799e1a63e12b4b1d1107cf3f99676d6eab20b8d6ea580824e7"
+    "rootHash": "sha256:74ecee36d6ebf2b80df6b0140825c3fb08b015f3f263b52c47e48120b0ac12dc"
   },
   "nodes": [
     {
@@ -3467,7 +3467,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 396,
+          "lines": 400,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3476,7 +3476,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7059,
+          "staticTokens": 7217,
           "type": "skill"
         }
       },
@@ -4247,7 +4247,7 @@
             }
           ],
           "id": "skill:void-implement",
-          "lines": 234,
+          "lines": 236,
           "name": "void-implement",
           "owner": "folpe",
           "pack": null,
@@ -4256,7 +4256,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6632,
+          "staticTokens": 6683,
           "type": "skill"
         }
       },
@@ -4424,7 +4424,7 @@
       "label": "void-merge",
       "data": {
         "legacy": {
-          "description": "Vider la file des PR ouvertes sans casser le dépôt. Ordre par déblocage plutôt que par date, CI verte ET à jour, artefacts générés régénérés, conflits de contenu rendus à leur auteur. Use when merging pull requests.",
+          "description": "Vider la file des PR ouvertes sans casser le dépôt. Fusions séquentielles, ordre stable et dépendances explicites, CI verte ET à jour, artefacts générés régénérés, conflits de contenu rendus à leur auteur. Use when merging pull requests.",
           "enforcement": {
             "floor": "ci",
             "inline": {
@@ -4441,7 +4441,7 @@
             }
           ],
           "id": "skill:void-merge",
-          "lines": 111,
+          "lines": 118,
           "name": "void-merge",
           "owner": "folpe",
           "pack": null,
@@ -4450,7 +4450,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-merge/SKILL.md",
-          "staticTokens": 1272,
+          "staticTokens": 1474,
           "type": "skill"
         }
       },
@@ -4593,7 +4593,7 @@
             }
           ],
           "id": "skill:void-orchestrate",
-          "lines": 198,
+          "lines": 203,
           "name": "void-orchestrate",
           "owner": "folpe",
           "pack": null,
@@ -4602,7 +4602,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-orchestrate/SKILL.md",
-          "staticTokens": 3221,
+          "staticTokens": 3363,
           "type": "skill"
         }
       },

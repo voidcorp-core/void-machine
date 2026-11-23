@@ -122,9 +122,8 @@ export function planVoidMigration(root: string): { readonly movable: string[]; r
 }
 
 /**
- * The repo-relative paths the harness owns AND that are derived and safe to leave
- * out of a clone. `undefined` when nothing proves ownership, which callers must
- * treat as "prove nothing, touch nothing".
+ * The repo-relative paths attested by the installation, before policy filtering.
+ * `undefined` when nothing proves ownership: "prove nothing, touch nothing".
  *
  * The MANIFEST is consulted first, and that ordering is load-bearing: the receipt
  * is `observed`, so it is gitignored and simply ABSENT on a fresh clone. Sourcing
@@ -134,13 +133,13 @@ export function planVoidMigration(root: string): { readonly movable: string[]; r
  * and always there. The receipt remains the fallback for a project installed by a
  * CLI old enough to predate the manifest.
  */
-export async function ownedDerivedPaths(root: string): Promise<Set<string> | undefined> {
+export async function ownedInstallPaths(root: string): Promise<Set<string> | undefined> {
   const manifestPath = join(root, ...INSTALL_MANIFEST_PATH.split('/'));
   if (existsSync(manifestPath)) {
     try {
       const manifest = parseInstallManifest(await readFile(manifestPath, 'utf8'));
       if (manifest !== undefined) {
-        return new Set(manifest.files.map((file) => file.path).filter((path) => isOwnedDerived(path)));
+        return new Set(manifest.files.map((file) => file.path));
       }
     } catch {
       // An unreadable manifest falls through to the receipt rather than claiming
@@ -149,7 +148,13 @@ export async function ownedDerivedPaths(root: string): Promise<Set<string> | und
   }
   const receipt = await readInstallReceipt(root);
   if (receipt === undefined) return undefined;
-  return new Set(receipt.files.map((file) => file.path).filter((path) => isOwnedDerived(path)));
+  return new Set(receipt.files.map((file) => file.path));
+}
+
+/** Git keeps load-bearing assets; analyzer diagnostics use a different filter. */
+export async function ownedDerivedPaths(root: string): Promise<Set<string> | undefined> {
+  const paths = await ownedInstallPaths(root);
+  return paths === undefined ? undefined : new Set([...paths].filter(isOwnedDerived));
 }
 
 export interface UntrackResult {

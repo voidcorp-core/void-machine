@@ -1,15 +1,10 @@
 # Reusable workflow: the void-machine enforcement floor for CONSUMER repos.
 #
-# Adopt it with five lines in your own repo (.github/workflows/void-enforce.yml):
-#
-#   name: void-enforce
-#   on: pull_request
-#   jobs:
-#     enforce:
-#       uses: voidcorp-core/void-machine/.github/workflows/enforce.yml@<full-sha>
-#
-# Pin the reusable workflow to a full commit SHA. This complements — it does not
-# replace — your own lint/test CI: it enforces the doctrine floor only.
+# Adopt the caller example in README.md, preserving existing required names.
+# Pin this reusable workflow to a reviewed full SHA. The caller owns readiness
+# and merge_group triggers, plus PR-only concurrency; do not duplicate its group
+# here because github.workflow belongs to the caller, even in a reusable job.
+# This floor complements the consuming project's own lint/test CI.
 name: void-enforce (reusable)
 
 on:
@@ -24,6 +19,7 @@ on:
 jobs:
   enforce:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       # fetch-depth: 0 gives the base commit so the diff (and fail-closed base
       # resolution) works; a shallow checkout would make the base unresolvable.
@@ -40,6 +36,10 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .void-enforce-runtime
           persist-credentials: false
+      # Admission comes from the pinned implementation, not the caller's files.
+      # Keep it inside the required job: a skipped required job reports success.
+      - name: Admit integration enforcement
+        run: node .void-enforce-runtime/packages/core/skills/void-verify/references/ci-admission.mjs
       # The caller need not declare Node: use the pinned implementation's file.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:

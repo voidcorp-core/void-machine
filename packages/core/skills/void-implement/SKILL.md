@@ -55,8 +55,10 @@ materializes its runtime-neutral specialist envelopes from the current plan.
 
 1. Keep one `leadWriterId` for implementation and every correction. The implementer owns
    the worktree and code; specialists and the independent reviewer never edit.
-2. Start with `mission start --ticket <ticket>` and follow `mission dispatch --id <mission>
-   --json`. The frozen task and controller own routing, state and correction budget. Normal
+2. Reuse the mission ID the coordinator supplied. The coordinator creates it once from the
+   assigned worktree with `mission start --title <unit> --ticket <full-frozen-ticket> --json`.
+   Run `mission dispatch --id <mission> --json` from that worktree. Never start another mission
+   to repair a refusal. The frozen task and controller own routing, state and correction budget. Normal
    dispatch starts the writer without a compulsory preparation panel. The writer still obtains
    the primary domain specialist advice required by pass 5 before production edits.
    For canonical `invoke-specialists` actions, pass each envelope unchanged through

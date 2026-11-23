@@ -83,6 +83,33 @@ resolve every blocking finding against the currently observed proof set, includi
 partially resolved in an earlier correction. Missing, forged or out-of-window historical
 proofs still invalidate native continuity; no historical Git observation is invented.
 
+Resolution proof lists may retain relative source citations alongside canonical
+`evd_` references. A source citation is a bounded slash-separated path (or a file
+name containing a dot), optionally followed by a positive `:line`; only letters,
+digits, underscores, dots and hyphens are accepted in path components. Absolute
+paths, traversal components, URLs and unknown labels refuse. Citations supply
+context, never authority: each resolved finding still needs at least one canonical
+proof, every claimed `evd_` reference must be well formed and valid, and every
+resolution reference must also occur in the receipt's proof list. Historical
+continuity requires intact passed canonical proof inside the correction window;
+current finding reconciliation additionally requires current freshness. Top-level
+contextual references do not become resolution authority.
+
+If the old reducer already closed after recording that targeted PASS, use the
+existing `controller-defect` / `targeted-review-context` recovery for the actual
+current closure and journal hash, then dispatch. Recovery validates prior receipts
+and applies their authenticated writer-binding projection before checking native
+continuity. It neither rewrites the completion nor requests another invocation;
+original events and consumed review/correction counts remain intact.
+
+A controller correction request may reopen even the sole previously resolved blocker when
+its proof becomes stale. Continuation authenticates the recorded request and linked writer
+completion, then requires nonempty, unique finding IDs from the authenticated prior blockers.
+It cannot reconstruct the exact historical open set without the Git observations from that
+time: treating every intact historical proof as fresh would erase a legitimate reopening.
+A request for a subset never resolves the other blockers; current reconciliation still
+requires fresh proofs for every blocking finding before completion or recovery.
+
 For a bounded mission stopped solely by the former `reused-context` false positive after a
 valid targeted PASS, use this explicit disposition on the existing recovery command:
 
@@ -423,6 +450,138 @@ node "$BOUNDED_CLI" mission dispatch --id "$MISSION_ID" --json
 
 Use the original task's actual verification command in a consumer project. Completion
 requires passed current evidence and no unresolved blocker; `recover` alone is not closure.
+
+## Recover correction readiness without accepting the review
+
+A completed, bound independent review with concrete blocking findings can request
+correction even when its verdict is `degraded`. The same finding-based rule governs
+normal dispatch and native targeted continuation; the label does not promote the
+review to PASS. A limitation without an actionable finding still stops. Invalid
+source, contract, writer, subject, provenance, invocation, journal or evidence
+remains blocking before any correction dispatch. Missing evidence prevents
+acceptance but does not prevent correcting an established defect.
+
+For an existing `controller-stop`, retain the original receipt and the actual
+reviewer's clarification. Use the existing recovery request, with the clarification
+saved under the original worktree and its exact byte hash:
+
+```json
+{
+  "schemaVersion": 1,
+  "closureEventId": "evt_original_controller_stop",
+  "expectedJournalHash": "sha256:<canonical current journal hash>",
+  "disposition": {
+    "kind": "review-blocker",
+    "completionEventIds": ["evt_original_completion"],
+    "resolutionArtifact": {
+      "path": ".void/machine/reviewer-clarification.json",
+      "sha256": "sha256:<clarification byte hash>"
+    }
+  }
+}
+```
+
+Run `mission recover --id <same-id> --input <request.json> --json`, then
+`mission dispatch --id <same-id> --json` using the verified candidate from the
+original worktree. Recovery appends its receipt; it changes neither the original
+review nor its findings, proofs, baseline or counters. A valid actionable review
+then yields `run-correction`. Record the real writer completion and fresh proofs,
+and continue only the targeted review in its retained native context. Evidence
+classification and discharge remain author-owned through the existing evidence
+commands. A targeted PASS does not discharge an earlier evidence request.
+
+The controller no longer gives writer-binding recovery its own correction-dispatch
+policy: after authenticated repair, its retained findings enter the same decision.
+The writer-only identity amendment, original-subject observation checks, historical
+empty-request compatibility and its single-targeted-continuation limit remain
+necessary to replay those old journals without broadening their authorization.
+Ordinary bounded missions keep their existing two-correction ceiling; a stricter
+caller mandate, including one remaining targeted review, still applies. Recovery
+never resets either limit or authorizes another general review.
+
+## Correct a historical writer binding
+
+New review ingestion rejects a `review.writerId` that differs from the canonical
+`leadWriterId` in `mission.started`. Native agent names and mission writer identity
+are different fields. Existing malformed history is never rewritten.
+
+For an original degraded general review with explicit blocking findings, a stopped
+mission can request one writer-only amendment from its **original native author**.
+Use the original coordinator session, which can actually contact that author.
+The lifecycle validates its request/start/result chain and the exact returned
+artifact; it does not provide cryptographic author authentication. A recomputable
+hash, a coordinator-written answer, or a replacement reviewer does not constitute
+the required actual author response. If the author is unavailable, leave the request
+pending and the mission closed.
+
+1. Prepare `amendment-request.json` with exactly `closureEventId`,
+   `expectedJournalHash` (canonical hash of the current complete journal),
+   `completionEventId`, and `completionHash` (canonical hash of the original structured
+   completion). Request alone does not reopen the mission:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-requested --input amendment-request.json --json
+   ```
+
+2. Read the resulting `specialist.review-amendment-requested` payload. It includes
+   the original invocation ID, retained context, and canonical writer. Actually
+   follow up with that native author to confirm only this writer binding. Record
+   that invocation using `amendment-started.json` containing exactly `requestEventId`
+   and the original `contextId`:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-started --input amendment-started.json --json
+   ```
+
+3. The author returns an artifact with exactly `requestEventId`, `invocationEventId`
+   (the amendment started event), and `amendment`. That amendment contains exactly
+   `completionEventId`, `completionHash`, `originalInvocationEventId`, `contextId`
+   and `writerId`, matching the request. Preserve those actual returned bytes in a
+   bounded project-local JSON file. Submit `amendment-completed.json` with exactly
+   `requestEventId`, `contextId` and `responseArtifact: { "path": "returned.json",
+   "sha256": "sha256:<hash-of-returned-bytes>" }`:
+
+   ```sh
+   void-machine mission specialist-event --id "$MISSION_ID" --status amendment-completed --input amendment-completed.json --json
+   ```
+
+4. Reobserve the closure and journal. Use the ordinary `mission recover --input`
+   schema, with disposition `{ "kind": "review-writer-binding", "responseEventId":
+   "<amendment-completed-event>" }`. Recovery rereads the artifact and current project
+   inputs, then validates the full history under the journal lock. An actual new
+   amendment is narrowly admissible progress after an ineffective blocker recovery;
+   repeating the old recovery alone remains refused.
+
+5. Dispatch obtains a real `run-correction` request. The original writer reports
+   corrections truthfully, including already-created commits. Obtain fresh canonical
+   proof after that request, then dispatch one targeted continuation to the retained
+   reviewer. An old successful SQL job may be inspected again with a new read-only
+   observation tied to the exact current head; never relabel the old execution as
+   fresh or rerun SQL merely to obtain a new timestamp. Existing evidence obligations
+   and their discharge checks still apply.
+
+A changed current head does not erase the original blockers: correction dispatch
+normalizes findings from the exact completion named by the validated writer-binding
+recovery. A historical empty `findingIds` request from this defect is interpreted
+only for that recovery's sole round-two correction, with the canonical writer and
+plan, exact completed request/causation, and matching original targeted scope.
+Nonempty incorrect IDs, unrelated recoveries and extra correction requests refuse.
+The raw request remains unchanged. Resume the existing targeted request with the
+actual retained invocation and returned result through ordinary `specialist-event`
+`started` and `completed`; do not dispatch another review or writer completion.
+Fresh proof and all existing continuation checks still apply.
+
+The original degraded verdict, historical subject, findings, proof references,
+limitations and resolutions remain unchanged. Effective history substitutes only
+the canonical writer. Recovery grants correction, never PASS. There is no new general
+review, reviewer substitution, automatic obligation discharge or budget reset.
+Historical bounded-correction accounting can legitimately retain `maxRounds: 2`,
+`consumedRounds: 1`, `remainingRounds: 2`: the bounded policy permits three review
+rounds, while `maxRounds` is the original observation. This repair separately permits
+only **one targeted continuation**. It does not rewrite the historical counters to
+claim that they already expressed a two-total-review mandate.
+
+See the [writer amendment decision](decisions-log/2026-11-09-review-writer-binding-amendment--1d1c975b-2249-42d1-b844-37f2f3f5580d.md).
 
 ## Acceptance evidence
 

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -67,10 +67,13 @@ describe('single gate process', () => {
 
   it('refuses to overwrite an existing report', () => {
     const sha = gitHead();
-    const path = `.void/machine/gate-runner-test-${String(process.pid)}/version-lockstep.json`;
+    const path = `.void/machine/gate-runner-test-${String(process.pid)}/existing.json`;
+    const original = '{"preserved":true}\n';
+    writeFileSync(resolve(ROOT, path), original, { flag: 'wx' });
     const result = run(['--gate', 'version-lockstep', '--sha', sha, '--report', path]);
 
     expect(result.status).toBe(2);
     expect(result.stderr).toMatch(/already exists/);
+    expect(readFileSync(resolve(ROOT, path), 'utf8')).toBe(original);
   });
 });

@@ -1,5 +1,6 @@
+import { currentChecksFixture, noWorkflowRuns } from '../test/fixtures/loop-checks.js';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -125,6 +126,8 @@ function answer(args: readonly string[], view: string = reviewedPull()): string 
   if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
   if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
   if (line.includes('pr view 11')) return view;
+  if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
+  if (line.includes('/actions/runs?')) return noWorkflowRuns;
   if (line.includes('pulls/11/files')) return pullFiles();
   if (line.includes('isInMergeQueue')) return membership(false);
   if (line.includes('timelineItems')) return fixture('timeline-commit-then-ejection.json').replace(
@@ -220,6 +223,22 @@ describe('autopilot next', () => {
     ]);
   });
 
+  it.each([3, 4] as const)('continues next under retained policy %s and keeps its cache coverage', schemaVersion => {
+    const root = project();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const path = join(root, '.void/machine/autopilot/fingerprints/DEV-1.json');
+    const baseline = JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), schemaVersion });
+    writeFileSync(path, baseline);
+    recordLocalVerdict(root);
+    const observed = () => next(root, trackerJson([heldTicket], []), gh).decision.actions[0];
+    expect(observed()).toMatchObject({ kind: 'enable-auto-merge' });
+    writeFileSync(join(root, '.git/info/refs'), 'new server cache');
+    expect(observed()).toMatchObject(schemaVersion === 3
+      ? { kind: 'mark-human-wait', reason: 'shared-state-changed', detail: expect.stringMatching(/info/) }
+      : { kind: 'enable-auto-merge' });
+    expect(readFileSync(path, 'utf8')).toBe(baseline);
+  });
+
   it('withholds the merge of a unit that changed the shared Git state', () => {
     const root = project();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
@@ -313,11 +332,15 @@ describe('autopilot arm and disarm', () => {
   function sequence(views: readonly string[], queued: readonly boolean[] = []) {
     const calls: string[][] = [];
     const [pending, memberships] = [[...views], [...queued]];
+    let currentView = reviewedPull();
     const isRead = (args: readonly string[]) =>
-      (args[0] === 'pr' && args[1] === 'view') || args.some((arg) => arg.includes('isInMergeQueue'));
+      (args[0] === 'pr' && args[1] === 'view') || args.some((arg) =>
+        arg.includes('isInMergeQueue') || arg.includes('CurrentPullRequestChecks') || arg.includes('/actions/runs?'));
     const run = (args: readonly string[]): string => {
       calls.push([...args]);
-      if (args[0] === 'pr' && args[1] === 'view') return pending.shift() ?? '';
+      if (args[0] === 'pr' && args[1] === 'view') { currentView = pending.shift() ?? ''; return currentView; }
+      if (args.join(' ').includes('CurrentPullRequestChecks')) return currentChecksFixture(currentView);
+      if (args.join(' ').includes('/actions/runs?')) return noWorkflowRuns;
       if (isRead(args)) return membership(memberships.shift() ?? false);
       return '';
     };
@@ -476,7 +499,7 @@ describe('autopilot arm and disarm', () => {
     const moved = (args: readonly string[]): string =>
       args.join(' ').includes('pr view 11')
         ? reviewedPull({ armed: true, head: 'b'.repeat(40) })
-        : answer(args);
+        : answer(args, reviewedPull({ head: 'b'.repeat(40), armed: true }));
     const { decision } = next(root, trackerJson([heldTicket], []), moved);
     expect(decision.actions.slice(0, 2)).toEqual([
       { kind: 'disable-auto-merge', ticketId: 'DEV-1', pullRequest: 11, headSha: 'b'.repeat(40), armedSha: HEAD },
@@ -571,11 +594,14 @@ describe('autopilot merge', () => {
   }) {
     const calls: string[][] = [];
     const views = [...options.views];
+    let currentView = reviewedPull();
     const memberships = [...(options.queued ?? [])];
     const run = (args: readonly string[]): string => {
       calls.push([...args]);
       const line = args.join(' ');
-      if (args[0] === 'pr' && args[1] === 'view') return views.shift() ?? '';
+      if (args[0] === 'pr' && args[1] === 'view') { currentView = views.shift() ?? ''; return currentView; }
+      if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(currentView);
+      if (line.includes('/actions/runs?')) return noWorkflowRuns;
       if (line.includes('isInMergeQueue')) return membership(memberships.shift() ?? false);
       if (line.includes('/compare/')) return fixture(options.compare ?? 'compare-ahead.json');
       if (line.includes('mergeCommitAllowed')) return fixture('repo-view-merge-methods.json');
@@ -873,5 +899,251 @@ describe('autopilot fingerprint', () => {
     const escaping = runAutopilotCommand(['fingerprint', '--before', '../x'], '', context(root));
     expect(escaping.exitCode).toBe(2);
     expect(existsSync(join(root, '.void', 'machine', 'autopilot', 'x.json'))).toBe(false);
+  });
+});
+
+
+describe('guarded publication and human fingerprint renewal', () => {
+  const candidate = () => { const root = project(); git(root, 'checkout', '-qb', 'work/DEV-1'); return root; };
+  const recordPath = (root: string) => join(root, '.void/machine/autopilot/fingerprints/DEV-1.json');
+  const head = (root: string) => gitIn(root)(['rev-parse', 'HEAD']).trim();
+  const publishArgs = (root: string) => ['publish', '--ticket', 'DEV-1', '--head', head(root), '--remote', 'origin', '--branch', 'work/DEV-1'];
+  function publication(root: string, overrides: { failRead?: boolean; failPush?: boolean } = {}) {
+    const calls: string[][] = [];
+    const runner = (args: readonly string[]) => {
+      if (args[0] === 'push') {
+        calls.push([...args]);
+        if (overrides.failPush) throw new Error('transport disconnected');
+        return '';
+      }
+      if (overrides.failRead && args[0] === 'config') throw new Error('unreadable');
+      return gitIn(root)(args);
+    };
+    return { context: { ...context(root), git: runner }, pushes: calls };
+  }
+  function renewalArgs(root: string) {
+    const inspected = runAutopilotCommand(['fingerprint', '--record', 'DEV-1', '--json'], '', context(root));
+    expect(inspected.exitCode).toBe(0);
+    const record = JSON.parse(inspected.stdout) as { recordDigest: string; currentDigest: string };
+    return ['fingerprint', '--renew', 'DEV-1', '--head', head(root), '--branch', 'work/DEV-1', '--previous', record.recordDigest,
+      '--expected', record.currentDigest, '--cause', 'authorized repair', '--decision', 'human:approval-42'];
+  }
+
+  it('pushes the literal checked SHA and explicit target only after a successful guard', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const spy = publication(root);
+    expect(runAutopilotCommand(publishArgs(root), '', spy.context).exitCode).toBe(0);
+    expect(spy.pushes).toEqual([['push', '--', 'origin', `${head(root)}:refs/heads/work/DEV-1`]]);
+  });
+
+  it.each(['default-target', 'absent-default', 'unreadable', 'malformed', 'missing-runner'])(
+    'does not push when deployment protection is %s', (failure) => {
+      const root = candidate();
+      writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+      git(root, 'branch', 'main');
+      runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+      const spy = publication(root);
+      const { gh: _gh, ...withoutGh } = spy.context;
+      const readDefault = (args: readonly string[]) => {
+        expect(args).toEqual(['repo', 'view', '--json', 'defaultBranchRef']);
+        if (failure === 'unreadable') throw new Error('repository unavailable');
+        if (failure === 'malformed') return '{}';
+        return JSON.stringify({ defaultBranchRef: { name: failure === 'absent-default' ? '' : 'main' } });
+      };
+      const args = publishArgs(root);
+      if (failure === 'default-target') args[args.length - 1] = 'main';
+      const observed = failure === 'missing-runner' ? withoutGh : { ...spy.context, gh: readDefault };
+      expect(runAutopilotCommand(args, '', observed).exitCode).toBe(2);
+      expect(spy.pushes).toEqual([]);
+    },
+  );
+
+  it('allows an ordinary candidate after resolving an undeclared deployment branch', () => {
+    const root = candidate();
+    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const spy = publication(root);
+    const calls: string[][] = [];
+    const result = runAutopilotCommand(publishArgs(root), '', { ...spy.context, gh: (args) => {
+      calls.push([...args]);
+      return JSON.stringify({ defaultBranchRef: { name: 'main' } });
+    } });
+    expect(result.exitCode).toBe(0);
+    expect(calls).toEqual([['repo', 'view', '--json', 'defaultBranchRef']]);
+    expect(spy.pushes).toEqual([['push', '--', 'origin', `${head(root)}:refs/heads/work/DEV-1`]]);
+  });
+
+  it.each(['missing', 'invalid', 'legacy', 'changed', 'unreadable', 'head'])(
+    'never calls push after a %s guard', (failure) => {
+      const root = candidate();
+      if (failure !== 'missing') runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+      if (failure === 'invalid') writeFileSync(recordPath(root), '{');
+      if (failure === 'legacy') {
+        const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
+        writeFileSync(recordPath(root), JSON.stringify({ ...old, schemaVersion: 2 }));
+      }
+      if (failure === 'changed') writeFileSync(join(root, '.git/info/exclude'), 'changed');
+      const spy = publication(root, { failRead: failure === 'unreadable' });
+      const args = publishArgs(root);
+      if (failure === 'head') args[4] = 'a'.repeat(40);
+      const result = runAutopilotCommand(args, '', spy.context);
+      expect(result.exitCode).toBe(2);
+      expect(spy.pushes).toEqual([]);
+    },
+  );
+
+  it('reports an uncertain remote outcome without retrying a failed push', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const spy = publication(root, { failPush: true });
+    const result = runAutopilotCommand(publishArgs(root), '', spy.context);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/remote outcome.*unknown/);
+    expect(spy.pushes).toHaveLength(1);
+  });
+
+  it('blocks a second operation while publication owns the lock', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const args = renewalArgs(root);
+    const spy = publication(root);
+    const owner = { ...context(root), git: (argv: readonly string[]) => {
+      if (argv[0] === 'push') {
+        expect(runAutopilotCommand(publishArgs(root), '', spy.context).exitCode).toBe(2);
+        expect(runAutopilotCommand(args, '', context(root)).exitCode).toBe(2);
+        return '';
+      }
+      return gitIn(root)(argv);
+    } };
+    expect(runAutopilotCommand(publishArgs(root), '', owner).exitCode).toBe(0);
+    expect(spy.pushes).toEqual([]);
+  });
+
+  it.each(['shared', 'branch'])('detects a %s mutation during renewal without writing an accepted record', (mutation) => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const args = renewalArgs(root);
+    let reads = 0;
+    const concurrent = { ...context(root), git: (argv: readonly string[]) => {
+      if (argv[0] === 'config' && ++reads === 2) {
+        if (mutation === 'shared') writeFileSync(join(root, '.git/info/exclude'), 'concurrent');
+        else git(root, 'commit', '-q', '--allow-empty', '-m', 'concurrent');
+      }
+      return gitIn(root)(argv);
+    } };
+    expect(runAutopilotCommand(args, '', concurrent).exitCode).toBe(2);
+    expect(existsSync(join(root, '.void/machine/autopilot/fingerprints/DEV-1.renewals'))).toBe(false);
+  });
+
+  it('refuses a protected destination and a head changed while the guard reads', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const spy = publication(root);
+    const args = publishArgs(root);
+    args[args.length - 1] = 'main';
+    expect(runAutopilotCommand(args, '', spy.context).exitCode).toBe(2);
+    expect(spy.pushes).toEqual([]);
+    let moved = false;
+    const concurrent = { ...context(root), git: (argv: readonly string[]) => {
+      if (argv[0] === 'config' && !moved) { moved = true; git(root, 'commit', '-q', '--allow-empty', '-m', 'moved'); }
+      if (argv[0] === 'push') throw new Error('push must not run');
+      return gitIn(root)(argv);
+    } };
+    const changed = runAutopilotCommand(publishArgs(root), '', concurrent);
+    expect(changed.exitCode).toBe(2);
+    expect(changed.stderr).toContain('branch differs');
+  });
+
+  it('publishes to a real local remote and respects its installed pre-push hook', () => {
+    const root = candidate();
+    const remote = mkdtempSync(join(tmpdir(), 'void-publication-remote-'));
+    roots.push(remote);
+    expect(git(remote, 'init', '-q', '--bare').status).toBe(0);
+    expect(git(root, 'remote', 'add', 'origin', remote).status).toBe(0);
+    const hook = join(root, '.git/hooks/pre-push');
+    writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    expect(runAutopilotCommand(publishArgs(root), '', context(root)).exitCode).toBe(2);
+    expect(git(remote, 'show-ref', '--verify', 'refs/heads/work/DEV-1').status).not.toBe(0);
+    writeFileSync(hook, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    expect(runAutopilotCommand(renewalArgs(root), '', context(root)).exitCode).toBe(0);
+    expect(runAutopilotCommand(publishArgs(root), '', context(root)).exitCode).toBe(0);
+    expect(gitIn(remote)(['rev-parse', 'refs/heads/work/DEV-1']).trim()).toBe(head(root));
+  });
+
+  it('retains the original and complete renewal evidence and replays identically', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const original = readFileSync(recordPath(root), 'utf8');
+    writeFileSync(join(root, '.git/info/exclude'), 'authorized');
+    const args = renewalArgs(root);
+    const renewed = runAutopilotCommand([...args, '--json'], '', context(root));
+    expect(renewed.exitCode).toBe(0);
+    const evidence = JSON.parse(renewed.stdout) as Record<string, unknown>;
+    expect(evidence).toMatchObject({ cause: 'authorized repair', decision: 'human:approval-42', head: head(root) });
+    expect(evidence.previous).not.toEqual(evidence.fingerprint);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+    expect(runAutopilotCommand([...args, '--json'], '', context(root))).toEqual(renewed);
+    expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(0);
+    const conflict = [...args];
+    conflict[conflict.indexOf('--cause') + 1] = 'another cause';
+    expect(runAutopilotCommand(conflict, '', context(root)).exitCode).toBe(2);
+    expect(existsSync(join(root, '.void/machine/autopilot/reviews'))).toBe(false);
+  });
+
+  it('compares a retained v3 fingerprint under its original policy without renewal', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
+    const original = JSON.stringify({ ...old, schemaVersion: 3 });
+    writeFileSync(recordPath(root), original);
+    expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(0);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+    writeFileSync(join(root, '.git/info/refs'), 'changed server cache');
+    expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(2);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+  });
+
+  it.each([false, true])('uses the retained v3 policy at both publication reads (drift: %s)', drift => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const old = JSON.parse(readFileSync(recordPath(root), 'utf8')) as Record<string, unknown>;
+    const baseline = JSON.stringify({ ...old, schemaVersion: 3 });
+    writeFileSync(recordPath(root), baseline);
+    let reads = 0;
+    const pushes: string[][] = [];
+    const owner = { ...context(root), git: (argv: readonly string[]) => {
+      if (argv[0] === 'config' && ++reads === 2 && drift) writeFileSync(join(root, '.git/info/refs'), 'concurrent cache');
+      if (argv[0] === 'push') { pushes.push([...argv]); return ''; }
+      return gitIn(root)(argv);
+    } };
+    expect(runAutopilotCommand(publishArgs(root), '', owner).exitCode).toBe(drift ? 2 : 0);
+    expect(reads).toBe(2);
+    expect(pushes).toHaveLength(drift ? 0 : 1);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(baseline);
+    expect(existsSync(join(root, '.void/machine/autopilot/fingerprints/DEV-1.renewals'))).toBe(false);
+  });
+
+  it('refuses stale observations, concurrent operations and incomplete renewal evidence', () => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const args = renewalArgs(root);
+    writeFileSync(join(root, '.git/info/exclude'), 'later');
+    expect(runAutopilotCommand(args, '', context(root)).exitCode).toBe(2);
+    const lock = join(root, '.void/machine/autopilot/fingerprints/DEV-1.lock');
+    mkdirSync(lock);
+    const spy = publication(root);
+    expect(runAutopilotCommand(publishArgs(root), '', spy.context).exitCode).toBe(2);
+    expect(runAutopilotCommand(renewalArgs(root), '', context(root)).exitCode).toBe(2);
+    expect(spy.pushes).toEqual([]);
+    rmSync(lock, { recursive: true });
+    const valid = renewalArgs(root);
+    const prior = valid[valid.indexOf('--previous') + 1];
+    const directory = join(root, '.void/machine/autopilot/fingerprints/DEV-1.renewals');
+    mkdirSync(directory);
+    writeFileSync(join(directory, `${prior}.json`), '{');
+    expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(2);
+    expect(runAutopilotCommand(valid, '', context(root)).exitCode).toBe(2);
   });
 });

@@ -31,7 +31,18 @@ function unavailable(label, result) {
 }
 
 /** One capability probe, then one bounded lane. No retry or success on absence. */
-export function runNetworkLane(execute = spawnSync) {
+export function runNetworkLane(execute = spawnSync, args = []) {
+  // Only certification ordering may vary; callers cannot override lane safety.
+  // Vitest 5.0.1: https://vitest.dev/config/sequence
+  const seen = new Set();
+  for (const argument of args) {
+    const seed = /^--sequence.seed=([1-9][0-9]*)$/.exec(argument);
+    const option = argument === '--sequence.shuffle' ? 'shuffle' : seed ? 'seed' : undefined;
+    if (!option || seen.has(option) || (seed && Number(seed[1]) > 2_147_483_647)) {
+      return { status: 'unknown', exitCode: 2, reason: 'unsupported network lane arguments' };
+    }
+    seen.add(option);
+  }
   const probe = execute(process.execPath, ['--input-type=module', '-e', PROBE], {
     encoding: 'utf8', shell: false, timeout: 2_000, killSignal: 'SIGKILL', maxBuffer: 4_096,
   });
@@ -40,7 +51,7 @@ export function runNetworkLane(execute = spawnSync) {
     fileURLToPath(new URL('../node_modules/vitest/vitest.mjs', import.meta.url)),
     // Threads die with the bounded parent; a timed-out fork can outlive it.
     // Vitest 5: https://vitest.dev/config/pool.html
-    'run', '--project=*:network-browser', '--maxWorkers=1', '--pool=threads',
+    'run', '--project=*:network-browser', '--maxWorkers=1', '--pool=threads', ...args,
   ], {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
     stdio: 'inherit', shell: false, timeout: 120_000, killSignal: 'SIGKILL',
@@ -52,7 +63,7 @@ export function runNetworkLane(execute = spawnSync) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = runNetworkLane();
+  const result = runNetworkLane(spawnSync, process.argv.slice(2));
   process.stdout.write(`${JSON.stringify({ lane: 'network-browser', ...result })}\n`);
   process.exitCode = result.exitCode;
 }

@@ -18,7 +18,7 @@ function fail(message) {
 }
 
 function commandFor(script, seed) {
-  return ['pnpm', script, '--', '--sequence.shuffle', `--sequence.seed=${seed}`];
+  return ['pnpm', script, '--sequence.shuffle', `--sequence.seed=${seed}`];
 }
 
 export function stressPlan(mode, attempts, firstSeed) {

@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
 // view (via updatedToolOutput) plus a full spill file, while Read/Edit and small
 // results pass through untouched, and any uncertainty fails OPEN.
 const here = dirname(fileURLToPath(import.meta.url));
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 const HOOK = 'trim-large-output.sh';
 
 function runHook(

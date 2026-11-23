@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { validateConfig } from '../lib/config-schema.js';
 import { buildDefaultConfig, buildFinalChecklist, configWriteVerdict, installDoctrineFiles, resolveInstallSource, sourceRepoVerdict } from './init.js';
 import { stageInstallManifest } from '../lib/local-install.js';
 import type { CheckResult } from '../lib/prerequisites.js';
@@ -19,6 +20,19 @@ import { afterEach } from 'vitest';
 const STACK: Stack = { packageManager: 'pnpm', testRunner: 'vitest', e2eRunner: 'none', mutationRunner: 'none' };
 
 describe('buildDefaultConfig pin behavior', () => {
+  it('seeds corresponding root and apps paths accepted by the config schema', () => {
+    const config = buildDefaultConfig({ pinVersion: '7.0.1', stack: STACK });
+    expect(validateConfig(config).ok).toBe(true);
+    expect(config.paths).toEqual({
+      business: ['src/**', 'apps/*/src/**'],
+      tests: ['src/**/*.test.{ts,tsx}', 'apps/*/src/**/*.test.{ts,tsx}'],
+      spikes: ['scripts/spike-*', 'apps/*/scripts/spike-*'],
+      serverActions: ['src/app/(api|actions)/**', 'apps/*/src/app/(api|actions)/**'],
+      contracts: ['src/lib/contracts/**', 'apps/*/src/lib/contracts/**'],
+      e2e: ['tests/e2e/**', 'apps/*/tests/e2e/**'],
+    });
+  });
+
   it('pins core when a version was resolved', () => {
     const config = buildDefaultConfig({ pinVersion: '0.14.0', stack: STACK });
     expect(config.core).toBe('^0.14.0');

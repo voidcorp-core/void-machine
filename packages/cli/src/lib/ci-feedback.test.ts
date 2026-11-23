@@ -59,8 +59,12 @@ describe('development feedback and integration admission', () => {
     expect(ci.getIn(['jobs', 'validate', 'if'])).toBeUndefined();
   });
 
-  it.each(['ci.yml', 'void-enforce.yml'])('%s starts fresh on ready and cancels only obsolete PR runs', (name) => {
-    const ci = workflow(`.github/workflows/${name}`);
+  it.each([
+    '.github/workflows/ci.yml', '.github/workflows/void-enforce.yml',
+    'packages/core/skills/void-verify/references/quality.yml',
+    'packages/core/templates/github/void-dependency-audit.yml',
+  ])('%s starts fresh on ready and cancels only obsolete PR runs', (name) => {
+    const ci = workflow(name);
     const types = sequence(ci, ['on', 'pull_request', 'types']);
     expect(types).toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft', 'synchronize']));
     const group = ci.getIn(['concurrency', 'group']);
@@ -73,6 +77,54 @@ describe('development feedback and integration admission', () => {
       expect(evaluate(group, { ...context, workflow: name }))
         .not.toBe(evaluate(group, { ...context, workflow: name, run_id: 999 }));
     }
+  });
+
+  it('keeps caller readiness and concurrency in the documented reusable workflow adoption', () => {
+    const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+    const example = readme.match(/```yaml\n(name: void-enforce\n[\s\S]*?)```/)?.[1];
+    expect(example).toBeDefined();
+    const caller = parseDocument(example ?? '', { uniqueKeys: true });
+    expect(caller.errors).toEqual([]);
+    expect(sequence(caller, ['on', 'pull_request', 'types']))
+      .toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft']));
+    expect(sequence(caller, ['on', 'merge_group', 'types'])).toEqual(['checks_requested']);
+    expect(caller.getIn(['jobs', 'enforce', 'if'])).toBeUndefined();
+    expect(caller.getIn(['jobs', 'enforce', 'uses'])).toMatch(/enforce\.yml@<full-sha>$/);
+    const group = caller.getIn(['concurrency', 'group']);
+    const cancel = caller.getIn(['concurrency', 'cancel-in-progress']);
+    expect(evaluate(group, { ...contexts.draft, workflow: 'void-enforce' }))
+      .toBe(evaluate(group, { ...contexts.ready, workflow: 'void-enforce' }));
+    expect(evaluate(cancel, contexts.ready)).toBe('true');
+    for (const context of [contexts.queue, contexts.manual, contexts.push]) {
+      expect(evaluate(cancel, context)).toBe('false');
+      expect(evaluate(group, { ...context, workflow: 'void-enforce' }))
+        .not.toBe(evaluate(group, { ...context, workflow: 'void-enforce', run_id: 999 }));
+    }
+    const reusable = workflow('.github/workflows/enforce.yml');
+    expect(reusable.getIn(['concurrency'])).toBeUndefined();
+    expect(reusable.getIn(['jobs', 'enforce', 'concurrency'])).toBeUndefined();
+  });
+
+  it('admits reusable enforcement with immutable code before setup and floor execution', () => {
+    const reusable = workflow('.github/workflows/enforce.yml');
+    expect(reusable.getIn(['jobs', 'enforce', 'timeout-minutes'])).toBeLessThanOrEqual(10);
+    expect(reusable.getIn(['jobs', 'enforce', 'if'])).toBeUndefined();
+    const steps = sequence(reusable, ['jobs', 'enforce', 'steps']) as {
+      run?: string; uses?: string; with?: Record<string, string>; 'continue-on-error'?: boolean;
+    }[];
+    const admissionIndex = steps.findIndex(step => step.run?.includes('ci-admission.mjs'));
+    expect(admissionIndex).toBeGreaterThanOrEqual(0);
+    expect(steps[admissionIndex]?.run).toBe(
+      'node .void-enforce-runtime/packages/core/skills/void-verify/references/ci-admission.mjs',
+    );
+    expect(steps[admissionIndex]?.['continue-on-error']).toBeUndefined();
+    const implementationIndex = steps.findIndex(step => step.with?.path === '.void-enforce-runtime');
+    expect(implementationIndex).toBeLessThan(admissionIndex);
+    expect(steps[implementationIndex]?.with?.ref).toBe(`\${{ job.workflow_sha }}`);
+    expect(steps.findIndex(step => step.uses?.startsWith('actions/setup-node@')))
+      .toBeGreaterThan(admissionIndex);
+    expect(steps.findIndex(step => step.uses?.endsWith('/.github/actions/void-enforce')))
+      .toBeGreaterThan(admissionIndex);
   });
 
   it('keeps queue/main/manual validation without the develop post-merge duplicate', () => {
@@ -125,7 +177,7 @@ describe('development feedback and integration admission', () => {
     expect(result.status, result.stderr).toBe(0);
   });
 
-  it.each(['merge_group', 'workflow_dispatch', 'push'])('admits %s to real validation', (name) => {
+  it.each(['merge_group', 'workflow_dispatch', 'push', 'schedule'])('admits %s to real validation', (name) => {
     const result = admission(name, {});
     expect(result.status, result.stderr).toBe(0);
   });

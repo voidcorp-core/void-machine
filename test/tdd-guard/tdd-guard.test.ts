@@ -74,6 +74,19 @@ function runHook(
 }
 
 describe('tdd-guard.sh', () => {
+  it('governs root src through the legacy wrapper without a config', () => {
+    const dir = setupFixture();
+    try {
+      const call = { tool: 'Write', file: 'src/feature.ts', content: 'export const feature = 1;' };
+      expect(runHook(dir, call).code).toBe(2);
+      place(dir, 'src/feature.test.ts', 'test("feature", () => {});');
+      expect(runHook(dir, call).code).toBe(0);
+      expect(runHook(dir, { ...call, file: 'tools/src/feature.ts' }).code).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('BLOCKS a business edit with no sibling test (auto mode → exit 2)', () => {
     const dir = setupFixture();
     try {

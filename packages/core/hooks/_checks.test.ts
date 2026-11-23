@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest';
 // detects a violation, exit 0 and nothing when the input is clean.
 const here = dirname(fileURLToPath(import.meta.url));
 const lib = join(here, '_checks.sh');
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 
 /** Call one function from _checks.sh with args + stdin; capture exit + stdout (never throws). */
 function runCheck(fn: string, args: readonly string[] = [], input = ''): { code: number; stdout: string } {

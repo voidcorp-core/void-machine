@@ -29,3 +29,12 @@ variants from them by overriding fields; no shape here was written by hand.
 No pull request of this repository carries a commit status, hence the public
 sources. The queued captures (2026-09-24) come from flutter/flutter because no
 pull request of this repository sat in its merge queue at capture time.
+
+## Draft-to-ready current checks (6 November 2026)
+
+`pr-current-checks.json` is the read-only enriched GraphQL rollup for PR 533 at
+`337641aff1fda56b427254d39741230d153e86c8`. `pr-workflow-runs.json` retains the
+consumed fields from `GET actions/runs?head_sha=<sha>&event=pull_request&per_page=100`.
+Both contain real old/new suites: enforce run numbers 1104/1105 and CI 1617/1618.
+The test variants preserve the captured wire shapes. See `loop-checks.ts` for the
+query and `docs/CI-CHAIN.md` for bounded supersession and failure semantics.

@@ -49,3 +49,11 @@ La reprise n'accorde aucune permission supplémentaire : holds, revue indépenda
 checks, empreinte Git et chemins protégés restent applicables. Les PR touchant le
 plancher protégé vont à une personne ; aucune promotion vers main ni publication.
 Le checkpoint conserve l'intention de reprise ; il n'accorde aucune autorisation.
+
+Le programme `ci-economy-2026-11` présent sur develop est conservé dans Git, avec
+ses plan et spec du 5 novembre inchangés. Au 23 novembre, DEV-1204, DEV-1139,
+DEV-1140 et DEV-1141 sont terminés dans Linear ; DEV-1142 à DEV-1145 restent Todo.
+La demande explicite d'épuration remplace la sélection de travail de cette session,
+pas l'état ni l'acceptation de ces tickets. Ils ne sont ni repris automatiquement
+ni déclarés terminés. Le lot L8 réconciliera leur périmètre avec les décisions
+approuvées, notamment le build/pack de DEV-1143 et le retrait de ProjectGraph.

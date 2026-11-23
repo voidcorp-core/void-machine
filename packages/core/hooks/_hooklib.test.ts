@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -16,7 +16,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // empty payload — a wired-but-dead hook, a silent enforcement hole.
 const here = dirname(fileURLToPath(import.meta.url));
 const lib = join(here, '_hooklib.sh');
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// Resolve before the no-jq fixtures restrict PATH; login-shell state is irrelevant.
+const BASH = execFileSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).trim();
 
 const RS = '\x1e'; // record separator: ends one <path,content> record
 const US = '\x1f'; // unit separator: splits path from content

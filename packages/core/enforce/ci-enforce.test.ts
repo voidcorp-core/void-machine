@@ -26,7 +26,8 @@ const repositoryAllowlist = join(
   '.github',
   'void-enforce-allow',
 );
-const BASH = process.env.SHELL?.includes('bash') ? process.env.SHELL : '/opt/homebrew/bin/bash';
+// PATH resolves the installed Bash even when the runner omits login-shell state.
+const BASH = 'bash';
 
 const AWS_KEY = 'AKIA' + 'IOSFODNN7EXAMPLE1'; // split so the driver's own repo never trips the secret hook
 
@@ -162,13 +163,19 @@ describe('ci-enforce — violations become red annotations', () => {
 });
 
 describe('ci-enforce — clean diff is green', () => {
-  it('passes a benign change with no annotations', () => {
+  it.each([false, true])('requires evidence for an otherwise clean root-src change: sibling=%s', (sibling) => {
     write(repo, 'src/app.ts', 'export const ok = 2;\nexport const more = 3;\n');
+    if (sibling) write(repo, 'src/app.test.ts', 'test("app", () => {});\n');
     git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'benign');
+    git(repo, 'commit', '-q', '-m', 'root source change');
     const { code, stdout } = run(repo, base);
-    expect(code).toBe(0);
-    expect(stdout).not.toMatch(/::error/);
+    expect(code, stdout).toBe(sibling ? 0 : 1);
+    if (sibling) {
+      expect(stdout).not.toMatch(/::error/);
+    } else {
+      expect(stdout).toContain('::error file=src/app.ts,line=1::TDD_SIBLING_TEST_MISSING');
+      expect(stdout).toContain('src/app.ts -> src/app.test.ts');
+    }
   });
 
   it('does not flag a secret added to a test fixture', () => {

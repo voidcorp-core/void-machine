@@ -1,5 +1,51 @@
 # Changelog
 
+## [7.0.2](https://github.com/voidcorp-core/void-machine/compare/v7.0.1...v7.0.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **ci:** keep merge ordering stable without a queue service ([1c82fd5](https://github.com/voidcorp-core/void-machine/commit/1c82fd55f4b569ae9b14939c18e88702565ec477))
+* **ci:** keep merge ordering stable without a queue service ([703792f](https://github.com/voidcorp-core/void-machine/commit/703792fb59e2b8020b36cd0e1bbf1bb276643a60)), closes [#549](https://github.com/voidcorp-core/void-machine/issues/549)
+* **cli:** align consumer diagnostics with installed ownership ([80f45b6](https://github.com/voidcorp-core/void-machine/commit/80f45b6399eb1845c458056d26f8f66f110553d1))
+* **cli:** diagnose the installed channel and owned analyzer files ([c34cf2c](https://github.com/voidcorp-core/void-machine/commit/c34cf2ca8421699ef11db49a7ca919064a98387b)), closes [#545](https://github.com/voidcorp-core/void-machine/issues/545) [#327](https://github.com/voidcorp-core/void-machine/issues/327)
+* **cli:** keep damaged receipt channels unknown ([c969990](https://github.com/voidcorp-core/void-machine/commit/c9699903f90aa1472cffe600e988c9dd7855489b)), closes [#545](https://github.com/voidcorp-core/void-machine/issues/545)
+* **hooks:** block direct reads of environment secrets ([b909f8e](https://github.com/voidcorp-core/void-machine/commit/b909f8e2cfad1478657d3b4ca589b22e75360157))
+* **hooks:** guard direct secret environment reads ([83c486c](https://github.com/voidcorp-core/void-machine/commit/83c486ce1d9d46305be0ef054ec0db1d74f1b894)), closes [#454](https://github.com/voidcorp-core/void-machine/issues/454)
+* **hooks:** preserve shell read argument roles ([f1f14b4](https://github.com/voidcorp-core/void-machine/commit/f1f14b45cf8ff46c211d51d642d1c5cd71798bf0)), closes [#454](https://github.com/voidcorp-core/void-machine/issues/454)
+* **init:** cover root src applications in default paths ([d69337b](https://github.com/voidcorp-core/void-machine/commit/d69337bd14defef3d608b34e8226a4acc80f299e))
+* **init:** cover root src applications in default paths ([9a31fc8](https://github.com/voidcorp-core/void-machine/commit/9a31fc80b0c1f798334b58b19e48d4db6ed8fc3f)), closes [#452](https://github.com/voidcorp-core/void-machine/issues/452)
+* **review:** separate correction readiness from acceptance ([5e9f23a](https://github.com/voidcorp-core/void-machine/commit/5e9f23ad5f5a4b6e3ce0c65f80e41a16adb083ae))
+* **review:** separate correction readiness from acceptance ([57a1e40](https://github.com/voidcorp-core/void-machine/commit/57a1e40d4f4e50d32d6d2673f038789f59b3d1fe))
+
+## [7.0.1](https://github.com/voidcorp-core/void-machine/compare/v7.0.0...v7.0.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **autopilot:** bind controlled reviews to the assigned worktree ([dc3e94e](https://github.com/voidcorp-core/void-machine/commit/dc3e94e2bba9f9af51552c2a6656c297a1ab7d03))
+* **autopilot:** bind controlled reviews to the assigned worktree ([e86f168](https://github.com/voidcorp-core/void-machine/commit/e86f168e31fc09a328897bd7261b2b3ff291ebed)), closes [#535](https://github.com/voidcorp-core/void-machine/issues/535)
+* **autopilot:** compare retained fingerprints under their own policy ([9f8a853](https://github.com/voidcorp-core/void-machine/commit/9f8a853821bf141b165d0c4b2e212e0d176548e6))
+* **autopilot:** declare existing fixture coverage ([82e7cf7](https://github.com/voidcorp-core/void-machine/commit/82e7cf7cc1c42b553480377ccee2eb3cdefae130))
+* **autopilot:** guard publication and retain human renewal evidence ([484ce89](https://github.com/voidcorp-core/void-machine/commit/484ce8925a104d2370e6b5889e1bc0b2a994fea5))
+* **autopilot:** observe current checks across draft readiness ([d0e367a](https://github.com/voidcorp-core/void-machine/commit/d0e367a1bdc88205810bf05ff66863db405d1e2c))
+* **autopilot:** observe current checks across draft readiness ([3872698](https://github.com/voidcorp-core/void-machine/commit/3872698686b5a2823802654ed4d5c7e38f7cfdc4))
+* **autopilot:** preserve review attempts across overlapping preflight ([baece90](https://github.com/voidcorp-core/void-machine/commit/baece90c03aa5966d184d6c6e14eb828cfc50e2e)), closes [#535](https://github.com/voidcorp-core/void-machine/issues/535)
+* **autopilot:** protect the default deployment branch on publish ([ddd9895](https://github.com/voidcorp-core/void-machine/commit/ddd98950cf9587d9ecced3bd14c0ca8e0f08ca67))
+* **autopilot:** retain uncertain workflow admission blockers ([c56e6ae](https://github.com/voidcorp-core/void-machine/commit/c56e6ae5b744f65cf0a3d76dc87b757d169e2f73))
+* **autopilot:** stop publication on guard refusal ([6eebad5](https://github.com/voidcorp-core/void-machine/commit/6eebad5a1abde431487b2cc9c457b4e73a030ac7))
+* **ci:** align consumer admission and audit triggers ([90865b1](https://github.com/voidcorp-core/void-machine/commit/90865b146e685862db81d1b55425855df8d5356b))
+* **ci:** align consumer admission and audit triggers ([2ea390b](https://github.com/voidcorp-core/void-machine/commit/2ea390bd5d44ccbb097ba02b09f8c242aba99a37))
+* **ci:** prepare certification and apply recorded seeds ([87a2faf](https://github.com/voidcorp-core/void-machine/commit/87a2faf49518ae8dc85413213516d59e25f016cf))
+* **ci:** repair seeded certification and preserve worktree documents ([c758ab0](https://github.com/voidcorp-core/void-machine/commit/c758ab0964b5e8f1b59ca3d9c1025be507f13b39))
+* **mission:** recover retained review writer bindings ([61b7cb1](https://github.com/voidcorp-core/void-machine/commit/61b7cb161ed2abbb9a8777e6776ad8bda67d1f4b))
+* **mission:** recover retained review writer bindings ([de8c509](https://github.com/voidcorp-core/void-machine/commit/de8c509264b4406451c166ec7980d4649ee61294))
+* **recovery:** retain targeted corrections and fingerprint policy ([e5b0410](https://github.com/voidcorp-core/void-machine/commit/e5b04108a343696c2b99abcfc3f5331bc2b20005))
+* **review:** reconcile mixed proof references before recovery ([3323773](https://github.com/voidcorp-core/void-machine/commit/3323773d0a8dc202c206122de9392e7acdc1a321))
+* **review:** retain authorized corrections after proof staleness ([00b2c8f](https://github.com/voidcorp-core/void-machine/commit/00b2c8fcd48bb60e005356c02f7eb5d2995b2226))
+* **review:** retain authorized corrections after proof staleness ([ff71424](https://github.com/voidcorp-core/void-machine/commit/ff71424b1bf992c73c4e10b5aa6ec3dd82925a35)), closes [#536](https://github.com/voidcorp-core/void-machine/issues/536)
+* **review:** retain correction blockers across subject changes ([40f6cbd](https://github.com/voidcorp-core/void-machine/commit/40f6cbd2a53cbca5150e5c836c7fa9bac7d7950a))
+
 ## [7.0.0](https://github.com/voidcorp-core/void-machine/compare/v6.0.0...v7.0.0) (2026-10-31)
 
 

@@ -14,6 +14,8 @@ import {
   type SpecialistDispatchEnvelope,
   sameReviewSubject,
   validatedSpecialistContractMigrations,
+  validatedRecoveredReviewEvents,
+  writerBindingRecovery,
 } from '@voidcorp/mission-engine';
 import { readBoundedProjectFile } from '../safe-read.js';
 import { observedMissionLifecycle } from './mission-lifecycle.js';
@@ -278,6 +280,7 @@ export async function recordSpecialistLifecycle(
   rejectSecrets(payload);
   const inspected = await inspectMission(root, missionId, { dependencies: {} });
   const events = inspected.stream.events;
+  rejectWrongWriter(events, input);
   const lifecycle = observedMissionLifecycle(events);
   if (lifecycle.status === 'closed') invalid('mission is closed');
   await rejectSupersededSpecialistContract(root, missionId, events, input.envelope, input.contextId);
@@ -288,6 +291,10 @@ export async function recordSpecialistLifecycle(
     && field(event.payload, 'runtime') === input.envelope.runtime).at(-1);
   if (requested === undefined) invalid('no matching specialist.requested event exists');
   const invocationId = await checkedReviewArtifact(artifactRoot, input, events, requested);
+  if (writerBindingRecovery(events) && input.status === 'started'
+    && (input.contextId === undefined || !canContinueRecoveredReview(events, requested, input.contextId))) {
+    invalid('writer binding recovery requires its retained reviewer and targeted correction');
+  }
   if (invocationId !== undefined && input.status === 'completed') {
     payload = { ...common, ...(input.contextId === undefined ? {} : { contextId: input.contextId }),
       completion: completionJson(input.completion), reviewInvocationEventId: invocationId };
@@ -316,7 +323,7 @@ export async function recordSpecialistLifecycle(
     }
     if (recovery !== undefined && input.contextId !== undefined && events.some(event =>
       event.kind === 'specialist.started' && field(event.payload, 'contextId') === input.contextId)
-      && !canContinueNativeReview(events, requested, input.contextId)) {
+      && !canContinueRecoveredReview(events, requested, input.contextId)) {
       invalid('contextId was already used by a previous dispatch');
     }
   } else {
@@ -346,6 +353,11 @@ export async function recordSpecialistLifecycle(
     draft,
     validate: async current => {
       rejectClosedMission(current);
+      rejectWrongWriter(current, input);
+      if (writerBindingRecovery(current) && input.status === 'started'
+        && (input.contextId === undefined || !canContinueRecoveredReview(current, requested, input.contextId))) {
+        invalid('writer binding recovery requires its retained reviewer and targeted correction');
+      }
       await checkedReviewArtifact(artifactRoot, input, current, requested);
       await rejectSupersededSpecialistContract(root, missionId, current, input.envelope, input.contextId);
       if (observedMissionLifecycle(current).episodeId !== lifecycle.episodeId) {
@@ -355,13 +367,37 @@ export async function recordSpecialistLifecycle(
         event.kind === 'specialist.started'
         && field(event.payload, 'contextId') === input.contextId
         && event.eventId !== eventId)
-        && !canContinueNativeReview(current, requested, input.contextId)) {
+        && !canContinueRecoveredReview(current, requested, input.contextId)) {
         invalid('contextId was already used by a previous dispatch');
       }
     },
   });
   if (!sameDraft(result.event, draft)) {
     invalid(`dispatch ${phase} event conflicts with an existing event`);
+  }
+}
+
+function rejectWrongWriter(events: readonly CanonicalEvent[], input: SpecialistLifecycleInput): void {
+  if (input.status !== 'completed' || input.completion.review === undefined) return;
+  const writer = field(events[0]?.payload ?? {}, 'leadWriterId');
+  if (typeof writer === 'string' && input.completion.review.writerId !== writer) {
+    invalid('review receipt must name the canonical lead writer from mission.started');
+  }
+}
+
+function canContinueRecoveredReview(events: readonly CanonicalEvent[], request: CanonicalEvent, contextId: string): boolean {
+  const projected = validatedRecoveredReviewEvents(events);
+  return projected.ok && canContinueNativeReview(projected.events, request, contextId);
+}
+
+function rejectExtraAmendedReview(events: readonly CanonicalEvent[], envelope: SpecialistDispatchEnvelope): void {
+  const projected = validatedRecoveredReviewEvents(events);
+  if (!projected.ok) invalid(projected.reasons.join('; '));
+  const amendment = writerBindingRecovery(projected.events);
+  if (amendment && (envelope.reviewScope?.kind !== 'targeted' || envelope.reviewRound !== 2
+    || events.some(event => event.seq > amendment.seq && event.kind === 'specialist.requested'
+      && !sameDispatch(event, envelope)))) {
+    invalid('writer binding recovery permits only its single targeted continuation');
   }
 }
 
@@ -508,6 +544,7 @@ export async function recordSpecialistRequests(
   if (lifecycle.status === 'closed') invalid('mission is closed');
   const recovery = inspected.stream.events.filter(event => event.kind === 'mission.recovered').at(-1);
   for (const envelope of parsed) {
+    rejectExtraAmendedReview(inspected.stream.events, envelope);
     await rejectSupersededSpecialistContract(root, missionId, inspected.stream.events, envelope);
     const eventId = `evt_${createHash('sha256')
       .update([
@@ -547,6 +584,7 @@ export async function recordSpecialistRequests(
       draft,
       validate: async current => {
         rejectClosedMission(current);
+        rejectExtraAmendedReview(current, envelope);
         await rejectSupersededSpecialistContract(root, missionId, current, envelope);
         if (observedMissionLifecycle(current).episodeId !== lifecycle.episodeId) {
           invalid('mission episode changed before recording dispatch');

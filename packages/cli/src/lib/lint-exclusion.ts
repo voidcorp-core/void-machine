@@ -1,79 +1,141 @@
-// Keep the harness out of the consumer's lint.
-//
-// `.claude/` holds files this repo wrote, in formats their engines define. The
-// autopilot workflow script is the sharp case: valid for the Workflow engine,
-// rejected by any standard JavaScript parser, because it carries
-// `export const meta` and a top-level `return` at once. A project that lints
-// `**/*.js` then fails on code it does not own and cannot fix.
-//
-// The harness caused that, so the harness clears it — at install time, where a
-// single decision covers every consumer, instead of leaving each one to
-// discover it three files into an afternoon.
-//
-// This module reads and reports; it never writes. Two reasons, both learned the
-// hard way. The config belongs to the project, and the install transaction
-// rolls back byte-for-byte only over files it owns — an edit here would survive
-// a failed install that claimed to have restored everything. And appending
-// `!.claude` to a config with no `files.includes` produces a lone negation,
-// which per Biome's documentation matches nothing at all: the repair would have
-// silently stopped the project linting anything.
-
 import { existsSync } from 'node:fs';
-import { readFile, realpath } from 'node:fs/promises';
+import { lstat, readFile, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import picomatch from 'picomatch';
+import { classifyMaterialized, isCoOwned } from '@voidcorp/hook-runner';
+import type { CheckResult } from './prerequisites.js';
+import { ownedInstallPaths } from './void-migration.js';
 
-/** What we add to a Biome `files.includes` list. */
-export const HARNESS_LINT_EXCLUSION = '!.claude';
-
+// Read-only advice: project analyzer configuration is outside the install transaction.
+// Ownership is per file, never inferred from a shared runtime directory.
 const BIOME_FILES = ['biome.json', 'biome.jsonc'];
-const HARNESS_PROBES = ['.claude', '.claude/workflows/autopilot.workflow.js'];
+const KNIP_FILES = ['knip.json', 'knip.jsonc', '.knip.json', '.knip.jsonc',
+  'knip.ts', 'knip.js', 'knip.config.ts', 'knip.config.js'];
 const MAX_BIOME_CONFIG_READS = 32;
-const OTHER_LINTERS = [
-  'eslint.config.js',
-  'eslint.config.mjs',
-  'eslint.config.ts',
-  '.eslintrc.json',
-  '.eslintrc.cjs',
-  '.oxlintrc.json',
-];
+const MAX_EXAMPLES = 5;
+const SCRIPT = /\.[cm]?[jt]sx?$/i;
+const BIOME_ASSET = /\.(?:[cm]?[jt]sx?|jsonc?|css|graphql|gql)$/i;
+const OTHER_LINTERS = ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.ts',
+  '.eslintrc.json', '.eslintrc.cjs', '.oxlintrc.json'];
 
-/** What the project's linter config says about `.claude`, read only. */
-export type LintExclusionState =
-  | { readonly kind: 'excluded'; readonly file: string }
-  | { readonly kind: 'missing'; readonly file: string; readonly instruction: string }
-  | { readonly kind: 'manual'; readonly file: string; readonly instruction: string }
-  | { readonly kind: 'no-linter' };
-
-/**
- * Read-only inspection, for `doctor`.
- *
- * A diagnostic that repairs what it measures cannot be run to find out whether
- * something is wrong — it would always report health, having just created it.
- */
-export async function inspectHarnessLintExclusion(projectRoot: string): Promise<LintExclusionState> {
-  const biome = BIOME_FILES.map((name) => join(projectRoot, name)).find((path) => existsSync(path));
+/** Inspect actual attested assets against each supported analyzer, without running it. */
+export async function inspectHarnessLintExclusion(root: string): Promise<readonly CheckResult[]> {
+  const checks: CheckResult[] = [];
+  const biome = BIOME_FILES.find((name) => existsSync(join(root, name)));
+  const knip = KNIP_FILES.find((name) => existsSync(join(root, name)));
+  const other = OTHER_LINTERS.find((name) => existsSync(join(root, name)));
+  const packageKnip = knip === undefined ? await readPackageKnip(root) : undefined;
+  if (biome === undefined && knip === undefined && packageKnip === undefined && other === undefined) {
+    return [{ name: 'lint boundary', ok: true, status: 'pass', message: 'no analyzer config found' }];
+  }
+  const owned = await analyzerPaths(root);
   if (biome !== undefined) {
-    const name = relative(projectRoot, biome);
-    const scope = await resolveBiomeIncludes(projectRoot, name);
-    if (scope.kind === 'failure') return manual(name, scope.reason);
+    const scope = await resolveBiomeIncludes(root, biome);
+    checks.push(owned.kind === 'failure' ? manual('lint boundary', biome, owned.reason)
+      : scope.kind === 'failure' ? manual('lint boundary', biome, scope.reason)
+      : inspectBiome(biome, owned.paths, scope.includes));
+  } else if (other !== undefined) {
+    checks.push(manual('lint boundary', other, 'this analyzer configuration needs manual inspection'));
+  }
+  if (knip !== undefined || packageKnip !== undefined) {
+    const file = knip ?? 'package.json';
+    checks.push(owned.kind === 'failure' ? manual('knip boundary', file, owned.reason)
+      : await inspectKnip(root, file, owned.paths.filter((path) => SCRIPT.test(path)), packageKnip));
+  }
+  return checks;
+}
 
-    const harnessScope = harnessCanEnter(scope.includes);
-    if (harnessScope.kind === 'failure') return manual(name, harnessScope.reason);
-    if (!harnessScope.included) {
-      return { kind: 'excluded', file: name };
+async function analyzerPaths(root: string): Promise<{ kind: 'paths'; paths: string[] } | ResolutionFailure> {
+  const owned = await ownedInstallPaths(root);
+  if (owned === undefined) return { kind: 'failure', reason: 'ownership unknown: no valid manifest or receipt' };
+  const paths: string[] = [];
+  try {
+    const canonicalRoot = await realpath(root);
+    for (const path of [...owned].sort()) {
+      if (isCoOwned(path) || classifyMaterialized(path) !== 'derived' || !BIOME_ASSET.test(path)) continue;
+      const full = join(root, path);
+      if (!existsSync(full)) continue;
+      if (!isInside(canonicalRoot, await realpath(full))) {
+        return { kind: 'failure', reason: `owned path resolves outside the project: ${path}` };
+      }
+      if ((await lstat(full)).isFile()) paths.push(path);
     }
-    return {
-      kind: 'missing',
-      file: name,
-      instruction: `add \`${HARNESS_LINT_EXCLUSION}\` to files.includes in ${name} (keep a positive pattern such as \`**\` before it — a lone negation matches nothing in Biome)`,
-    };
+  } catch {
+    return { kind: 'failure', reason: 'cannot inspect owned analyzer files' };
   }
-  const other = OTHER_LINTERS.find((name) => existsSync(join(projectRoot, name)));
-  if (other !== undefined) {
-    return manual(other, 'this linter is configured in code');
+  return { kind: 'paths', paths };
+}
+
+function inspectBiome(file: string, paths: readonly string[], includes: readonly string[] | undefined): CheckResult {
+  const exposed: string[] = [];
+  for (const path of paths) {
+    const scope = harnessCanEnter(path, includes);
+    if (scope.kind === 'failure') return manual('lint boundary', file, scope.reason);
+    if (scope.included) exposed.push(path);
   }
-  return { kind: 'no-linter' };
+  return boundary('lint boundary', file, exposed, 'files.includes', true);
+}
+
+async function readPackageKnip(root: string): Promise<unknown> {
+  if (!existsSync(join(root, 'package.json'))) return undefined;
+  const parsed = await readAnalyzerConfig(root, 'package.json');
+  return parsed.kind === 'parsed' && isRecord(parsed.value) ? parsed.value.knip : undefined;
+}
+
+async function readAnalyzerConfig(root: string, file: string): Promise<
+  { kind: 'parsed'; value: unknown } | ResolutionFailure
+> {
+  try {
+    const canonicalRoot = await realpath(root);
+    const path = await realpath(join(root, file));
+    if (!isInside(canonicalRoot, path)) return { kind: 'failure', reason: 'config resolves outside the project' };
+    return { kind: 'parsed', value: JSON.parse(await readFile(path, 'utf8')) };
+  } catch {
+    return { kind: 'failure', reason: 'config is unreadable or not plain JSON' };
+  }
+}
+
+async function inspectKnip(root: string, file: string, paths: readonly string[], embedded?: unknown): Promise<CheckResult> {
+  if (!file.endsWith('.json') && !file.endsWith('.jsonc')) {
+    return manual('knip boundary', file, 'executable configuration is not evaluated');
+  }
+  const read = embedded === undefined ? await readAnalyzerConfig(root, file) : { kind: 'parsed' as const, value: embedded };
+  if (read.kind === 'failure') return manual('knip boundary', file, read.reason);
+  if (!isRecord(read.value)) return manual('knip boundary', file, 'config must be an object');
+  // Deliberately bounded subset, documented by Knip schema 6. Workspaces, plugins,
+  // project scopes and mode-specific patterns need the analyzer's own evaluation.
+  // https://knip.dev/reference/configuration/#ignorefiles
+  const config = read.value;
+  const unsupported = Object.keys(config).some((key) => !['$schema', 'ignore', 'ignoreFiles'].includes(key));
+  const ignore = stringArray(config.ignore);
+  const unused = stringArray(config.ignoreFiles);
+  if (unsupported || ignore === 'invalid' || unused === 'invalid'
+      || [...(ignore ?? []), ...(unused ?? [])].some((pattern) => pattern.startsWith('!') || pattern.endsWith('!') || pattern.trim() === '')) {
+    return manual('knip boundary', file, 'unsupported static config or mode-specific patterns; inspect manually');
+  }
+  try {
+    const matches = picomatch([...(ignore ?? [])], { dot: true });
+    const check = boundary('knip boundary', file, paths.filter((path) => !matches(path)),
+      file === 'package.json' ? 'knip.ignore' : 'ignore', false);
+    return unused !== undefined && check.status === 'advisory'
+      ? { ...check, message: `${check.message}; ignoreFiles suppresses unused files only` } : check;
+  } catch {
+    return manual('knip boundary', file, 'invalid ignore patterns');
+  }
+}
+
+function boundary(name: string, file: string, exposed: readonly string[], field: string, negate: boolean): CheckResult {
+  if (exposed.length === 0) return { name, ok: true, status: 'pass', message: `${file}: no owned analyzer files exposed` };
+  const sample = exposed.slice(0, MAX_EXAMPLES);
+  const patterns = sample.map((path) => `\`${negate ? '!' : ''}${path}\``).join(', ');
+  const remainder = exposed.length > MAX_EXAMPLES ? `; inspect the remaining ${exposed.length - MAX_EXAMPLES} owned files in the install manifest` : '';
+  return {
+    name, ok: true, status: 'advisory',
+    message: `${file}: ${exposed.length} owned file(s) lack an explicit analyzer exclusion: ${sample.join(', ')}`,
+    fix: `review ${field} in ${file}: exclude ${patterns}${remainder}`
+      + (negate ? ' (keep a positive pattern such as `**` before exclusions; a lone negation matches nothing in Biome)' : '')
+      + '; keep project-owned neighbors in scope',
+  };
 }
 
 type ResolutionFailure = { readonly kind: 'failure'; readonly reason: string };
@@ -212,7 +274,7 @@ function stringArray(value: unknown): readonly string[] | undefined | 'invalid' 
   return value;
 }
 
-function harnessCanEnter(includes: readonly string[] | undefined): ScopeResolution {
+function harnessCanEnter(path: string, includes: readonly string[] | undefined): ScopeResolution {
   if (includes === undefined) return { kind: 'scope', included: true };
 
   let included = false;
@@ -223,7 +285,10 @@ function harnessCanEnter(includes: readonly string[] | undefined): ScopeResoluti
     }
     try {
       const matches = picomatch(parsed.pattern, { dot: true });
-      if (HARNESS_PROBES.some((probe) => matches(probe))) included = !parsed.excluded;
+      // A directory pattern also governs its descendants (Biome `!.claude`).
+      const segments = path.split('/');
+      const candidates = segments.map((_, index) => segments.slice(0, index + 1).join('/'));
+      if (candidates.some((candidate) => matches(candidate))) included = !parsed.excluded;
     } catch {
       return { kind: 'failure', reason: `files.includes contains an invalid pattern: ${entry}` };
     }
@@ -258,10 +323,7 @@ function displayPath(root: string, path: string): string {
   return displayed === '' ? '.' : displayed;
 }
 
-function manual(file: string, why: string): { kind: 'manual'; file: string; instruction: string } {
-  return {
-    kind: 'manual',
-    file,
-    instruction: `${why}: add \`${HARNESS_LINT_EXCLUSION}\` to ${file} (after a positive pattern such as \`**\`) so the harness is not linted as project source`,
-  };
+function manual(name: string, file: string, reason: string): CheckResult {
+  return { name, ok: true, status: 'unknown', message: `${file}: ${reason}`,
+    fix: 'inspect analyzer scope manually for attested harness assets; keep project-owned files in scope' };
 }

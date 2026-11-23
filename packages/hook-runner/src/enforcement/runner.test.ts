@@ -1,12 +1,13 @@
 import {
   mkdirSync,
   mkdtempSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PRODUCT_IDENTITY } from '../identity.js';
 import {
   configuredStrings,
@@ -21,6 +22,83 @@ function write(root: string, path: string, content: string): void {
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, content);
 }
+
+describe('bounded default TDD scope', () => {
+  const roots: string[] = [];
+  const project = (): string => {
+    const root = mkdtempSync(join(tmpdir(), 'void-tdd-defaults-'));
+    roots.push(root);
+    return root;
+  };
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+  it.each([
+    undefined, '{invalid', '{}', '{"paths":{"business":7}}',
+    '{"paths":{"business":[]}}', '{"paths":{"business":[7]}}',
+  ])('governs root and apps sources with optional config %s', (config) => {
+    const root = project();
+    if (config !== undefined) write(root, '.void/config.json', config);
+    for (const path of ['src/feature.ts', 'src/domain/feature.ts', 'apps/web/src/feature.ts']) {
+      const input = { tool_name: 'Write', tool_input: {
+        file_path: path, content: 'export const feature = 1;',
+      } };
+      expect(evaluateRule('tdd-order', input, { root }).code, path).toBe('TDD_SIBLING_TEST_MISSING');
+      write(root, path.replace('.ts', '.test.ts'), 'test("feature", () => {});');
+      expect(evaluateRule('tdd-order', input, { root }).allow, path).toBe(true);
+    }
+    for (const path of ['tools/src/tool.ts', 'packages/lib/src/feature.ts', 'src/feature.test.ts',
+      'src/types.d.ts', 'src/docs/example.ts', 'src/__generated__/types.ts',
+      'src/tests/fixtures/data.ts', 'scripts/spike-feature.ts', 'apps/web/scripts/spike-feature.ts']) {
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: path, content: 'export const feature = 1;',
+      } }, { root }).allow, path).toBe(true);
+    }
+  });
+
+  it.each([{ business: 'services/**' }, { business: ['services/**', 'domain/**'] }, { business: 'apps/*/src/**' }])(
+    'retains explicit business scope $business without widening', ({ business }) => {
+      const root = project();
+      write(root, '.void/config.json', JSON.stringify({ paths: { business } }));
+      const governed = typeof business === 'string' && business.startsWith('apps')
+        ? 'apps/web/src/feature.ts' : 'services/feature.ts';
+      const secondRoot = Array.isArray(business) ? [['domain/feature.ts', 'TDD_SIBLING_TEST_MISSING']] : [];
+      for (const [path, code] of [[governed, 'TDD_SIBLING_TEST_MISSING'], ['src/feature.ts', 'ALLOW'], ...secondRoot]) {
+        expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+          file_path: path, content: 'export const feature = 1;',
+        } }, { root }).code).toBe(code);
+      }
+    },
+  );
+
+  it('exempts root and apps spikes when a custom business scope includes scripts', () => {
+    const root = project();
+    write(root, '.void/config.json', JSON.stringify({ paths: { business: '**' } }));
+    for (const path of ['scripts/spike-feature.ts', 'apps/web/scripts/spike-feature.ts']) {
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: path, content: 'export const spike = 1;',
+      } }, { root }).code).toBe('ALLOW');
+    }
+    expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+      file_path: 'scripts/feature.ts', content: 'export const feature = 1;',
+    } }, { root }).code).toBe('TDD_SIBLING_TEST_MISSING');
+  });
+
+  it.each([{ spikes: 'src/spike-*' }, { spikes: ['src/spike-*', 'apps/*/src/spike-*'] }])(
+    'retains configured spike exemptions $spikes inside business scope', ({ spikes }) => {
+      const root = project();
+      write(root, '.void/config.json', JSON.stringify({
+        paths: { business: ['src/**', 'apps/*/src/**'], spikes },
+      }));
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: 'src/spike-feature.ts', content: 'export const spike = 1;',
+      } }, { root }).code).toBe('ALLOW');
+      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
+        file_path: 'src/feature.ts', content: 'export const feature = 1;',
+      } }, { root }).code).toBe('TDD_SIBLING_TEST_MISSING');
+    },
+  );
+});
 
 describe('complete TDD evidence and operation bounds', () => {
   it.each([

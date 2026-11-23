@@ -61,6 +61,13 @@ describe('normalizeToolCall', () => {
     expect(call.edits).toEqual([{ path: '.env', addedContent: 'S=1\n' }]);
   });
 
+  it('preserves apostrophes in patch content carried by argv', () => {
+    const patch = "*** Begin Patch\n*** Update File: a.ts\n+const text = 'value';\n*** End Patch";
+    expect(normalizeToolCall({
+      tool_name: 'shell', tool_input: { command: ['apply_patch', patch] },
+    }).edits).toEqual([{ path: 'a.ts', addedContent: "const text = 'value';\n" }]);
+  });
+
   it('rejects malformed shapes and NUL-bearing strings', () => {
     expect(() => normalizeToolCall(null)).toThrow(/invalid hook input/i);
     expect(() => normalizeToolCall({

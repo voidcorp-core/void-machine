@@ -50,6 +50,44 @@ unchanged receipt-owned obsolete file through the existing transaction; modified
 or unowned files are preserved. Adding a runtime may retain an older inert asset.
 Preserve the installation, rollback and user-file ownership proofs.
 
+### Destructive shell operations
+
+`dangerous-command` checks targeted operations in command position, including
+executable basenames, ordinary `sudo`/`env`/`command`/`exec` wrappers and literal
+assignments. Quotes and escapes preserve argument boundaries: searching for or
+printing destructive shell or SQL text does not itself execute that text.
+Tool payloads supplied as argv retain each literal argument, including empty
+arguments, apostrophes and dollar signs, before lexical inspection.
+Unquoted operators and pipelines start commands; redirections to raw devices
+are checked independently of the executable. Shell `-c`, `eval`, visible shell
+stdin, command/process substitutions and backticks are inspected recursively.
+Single quotes suppress shell substitutions; double quotes do not.
+
+Destructive SQL is checked in command arguments to `psql`, `mysql`/`mariadb`,
+`sqlite3` and `sqlcmd`, or visible pipeline/here-string input to those clients.
+One here-document at the end of a command line is supported, with quoted
+delimiter suppression of substitutions. Its body is inspected as code only
+when the receiving command executes it. Git rebase `--rebase-merges` and
+`--strategy-option` are ordinary options; `--exec`/`-x` remain execution flags.
+Git apply/am `--unsafe-paths` and forced pushes without a lease remain refused.
+
+This is a bounded lexical guard, not a shell or SQL interpreter and not a
+security boundary. It does not resolve aliases, variables, external scripts,
+SQL files or generated output. SQL matching does not parse SQL string literals
+or comments. Pipeline text is conservative evidence, not evaluated output.
+Unclosed syntax, unsupported here-document layouts, ANSI-C quoting and dynamic
+command names refuse explicitly instead of being treated as safe quoted data;
+recursive inspection is limited to eight levels. Other shell dialects, arbitrary
+wrapper options and indirect execution remain outside its proven coverage.
+No command fixture is executed: source tests pass strings to the rule, and
+delivered tests pass JSON to both hook bundles in `packages/core` and
+`packages/cli/core-assets`.
+
+Semantics checked against [Git 2.54 rebase](https://git-scm.com/docs/git-rebase/2.54.0),
+[Git apply](https://git-scm.com/docs/git-apply/2.51.0),
+[Bash quoting and substitutions](https://www.gnu.org/software/bash/manual/bash.html#Quoting)
+and [psql command/stdin input](https://www.postgresql.org/docs/current/app-psql.html).
+
 ## CI content boundary
 
 `enforce-ci` receives added artifact content, not a runtime tool payload. Its

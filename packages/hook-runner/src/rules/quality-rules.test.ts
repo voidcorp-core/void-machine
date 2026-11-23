@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { boundaryDirection } from './boundary-direction.js';
-import { designSlop } from './design-slop.js';
 import { noAny } from './no-any.js';
 import { noAsCast } from './no-as-cast.js';
 import { noConsole } from './no-console.js';
 import { noFocusedTest } from './no-focused-test.js';
 import { noNull } from './no-null.js';
-import { testName } from './test-name.js';
 
 const edit = (path: string, addedContent: string) => [{ path, addedContent }];
 
@@ -46,14 +44,12 @@ describe('language and test hygiene rules', () => {
     expect(noFocusedTest(edit('src/user.test.ts', 'it.todo("pending contract");')).allow).toBe(true);
   });
 
-  it('blocks focused/skipped JavaScript tests and generic test names', () => {
+  it('blocks focused JavaScript tests', () => {
     expect(noFocusedTest(edit('src/user.test.tsx', 'it.only("renders", () => {});')).allow).toBe(false);
-    expect(testName(edit('src/user.spec.js', 'test("should work", () => {});')).allow).toBe(false);
-    expect(testName(edit('src/user.spec.js', 'test("returns the user when valid", () => {});')).allow).toBe(true);
   });
 });
 
-describe('architecture and design rules', () => {
+describe('architecture rules', () => {
   it('blocks a cross-package import but scopes itself to the monorepo profile', () => {
     // Topology now comes from each package's own manifest, so this rule needs a
     // project root to say anything at all. Without one it allows rather than
@@ -65,18 +61,4 @@ describe('architecture and design rules', () => {
     )).allow).toBe(true);
   });
 
-  it('blocks conservative design tells only in style-bearing files', () => {
-    expect(designSlop(edit(
-      'apps/web/src/Hero.tsx',
-      '<div className="bg-gradient-to-r from-violet-500 to-cyan-500">Hero</div>',
-    )).allow).toBe(false);
-    expect(designSlop(edit(
-      'apps/api/src/hero.ts',
-      'const gradient = "from-violet-500 to-cyan-500";',
-    )).allow).toBe(true);
-    expect(designSlop(edit(
-      'apps/web/src/Hero.tsx',
-      '<div className="font-[Inter]">Hero</div> // allow-design-slop: brand font',
-    )).allow).toBe(true);
-  });
 });

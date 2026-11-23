@@ -15,7 +15,6 @@ import {
 import { boundaryDirection } from '../rules/boundary-direction.js';
 import { controlCharacter } from '../rules/control-character.js';
 import { dangerousCommand } from '../rules/dangerous-command.js';
-import { designSlop } from '../rules/design-slop.js';
 import { noAny } from '../rules/no-any.js';
 import { noAsCast } from '../rules/no-as-cast.js';
 import { noConsole } from '../rules/no-console.js';
@@ -29,7 +28,6 @@ import {
   tddApplies,
   tddOrder,
 } from '../rules/tdd-order.js';
-import { testName } from '../rules/test-name.js';
 import { allow } from '../rules/verdict.js';
 import { normalizeToolCall } from './normalize.js';
 import { readOriginalSource } from './original-source.js';
@@ -52,7 +50,6 @@ export type RuleName =
   | 'control-character'
   | 'dangerous-command'
   | 'boundary-direction'
-  | 'design-slop'
   | 'no-any'
   | 'no-as-cast'
   | 'no-console'
@@ -60,8 +57,7 @@ export type RuleName =
   | 'no-null'
   | 'protected-file'
   | 'secret-content'
-  | 'tdd-order'
-  | 'test-name';
+  | 'tdd-order';
 
 export interface EvaluateRuleOptions {
   readonly root: string;
@@ -416,8 +412,6 @@ export function evaluateRule(
   if (rule === 'no-console') return noConsole(edits, options.root);
   if (rule === 'no-null') return noNull(edits);
   if (rule === 'boundary-direction') return boundaryDirection(edits, options.root);
-  if (rule === 'test-name') return testName(edits);
-  if (rule === 'design-slop') return designSlop(edits);
   rule satisfies never;
   throw new Error('UNKNOWN_ENFORCEMENT_RULE');
 }

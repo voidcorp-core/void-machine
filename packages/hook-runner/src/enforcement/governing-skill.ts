@@ -25,7 +25,6 @@ const GOVERNING_SKILL = {
   // fixture practice, and void-testing is the only skill that already carries it.
   'control-character': 'void-testing',
   'dangerous-command': 'void-security-guidance',
-  'design-slop': 'void-frontend-design',
   'no-any': 'void-typescript-strict',
   'no-as-cast': 'void-typescript-strict',
   'no-console': 'void-observability',
@@ -34,7 +33,6 @@ const GOVERNING_SKILL = {
   'protected-file': 'void-security-guidance',
   'secret-content': 'void-security-guidance',
   'tdd-order': 'void-tdd',
-  'test-name': 'void-testing',
 } satisfies Record<RuleName, string>;
 
 /**
@@ -46,7 +44,6 @@ export const RULE_NAMES = [
   'boundary-direction',
   'control-character',
   'dangerous-command',
-  'design-slop',
   'no-any',
   'no-as-cast',
   'no-console',
@@ -55,7 +52,6 @@ export const RULE_NAMES = [
   'protected-file',
   'secret-content',
   'tdd-order',
-  'test-name',
 ] as const satisfies readonly RuleName[];
 
 /** The skill whose doctrine a refusal of `rule` comes from. */

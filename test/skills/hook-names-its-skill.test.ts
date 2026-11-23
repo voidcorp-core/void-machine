@@ -53,7 +53,6 @@ function skillExists(name: string): boolean {
  */
 const UNDECLARED_BY_DESIGN = [
   'dangerous-command',
-  'design-slop',
   'no-focused-test',
   'protected-file',
   'secret-content',

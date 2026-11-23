@@ -1,7 +1,7 @@
 {
   "name": "harness",
   "version": "7.0.0",
-  "description": "VoidCorp universal craftsman skills (void-tdd, void-typescript-strict, void-hexagonal-architecture, void-domain-driven-design, void-functional, void-code-review, void-api-and-interface-design, void-source-driven-development, void-context, void-learn, void-decide, void-claude-md, void-observability, void-security-guidance, ...) plus 12 PreToolUse enforcement hooks (tdd-guard, no-any, protect-sensitive-files, block-dangerous-bash, no-ai-design-slop, ...) and PostToolUse/SessionStart lifecycle hooks (incl. trim-large-output token frugality), five read-only critics including doctrine-critic, native architecture/security/QA specialists, and the void-graph, void-doctor and void-audit gestures, which are skills like everything else.",
+  "description": "VoidCorp universal craftsman skills (void-tdd, void-typescript-strict, void-hexagonal-architecture, void-domain-driven-design, void-functional, void-code-review, void-api-and-interface-design, void-source-driven-development, void-context, void-learn, void-decide, void-claude-md, void-observability, void-security-guidance, ...) plus PreToolUse enforcement hooks (tdd-guard, no-any, protect-sensitive-files, block-dangerous-bash, ...) and PostToolUse/SessionStart lifecycle hooks (incl. trim-large-output token frugality), five read-only critics including doctrine-critic, native architecture/security/QA specialists, and the void-graph, void-doctor and void-audit gestures, which are skills like everything else.",
   "author": {
     "name": "VoidCorp",
     "email": "florent.pellegrin@voidcorp.io"
@@ -90,15 +90,6 @@
         ]
       },
       {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" enforce test-name claude"
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write|Bash",
         "hooks": [
           {
@@ -113,15 +104,6 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" enforce dangerous-command claude"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/_void-hook.mjs\" enforce design-slop claude"
           }
         ]
       },

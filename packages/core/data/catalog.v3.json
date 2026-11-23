@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:7c5ec932f00ff8667d3d7e73c39baab6cdbf61430e0ae3fe17fc5d1be2696a98"
+    "rootHash": "sha256:e9a5d76905d505799e1a63e12b4b1d1107cf3f99676d6eab20b8d6ea580824e7"
   },
   "nodes": [
     {
@@ -160,7 +160,7 @@
           "name": "doctrine-critic",
           "pack": null,
           "source": "packages/core/agents/doctrine-critic.md",
-          "staticTokens": 1130,
+          "staticTokens": 1126,
           "type": "agent"
         }
       },
@@ -905,34 +905,6 @@
       }
     },
     {
-      "id": "catalog:hook:hook:no-ai-design-slop",
-      "kind": "hook",
-      "label": "no-ai-design-slop",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:no-ai-design-slop",
-          "lines": 10,
-          "name": "no-ai-design-slop",
-          "pack": null,
-          "source": "packages/core/hooks/no-ai-design-slop.sh",
-          "staticTokens": 94,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/no-ai-design-slop.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:hook:hook:no-any-grep",
       "kind": "hook",
       "label": "no-any-grep",
@@ -1291,34 +1263,6 @@
           {
             "kind": "path",
             "ref": "packages/core/hooks/tdd-guard.sh",
-            "hashOrVersion": "catalog-v1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:hook:hook:test-name-lint",
-      "kind": "hook",
-      "label": "test-name-lint",
-      "data": {
-        "legacy": {
-          "description": "",
-          "id": "hook:test-name-lint",
-          "lines": 10,
-          "name": "test-name-lint",
-          "pack": null,
-          "source": "packages/core/hooks/test-name-lint.sh",
-          "staticTokens": 94,
-          "type": "hook"
-        }
-      },
-      "provenance": {
-        "origin": "extracted",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "path",
-            "ref": "packages/core/hooks/test-name-lint.sh",
             "hashOrVersion": "catalog-v1"
           }
         ]
@@ -5147,7 +5091,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-testing/SKILL.md",
-          "staticTokens": 3097,
+          "staticTokens": 3078,
           "triggers": {
             "globs": [
               "**/*.test.ts",
@@ -9637,32 +9581,6 @@
       }
     },
     {
-      "id": "catalog:edge:enforces:404bbd3dbab27b965df12e3fb2cdac0f",
-      "from": "catalog:hook:hook:no-ai-design-slop",
-      "to": "catalog:skill:skill:void-frontend-design",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "no-ai-design-slop blocks AI-slop UI patterns — enforces frontend-design",
-          "from": "hook:no-ai-design-slop",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-frontend-design"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
       "id": "catalog:edge:enforces:4b6736b741264bb350c759d0585ab7f0",
       "from": "catalog:hook:hook:no-only-no-skip",
       "to": "catalog:skill:skill:void-testing",
@@ -10012,32 +9930,6 @@
           "kind": "enforces",
           "origin": "declared",
           "to": "skill:void-frontend-design"
-        }
-      },
-      "provenance": {
-        "origin": "declared",
-        "confidence": 1,
-        "sources": [
-          {
-            "kind": "contract",
-            "ref": "relations:v1",
-            "hashOrVersion": "1"
-          }
-        ]
-      }
-    },
-    {
-      "id": "catalog:edge:enforces:caeded39fa6a5ff7d5d0b55d7a0f6ad5",
-      "from": "catalog:hook:hook:test-name-lint",
-      "to": "catalog:skill:skill:void-testing",
-      "kind": "enforces",
-      "data": {
-        "legacy": {
-          "evidence": "test-name-lint checks behavior-named tests — enforces testing",
-          "from": "hook:test-name-lint",
-          "kind": "enforces",
-          "origin": "declared",
-          "to": "skill:void-testing"
         }
       },
       "provenance": {

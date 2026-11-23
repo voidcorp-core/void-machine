@@ -475,7 +475,7 @@ describe('lifecycle context', () => {
     }
   });
 
-  it('injects identical resume context for Claude Code and Codex', () => {
+  it.each(['startup', 'resume', 'clear', 'compact'])('injects identical work handoff on %s for Claude Code and Codex', source => {
     const root = mkdtempSync(join(tmpdir(), 'void-resume-parity-'));
     mkdirSync(join(root, '.void', 'machine'), { recursive: true });
     writeFileSync(join(root, '.void', 'config.json'), '{}\n');
@@ -483,20 +483,25 @@ describe('lifecycle context', () => {
       join(root, '.void', 'program.md'),
       '---\nschemaVersion: 1\nstatus: executing\nprogram: parity\nplan: docs/plan.md\nspec: docs/spec.md\nautopilot:\n  enabled: false\n---\n',
     );
-    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nResume equally.\n');
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Engaged work\n\nA-1: worker uncertain.\n\n## Planned work\n\nA-3\nA-2\n');
 
     try {
       const context = (agentRuntime: 'claude' | 'codex'): string => {
         const result = spawnSync(process.execPath, [hook, 'lifecycle', 'context', agentRuntime], {
-          input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact' }),
+          input: JSON.stringify({ hook_event_name: 'SessionStart', source }),
           encoding: 'utf8',
           env: { ...process.env, VOID_PROJECT_ROOT: root },
         });
         return JSON.parse(result.stdout ?? '{}').hookSpecificOutput.additionalContext as string;
       };
-      expect(context('claude')).toBe(context('codex'));
-      expect(context('codex')).toContain('Program: parity');
-      expect(context('codex')).toContain('Objective: Resume equally.');
+      const claude = context('claude');
+      const codex = context('codex');
+      expect(claude).toBe(codex);
+      expect(codex).toContain('Program: parity');
+      expect(codex).toContain('Engaged work: A-1: worker uncertain.');
+      expect(codex).toContain('Planned work: A-3\nA-2');
+      expect(codex).toContain('Full checkpoint: .void/machine/checkpoint.md');
+      expect(codex).toContain('Observations and intentions to verify; no authorization.');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

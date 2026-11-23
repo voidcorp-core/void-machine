@@ -17,6 +17,7 @@ import { banner, blank, c, footer, glyph, heading, line, meta } from '../lib/ren
 import { type Checkpoint, parseCheckpoint } from '../lib/session/checkpoint.js';
 import {
   composeResumeBundle,
+  type CheckpointPath,
   type ResumeBundle,
   type ResumeBundleInput,
   renderResumeContext,
@@ -24,10 +25,10 @@ import {
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 /** Newest location first; the previous one is read until a project migrates. */
-const CHECKPOINT_PATHS = [
-  join('.void', 'machine', 'checkpoint.md'),
-  join('.void', 'local', 'checkpoint.md'),
-  join('.void', 'session', 'current.md'),
+const CHECKPOINT_PATHS: readonly CheckpointPath[] = [
+  '.void/machine/checkpoint.md',
+  '.void/local/checkpoint.md',
+  '.void/session/current.md',
 ];
 
 /** The nearest ancestor carrying the project marker, so it works from anywhere. */
@@ -43,13 +44,14 @@ function enclosingProject(from: string): string | undefined {
 
 function readCheckpointFile(
   root: string,
-): { checkpoint: Checkpoint; writtenAt: number } | undefined {
+): { checkpoint: Checkpoint; writtenAt: number; path: CheckpointPath } | undefined {
   for (const relative of CHECKPOINT_PATHS) {
     const path = join(root, relative);
     try {
       if (!existsSync(path)) continue;
       return {
         checkpoint: parseCheckpoint(readFileSync(path, 'utf8')),
+        path: relative,
         writtenAt: statSync(path).mtimeMs,
       };
     } catch {
@@ -68,6 +70,8 @@ function renderHuman(bundle: ResumeBundle): void {
     for (const row of text.split('\n')) line(row.trim());
   };
 
+  if (bundle.checkpointNotice !== undefined) line(bundle.checkpointNotice);
+  if (bundle.checkpointPath !== undefined) line(`Full checkpoint: ${bundle.checkpointPath}`);
   if (checkpoint?.objective !== undefined) {
     heading('Objective');
     paragraph(checkpoint.objective);
@@ -79,6 +83,14 @@ function renderHuman(bundle: ResumeBundle): void {
   if (checkpoint?.state !== undefined) {
     heading('State');
     paragraph(checkpoint.state);
+  }
+  if (checkpoint?.engagedWork !== undefined) {
+    heading('Engaged work');
+    paragraph(checkpoint.engagedWork);
+  }
+  if (checkpoint?.plannedWork !== undefined) {
+    heading('Planned work');
+    paragraph(checkpoint.plannedWork);
   }
   if (checkpoint?.nextAction !== undefined) {
     heading('Next action');
@@ -142,6 +154,7 @@ export async function resume(args: readonly string[]): Promise<void> {
     git: { branch: git.branch, head: git.head, dirtyFiles: git.dirtyFiles },
     ...observeProgram(root),
     checkpoint: found?.checkpoint,
+    ...(found === undefined ? {} : { checkpointPath: found.path }),
     ...(found === undefined ? {} : { checkpointWrittenAt: found.writtenAt }),
   });
 

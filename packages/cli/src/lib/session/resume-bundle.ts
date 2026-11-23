@@ -1,6 +1,7 @@
 export {
   composeResumeBundle,
   type ProgramSummary,
+  type CheckpointPath,
   type ResumeBundle,
   type ResumeBundleInput,
   type ResumeGap,

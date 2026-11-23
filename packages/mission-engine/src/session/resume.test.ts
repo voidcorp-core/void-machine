@@ -124,3 +124,28 @@ it('resumes an explicit semantic checkpoint without tracking prerequisites', () 
   expect(rendered).toContain('Next action: Wire the CLI.');
   expect(rendered).not.toMatch(/mechanical|semantic revision|seal|Reconstruct context before any mutation|Context continuity/);
 });
+
+
+it('renders work observations and intentions without claiming authority', () => {
+  const checkpoint = parseCheckpoint('## Engaged work\n\n- A-1: worker uncertain.\n\n## Planned work\n\n2. A-3\n1. A-2\n');
+  const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
+  expect(context).toContain('Engaged work: - A-1: worker uncertain.');
+  expect(context).toContain('Planned work: 2. A-3\n1. A-2');
+  expect(context).toContain('Full checkpoint: .void/machine/checkpoint.md');
+  expect(context).toContain('Observations and intentions to verify; no authorization.');
+  expect(context).not.toContain('Summary truncated');
+});
+
+it('keeps the complete checkpoint pointer and limits before oversized optional content', () => {
+  const checkpoint = parseCheckpoint(`## Engaged work\n\n${'x'.repeat(10_000)}\n\n## Planned work\n\nA-9`);
+  const bundle = composeResumeBundle(input({
+    project: { name: 'p'.repeat(5_000), path: '/p/alpha' }, checkpoint,
+  }));
+  const context = renderResumeContext(bundle);
+  expect(context.length).toBeLessThanOrEqual(4_000);
+  expect(context).toContain('Full checkpoint: .void/machine/checkpoint.md');
+  expect(context).toContain('Observations and intentions to verify; no authorization.');
+  expect(context).toContain('Summary truncated; read the full checkpoint before resuming work.');
+  expect(bundle.checkpoint).toHaveProperty('engagedWork', 'x'.repeat(10_000));
+  expect(bundle.checkpoint).toHaveProperty('plannedWork', 'A-9');
+});

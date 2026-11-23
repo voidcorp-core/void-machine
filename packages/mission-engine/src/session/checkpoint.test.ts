@@ -180,3 +180,14 @@ it('ignores an unfinished legacy block without losing earlier semantic prose', (
   expect(checkpoint.objective).toBe('Manual objective.');
   expect(checkpoint.nextAction).toBeUndefined();
 });
+
+
+it.each(['Engaged work', 'Planned work'])('preserves %s alone as nonempty multiline prose', title => {
+  const reference = `https://tracker.example/project/${'long-reference/'.repeat(25)}DEV-1395`;
+  const worktree = `/worktrees/${'long-directory/'.repeat(25)}dev-1395`;
+  const prose = `- DEV-1395: ${reference}\n  PR: https://github.com/example/repo/pull/42\n  Worktree: ${worktree}\n  Worker: writer:primary (unreachable; not known stopped).\n\n- DEV-1394: observed completed, verify before removing.`;
+  const checkpoint = parseCheckpoint(`## ${title}\n\n${prose}\n`);
+  expect(checkpoint).toHaveProperty(title === 'Engaged work' ? 'engagedWork' : 'plannedWork', prose);
+  expect(checkpoint.isEmpty).toBe(false);
+  expect(parseCheckpoint(`## ${title}\n\n`).isEmpty).toBe(true);
+});

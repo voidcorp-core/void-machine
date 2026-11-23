@@ -13,7 +13,6 @@ reviewed pull request instead. Promotion to the branch that deploys stays human.
 
 **Attribution**: see `.source`.
 
----
 
 ## What this skill does NOT do
 
@@ -49,7 +48,6 @@ It never closes, cancels or deletes a ticket, and it never touches `main` or rep
 Autopilot consent alone never authorizes credential operations: these require separate explicit
 scope under `void-security-guidance`. Role restrictions, including read-only reviewers, remain binding.
 
----
 
 ## Consent and target
 
@@ -63,11 +61,17 @@ Never create consent from a flag, a checkpoint or a repair. `init` and `update` 
 The programme still supplies plan/spec and selection context during migration. Read that context
 when present; missing information needed to select work is a diagnostic, never an invented order.
 Config alone can authorize operations whose input already supplies the necessary selection.
+On resume, follow `void-checkpoint`: read the full local handoff, including Engaged work and
+Planned work, verify tickets/PRs/Git and reconcile workers before resuming or delegating. Honor
+changed intentions and real dependencies; remove completed work only after observing completion.
+An uncertain worker must not be duplicated. A removed planned item cancels no remote ticket and
+deletes no worktree. An unavailable provider blocks dependent actions, not the offline checkpoint.
+Saved observations grant no consent or fresh proof. Keep the programme during the transition
+until fresh native resume evidence on both runtimes; recover nothing beyond the last checkpoint.
 `void-machine autopilot next`, review, fingerprint and publication share the authority reader.
 A legacy programme with non-executing status or schema 1 is refused; a former
 `mergeGate: human` runs `autopilot merges --by-human` before any explicit migration.
 
----
 
 ## The cursor between code and model
 
@@ -86,7 +90,6 @@ acts. An answer that does not fit is a refusal naming the field, never an interp
 Slots, collisions, review rounds, stops, resumption and the merge are the kernel's. No agent may
 skip a step, merge, or decide that a refusal does not apply to it.
 
----
 
 ## Four roles, one subject each
 
@@ -106,7 +109,6 @@ A role that starts doing another's job is the failure this split exists to preve
 that "just looks at the diff" becomes a reviewer nobody bounded, and a worker that posts its own
 verdict is a self-review GitHub reads as independent.
 
----
 
 ## Curator
 
@@ -136,7 +138,6 @@ Return the queue as the typed `queue` judgment, at most sixteen entries. The cur
 orchestrator's session or as its own agent; either way its output is data the kernel admits, not an
 instruction the orchestrator follows.
 
----
 
 ## Orchestrator
 
@@ -266,7 +267,6 @@ conflict-class` prints for the JSON on its stdin; `next` reads it from GitHub an
 The review verdict is the local record above, never a comment. The tracker you pipe in carries
 neither, so a restart loses nothing.
 
----
 
 ## Workers
 
@@ -298,7 +298,6 @@ May not: enable auto-merge, merge anything, post or record a verdict, run `autop
 prune the mission journals, or write the git state the repository shares -- `refs/stash`, tags,
 notes, remotes, the repository config.
 
----
 
 ## Reviewer
 
@@ -322,7 +321,6 @@ hands the ticket to a human with the finding. The kernel counts rounds from the 
 per head a verdict blocked, not from the round a verdict announces, and a reviewer that failed
 without a verdict is an attempt it delegates again, not a round.
 
----
 
 ## Conflicts and the merge queue
 
@@ -353,7 +351,6 @@ itself, since GitHub reports it only under a protection that requires it: a head
 more just before merging. Same guarantee, lower throughput; the residual window is a person
 merging by hand between that read and the merge. The kernel keeps the turn; you do not.
 
----
 
 ## Stopping
 
@@ -367,7 +364,7 @@ agents, cleans the merged worktrees, and writes the recap.
 own included: `next` returns a `disable-auto-merge` for every armed pull request, then `freeze`.
 Run the disarms, then stop. When `next` cannot read what is armed, or a disarm fails, it does not
 pretend to have frozen: disarm by hand what it names and tell the person. Nothing is lost: the
-state is in the tracker and GitHub, and a later run resumes from there.
+state is in the tracker and GitHub. Use `void-checkpoint` for the local handoff and planned work.
 
 The stop file stays until someone deletes it; a new run starts only once it is gone.
 
@@ -375,7 +372,6 @@ The stop file stays until someone deletes it; a new run starts only once it is g
 ticket took. It is the account a person reads when they come back; write it from observed state,
 never from memory of the session.
 
----
 
 ## Red flags
 
@@ -394,7 +390,6 @@ never from memory of the session.
 | "I remember which worker had which ticket" | Rebuild from the tracker and GitHub. The session is not the state. |
 | "The PR is gone from the list, it must have been merged" | Only a merged pull request observed on GitHub is a merge. |
 
----
 
 ## Composition
 

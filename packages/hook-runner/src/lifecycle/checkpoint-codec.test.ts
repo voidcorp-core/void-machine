@@ -16,3 +16,11 @@ describe('the checkpoint codec of this product', () => {
   });
 
 });
+
+
+it('shares the work prose codec without the list length limit', () => {
+  const reference = `/worktree/${'exact-project-path/'.repeat(20)}A-1`;
+  expect(parseCheckpoint(`## Engaged work\n\n${reference}\n\n## Planned work\n\nA-3\nA-2\n`)).toMatchObject({
+    engagedWork: reference, plannedWork: 'A-3\nA-2', isEmpty: false,
+  });
+});

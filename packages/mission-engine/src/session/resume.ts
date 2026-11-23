@@ -34,6 +34,12 @@ export interface ResumeGitInput {
   readonly dirtyFiles: number;
 }
 
+/** Supported read locations, relative to the observed project. */
+export type CheckpointPath =
+  | '.void/machine/checkpoint.md'
+  | '.void/local/checkpoint.md'
+  | '.void/session/current.md';
+
 export interface ResumeBundleInput {
   readonly project: { readonly name: string; readonly path: string };
   readonly now: number;
@@ -42,6 +48,7 @@ export interface ResumeBundleInput {
   readonly programError?: string;
   readonly checkpoint: Checkpoint | undefined;
   readonly checkpointWrittenAt?: number;
+  readonly checkpointPath?: CheckpointPath;
 }
 
 export type ResumeGapReason =
@@ -63,6 +70,8 @@ export interface ResumeBundle {
   readonly project: { readonly name: string; readonly path: string };
   readonly program?: ProgramSummary;
   readonly checkpoint?: Checkpoint;
+  readonly checkpointPath?: CheckpointPath;
+  readonly checkpointNotice?: string;
   readonly git: {
     readonly branch?: string;
     readonly head?: string;
@@ -75,6 +84,7 @@ export interface ResumeBundle {
 const DAY_MS = 86_400_000;
 const STALE_DAYS = 7;
 const CONTEXT_CHARS_MAX = 4_000;
+const CHECKPOINT_NOTICE = 'Observations and intentions to verify; no authorization.';
 
 function summarizeProgram(descriptor: ResumeProgramInput): ProgramSummary {
   return {
@@ -167,7 +177,11 @@ export function composeResumeBundle(input: ResumeBundleInput): ResumeBundle {
     schemaVersion: 1,
     project: input.project,
     ...(input.program === undefined ? {} : { program: summarizeProgram(input.program) }),
-    ...(input.checkpoint === undefined ? {} : { checkpoint: input.checkpoint }),
+    ...(input.checkpoint === undefined ? {} : {
+      checkpoint: input.checkpoint,
+      checkpointPath: input.checkpointPath ?? '.void/machine/checkpoint.md',
+      checkpointNotice: CHECKPOINT_NOTICE,
+    }),
     git: {
       ...(input.git.branch === undefined ? {} : { branch: input.git.branch }),
       ...(input.git.head === undefined ? {} : { head: input.git.head }),
@@ -183,6 +197,8 @@ function checkpointContext(checkpoint: Checkpoint): readonly string[] {
     checkpoint.objective === undefined ? undefined : `Objective: ${checkpoint.objective}`,
     checkpoint.position === undefined ? undefined : `Position: ${checkpoint.position}`,
     checkpoint.state === undefined ? undefined : `State: ${checkpoint.state}`,
+    checkpoint.engagedWork === undefined ? undefined : `Engaged work: ${checkpoint.engagedWork}`,
+    checkpoint.plannedWork === undefined ? undefined : `Planned work: ${checkpoint.plannedWork}`,
     checkpoint.nextAction === undefined ? undefined : `Next action: ${checkpoint.nextAction}`,
     checkpoint.openLoops.length === 0
       ? undefined
@@ -201,15 +217,14 @@ function boundedResumeLines(
   optional: readonly string[],
 ): string {
   const requiredText = required.join('\n');
-  const remaining = CONTEXT_CHARS_MAX - requiredText.length - 1;
-  if (remaining <= 0 || optional.length === 0) {
-    return `${requiredText.slice(0, CONTEXT_CHARS_MAX - 1)}\n`;
-  }
   const optionalText = optional.join('\n');
-  const boundedOptional = optionalText.length <= remaining
-    ? optionalText
-    : `${optionalText.slice(0, Math.max(0, remaining - 3))}...`;
-  return `${requiredText}\n${boundedOptional}\n`.slice(0, CONTEXT_CHARS_MAX);
+  const complete = `${requiredText}\n${optionalText}\n`;
+  if (complete.length <= CONTEXT_CHARS_MAX) return complete;
+  const notice = 'Summary truncated; read the full checkpoint before resuming work.';
+  // Only fixed notices and a supported relative path are required. User prose
+  // cannot crowd out the pointer or make a partial summary look exhaustive.
+  const prefix = `${requiredText}\n${notice}\n`;
+  return `${prefix}${optionalText.slice(0, CONTEXT_CHARS_MAX - prefix.length - 4)}...\n`;
 }
 
 export function renderResumeContext(bundle: ResumeBundle): string {
@@ -220,8 +235,12 @@ export function renderResumeContext(bundle: ResumeBundle): string {
       ? ''
       : boundedResumeLines(['[void-machine resume]'], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
   }
-  const required = ['[void-machine resume]', `Project: ${bundle.project.name}`];
-  const optional: string[] = [];
+  const required = ['[void-machine resume]'];
+  if (usefulCheckpoint) {
+    required.push(`Full checkpoint: ${bundle.checkpointPath ?? '.void/machine/checkpoint.md'} (project-relative)`);
+    required.push(CHECKPOINT_NOTICE);
+  }
+  const optional: string[] = [`Project: ${bundle.project.name}`];
   if (bundle.git.branch !== undefined) optional.push(`Branch: ${bundle.git.branch}`);
   if (bundle.git.head !== undefined) optional.push(`HEAD: ${bundle.git.head}`);
   if (bundle.git.dirtyFiles > 0) optional.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);

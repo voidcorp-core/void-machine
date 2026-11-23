@@ -91,16 +91,12 @@ describe('what it refuses to become', () => {
     expect(flat(body(SKILL))).toMatch(/not a plan for what is next/i);
   });
 
-  it('keeps lifecycle hooks advisory and reserves semantic writing for the skill', () => {
-    expect(flat(body(SKILL))).toMatch(/UserPromptSubmit[\s\S]{0,160}remind/i);
-    expect(flat(body(SKILL))).toMatch(/SessionEnd[\s\S]{0,160}audit/i);
-    expect(flat(body(SKILL))).toMatch(/PreCompact[\s\S]{0,240}mechanical/i);
+  it('keeps checkpoint creation explicit and resumes semantic residue without automatic tracking', () => {
+    expect(flat(body(SKILL))).toMatch(/Checkpoint creation is explicit/i);
+    expect(flat(body(SKILL))).toMatch(/No automatic context tracker writes/i);
+    expect(flat(body(SKILL))).toMatch(/Legacy mechanical blocks are ignored/i);
+    expect(flat(body(SKILL))).toMatch(/SessionStart[\s\S]{0,160}semantic residue/i);
     expect(flat(body(SKILL))).toMatch(/never[\s\S]{0,120}(dead ends|assumptions|next action)/i);
-  });
-
-  it('preserves the delimited mechanical block verbatim on every semantic rewrite', () => {
-    expect(flat(body(SKILL))).toMatch(/preserve[\s\S]{0,160}context-continuity:begin/i);
-    expect(flat(body(SKILL))).toMatch(/exactly one[\s\S]{0,160}block/i);
   });
 
   it('keeps closing a session apart from completing a unit of work', () => {

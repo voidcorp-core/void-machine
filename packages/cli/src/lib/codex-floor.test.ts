@@ -247,7 +247,7 @@ describe('wireCodexFloor', () => {
     const commands = compiledCommands(compileCodexHooksManifest(template));
     const enforce = commands.find((command) => command.endsWith('enforce dangerous-command codex'));
     const lifecycle = commands.find(
-      (command) => command.endsWith('lifecycle checkpoint-audit codex'),
+      (command) => command.endsWith('lifecycle context codex'),
     );
     const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } });
 

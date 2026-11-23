@@ -59,11 +59,8 @@ describe('declared skill, agent, hook, and learn synergies', () => {
 
   it('connects lifecycle and context hooks to the doctrine they support', () => {
     expect(relations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ from: 'hook:auto-format', to: 'skill:void-commit-discipline' }),
       expect.objectContaining({ from: 'hook:secret-in-content', to: 'skill:void-security-guidance' }),
       expect.objectContaining({ from: 'hook:sessionstart-context', to: 'skill:void-context' }),
-      expect.objectContaining({ from: 'hook:stop-typecheck', to: 'skill:void-typescript-strict' }),
-      expect.objectContaining({ from: 'hook:trim-large-output', to: 'skill:void-context' }),
     ]));
   });
 

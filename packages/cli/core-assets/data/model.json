@@ -233,16 +233,6 @@
     },
     {
       "description": "",
-      "id": "hook:auto-format",
-      "lines": 9,
-      "name": "auto-format",
-      "pack": null,
-      "source": "packages/core/hooks/auto-format.sh",
-      "staticTokens": 84,
-      "type": "hook"
-    },
-    {
-      "description": "",
       "id": "hook:axe-precommit",
       "lines": 35,
       "name": "axe-precommit",
@@ -269,16 +259,6 @@
       "pack": null,
       "source": "packages/core/hooks/control-character-grep.sh",
       "staticTokens": 96,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:large-cl-grep",
-      "lines": 9,
-      "name": "large-cl-grep",
-      "pack": null,
-      "source": "packages/core/hooks/large-cl-grep.sh",
-      "staticTokens": 83,
       "type": "hook"
     },
     {
@@ -368,16 +348,6 @@
       "name": "sessionstart-context",
       "pack": null,
       "source": "packages/core/hooks/sessionstart-context.sh",
-      "staticTokens": 87,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:stop-typecheck",
-      "lines": 9,
-      "name": "stop-typecheck",
-      "pack": null,
-      "source": "packages/core/hooks/stop-typecheck.sh",
       "staticTokens": 84,
       "type": "hook"
     },
@@ -389,16 +359,6 @@
       "pack": null,
       "source": "packages/core/hooks/tidying-commit-prefix.sh",
       "staticTokens": 300,
-      "type": "hook"
-    },
-    {
-      "description": "",
-      "id": "hook:trim-large-output",
-      "lines": 9,
-      "name": "trim-large-output",
-      "pack": null,
-      "source": "packages/core/hooks/trim-large-output.sh",
-      "staticTokens": 83,
       "type": "hook"
     },
     {
@@ -1663,7 +1623,7 @@
         }
       ],
       "id": "skill:void-checkpoint",
-      "lines": 227,
+      "lines": 221,
       "name": "void-checkpoint",
       "owner": "folpe",
       "pack": null,
@@ -1672,7 +1632,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-checkpoint/SKILL.md",
-      "staticTokens": 2858,
+      "staticTokens": 2743,
       "type": "skill"
     },
     {
@@ -1724,7 +1684,7 @@
         }
       ],
       "id": "skill:void-code-review",
-      "lines": 245,
+      "lines": 241,
       "name": "void-code-review",
       "owner": "folpe",
       "pack": null,
@@ -1733,7 +1693,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-code-review/SKILL.md",
-      "staticTokens": 3443,
+      "staticTokens": 3369,
       "type": "skill"
     },
     {
@@ -1794,7 +1754,7 @@
         "codex"
       ],
       "source": "packages/core/skills/void-context/SKILL.md",
-      "staticTokens": 2865,
+      "staticTokens": 2834,
       "type": "skill"
     },
     {
@@ -2802,13 +2762,6 @@
       "evidence": "anti-ai-slop-grep flags generic AI aesthetics — enforces frontend-design"
     },
     {
-      "from": "hook:auto-format",
-      "to": "skill:void-commit-discipline",
-      "kind": "companion-of",
-      "origin": "declared",
-      "evidence": "CHEATSHEET: auto-format formats on write, so formatting never appears in a behavioural diff"
-    },
-    {
       "from": "hook:axe-precommit",
       "to": "skill:void-accessibility",
       "kind": "enforces",
@@ -2828,13 +2781,6 @@
       "kind": "enforces",
       "origin": "declared",
       "evidence": "control-character-grep refuses an invisible control byte in a source file — enforces testing's rule that a fixture needing one builds it rather than holding it literally"
-    },
-    {
-      "from": "hook:large-cl-grep",
-      "to": "skill:void-commit-discipline",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "large-cl-grep warns on oversized changelists — enforces commit-discipline (small commits)"
     },
     {
       "from": "hook:llm-cost-precommit",
@@ -2900,25 +2846,11 @@
       "evidence": "CHEATSHEET: sessionstart-context loads the project's standing context once, at the start of a session"
     },
     {
-      "from": "hook:stop-typecheck",
-      "to": "skill:void-typescript-strict",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "stop-typecheck typechecks the touched TypeScript surface before session end — enforces typescript-strict"
-    },
-    {
       "from": "hook:tidying-commit-prefix",
       "to": "skill:void-refactor",
       "kind": "enforces",
       "origin": "declared",
       "evidence": "tidying-commit-prefix separates tidyings from behavior — enforces refactor (Tidy-First)"
-    },
-    {
-      "from": "hook:trim-large-output",
-      "to": "skill:void-context",
-      "kind": "enforces",
-      "origin": "declared",
-      "evidence": "CHEATSHEET: trim-large-output bounds oversized tool output before it consumes the context window"
     },
     {
       "from": "hook:tsc-noemit-precommit",

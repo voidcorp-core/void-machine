@@ -30,33 +30,13 @@ describe.each([
 
   it('replays resume context for every documented SessionStart source', () => {
     expect(source.hooks.SessionStart?.[0]?.matcher).toBe('startup|resume|clear|compact');
-    expect(commands(source, 'SessionStart').join('\n')).toContain('lifecycle context-continuity');
+    expect(commands(source, 'SessionStart').join('\n')).toContain('lifecycle context');
   });
 
   it('projects verified orchestra metadata at each lifecycle boundary', () => {
     for (const event of ['SessionStart', 'Stop', 'SessionEnd']) {
       expect(commands(source, event).join('\n')).toContain('lifecycle herdr-metadata');
     }
-  });
-
-  it('seals mechanical state before compaction through the shared handler', () => {
-    expect(commands(source, 'PreCompact').join('\n')).toContain('lifecycle context-continuity');
-  });
-
-  it('tracks the cumulative working set after tool use', () => {
-    expect(commands(source, 'PostToolUse').join('\n')).toContain('lifecycle context-continuity');
-  });
-
-  it('reminds explicit closes at UserPromptSubmit without replacing the prompt', () => {
-    const command = commands(source, 'UserPromptSubmit').join('\n');
-    expect(command).toContain('lifecycle context-continuity');
-    expect(command).toContain('lifecycle checkpoint-reminder');
-  });
-
-  it('audits at SessionEnd instead of synthesising a checkpoint', () => {
-    const command = commands(source, 'SessionEnd').join('\n');
-    expect(command).toContain('lifecycle checkpoint-audit');
-    expect(command).not.toMatch(/write|generate|llm/i);
   });
 });
 

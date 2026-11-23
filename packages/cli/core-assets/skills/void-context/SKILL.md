@@ -42,7 +42,7 @@ A clean window with a sharp prompt beats a dirty window with three patches. Corr
 
 When a task is genuinely long and coherent (not mixed subjects, just big), do not clear — you would lose the thread. Run `/compact <focus>` to summarize the history down to what matters, naming the focus so the compaction keeps the relevant fil rather than a generic digest.
 
-Use `/clear` when subjects changed; use `/compact` when the subject is the same but the history is heavy. The `PreCompact` hook preserves the bounded mechanical block before compaction; it does not invent dead ends, assumptions, or the next action.
+Use `/clear` when subjects changed; use `/compact` when the subject is the same but the history is heavy. Save useful semantic residue with `void-checkpoint` before losing context; no hook writes it automatically.
 
 ### 4. Delegate heavy investigation to fresh-context subagents
 
@@ -80,7 +80,7 @@ A long task must not keep its state only in the conversation, because the conver
 
 - The versioned programme descriptor and its linked plan/spec, when a programme exists.
 - Mutable execution state in the declared progress provider, never duplicated locally.
-- `.void/machine/checkpoint.md` for session residue and the bounded mechanical working set.
+- `.void/machine/checkpoint.md` for manual session residue.
 - Durable decisions in ADRs and reusable rules in doctrine, through their owning skills.
 
 The test: **if you `/clear` right now, can the next session pick up the task from disk alone?** If not, the state is trapped in the window and one reset will lose it. Write it down first.
@@ -128,7 +128,7 @@ Decompose long tasks into sub-tasks with their own gates (composes with `void-pl
 
 - **`void-debug`**: investigate without drowning the window — gather evidence in a subagent, bring back the timeline and root cause, not every log line read.
 - **`void-plan`**: owns the approved execution structure; mutable progress remains with its declared provider.
-- **`void-checkpoint`**: owns semantic session residue; the lifecycle hook owns only the delimited mechanical block it must preserve.
+- **`void-checkpoint`**: owns manual semantic session residue; SessionStart reads it without modifying it.
 - **`void-orchestrate`**: delegate bounded independent investigations with fresh context by default; it owns capability fallback, dispatch bounds, isolation and collection. Keep conclusions and evidence references in the coordinator rather than full child transcripts.
 
 This skill absorbs the "context-engineering / anti-context-rot" concept; other skills do the work, this one keeps the window clean enough for them to do it well.
@@ -152,7 +152,7 @@ This skill absorbs the "context-engineering / anti-context-rot" concept; other s
 - [ ] Long coherent work was `/compact <focus>`-ed rather than left to bloat.
 - [ ] Heavy investigation was delegated to a fresh-context subagent that returned only its conclusion.
 - [ ] Programme, provider state, checkpoint residue, decisions, and doctrine are routed to their single authoritative owners before a reset.
-- [ ] Open semantic residue is checkpointed before `/clear`; no hook capability is assumed beyond mechanical preservation and an advisory nudge.
+- [ ] Open semantic residue is checkpointed before `/clear`; no automatic reminder or checkpoint write is assumed.
 - [ ] Acting on degradation signals before they compound, not after errors appear.
 
 ---

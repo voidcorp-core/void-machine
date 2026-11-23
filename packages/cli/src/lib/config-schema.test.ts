@@ -81,18 +81,12 @@ describe('validateConfig', () => {
   });
 });
 
-describe('context continuity config', () => {
-  it('keeps old configs valid and defaults the threshold only inside context config', () => {
+describe('Herdr context window config', () => {
+  it('keeps old configs valid without adding reminder settings', () => {
     expect(configSchema.parse({})).not.toHaveProperty('context');
     expect(configSchema.parse({ context: { windowTokens: 200_000 } })).toMatchObject({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: 50 },
+      context: { windowTokens: 200_000 },
     });
-  });
-
-  it.each([40, 50, 60])('accepts the bounded %i percent threshold', (threshold) => {
-    expect(validateConfig({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
-    }).ok).toBe(true);
   });
 
   it.each([0, -1, 1.5])('rejects the invalid window size %s without clamping', (windowTokens) => {
@@ -101,13 +95,13 @@ describe('context continuity config', () => {
     expect(result.issues.join(' ')).toContain('context.windowTokens');
   });
 
-  it.each([39, 61, 49.5])('rejects the out-of-bounds threshold %s without clamping', (threshold) => {
-    const result = validateConfig({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
-    });
-    expect(result.ok).toBe(false);
-    expect(result.issues.join(' ')).toContain('context.checkpointThresholdPercent');
+  it('ignores retired threshold fields in old configurations', () => {
+    expect(configSchema.parse({ context: { windowTokens: 200_000, checkpointThresholdPercent: 70 } }))
+      .toMatchObject({ context: { windowTokens: 200_000 } });
+    expect(configSchema.parse({ context: { checkpointThresholdPercent: 70 } }).context)
+      .not.toHaveProperty('checkpointThresholdPercent');
   });
+
 });
 
 describe('packsCoherenceIssues', () => {

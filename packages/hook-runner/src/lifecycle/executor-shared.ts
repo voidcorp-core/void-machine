@@ -1,9 +1,7 @@
 import {
   accessSync,
   constants,
-  lstatSync,
   readFileSync,
-  realpathSync,
 } from 'node:fs';
 import { delimiter, isAbsolute, join, relative } from 'node:path';
 import type { JsonValue } from '@voidcorp/mission-engine/events';
@@ -20,18 +18,6 @@ export function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
-}
-
-export function boundedInteger(
-  value: string | undefined,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max
-    ? parsed
-    : fallback;
 }
 
 export function within(root: string, target: string): boolean {
@@ -71,22 +57,6 @@ export function findExecutable(
     }
   }
   return undefined;
-}
-
-export function safeExistingFiles(
-  paths: readonly string[],
-  root: string,
-): string[] {
-  const canonicalRoot = realpathSync(root);
-  return paths.filter((path) => {
-    try {
-      const info = lstatSync(path);
-      if (!info.isFile() || info.isSymbolicLink()) return false;
-      return within(canonicalRoot, realpathSync(path));
-    } catch {
-      return false;
-    }
-  });
 }
 
 export function readJson(path: string): unknown {

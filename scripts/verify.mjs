@@ -191,15 +191,6 @@ export const GATES = Object.freeze([
     ['source'],
     { required: false },
   ),
-  gate(
-    'benchmark-hooks',
-    'Hook performance observation',
-    ['pnpm', 'benchmark:hooks'],
-    'certification',
-    'subprocess',
-    ['source'],
-    { required: false },
-  ),
 ]);
 
 /** @returns {Gate} */

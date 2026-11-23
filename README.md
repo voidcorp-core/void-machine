@@ -73,7 +73,7 @@ What is installed, in numbers:
 |---|---|---|
 | Core skills | 42 | Automatically, when what you are doing matches |
 | Stack pack skills | 28 | Same, for the packs you activated |
-| Hooks | 22 | Native tool guards and optional diagnostics; see the runtime manifests |
+| Hooks | 18 | Native tool guards and optional diagnostics; see the runtime manifests |
 | Agents | 21 | Delegated by a skill, or invoked by name |
 | Specialists | 16 | Invoked in their own fresh context during review |
 
@@ -111,50 +111,21 @@ npx voidmachine runtime add codex # wire a second runtime
 npx voidmachine update            # recompile owned assets from a newer CLI
 ```
 
-## Context continuity, within the limits the runtimes expose
+## Manual checkpoint and semantic resume
 
-Claude Code and Codex both route `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and
-`SessionStart` through the same local continuity handler. It keeps one bounded mechanical block in
-`.void/machine/checkpoint.md`: the latest complete token observation, the 20 most recent unique
-read paths, the 20 most recent unique modified paths, overflow counts, and semantic/work revisions.
-`PreCompact` seals that block atomically; the next `SessionStart` injects the semantic checkpoint,
-the bounded working set, and an explicit complete/degraded status.
+Use `void-checkpoint` to save useful session residue before leaving or clearing context.
+On Claude Code and Codex, `SessionStart` reads that checkpoint, the programme and Git state.
+It reports missing or stale context without requiring a mechanical block, seal or revision.
+Existing checkpoints remain untouched; legacy mechanical blocks are ignored on reads.
+No continuous context tracker, automatic checkpoint reminder or end-of-session audit runs.
 
-The runtime does not expose a reliable context-window size. If you know it, opt into a threshold
-nudge in `.void/config.json`:
-
-```json
-{
-  "context": {
-    "windowTokens": 200000,
-    "checkpointThresholdPercent": 50
-  }
-}
-```
-
-The threshold must be an integer from 40 through 60 and defaults to 50 when `context` is present.
-Without `windowTokens` there is no percentage to compare, so the nudge cannot fire — and the
-handler says so once rather than going quiet, because a watchdog that stays silent about not
-watching is indistinguishable from one that found nothing.
-Without `windowTokens`, the handler records the latest usage counters but computes no percentage
-and emits no threshold nudge. Transcript reads stay local, inspect only usage counters, and are
-bounded to 1,048,576 bytes per invocation; prompt and response content are neither logged nor sent.
-Only runtime-reported direct read/write paths are observed. Shell-mediated reads are intentionally
-not inferred. Codex transcripts must stay inside the project; Claude may also use its
-project-scoped transcript directory when an exact, bounded session identifier names the file.
-
-The limits are intentional: the harness never invokes `/clear` or `/compact`, and the hook never
-writes objective, progress, dead ends, assumptions, or a next action. A nudge asks the agent to
-invoke `void-checkpoint`; it does not invoke the skill. A brutal `/clear` before a recent semantic
-checkpoint can therefore still require reconstruction.
-
-The reproducible performance check runs 25 fresh processes against the exact shipped hook bundle
-and publishes bare Node, same-bundle no-op, representative continuity, and their wall and CPU
-measurements. DEV-651 gates the representative hot wall path below 75 ms p95 and its incremental
-CPU cost over the same-bundle no-op below 25 ms p95. Raw wall latency stays visible without making
-shared-CI scheduler noise a feature gate. The unchanged shared-runner wall budgets, cold below
-150 ms p95 and no-op over Node below 25 ms p95, are tracked in
-[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+Optional Herdr metadata can still display Claude's latest complete token usage when
+`.void/config.json` supplies a positive `context.windowTokens`. This read-only measurement
+examines at most 1,048,576 transcript bytes and uses only usage counters. Project containment,
+no-follow file checks and exact session binding protect external Claude transcript reads.
+Unknown windows, unavailable transcripts and Codex yield no percentage. No threshold nudge,
+checkpoint write or automatic compaction follows. Herdr discovery failure disables only the
+relevant Herdr operations; commands still require a verified target.
 
 ## What it does not do
 

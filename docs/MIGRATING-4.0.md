@@ -25,8 +25,8 @@ writes the new one, replacing each old block where it stands, never beside it:
 | `.gitignore`, `.git/info/exclude` | `# void-harness:begin` | `# void-machine:begin` |
 | `.void/machine/checkpoint.md` | `<!-- void-harness:context-continuity:begin -->` | `<!-- void-machine:context-continuity:begin -->` |
 
-The checkpoint block is rewritten by the next hook that records work, with the
-resume state it carries intact.
+Checkpoint blocks from either namespace are now legacy: the semantic resume parser ignores
+them. Hooks no longer rewrite checkpoints; existing files are left intact.
 
 ## What stays working, and what to rename
 

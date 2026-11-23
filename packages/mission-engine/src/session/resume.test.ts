@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeMechanicalContextBlock, parseCheckpoint } from '../test/checkpoint-markers.js';
-import type { MechanicalContextState } from './checkpoint.js';
+import { parseCheckpoint } from '../test/checkpoint-markers.js';
 import {
   composeResumeBundle,
   type ResumeBundleInput,
@@ -40,38 +39,6 @@ function input(over: Partial<ResumeBundleInput> = {}): ResumeBundleInput {
   };
 }
 
-function mechanical(over: Partial<MechanicalContextState> = {}): MechanicalContextState {
-  return {
-    schemaVersion: 1,
-    objectiveHash: `sha256:${'a'.repeat(64)}`,
-    workRevision: 3,
-    semanticRevision: 3,
-    sealedWorkRevision: 3,
-    nudgeEmitted: false,
-    unwatchableNotified: false,
-    transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
-    transcriptCursorBytes: 0,
-    lastMeasurementAtMs: 0,
-    lastUsedTokens: 0,
-    readFiles: [],
-    modifiedFiles: [],
-    readFilesOverflow: 0,
-    modifiedFilesOverflow: 0,
-    clearPending: false,
-    lastResumeSource: 'none',
-    ...over,
-  };
-}
-
-function checkpointWithMechanical(state: MechanicalContextState): ReturnType<typeof parseCheckpoint> {
-  const merged = mergeMechanicalContextBlock(
-    '## Objective\n\nShip the bundle.\n\n## Next action\n\nWire the CLI.\n',
-    state,
-  );
-  if (!merged.ok) throw new Error(merged.error);
-  return parseCheckpoint(merged.value);
-}
-
 describe('composeResumeBundle', () => {
   it('composes program checkpoint and git without remote execution state', () => {
     const bundle = composeResumeBundle(input());
@@ -87,10 +54,7 @@ describe('composeResumeBundle', () => {
       progress: { provider: 'jira', scope: 'ACME/KNOW' },
     });
     expect(bundle.checkpoint?.nextAction).toBe('Wire the CLI.');
-    expect(bundle.gaps).toContainEqual({
-      reason: 'mechanical-block-absent',
-      detail: 'the mechanical context block is absent',
-    });
+    expect(bundle.gaps).toEqual([]);
   });
 
   it('names an absent or invalid program without hiding a useful checkpoint', () => {
@@ -123,36 +87,6 @@ describe('composeResumeBundle', () => {
     expect(reasons).toContain('checkpoint-head-moved');
   });
 
-  it('marks equal mechanical and semantic revisions complete', () => {
-    const bundle = composeResumeBundle(input({ checkpoint: checkpointWithMechanical(mechanical()) }));
-
-    expect(bundle.continuity).toEqual({ status: 'complete', reasons: [] });
-    expect(bundle.gaps.map((gap) => gap.reason)).not.toContain('checkpoint-semantic-stale');
-  });
-
-  it('marks missing or stale mechanical state degraded with bounded reasons', () => {
-    const missing = composeResumeBundle(input());
-    const stale = composeResumeBundle(input({
-      checkpoint: checkpointWithMechanical(mechanical({ semanticRevision: 2 })),
-    }));
-
-    expect(missing.continuity.status).toBe('degraded');
-    expect(missing.continuity.reasons).toContain('mechanical-block-absent');
-    expect(stale.continuity).toEqual({
-      status: 'degraded',
-      reasons: ['semantic-revision-behind'],
-    });
-  });
-
-  it('forces clear degraded until the semantic checkpoint catches up', () => {
-    const checkpoint = checkpointWithMechanical(mechanical());
-    const cleared = composeResumeBundle(input({ checkpoint, resumeSource: 'clear' }));
-
-    expect(cleared.continuity).toEqual({
-      status: 'degraded',
-      reasons: ['clear-not-reconciled'],
-    });
-  });
 });
 
 describe('renderResumeContext', () => {
@@ -166,43 +100,8 @@ describe('renderResumeContext', () => {
     expect(context).not.toMatch(/Recent decisions|remote state|git diff/i);
   });
 
-  it('keeps degraded recovery visible when neither a program nor a useful checkpoint exists', () => {
-    const bundle = composeResumeBundle(
-      input({ program: undefined, checkpoint: parseCheckpoint('# empty\n') }),
-    );
-
-    expect(renderResumeContext(bundle)).toContain('Context continuity: degraded');
-    expect(renderResumeContext(bundle)).toContain('Reconstruct context before any mutation.');
-  });
-
-  it('never truncates degraded reasons or the reconstruction instruction', () => {
-    const checkpoint = checkpointWithMechanical(mechanical({
-      semanticRevision: 2,
-      readFiles: Array.from({ length: 20 }, (_, index) => `src/${String(index)}-${'x'.repeat(180)}.ts`),
-      modifiedFiles: Array.from(
-        { length: 20 },
-        (_, index) => `src/${String(index)}-${'y'.repeat(180)}.ts`,
-      ),
-    }));
-
-    const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
-
-    expect(context.length).toBeLessThanOrEqual(4_000);
-    expect(context).toContain('Context continuity: degraded');
-    expect(context).toContain('semantic revision is behind mechanical work');
-    expect(context).toContain('Reconstruct context before any mutation.');
-  });
-
-  it('renders a clear reconstruction even when the checkpoint is absent', () => {
-    const context = renderResumeContext(composeResumeBundle(input({
-      checkpoint: undefined,
-      program: undefined,
-      resumeSource: 'clear',
-    })));
-
-    expect(context).toContain('Context continuity: degraded');
-    expect(context).toContain('the last clear is not reconciled');
-    expect(context).toContain('Reconstruct context before any mutation.');
+  it('adds no reconstruction instruction when no useful resume context exists', () => {
+    expect(renderResumeContext(composeResumeBundle(input({ program: undefined, checkpoint: undefined })))).toBe('');
   });
 
   it('stays within the hook context budget', () => {
@@ -215,24 +114,13 @@ describe('renderResumeContext', () => {
     );
   });
 
-  it('renders the continuity status without inventing a next action', () => {
-    const checkpoint = checkpointWithMechanical(mechanical({ semanticRevision: 2 }));
-    const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
+});
 
-    expect(context).toContain('Context continuity: degraded');
-    expect(context).toContain('semantic revision is behind mechanical work');
-    expect(context).toContain('Reconstruct context before any mutation.');
-  });
-
-  it('renders the bounded cumulative read and modified working sets', () => {
-    const checkpoint = checkpointWithMechanical(mechanical({
-      readFiles: ['src/read.ts'],
-      modifiedFiles: ['src/changed.ts'],
-      readFilesOverflow: 2,
-    }));
-    const context = renderResumeContext(composeResumeBundle(input({ checkpoint })));
-
-    expect(context).toContain('Read files: src/read.ts (+2 older)');
-    expect(context).toContain('Modified files: src/changed.ts');
-  });
+it('resumes an explicit semantic checkpoint without tracking prerequisites', () => {
+  const bundle = composeResumeBundle(input());
+  expect(bundle.gaps).toEqual([]);
+  const rendered = renderResumeContext(bundle);
+  expect(rendered).toContain('Objective: Ship the bundle.');
+  expect(rendered).toContain('Next action: Wire the CLI.');
+  expect(rendered).not.toMatch(/mechanical|semantic revision|seal|Reconstruct context before any mutation|Context continuity/);
 });

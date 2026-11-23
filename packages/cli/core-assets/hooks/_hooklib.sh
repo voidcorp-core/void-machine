@@ -98,7 +98,7 @@ _hooklib_parse_patch() {
 #   done < <(hooklib_edits)
 hooklib_edits() {
   # Without jq: degrade to the pure-bash file_path, emitting one CONTENTLESS
-  # record. That keeps the PATH-ONLY hooks (auto-format) enforcing on
+  # record. That keeps the PATH-ONLY consumers enforcing on
   # the Claude shape exactly as they did before this stream existed. It does not
   # weaken the content-scanning hooks: those call hooklib_require_jq BEFORE the
   # loop and have already exited 2 by the time they would read a record (#63).

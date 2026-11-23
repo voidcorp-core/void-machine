@@ -533,47 +533,22 @@ that session. This is agent guidance, not a technical authorization barrier. Cur
 ahead, unknown, marketplace and unknown-source cases remain silent; the terminal notice,
 cached detection and background refresh keep their existing behavior and startup budget.
 
-### Mechanical context continuity
+### Manual checkpoint and semantic resume
 
-The checkpoint is also the single local continuity file. A uniquely delimited mechanical block
-coexists with the semantic sections: `void-checkpoint` owns objective, position, proven state, open
-loops, dead ends, assumptions, and the exact next action; the lifecycle handler owns only observed
-usage, bounded read/modified paths, overflow, and revision/cycle facts. Every semantic rewrite must
-preserve that block byte-for-byte. There is no sidecar or reconciliation daemon.
+`void-checkpoint` owns semantic residue. `mission-engine` parses it and composes programme,
+Git, freshness and reference diagnostics; `hook-runner` observes and injects the bounded result
+at `SessionStart` in both runtimes. No mechanical revision or seal is required. Legacy mechanical
+blocks are ignored, and hooks never rewrite checkpoint files or acquire checkpoint locks.
+There is no continuous tracker, threshold reminder or end-of-session audit.
 
-The dependency direction remains the normal one. `mission-engine` makes pure revision, recency,
-threshold, merge, and complete/degraded decisions. `hook-runner` normalizes Claude Code and Codex
-payloads, reads at most 1,048,576 transcript bytes, confines project paths, and replaces the block
-under a no-wait lock through a same-directory temporary file and rename. Runtime manifests only
-map `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and `SessionStart` to that handler.
-The lock covers the complete read-modify-write decision. Stale takeover is serialized by a
-no-wait claim chain whose generations are created exclusively and never ranked by timestamps.
-After acquiring the recovery claim, takeover checks the current lock's age again as well as its
-identity: Linux can reuse an unlinked inode immediately for a fresh owner's lock, so matching
-device and inode numbers alone do not authorize removal. Checkpoint mutation stays anchored to
-an opened, verified machine directory while relative
-no-follow files are read and renamed. Transcript reads use no-follow bounded descriptors. Codex
-transcripts remain project-local; Claude may also use its
-project-scoped transcript directory when the file name exactly matches a bounded session ID.
-Configuration reads are regular-file-only and capped at 65,536 bytes. Direct runtime read/write
-payloads contribute paths, while shell-mediated reads remain unobserved.
-
-The latest complete `message.usage` record is an occupation observation, not accumulated session
-cost. A nudge is possible only when `.void/config.json` supplies a positive `context.windowTokens`;
-the 40–60% integer threshold defaults to 50. Unknown windows produce no percentage. The handler
-never invokes `/clear`, `/compact`, or `void-checkpoint`, and never authors semantic residue.
-`SessionStart:clear` is consequently degraded until a later semantic checkpoint reconciles the
-revisions. A semantic rewrite invalidates the previous `sealed_work_revision`; only a successful
-`PreCompact` can seal the current work revision, so a failed seal cannot be rendered complete on
-the next compact resume. See the decision
-[PreCompact may preserve mechanical checkpoint state](decisions-log/2026-08-27-precompact-preserves-mechanical-checkpoint-state--da9bb0a9-9c5a-46df-9459-27a583e92af2.md).
-
-The continuity benchmark executes the exact delivered hook bundle in 25 fresh processes and keeps
-bare Node, same-bundle no-op, and representative-event measurements separate. DEV-651 gates only
-the hot wall path and incremental feature-versus-no-op CPU cost. It still publishes raw wall
-latencies, but external scheduler contention cannot make the causal feature gate flaky. The
-existing global cold-start and no-op-versus-Node wall budgets remain owned by
-[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+Herdr's read-only context measurement is isolated in `herdr-context.ts`. It reads at most
+1,048,576 bytes from the tail of a regular transcript using no-follow descriptors, canonical
+containment and identity checks before and after opening. Claude's external project transcript
+also requires an exact bounded session ID. Configuration reads are capped at 65,536 bytes.
+Only Claude's latest complete `message.usage` record and a configured positive
+`context.windowTokens` produce an occupation percentage; Codex, unknown windows and unavailable
+transcripts produce none. No cursor, checkpoint, lock, revision or threshold state is written.
+This does not change Herdr's optional discovery or verified-target command boundary.
 
 ### Installed capability discovery
 
@@ -698,38 +673,9 @@ receipts and health checks do not depend on them. `_hooklib.sh` and `_checks.sh`
 remain characterization inputs only and are not part of the active runtime.
 The local runtime therefore requires Node only, not `jq` or a POSIX shell.
 
-`outcome-meter` composes warning-only repeated-read advice in its existing
-`PostToolUse` process, with Claude's documented
-`PostToolUseFailure` used only to reset the stream. It compares exact `Read`, `Grep`
-and `Glob` calls within a runtime/session and project, using canonical object key
-order but preserving strings, paths, flags and array order. The fourth consecutive
-successful call with identical arguments and result emits one fixed `additionalContext`
-message; the counter saturates until new information, arguments or another observed
-activity resets it. Immediate duplicate tool-call IDs do not increment. It does not judge
-semantic progress, block tools, rewrite results, call an LLM or inspect shell commands.
-Interleaved loops are intentionally outside this last-call heuristic.
-
-The disposable `.void/machine/read-loop/state.json` cache retains only SHA-256
-digests, counts and timestamps: at most 32 sessions, 32 KiB and 24 hours. Digests are
-comparison keys, not encryption or authentication. JSON normalization is bounded
-at 32 levels, 4,096 nodes and 256 KiB per argument/result value, inside the runner's
-1 MiB input limit. Missing results, explicit error/interruption markers and
-uninspectable values reset rather than count. Missing session identity or unsafe
-cache access reports `READ_LOOP_UNAVAILABLE` without changing tool permission.
-The private cache refuses symlinks/nonregular or oversized state, uses atomic
-replacement and an exclusive no-wait lock. Contention skips advice. A crashed
-writer can leave the lock; with no hook process using it, remove this disposable
-`read-loop` cache directory to recover. There is no stale-lock takeover or retry loop.
-No raw arguments, results or session identifiers are written by this advice path.
-
-The existing `outcome-meter` wrapper remains the catalogue and cheat-sheet owner.
-There is no additional process on normal tool completions. One `hook.completed`
-receipt records the advice outcome, alongside the existing tool outcome event; a
-failure reset never manufactures a `runtime.tool.completed` receipt. Source: the
-[Claude hooks contract](https://code.claude.com/docs/en/hooks#posttooluse) and
-[Codex hooks contract](https://learn.chatgpt.com/docs/hooks#posttooluse).
-Slim's [tool-loop guard](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/hooks/tool-loop-guard/hook.ts)
-informed the identical-result check; its blocking and task/wait heuristics are not adopted.
+`outcome-meter` records successful runtime tool outcomes through the existing event boundary.
+`PostToolUseFailure` returns without manufacturing a `runtime.tool.completed` event. It does not
+track repeated reads, persist a read-loop cache, rewrite results or add context advice.
 
 Test focusing, explicit `any`, console usage and undeclared package imports are
 validated through the project's existing syntax-aware linter. TDD evidence comes
@@ -765,12 +711,6 @@ Two content-aware hooks sit beside the filename/path guards:
   test/fixture paths are skipped except credential-named source modules admitted by
   the filename heuristic above, which receive the same content policy. The marker
   applies only to its own line and does not exempt another line or file.
-- **`stop-typecheck.sh`** (Stop, **advisory**) — when a TS project has uncommitted
-  `.ts` changes at end of turn, it runs a timeout-bounded `tsc --noEmit` scoped to
-  the nearest tsconfig of the touched files and surfaces type errors on stderr, so
-  the "typecheck clean" item of `void-verify` is answered from
-  observation. It **never blocks** (a blocking Stop would trap the session) and
-  no-ops with no TS project, no TS edit, or no `tsc`.
 
 ### Pack independence
 
@@ -814,9 +754,10 @@ is a bin file named after it; a deprecated one runs the same CLI with one line o
 The same source names what the product writes into a consumer's files and reads from their
 environment, because a release cannot rewrite what an older one left there. `markers` derives the
 begin and end of each managed block (CLAUDE.md and AGENTS.md, `.gitignore` and
-`.git/info/exclude`, the mechanical block of `.void/machine/checkpoint.md`) for the current
+`.git/info/exclude`, legacy mechanical blocks of `.void/machine/checkpoint.md`) for the current
 namespace and every former one; `environment` names the current settings prefix and the former
-ones. Every write uses the current name, every read accepts any of them:
+ones. Every managed write uses the current name, every read accepts any of them. Checkpoint blocks
+are recognized only to exclude retired mechanical content from semantic resume:
 
 - `managed-block.ts` (hook-runner) is the only finder of a managed block. It puts the new block
   where the first recognized one stands and drops any other, so an update from a release that used

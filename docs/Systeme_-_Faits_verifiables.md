@@ -39,7 +39,7 @@ syntaxe et de sélection des tests passent dans la validation configurée du pro
 
 Toutes les entrées invoquent le même exécutable, `packages/core/hooks/_void-hook.mjs`. Preuve : champ `command` de chaque entrée dans `packages/core/.claude-plugin/plugin.json`.
 
-`packages/core/codex/hooks.json` déclare que `trim-large-output` n'est pas mirroré côté Codex : « NOT mirrored, deliberately: trim-large-output, whose PostToolUse output rewriting is unconfirmed on Codex ».
+Le trim automatique des sorties a été retiré des deux runtimes ; aucun hook ne réécrit les résultats des outils.
 
 ## Règles de décision écrites
 

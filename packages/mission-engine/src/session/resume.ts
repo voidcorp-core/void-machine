@@ -214,7 +214,12 @@ function boundedResumeLines(
 
 export function renderResumeContext(bundle: ResumeBundle): string {
   const usefulCheckpoint = bundle.checkpoint !== undefined && !bundle.checkpoint.isEmpty;
-  if (bundle.program === undefined && !usefulCheckpoint) return '';
+  if (bundle.program === undefined && !usefulCheckpoint) {
+    const invalidProgram = bundle.gaps.filter((gap) => gap.reason === 'program-invalid');
+    return invalidProgram.length === 0
+      ? ''
+      : boundedResumeLines(['[void-machine resume]'], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
+  }
   const required = ['[void-machine resume]', `Project: ${bundle.project.name}`];
   const optional: string[] = [];
   if (bundle.git.branch !== undefined) optional.push(`Branch: ${bundle.git.branch}`);

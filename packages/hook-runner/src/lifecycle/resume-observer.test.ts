@@ -88,6 +88,29 @@ describe('observeResume', () => {
     expect(observed.context.length).toBeLessThanOrEqual(4_000);
   });
 
+  it.each([
+    ['malformed', 'absent'], ['malformed', 'empty'],
+    ['competing', 'absent'], ['competing', 'empty'],
+  ])('surfaces a %s programme with an %s checkpoint without imposing recovery', (kind, checkpoint) => {
+    const root = project();
+    if (kind === 'malformed') {
+      writeFileSync(join(root, '.void', 'program.md'), 'not a programme descriptor\n');
+    } else {
+      writeProgram(root);
+      writeFileSync(join(root, '.void', 'active.md'), '# competing descriptor\n');
+    }
+    if (checkpoint === 'empty') writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '');
+
+    const observed = observeResume(root, Date.now());
+    const diagnostic = kind === 'malformed'
+      ? 'invalid program descriptor: .void/program.md'
+      : 'multiple program descriptors: .void/program.md, .void/active.md';
+    expect(observed.bundle.gaps).toContainEqual({ reason: 'program-invalid', detail: diagnostic });
+    expect(observed.context).toContain(`Gap: ${diagnostic}`);
+    expect(observed.context.length).toBeLessThanOrEqual(4_000);
+    expect(observed.context).not.toMatch(/Reconstruct context|mechanical|void-checkpoint|before any mutation/i);
+  });
+
   it('reports missing observations without imposing a checkpoint repair', () => {
     const observed = observeResume(project(), Date.now());
     expect(observed.context).toBe('');

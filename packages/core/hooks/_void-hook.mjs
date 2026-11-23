@@ -11765,8 +11765,10 @@ ${boundedOptional}
 }
 function renderResumeContext(bundle) {
   const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
-  if (bundle.program === void 0 && !usefulCheckpoint)
-    return "";
+  if (bundle.program === void 0 && !usefulCheckpoint) {
+    const invalidProgram = bundle.gaps.filter((gap) => gap.reason === "program-invalid");
+    return invalidProgram.length === 0 ? "" : boundedResumeLines(["[void-machine resume]"], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
+  }
   const required2 = ["[void-machine resume]", `Project: ${bundle.project.name}`];
   const optional2 = [];
   if (bundle.git.branch !== void 0)

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { journalFingerprint, readMissionJournals } from './journal.js';
+import { readMissionJournals } from './journal.js';
 
 // The journals of one project sit at two locations at once: a project whose
 // installed harness predates the machine/ split keeps writing to the old one
@@ -92,33 +92,3 @@ describe('readMissionJournals', () => {
   });
 });
 
-// The banner cannot afford to read the journals: 11 MB for twelve lines of
-// interest, measured at 49 ms. The fingerprint is what it can afford -- stat
-// only -- so the verdict is cached and recomputed only when the journals moved.
-describe('journalFingerprint', () => {
-  it('is stable while nothing is written', () => {
-    const root = project();
-    mission(root, 'machine', MIS_A, '{"seq":1}\n', 1_000);
-    expect(journalFingerprint(root)).toBe(journalFingerprint(root));
-  });
-
-  it('changes when a journal grows, which is what makes a stale verdict recompute', () => {
-    const root = project();
-    mission(root, 'machine', MIS_A, '{"seq":1}\n', 1_000);
-    const before = journalFingerprint(root);
-    mission(root, 'machine', MIS_A, '{"seq":1}\n{"seq":2}\n', 2_000);
-    expect(journalFingerprint(root)).not.toBe(before);
-  });
-
-  it('changes when a mission appears at the other location', () => {
-    const root = project();
-    mission(root, 'machine', MIS_A, '{"seq":1}\n', 1_000);
-    const before = journalFingerprint(root);
-    mission(root, 'legacy', MIS_B, '{"seq":2}\n', 1_000);
-    expect(journalFingerprint(root)).not.toBe(before);
-  });
-
-  it('answers for a project that never recorded anything', () => {
-    expect(journalFingerprint(project())).toBe('0:0');
-  });
-});

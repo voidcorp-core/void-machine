@@ -11,7 +11,6 @@ import {
 import { readFreshnessCache } from './freshness/cache.js';
 import { compareFreshness } from './freshness/compare.js';
 import { freshnessRelay, resolveFreshness } from './freshness/notice.js';
-import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js';
 import { sessionStartOutput } from './lifecycle/context.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
 import { executeDelegationResult } from './lifecycle/delegation-result.js';
@@ -153,6 +152,7 @@ async function observeHook(
   agentRuntime: AgentRuntime,
   root: string,
 ): Promise<void> {
+  if (execution.status === 'ok' || execution.status === 'skipped') return;
   try {
     const explicitRoot = process.env['VOID_PROJECT_ROOT'] ?? process.env['CLAUDE_PROJECT_DIR'];
     telemetryDestination ??= explicitRoot === undefined
@@ -200,20 +200,11 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
       cached === undefined
         ? undefined
         : freshnessRelay(compareFreshness(install.version, cached.latest), install.source);
-    // The harness cannot see an invocation the runtime refused, so what it reads
-    // here is the trace one leaves: a name it recorded that no longer resolves.
-    // Read, never compute: judging the journals costs 49 ms here, and a session
-    // start must not wait on an answer that can be one session old without
-    // anyone being worse off. The recompute happens below, after stdout.
-    const alert = cachedInvocationAlert(root);
     const resume = observeResume(root, Date.now());
     process.stdout.write(
-      `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}\n`,
+      `${JSON.stringify(sessionStartOutput(install.version, notice, resume.context))}\n`,
     );
-    const execution = { status: 'ok', details: {} } satisfies LifecycleExecution;
     await refreshFreshnessInBackground(install.version);
-    refreshInvocationVerdict(root);
-    await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
     return;
   }
   if (rawInput === undefined) {

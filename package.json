@@ -55,7 +55,6 @@
     "conformance:hooks": "node packages/cli/scripts/conformance-consumer.mjs --suite hooks",
     "conformance:autopilot": "node packages/cli/scripts/conformance-consumer.mjs --suite autopilot",
     "conformance:project-graph": "node scripts/conformance-project-graph.mjs",
-    "eval": "pnpm build:cli && pnpm --filter @voidcorp/eval-harness run eval --",
     "verify": "node scripts/verify.mjs",
     "ci:gates:render": "node scripts/render-ci-gates.mjs",
     "ci:gates:check": "node scripts/render-ci-gates.mjs --check",

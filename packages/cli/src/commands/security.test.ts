@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSecurityManifestYaml, type SecurityAdapter } from '../lib/security/manifest.js';
-import { outcomeOf, parseSecurityArgs } from './security.js';
+import { outcomeOf, parseSecurityArgs, runAdapters } from './security.js';
 
 describe('parseSecurityArgs', () => {
   it('asks for help when given nothing, rather than guessing a subcommand', () => {
@@ -124,5 +125,34 @@ adapters:
     for (const code of [2, 3, 7, 127, 255]) {
       expect(outcomeOf(adapter, code), String(code)).toBe('errored');
     }
+  });
+});
+
+
+describe('Semgrep process results through the production runner', () => {
+  const adapter = parseSecurityManifestYaml(readFileSync(
+    new URL('../../../core/src/adapters/security/manifest.yaml', import.meta.url), 'utf8',
+  ), 'shipped manifest').adapters.find((entry) => entry.id === 'semgrep') as SecurityAdapter;
+  const finding = { check_id: 'sql-injection', path: 'app.js', start: { line: 1 },
+    extra: { severity: 'ERROR', message: 'Unsafe query' } };
+
+  it.each([
+    [0, { results: [finding] }, 'findings', 1],
+    [1, { results: [finding] }, 'findings', 1],
+    [0, { results: [] }, 'clean', 0],
+    [0, { unexpected: true }, 'errored', 0],
+    [0, 'not JSON', 'errored', 0],
+    [0, { results: [null] }, 'errored', 0],
+    [0, { results: [], errors: [{ message: 'scan failed' }] }, 'errored', 0],
+    [7, { results: [] }, 'errored', 0],
+  ])('reads exit %s with %j as %s', async (exitCode, output, outcome, count) => {
+    const raw = typeof output === 'string' ? output : JSON.stringify(output);
+    const result = await runAdapters({ kind: 'planned', skipped: [], missingTools: [], run: [{
+      adapter: { ...adapter, command: process.execPath },
+      argv: ['--eval', `process.stdout.write(${JSON.stringify(raw)}); process.exitCode = ${exitCode};`],
+    }] });
+    expect(result.runs[0]).toMatchObject({ exitCode, outcome });
+    expect(result.findings).toHaveLength(count);
+    if (count > 0) expect(result.findings[0]?.securityClass).toBe('injection');
   });
 });

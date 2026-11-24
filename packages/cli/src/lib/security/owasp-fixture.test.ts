@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
+import { runAdapters } from '../../commands/security.js';
+import { parseSecurityManifestYaml, type SecurityAdapter } from './manifest.js';
 
 const execFile = promisify(nodeExecFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -78,14 +80,15 @@ describe.skipIf(!HAS_SEMGREP)('a real scanner over the fixture', () => {
   // than a slow one.
   it('finds both planted vulnerabilities without changing the fixture', { timeout: 300_000 }, async () => {
     const before = fingerprint();
-    const { stdout } = await execFile(
-      'semgrep',
-      ['scan', '--config', 'rules.yml', '--json', '--metrics=off', '--quiet', '.'],
-      { cwd: FIXTURE, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 },
-    ).catch((error: { stdout?: string }) => ({ stdout: error.stdout ?? '' }));
-    const found = (JSON.parse(stdout).results as { check_id: string }[]).map((result) =>
-      result.check_id.split('.').pop(),
-    );
+    const adapter = parseSecurityManifestYaml(readFileSync(
+      resolve(HERE, '../../../../core/src/adapters/security/manifest.yaml'), 'utf8',
+    ), 'shipped manifest').adapters.find((entry) => entry.id === 'semgrep') as SecurityAdapter;
+    const argv = adapter.args.map((arg) => arg === '.semgrep.yml' ? join(FIXTURE, 'rules.yml') : arg);
+    const result = await runAdapters({ kind: 'planned', skipped: [], missingTools: [], run: [{
+      adapter, argv: [...argv, '--no-git-ignore', FIXTURE],
+    }] });
+    expect(result.runs[0]).toMatchObject({ outcome: 'findings', exitCode: 1 });
+    const found = result.findings.map((finding) => finding.rule.split('.').pop());
 
     expect(found).toEqual(
       expect.arrayContaining(['sql-query-string-concatenation', 'shell-command-string-concatenation']),

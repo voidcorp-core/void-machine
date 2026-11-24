@@ -136,11 +136,30 @@ describe('ci-enforce — clean diff is green', () => {
     expect(stdout).not.toMatch(/::error/);
   });
 
-  it('does not flag a secret added to a test fixture', () => {
-    write(repo, 'src/auth.test.ts', `const k = "${AWS_KEY}";\n`);
+  it.each(['src/auth.test.ts', 'fixtures/data.ts', '__generated__/data.ts'])(
+    'flags a high-confidence secret in %s without exposing it', (path) => {
+    write(repo, path, `const k = "${AWS_KEY}";\n`);
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'fixture secret');
+    const result = run(repo, base);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('leaked secret');
+    expect(result.stdout + result.stderr).not.toContain(AWS_KEY);
+  });
+
+  it('allows an explicitly marked synthetic fixture without exempting adjacent lines', () => {
+    const path = 'src/auth.test.ts';
+    const synthetic = `const k = "${AWS_KEY}"; // allow-secret-pattern: intentional synthetic fixture`;
+    write(repo, path, `${synthetic}\n`);
+    git(repo, 'add', '-A');
+    git(repo, 'commit', '-q', '-m', 'document synthetic fixture');
     expect(run(repo, base).code).toBe(0);
+    write(repo, path, `${synthetic}\nconst other = "${AWS_KEY}";\n`);
+    git(repo, 'add', '-A');
+    git(repo, 'commit', '-q', '-m', 'unmarked adjacent token');
+    const result = run(repo, base);
+    expect(result.code).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(AWS_KEY);
   });
 
   it('does not flag a declared import or a self import', () => {

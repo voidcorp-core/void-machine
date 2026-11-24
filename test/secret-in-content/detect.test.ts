@@ -62,9 +62,13 @@ describe('secret-in-content.sh — false positives stay allowed', () => {
 });
 
 describe('secret-in-content.sh — escape hatches', () => {
-  it('skips test/fixture files even with a real-looking key (exit 0)', () => {
-    expect(runHook('apps/web/src/a.test.ts', `const k = '${AWS}';\n`).code).toBe(0);
-  });
+  it.each(['apps/web/src/a.test.ts', 'fixtures/data.ts', '__generated__/data.ts'])(
+    'blocks high-confidence keys in %s', (path) => {
+      const result = runHook(path, `const k = '${AWS}';\n`);
+      expect(result.code).toBe(2);
+      expect(result.stderr).not.toContain(AWS);
+    },
+  );
 
   it('honors the allow-secret-pattern tag (exit 0)', () => {
     expect(runHook('apps/web/src/a.ts', `const k = '${AWS}'; // allow-secret-pattern: docs example\n`).code).toBe(0);

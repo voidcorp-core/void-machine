@@ -692,15 +692,27 @@ Two content-aware hooks sit beside the filename/path guards:
   suffix assigned a long, mixed, non-placeholder literal — excluding UUIDs, git shas,
   and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
-  test/fixture paths are skipped except credential-named source modules admitted by
-  the filename heuristic above, which receive the same content policy. The marker
-  applies only to its own line and does not exempt another line or file.
+  high-confidence signatures apply in every path, including tests, fixtures and
+  generated files. Only the ambiguous assignment heuristics retain their fixture
+  exemptions (credential-named source modules still receive all checks). Synthetic
+  values should be assembled at runtime or explicitly marked on the exact fixture
+  line. The marker applies only to its own line, never another line or file. Local
+  hooks and the CI diff driver share this policy and report locations, not values.
 
 ### Pack independence
 
 A pack **may not carry a bundled runtime `dependencies` edge on another pack** — that hides a dependency graph and couples release cycles. If two packs share substantial logic, that logic belongs in `core/`.
 
 One exception is allowed: an **explicit, documented `peerDependency` of composition** — a stack pack that deliberately presupposes another (e.g. `pack-nextjs` peer-depends on `pack-monorepo` for the `Result`/`ok`/`err` primitives, and `init` co-installs them). This is not a hidden edge: it is declared in `package.json` `peerDependencies`, documented in the pack README, and the consumer installs both. Extracting three functional primitives into their own package to avoid it would be premature (see `void-package-extraction`). Prefer this over a new shared package when the shared surface is small and the composition is intentional.
+
+### Security scanner results
+
+The Semgrep adapter uses local rules and `scan --error --json`: `--error` makes
+findings return exit 1 (see the [Semgrep CLI reference](https://semgrep.dev/docs/cli-reference)).
+The runner also reads Semgrep JSON on exit 0 so successful execution cannot hide
+findings. Missing, malformed or error-bearing reports leave the scan errored;
+valid findings still reach the mission engine's classification and blocking policy.
+Other scanners retain their declared exit-code contracts.
 
 ### CLI scope
 

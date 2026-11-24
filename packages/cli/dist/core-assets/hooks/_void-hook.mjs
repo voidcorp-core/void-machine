@@ -7838,9 +7838,10 @@ var CAMEL_ASSIGNMENT = /\b[a-z][A-Za-z0-9_$]*(?:Key|Secret|Token|Password|Passwd
 var PLACEHOLDER = /process\.env|import\.meta\.env|xxx|changeme|example|redacted|your[-_]|<[a-z]|placeholder|todo/i;
 var EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures\/|\/__generated__\//;
 var CREDENTIAL_SOURCE_MODULE = /(?:secret|credential)[^/]*\.(?:[cm]?[jt]s|[jt]sx)$/i;
-function lineHasSecret(line) {
+function lineHasSecret(line, checkGeneric) {
   if (line.includes("allow-secret-pattern:")) return false;
   if (HIGH_CONFIDENCE.some((pattern2) => pattern2.test(line))) return true;
+  if (!checkGeneric) return false;
   for (const pattern2 of [GENERIC_ASSIGNMENT, CAMEL_ASSIGNMENT]) {
     for (const assignment of line.matchAll(pattern2)) {
       const value = assignment[1] ?? "";
@@ -7857,9 +7858,9 @@ function secretContent(edits) {
   const evidence = [];
   for (const edit of edits) {
     const path2 = edit.path.replaceAll("\\", "/");
-    if (EXEMPT_PATH.test(path2) && !CREDENTIAL_SOURCE_MODULE.test(path2)) continue;
+    const checkGeneric = !EXEMPT_PATH.test(path2) || CREDENTIAL_SOURCE_MODULE.test(path2);
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
-      if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
+      if (lineHasSecret(line, checkGeneric)) evidence.push(`${edit.path}:${index + 1}`);
     });
   }
   return evidence.length === 0 ? allow() : block("SECRET_IN_CONTENT", "secret-in-content: likely secret detected in edited content", evidence);

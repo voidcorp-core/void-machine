@@ -88,8 +88,11 @@ jobs:
         run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"
 
   validate:
+    if: ${{ !cancelled() }}
+    needs: consumer-artifact
     runs-on: ubuntu-latest
     env:
+      VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
       # On pull requests, prove the reviewed branch commit rather than GitHub's
       # synthetic merge ref. Pushes and manual runs prove their triggering SHA.
       GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -118,7 +121,20 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Download the same checked consumer archive
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/void-consumer-artifact
+
       # verify-gates:begin
+      - name: "[generated-artifacts] Generated artifacts"
+        continue-on-error: true
+        run: >-
+          node scripts/verify.mjs --gate generated-artifacts
+          --sha "$GATE_SHA"
+          --report ".void/machine/gate-reports/generated-artifacts.json"
+
       - name: "[version-lockstep] Version lockstep"
         continue-on-error: true
         run: >-
@@ -188,13 +204,6 @@ jobs:
           node scripts/verify.mjs --gate self-host-doctor
           --sha "$GATE_SHA"
           --report ".void/machine/gate-reports/self-host-doctor.json"
-
-      - name: "[generated-artifacts] Generated artifacts"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate generated-artifacts
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/generated-artifacts.json"
 
       - name: "[skill-references] Skill references"
         continue-on-error: true

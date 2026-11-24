@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   readFileSync,
+  renameSync,
   readdirSync,
   writeFileSync,
 } from 'node:fs';
@@ -13,6 +14,7 @@ import {
   createReleaseArtifactManifest,
   parseReleaseTag,
 } from './release-artifact-contract.mjs';
+import { verifyConformanceArtifact } from '../packages/cli/scripts/conformance-artifact.mjs';
 import { PRODUCT_IDENTITY } from './product-identity.mjs';
 
 function requiredEnv(name) {
@@ -108,6 +110,16 @@ function prepareArtifact() {
   const tarballNames = readdirSync(artifactDir).filter((name) => name.endsWith('.tgz'));
   if (tarballNames.length !== 1) {
     throw new Error('release artifact directory must contain exactly one tarball');
+  }
+  if (tarballNames[0] === 'consumer.tgz') {
+    const source = join(artifactDir, 'consumer.tgz');
+    verifyConformanceArtifact(source, releaseCommit, {
+      packageVersion: version,
+      runIdentity: `${requiredEnv('GITHUB_RUN_ID')}:${requiredEnv('GITHUB_RUN_ATTEMPT')}`,
+    });
+    const canonical = `${PRODUCT_IDENTITY.packageName}-${version}.tgz`;
+    renameSync(source, join(artifactDir, canonical));
+    tarballNames[0] = canonical;
   }
   const tarballPath = join(artifactDir, tarballNames[0]);
   const tarballBytes = readFileSync(tarballPath);

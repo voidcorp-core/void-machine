@@ -79,3 +79,10 @@ it('aligns every first-party declared Node floor with the exact runtime CI prove
     }
   }
 });
+
+it('reuses the producer archive in validation and binds the current run', () => {
+  expect(job('validate')).toContain('needs: consumer-artifact');
+  expect(job('validate')).toContain(`if: ${expression('!cancelled()')}`);
+  expect(job('validate')).toContain('VOID_CONFORMANCE_TARBALL:');
+  expect(job('validate')).toContain('actions/download-artifact@');
+});

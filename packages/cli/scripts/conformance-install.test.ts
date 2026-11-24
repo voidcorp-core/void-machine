@@ -45,9 +45,11 @@ it('runs each consumer suite on the same artifact', async () => {
   const names = await exerciseConsumerSuites(undefined, '/artifact/consumer.tgz', root, async (options) => {
     calls.push(options);
     return { outcome: { kind: 'exited', code: 0 }, stdout: '', stderr: '' };
-  });
+  }, '/prepared/bin.mjs');
   expect(names).toEqual(['install', 'hooks', 'autopilot']);
   expect(calls).toHaveLength(3);
+  expect(calls.every(call => call.env.VOID_CONFORMANCE_BIN === '/prepared/bin.mjs')).toBe(true);
+  expect(new Set(calls.map(call => call.env.HOME)).size).toBe(3);
   expect(new Set(calls.map((call) => call.args[0])).size).toBe(3);
   expect(calls.every((call) => call.env.VOID_CONFORMANCE_TARBALL === '/artifact/consumer.tgz')).toBe(true);
   expect(calls.every((call) => call.timeoutMs === undefined)).toBe(true);

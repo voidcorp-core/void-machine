@@ -21,11 +21,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
+import { installPackage } from './conformance-install.mjs';
 import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import { assertPortableConsumerSkill } from './conformance-autopilot-lib.mjs';
 import {
   conformanceFixtureEnvironment,
-  packageManagerCommand,
   requireConformanceExit,
   runConformanceProcess,
 } from './conformance-process.mjs';
@@ -39,10 +39,12 @@ function requirePath(path, label) {
 }
 
 const temporary = await mkdtemp(join(tmpdir(), 'void-autopilot-conformance-'));
-const npm = packageManagerCommand('npm');
+
 
 try {
   const { manifest, tarball } = await conformanceArtifactFromEnvironment();
+
+  const bin = process.env.VOID_CONFORMANCE_BIN ?? await installPackage(temporary, tarball);
 
   for (const runtime of ['claude', 'codex']) {
     const fixture = join(temporary, `consumer-${runtime}`);
@@ -50,23 +52,6 @@ try {
     await writeFile(join(fixture, 'package.json'), JSON.stringify({ name: 'consumer', private: true }));
     const environment = conformanceFixtureEnvironment(fixture);
 
-    const installed = await runConformanceProcess({
-      command: npm.executable,
-      args: [
-        ...npm.prefixArguments,
-        'install',
-        '--offline',
-        '--ignore-scripts',
-        '--no-audit',
-        '--no-fund',
-        tarball,
-      ],
-      cwd: fixture,
-      env: environment,
-    });
-    requireConformanceExit(installed, `autopilot conformance ${runtime} install`);
-
-    const bin = join(fixture, 'node_modules', PRODUCT_IDENTITY.packageName, 'dist', 'bin', `${PRODUCT_IDENTITY.commands.primary}.mjs`);
     const init = await runConformanceProcess({
       command: process.execPath,
       args: [bin, 'init', '--runtime', runtime, '--no-interactive'],

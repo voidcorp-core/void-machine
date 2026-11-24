@@ -1,6 +1,6 @@
 // @test-resource subprocess
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -28,7 +28,7 @@ describe('checkout trust without ambient HOME', () => {
     const bytes = Buffer.from('packed bytes');
     writeFileSync(tarball, bytes);
     writeFileSync(`${tarball}.json`, JSON.stringify(createArtifactManifest(bytes, {
-      packageName: PRODUCT_IDENTITY.packageName, packageVersion: '3.6.0', sourceSha,
+      packageName: PRODUCT_IDENTITY.packageName, packageVersion: JSON.parse(readFileSync(join(checkout, 'packages/cli/package.json'), 'utf8')).version, sourceSha,
     })));
     const init = spawnSync('git', ['init', root], { encoding: 'utf8' });
     expect(init.status, init.stderr).toBe(0);

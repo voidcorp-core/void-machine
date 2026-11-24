@@ -5,11 +5,14 @@ import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
+  rmSync,
   readFileSync,
   readdirSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,6 +44,15 @@ const RESOURCES = new Set([
 
 /** @type {readonly Gate[]} */
 export const GATES = Object.freeze([
+  gate(
+    'generated-artifacts',
+    'Generated artifacts',
+    ['pnpm', 'derive:check'],
+    'consumer',
+    'subprocess',
+    ['source'],
+    { artifact: true, fix: ['pnpm', 'derive'] },
+  ),
   gate('version-lockstep', 'Version lockstep', ['pnpm', 'version:check'], 'contract', 'filesystem', ['source']),
   gate('anti-bloat', 'Anti-bloat', ['pnpm', 'anti-bloat:check'], 'contract', 'subprocess', ['source']),
   gate(
@@ -88,15 +100,6 @@ export const GATES = Object.freeze([
     'consumer',
     'subprocess',
     ['source'],
-  ),
-  gate(
-    'generated-artifacts',
-    'Generated artifacts',
-    ['pnpm', 'derive:check'],
-    'consumer',
-    'subprocess',
-    ['source'],
-    { artifact: true, fix: ['pnpm', 'derive'] },
   ),
   gate(
     'skill-references',
@@ -312,11 +315,11 @@ function snapshot(paths) {
   return run(['git', 'status', '--porcelain', '--', ...paths], { quiet: true }).output;
 }
 
-function runOne(gateDefinition, sha) {
+function runOne(gateDefinition, sha, env = {}) {
   const before = snapshot(gateDefinition.drift);
   const startedAt = new Date().toISOString();
   const started = performance.now();
-  const outcome = run(gateDefinition.run);
+  const outcome = run(gateDefinition.run, { env });
   const after = snapshot(gateDefinition.drift);
   const drifted = before !== null && after !== null && before !== after;
   const exitCode = outcome.exitCode === 0 && !drifted ? 0 : 1;
@@ -406,7 +409,23 @@ function usage() {
   ].join('\n');
 }
 
-function main() {
+// An invocation-owned temporary is reusable only while the checkout is clean.
+// Edited local sources retain standalone inspection without a false HEAD attestation.
+export async function withVerificationArtifact(selected, execute) {
+  if (process.env.VOID_CONFORMANCE_TARBALL
+    || !['publish-safety', 'package-size'].every(id => selected.some(gate => gate.id === id))
+    || run(['git', 'status', '--porcelain=v1', '--untracked-files=all'], { quiet: true }).output.trim() !== '') {
+    return await execute({});
+  }
+  const temporary = mkdtempSync(resolve(tmpdir(), 'void-verify-artifact-'));
+  try {
+    const { packConformanceArtifact } = await import('../packages/cli/scripts/conformance-artifact.mjs');
+    const artifact = await packConformanceArtifact(resolve(temporary, 'artifact'));
+    return await execute({ VOID_CONFORMANCE_TARBALL: artifact.tarball });
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+}
+
+async function main() {
   try {
     validateCatalogue();
     const options = parseArgs(process.argv.slice(2));
@@ -445,7 +464,8 @@ function main() {
         if (run(item.fix).exitCode !== 0) throw new Error(`verify: could not regenerate ${item.id}`);
       }
     }
-    const failed = selected.map((item) => runOne(item, sha)).filter((report) => report.status === 'failed');
+    const failed = await withVerificationArtifact(selected, env =>
+      selected.map(item => runOne(item, sha, env)).filter(report => report.status === 'failed'));
     if (failed.length === 0) {
       process.stdout.write(`verify: ${String(selected.length)} gate(s) passed on ${sha}.\n`);
       return;
@@ -468,4 +488,4 @@ function validateCatalogue() {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

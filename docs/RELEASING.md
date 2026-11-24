@@ -205,8 +205,10 @@ Actions on the routine path.
    changelog and after all required checks pass. This merge creates `vX.Y.Z` and the GitHub Release. It is the npm
    publication authorization.
 4. `validate-release`, with `contents: read` and no OIDC, resolves the immutable
-   tag, proves its commit is on protected `main`, validates the exact tree, and
-   packs `voidmachine-X.Y.Z.tgz` once. It uploads that tarball plus an integrity
+   tag, proves its commit is on protected `main`, checks original delivery freshness,
+   and packs the CLI once. Type/tests and safety/size then validate the same tree
+   and bytes. The verified `consumer.tgz` is renamed to `voidmachine-X.Y.Z.tgz`
+   without repacking. It uploads that tarball plus an integrity
    manifest containing the release identity, SHA-256 and npm SHA-512 integrity.
 5. `publish` is the only job with `id-token: write`. It checks the artifact's exact
    GitHub ID, service digest, workflow run and head SHA before download, then
@@ -392,16 +394,16 @@ structured start/finish events with their runtime, operation and duration, so an
 outer timeout retains the last active step. Consumer suites stop at the first
 failed proof; later suites are not launched after that failure. These diagnostics
 do not change the 120-second execution limit or authorize a retry.
-The install suite performs one offline npm installation of the verified tarball
-in a suite-local package directory. Its CLI then exercises three independent
-consumer roots (Claude, Codex and both), each with its own environment, receipts
-and user files. Package installation is measured separately; runtime p50 covers
-init and both update paths only. The package directory is never reused across
-runs or operating systems, and all three runtime proofs remain mandatory. The final
-`npm exec --offline --yes -- file:<tarball> --version` uses this same installed
-package directory and cache: it still proves manifest-based bin selection and
-avoids a second cold cache. npm may still materialize its internal execution tree;
-this does not remove the unchanged suite deadline or guarantee its Windows timing.
+The consumer invocation performs one offline npm installation of the verified
+tarball in a temporary package directory. The real
+`npm exec --offline --yes -- file:<tarball> --version` still proves manifest-based
+bin selection against that package directory and cache. npm may materialize its
+internal execution tree. Install, hooks and autopilot suites share the immutable
+CLI on that OS; every writable runtime project keeps its own environment,
+receipts and user files. Real init/update and installed-hook assertions remain.
+Package installation is measured separately; runtime p50 covers init/update only.
+No package directory survives the invocation or crosses OS boundaries, and the
+existing suite deadlines remain unchanged.
 Install conformance and later
 runtime-invocation certification remain separate gates.
 
@@ -419,19 +421,17 @@ void-machine update    # refresh marketplace cache + bump .void/config.json pins
 
 ## Package size ceilings
 
-`pnpm check:size` (`scripts/check-package-size.mjs`, run in CI beside `check:publish`) packs every
-publishable package with `pnpm pack` and fails when a compressed tarball exceeds its declared
-ceiling. The compressed tarball is what a consumer downloads on `npx voidmachine`; unpacked and
-bundle sizes are diagnostics, not budgets. Every size prints on every run, breach or not, so growth
-reads as a trajectory rather than a one-day alarm.
+`pnpm check:size` reads the same CLI archive as safety and conformance in CI and
+release. Only the CLI is published by the supported release workflow; internal
+packs are still built and tested, but are not separately packed or size-budgeted.
+Standalone inspection prepares its own lifecycle-complete archive after checking
+original delivery freshness.
 
-Ceilings live in `PACKAGE_LIMITS` in that script, set 2026-08-06 with roughly one sixth of headroom
-over the sizes measured then (the CLI 728.2 kB and packs under 8 kB).
-
-**Raising a ceiling is normal.** Do it in the same commit as the change that needs the room, with
-the reason in the commit message, so the growth is a decision on the record rather than a drift
-nobody signed. A package published without a ceiling fails the gate: an unbounded package is the one
-that grows.
+The compressed-byte ceiling in `PACKAGE_LIMITS` is 1,100,000 bytes. DEV-1143
+measured the post-retirement CLI at 914,621 bytes, leaving about 20% headroom
+while catching accidental doubling. This measures downloaded bytes, not startup
+context or execution time. A breach requires inspecting payload growth; a
+necessary ceiling revision requires a measured archive and a documented reason.
 
 ## What counts as breaking
 

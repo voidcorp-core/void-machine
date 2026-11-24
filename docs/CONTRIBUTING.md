@@ -40,8 +40,8 @@ The release lane still runs `pnpm verify` once on the integrated result.
 `scripts/verify.mjs` is the only gate catalogue. The managed block in
 `.github/workflows/ci.yml` is generated from it, and every CI gate writes one report bound to the
 checked-out SHA and exact argv. The final step rejects a missing, duplicate, stale or red report.
-Performance benchmarks remain explicit observations through `pnpm verify --observations`; shared
-PR runners do not authorize correctness from wall-clock thresholds.
+`pnpm verify --observations` currently selects no gates. Shared PR runners do not authorize
+correctness from wall-clock thresholds; timing investigation is explicitly requested.
 Install conformance proves the packed runner and native runtime wiring, preserves
 user doctrine and adjacent files, and exercises update and receipt recovery.
 The retired syntax worker has no installation prerequisite or latency campaign.
@@ -57,11 +57,10 @@ Consumers configure and verify equivalents in their existing toolchain; missing
 coverage is reported honestly, without a new checker or a general work veto.
 See [test evidence and validation](HOOK-TEST-EVIDENCE.md) for scope and limitations.
 
-Repeated reliability stress is not a laptop gate. `.github/workflows/test-certification.yml` runs
-twenty seeded fast attempts and ten seeded complete attempts weekly or on explicit dispatch, with
-fixed worker budgets and exact-SHA JSON reports. A failure stops the campaign and remains red; the
-workflow never retries an attempt. A separately triggered GitHub run has a new run identity and
-does not erase the earlier red evidence.
+The scheduled/manual certification campaign is retired. Historical reports remain evidence of
+those runs. For an explicitly requested ordering investigation, use native Vitest once with
+`--sequence.shuffle --sequence.seed=10401`; a failed invocation remains red. The network command
+accepts the same two options while retaining its fixed worker and timeout bounds.
 
 - `pnpm verify --artifacts` — only the generated-artefact gates, in seconds.
   Adding a skill changes the `core-assets` mirror; verify it alongside hook bundle freshness.
@@ -75,22 +74,25 @@ does not erase the earlier red evidence.
   `VOID_GLOBAL_DIR` into it before test modules load. Global teardown removes the root after all
   workers finish. A package-local run and the root run therefore have the same containment and
   timeout contract; do not duplicate those values in package configs.
-- The root Vitest config derives exclusive projects from `test/support/test-catalog.ts`. Proof tier
-  answers what a test proves; resource class controls how it is scheduled. `pnpm test:fast` is the
-  CPU-only edit loop, `pnpm test:component` owns filesystem and subprocess checks, and
-  `pnpm test:network` is explicit because it needs loopback sockets. Use the tier commands when the
-  semantic boundary matters. Contract subprocess tests use two bounded workers; consumer and
-  system subprocess tests stay sequential in separate groups. Loading Vitest fails if a test path
-  has no tier or more than one. Any increase to a worker budget requires the complete stress proof,
-  not a retry-until-green run.
+- The root config uses [Vitest 5 native projects](https://vitest.dev/guide/projects).
+  `pnpm test:engine` runs the I/O-free mission-engine package with four workers;
+  `pnpm test:local` runs the remaining local package/repository tests with one worker because
+  they include indirect subprocess fixtures; `pnpm test:network` owns the UI, daemon, note and signal families
+  with one thread. Native `sequence.groupOrder` separates these groups when running all projects.
+  Shared global setup, per-file isolation and cleanup apply to every project.
+- Target a regression directly: `pnpm exec vitest run path/to/file.test.ts`, optionally adding
+  `--project=local`, `--project=engine` or `--project=network`. Filter by `-t` for a named case.
+  For actual runtime collection use `pnpm exec vitest list --no-static-parse --json=tests.json`;
+  Vitest 5's default static list is not evidence that modules loaded successfully.
+  No source scanner, proof-tier taxonomy, import regex or per-file registry chooses tests.
 - `pnpm lint` and `pnpm typecheck` — zero errors.
 - `pnpm anti-bloat:check` — discovery contracts (description target ≤250 chars and hard cap 500, technical skill names, `.source` provenance), agent tool isolation and hook syntax. Skills and hooks stay concise without editorial line caps.
 - `pnpm conformance:consumer` — pack the local CLI once, then prove account-free install,
   installed-hook execution and the Autopilot public surface for Claude, Codex, and both. The
   narrower `conformance:install`, `conformance:hooks` and `conformance:autopilot` commands select
   one suite through the same orchestrator. CI packs one exact-SHA artifact and makes Linux, macOS
-  and Windows verify and execute those same bytes. The default run also executes the latency
-  suite; select it alone with `pnpm conformance:consumer --suite latency`.
+  and Windows verify and execute those same bytes. The available suites are install, hooks and
+  autopilot; the syntax-worker latency campaign was retired with that worker.
 - `pnpm sync:docs` — `CLAUDE.md` and `AGENTS.md` must stay in parity (a pre-commit hook enforces this; change one, change the other in the same commit).
 - `void-machine self-host sync` then `void-machine self-host doctor` — compile and exercise the current sources as isolated Claude + Codex artifacts. Generated bytes live only under `.void/machine/generated/`; the command never owns native root agent files.
 

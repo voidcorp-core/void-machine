@@ -106,23 +106,8 @@ export const GATES = Object.freeze([
     'filesystem',
     ['docs', 'source'],
   ),
-  gate('test-cpu', 'CPU tests', ['pnpm', 'test:cpu'], 'contract', 'cpu', ['source', 'tests']),
-  gate(
-    'test-filesystem',
-    'Filesystem tests',
-    ['pnpm', 'test:filesystem'],
-    'contract',
-    'filesystem',
-    ['source', 'tests'],
-  ),
-  gate(
-    'test-subprocess',
-    'Subprocess tests',
-    ['pnpm', 'test:subprocess'],
-    'system',
-    'subprocess',
-    ['source', 'tests'],
-  ),
+  gate('test-engine', 'Mission engine tests', ['pnpm', 'test:engine'], 'contract', 'cpu', ['source', 'tests']),
+  gate('test-local', 'Local tests', ['pnpm', 'test:local'], 'system', 'subprocess', ['source', 'tests']),
   gate(
     'test-network',
     'Network and browser tests',
@@ -160,7 +145,7 @@ export function selectGates(changes) {
   const conservative = changes.some((change) => change.status === 'deleted' || change.status === 'renamed')
     || paths.some((path) =>
       CONSERVATIVE_PATHS.has(path)
-      || path.startsWith('test/support/test-catalog.')
+      || path.startsWith('test/support/')
       || path.startsWith('.github/workflows/')
       || path.startsWith('packages/core/')
       || !KNOWN_PREFIXES.some((prefix) => path.startsWith(prefix)),

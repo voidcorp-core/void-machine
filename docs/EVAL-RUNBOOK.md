@@ -313,9 +313,8 @@ The default feedback loop is intentionally layered:
 
 | Lane | Command | Allowed dependencies | Gate |
 | --- | --- | --- | --- |
-| Fast | `pnpm test:fast` | pure CPU and contracts | changed behavior; target its regression first |
-| Filesystem | `pnpm test:filesystem` | temp dirs, git, local fixtures | runner/workspace changes |
-| Subprocess | `pnpm test:subprocess` | child processes, bounded I/O | process/adapter changes |
+| Engine | `pnpm test:engine` | I/O-free mission-engine package | changed pure behavior |
+| Local | `pnpm test:local` | temp dirs, git, subprocess fixtures; one worker | target the changed file first |
 | Network/browser | `pnpm test:network` | local loopback server/client | release or changed network boundary |
 | Release | `pnpm verify` on the final tree | all required gates | before promotion |
 

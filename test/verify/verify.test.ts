@@ -81,12 +81,12 @@ describe('gate catalogue', () => {
     }
   });
 
-  it('keeps shared, dependency, workflow and classifier changes conservative', () => {
+  it('keeps shared, dependency, workflow and test setup changes conservative', () => {
     for (const path of [
       'packages/core/src/hooks/secret-in-content.sh',
       'pnpm-lock.yaml',
       '.github/workflows/ci.yml',
-      'test/support/test-catalog.ts',
+      'test/support/vitest-options.ts',
     ]) {
       expect(selectGates([{ path, status: 'modified' }]).map((gate: Gate) => gate.id), path)
         .toEqual(requiredIds);

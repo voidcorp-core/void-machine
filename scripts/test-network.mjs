@@ -32,7 +32,7 @@ function unavailable(label, result) {
 
 /** One capability probe, then one bounded lane. No retry or success on absence. */
 export function runNetworkLane(execute = spawnSync, args = []) {
-  // Only certification ordering may vary; callers cannot override lane safety.
+  // Only diagnostic ordering may vary; callers cannot override lane safety.
   // Vitest 5.0.1: https://vitest.dev/config/sequence
   const seen = new Set();
   for (const argument of args) {
@@ -51,7 +51,7 @@ export function runNetworkLane(execute = spawnSync, args = []) {
     fileURLToPath(new URL('../node_modules/vitest/vitest.mjs', import.meta.url)),
     // Threads die with the bounded parent; a timed-out fork can outlive it.
     // Vitest 5: https://vitest.dev/config/pool.html
-    'run', '--project=*:network-browser', '--maxWorkers=1', '--pool=threads', ...args,
+    'run', '--project=network', '--maxWorkers=1', '--pool=threads', ...args,
   ], {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
     stdio: 'inherit', shell: false, timeout: 120_000, killSignal: 'SIGKILL',
@@ -64,6 +64,6 @@ export function runNetworkLane(execute = spawnSync, args = []) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const result = runNetworkLane(spawnSync, process.argv.slice(2));
-  process.stdout.write(`${JSON.stringify({ lane: 'network-browser', ...result })}\n`);
+  process.stdout.write(`${JSON.stringify({ lane: 'network', ...result })}\n`);
   process.exitCode = result.exitCode;
 }

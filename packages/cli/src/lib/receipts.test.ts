@@ -6,6 +6,8 @@ import {
   buildInstallReceipt,
   encodeReceipt,
   parseReceipt,
+  readInstallReceipt,
+  INSTALL_RECEIPT_PATH,
   removeReceiptOwnedFiles,
 } from './receipts.js';
 
@@ -48,6 +50,29 @@ describe('install receipts', () => {
         files: [{ path, sha256: 'a'.repeat(64), mode: 420 }],
       });
       expect(parseReceipt(unsafe)).toBeUndefined();
+    },
+  );
+
+  it.each(['malformed', 'unsupported-version', 'unreadable-directory'] as const)(
+    'grants no ownership from a %s receipt', async (kind) => {
+      const root = scratch();
+      const directory = join(root, '.void/machine/receipts');
+      const path = join(root, INSTALL_RECEIPT_PATH);
+      mkdirSync(directory, { recursive: true });
+      const userFile = join(root, 'user.txt');
+      writeFileSync(userFile, 'preserve these bytes');
+      if (kind === 'unreadable-directory') {
+        mkdirSync(path);
+      } else {
+        const valid = buildInstallReceipt({ version: '2.0.2', source: 'local',
+          runtimes: ['codex'], files: [
+            { path: 'user.txt', content: Buffer.from('preserve these bytes'), mode: 0o644 },
+          ] });
+        writeFileSync(path, kind === 'malformed' ? '{broken' :
+          JSON.stringify({ ...valid, schemaVersion: 999 }));
+      }
+      expect(await readInstallReceipt(root)).toBeUndefined();
+      expect(readFileSync(userFile, 'utf8')).toBe('preserve these bytes');
     },
   );
 

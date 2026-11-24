@@ -82,8 +82,8 @@ describe('observeResume', () => {
     const observed = observeResume(root, Date.parse('2026-08-26T12:00:00Z'));
 
     expect(observed.context).toContain('[void-machine resume]');
-    expect(observed.context).toContain('Program: portable-resume');
-    expect(observed.context).toContain('Progress: github at voidcorp/repo');
+    expect(observed.context).not.toContain('Program:');
+    expect(observed.bundle).not.toHaveProperty('program');
     expect(observed.context).toContain('Objective: Wire portable resume hooks.');
     expect(observed.context).toContain(`HEAD: ${head}`);
     expect(observed.context.length).toBeLessThanOrEqual(4_000);
@@ -103,11 +103,8 @@ describe('observeResume', () => {
     if (checkpoint === 'empty') writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '');
 
     const observed = observeResume(root, Date.now());
-    const diagnostic = kind === 'malformed'
-      ? 'invalid program descriptor: .void/program.md'
-      : 'multiple program descriptors: .void/program.md, .void/active.md';
-    expect(observed.bundle.gaps).toContainEqual({ reason: 'program-invalid', detail: diagnostic });
-    expect(observed.context).toContain(`Gap: ${diagnostic}`);
+    expect(observed.bundle.gaps.map(gap => gap.reason)).toEqual([checkpoint === 'empty' ? 'checkpoint-empty' : 'checkpoint-absent']);
+    expect(observed.context).toBe('');
     expect(observed.context.length).toBeLessThanOrEqual(4_000);
     expect(observed.context).not.toMatch(/Reconstruct context|mechanical|void-checkpoint|before any mutation/i);
   });

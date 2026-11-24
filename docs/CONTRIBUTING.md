@@ -103,43 +103,19 @@ Self-host rollout modes are `shadow`, `warn`, `enforce`, and `release-gate`.
 native runtime executables that are unavailable remain an explicit degraded
 state until their dedicated certification lane.
 
-## Programme and session handoff
+## Authority and session handoff
 
-An executing multi-session programme may install one versioned `.void/program.md` descriptor.
-Root `AGENTS.md` and `CLAUDE.md` load its global plan and spec; `ResumeBundle` composes it with the
-local `.void/machine/checkpoint.md` and Git so a later session can resume from a plain “continue”.
+[Explicit config authority](AUTOPILOT-AUTHORITY.md) requires schemaVersion 3 and an explicit
+boolean enabled. The native project/milestone locator lives in `progress.scope`; the milestone
+links the approved plan and native relations own progress. Historical programme files are kept
+without being read, moved or rewritten. Installation never migrates autonomous consent.
 
-The programme records durable context and routing: global plan, approved spec, optional progress
-provider and opaque scope, stable unit order, native ready/started/review/done roles, human gates,
-and the `void-autopilot` consent block. It does not duplicate a mutable current or next unit. The
-declared progress provider is the execution ledger:
-
-- recover exactly one unit in the declared started role before claiming new work;
-- claim the selected ready unit in the provider's started role before editing;
-- keep native blockers, ownership, comments and review evidence truthful when supported;
-- move to the declared review role only after the unit gates pass;
-- move to the declared done role only after merge and final verification;
-- never auto-complete a human gate.
-
-The `autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 2`
-and an explicit `enabled`. It declares no merge gate: the loop merges into the integration branch on
-a local verdict, never into `deployBranch` or the repository default branch, and a person who merges
-themselves runs `void-machine autopilot merges --by-human`. A program that does not want autopilot declares
-`enabled: false` rather than omitting the block, because consent is never inferred from silence.
-`packages/cli/src/lib/autopilot/program.ts` is the single parser of this contract, and its tests
-validate this repository's own `.void/program.md` so the schema and the file cannot drift.
-
-Ready means every native blocker relation is complete. If a required provider capability is
-unavailable, only the action needing it stops; programme and checkpoint remain readable offline.
-A specific user request still overrides automatic selection. When every scoped unit and human gate
-is complete, the final programme change marks `.void/program.md` completed; it never repoints
-itself to unrelated work.
-
-The same protocol ships to consumer projects through the managed runtime-doc block. It is
-provider-agnostic and dormant unless the consumer has a project-owned `.void/program.md` with
-`status: executing`; `void-ticket` creates that descriptor only after an approved multi-unit pool
-and native dependencies exist. The local checkpoint is replaced on a deliberate session close and
-never carries the current or next unit.
+Read the complete checkpoint and reconcile all engaged tickets, PRs, Git and native workers.
+Keep the bounded planned list as intention, preserve human priorities and assignments, and
+refresh affected observations after a merge. Missing required provider, scope or plan stops
+only dependent selection. No duplicate worker for uncertain activity; no permission from
+membership alone. Claim selected work before editing, use review after its gates pass, and
+mark done only after merge and final verification. Human gates remain human.
 
 ## Commits
 

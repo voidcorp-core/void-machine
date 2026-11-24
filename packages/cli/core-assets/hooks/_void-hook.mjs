@@ -11796,7 +11796,6 @@ function executeHerdrSession(input, env, runtime3, run = runCommand2, clock = ()
 
 import { execFileSync } from "node:child_process";
 import {
-  existsSync as existsSync4,
   lstatSync as lstatSync5,
   readFileSync as readFileSync8,
   statSync as statSync6
@@ -11958,32 +11957,6 @@ var DAY_MS = 864e5;
 var STALE_DAYS = 7;
 var CONTEXT_CHARS_MAX = 4e3;
 var CHECKPOINT_NOTICE = "Observations and intentions to verify; no authorization.";
-function summarizeProgram(descriptor) {
-  return {
-    status: descriptor.status,
-    program: descriptor.program,
-    plan: descriptor.plan,
-    spec: descriptor.spec,
-    ...descriptor.progress === void 0 ? {} : {
-      progress: {
-        provider: descriptor.progress.provider,
-        scope: descriptor.progress.scope
-      }
-    }
-  };
-}
-function programGap(input) {
-  if (input.programError !== void 0) {
-    return { reason: "program-invalid", detail: input.programError };
-  }
-  if (input.program === void 0) {
-    return {
-      reason: "program-absent",
-      detail: "no .void/program.md; resume can still use a local checkpoint and Git"
-    };
-  }
-  return void 0;
-}
 function checkpointGap(input) {
   if (input.checkpoint === void 0) {
     return {
@@ -12024,14 +11997,12 @@ function treeGaps(input) {
 }
 function composeResumeBundle(input) {
   const gaps = [
-    programGap(input),
     checkpointGap(input),
     ...treeGaps(input)
   ].filter((gap) => gap !== void 0);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     project: input.project,
-    ...input.program === void 0 ? {} : { program: summarizeProgram(input.program) },
     ...input.checkpoint === void 0 ? {} : {
       checkpoint: input.checkpoint,
       checkpointPath: input.checkpointPath ?? ".void/machine/checkpoint.md",
@@ -12076,10 +12047,8 @@ ${notice}
 }
 function renderResumeContext(bundle) {
   const usefulCheckpoint = bundle.checkpoint !== void 0 && !bundle.checkpoint.isEmpty;
-  if (bundle.program === void 0 && !usefulCheckpoint) {
-    const invalidProgram = bundle.gaps.filter((gap) => gap.reason === "program-invalid");
-    return invalidProgram.length === 0 ? "" : boundedResumeLines(["[void-machine resume]"], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
-  }
+  if (!usefulCheckpoint)
+    return "";
   const required2 = ["[void-machine resume]"];
   if (usefulCheckpoint) {
     required2.push(`Full checkpoint: ${bundle.checkpointPath ?? ".void/machine/checkpoint.md"} (project-relative)`);
@@ -12092,14 +12061,6 @@ function renderResumeContext(bundle) {
     optional2.push(`HEAD: ${bundle.git.head}`);
   if (bundle.git.dirtyFiles > 0)
     optional2.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
-  if (bundle.program !== void 0) {
-    optional2.push(`Program: ${bundle.program.program}`);
-    optional2.push(`Plan: ${bundle.program.plan}`);
-    optional2.push(`Spec: ${bundle.program.spec}`);
-    if (bundle.program.progress !== void 0) {
-      optional2.push(`Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`);
-    }
-  }
   if (usefulCheckpoint && bundle.checkpoint !== void 0) {
     optional2.push(...checkpointContext(bundle.checkpoint));
   }
@@ -12111,11 +12072,6 @@ var {
   parseCheckpoint: parseCheckpoint2
 } = checkpointCodec(PRODUCT_IDENTITY.markers.contextContinuity);
 
-var PROGRAM_PATHS = [
-  join15(".void", "program.md"),
-  join15(".void", "active.md"),
-  join15("plans", "ACTIVE.md")
-];
 var CHECKPOINT_PATHS = [
   ".void/machine/checkpoint.md",
   ".void/local/checkpoint.md",
@@ -12131,66 +12087,6 @@ function readBounded(path2) {
   } catch {
     return void 0;
   }
-}
-function frontmatter2(raw) {
-  return /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)?.[1];
-}
-function cleanScalar(value) {
-  if (value === void 0) return void 0;
-  const clean2 = value.trim().replace(/^['"]|['"]$/g, "");
-  return clean2 === "" ? void 0 : clean2;
-}
-function rootScalar(block2, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return cleanScalar(new RegExp(`^${escaped}:\\s*(.+?)\\s*$`, "m").exec(block2)?.[1]);
-}
-function nestedBlock(block2, key) {
-  const lines = block2.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === `${key}:` && /^\S/.test(line));
-  if (start < 0) return void 0;
-  const nested = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^\S/.test(line)) break;
-    nested.push(line.replace(/^ {2}/, ""));
-  }
-  return nested.join("\n");
-}
-function programFrom(raw, legacy) {
-  const block2 = frontmatter2(raw);
-  if (block2 === void 0) return void 0;
-  if (!legacy && rootScalar(block2, "schemaVersion") !== "1") return void 0;
-  const status2 = rootScalar(block2, "status");
-  const program = rootScalar(block2, "program");
-  const plan = rootScalar(block2, "plan");
-  const spec = rootScalar(block2, "spec");
-  if (status2 !== "executing" && status2 !== "completed" || program === void 0 || plan === void 0 || spec === void 0) {
-    return void 0;
-  }
-  const progressBlock = nestedBlock(block2, legacy ? "tracker" : "progress");
-  const provider = progressBlock === void 0 ? void 0 : rootScalar(progressBlock, "provider");
-  const scope = progressBlock === void 0 ? void 0 : rootScalar(progressBlock, "scope");
-  return {
-    status: status2,
-    program,
-    plan,
-    spec,
-    ...provider === void 0 || scope === void 0 ? {} : { progress: { provider, scope } }
-  };
-}
-function observeProgram(root) {
-  const present = PROGRAM_PATHS.filter((relative7) => existsSync4(join15(root, relative7)));
-  if (present.length === 0) return { program: void 0 };
-  if (present.length > 1) {
-    return {
-      program: void 0,
-      programError: `multiple program descriptors: ${present.join(", ")}`
-    };
-  }
-  const relative6 = present[0];
-  if (relative6 === void 0) return { program: void 0 };
-  const raw = readBounded(join15(root, relative6));
-  const program = raw === void 0 ? void 0 : programFrom(raw, relative6 !== PROGRAM_PATHS[0]);
-  return program === void 0 ? { program: void 0, programError: `invalid program descriptor: ${relative6}` } : { program };
 }
 function git(root, args) {
   try {
@@ -12233,7 +12129,6 @@ function observeResume(root, now) {
     project: { name: basename9(root), path: root },
     now,
     git: gitObservation(root),
-    ...observeProgram(root),
     checkpoint: checkpoint.checkpoint,
     ...checkpoint.checkpointPath === void 0 ? {} : { checkpointPath: checkpoint.checkpointPath },
     ...checkpoint.checkpointWrittenAt === void 0 ? {} : { checkpointWrittenAt: checkpoint.checkpointWrittenAt }
@@ -12246,7 +12141,7 @@ function observeResume(root, now) {
 }
 
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { closeSync as closeSync3, existsSync as existsSync5, lstatSync as lstatSync6, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync7 } from "node:fs";
+import { closeSync as closeSync3, existsSync as existsSync4, lstatSync as lstatSync6, openSync as openSync3, readSync as readSync3, realpathSync as realpathSync7 } from "node:fs";
 import { dirname as dirname6, isAbsolute as isAbsolute7, join as join16, resolve as resolve7 } from "node:path";
 var GIT_TIMEOUT_MS2 = 5e3;
 var GIT_MAX_OUTPUT_BYTES = 1e6;
@@ -12289,7 +12184,7 @@ function mainWorkingTree(cwd, deadline, expectedCommon, query = git2) {
   return canonical2(toplevel);
 }
 function holdsInstallReceipt(root) {
-  return existsSync5(voidReadPath(root, "receipts", "install-v1.json"));
+  return existsSync4(voidReadPath(root, "receipts", "install-v1.json"));
 }
 function gitPointer(path2) {
   if (!lstatSync6(path2).isFile()) throw new Error("INVALID_GIT_POINTER");
@@ -12313,7 +12208,7 @@ function ordinaryLinkedMain(tree) {
   const pointer = gitPointer(marker);
   if (!pointer.startsWith("gitdir: ")) throw new Error("INVALID_GIT_POINTER");
   const directory = canonical2(resolve7(tree, pointer.slice(8)));
-  if (!existsSync5(join16(directory, "commondir"))) return void 0;
+  if (!existsSync4(join16(directory, "commondir"))) return void 0;
   const common = canonical2(resolve7(directory, gitPointer(join16(directory, "commondir"))));
   const backlink = gitPointer(join16(directory, "gitdir"));
   if (!isAbsolute7(backlink) || canonical2(backlink) !== canonical2(marker) || canonical2(dirname6(directory)) !== canonical2(join16(common, "worktrees"))) {

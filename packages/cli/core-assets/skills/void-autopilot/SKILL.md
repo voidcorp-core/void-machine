@@ -23,7 +23,7 @@ a ticket gets a different standard depending on how it was started.
 It never merges on a flag. Not on the command line, not because the checks are green, not because
 the diff is small. There is no `--auto-merge` on any path and no merge gate to configure: the loop
 merges into the integration branch only a head a local verdict passed, and never into the branch
-that deploys -- `autopilot.deployBranch`, or the repository's default branch when the programme
+that deploys -- `autopilot.deployBranch`, or the repository's default branch when config
 names none. When the person says they merge themselves, run `void-machine autopilot merges
 --by-human`: from the next tick every reviewed pull request goes to them instead (see Who merges).
 Promotion from the integration branch to the one that deploys stays human.
@@ -35,12 +35,12 @@ what a judging workflow runs from outside `.github`
 `packages/core/enforce/**`), what judges a publication (`scripts/prepare-release-artifact.mjs`,
 `scripts/verify-release-publication.mjs` and the two release contracts they read), the loop code that believes a verdict and merges (`loop.ts`,
 `loop-observe.ts`, `branch-identity.ts`, `commands/autopilot-loop.ts`), the local chain of judgment
-(`packages/void-machine/src/**`, `commands/agents.ts`, `program.ts`, `judgments.ts`,
+(`packages/void-machine/src/**`, `commands/agents.ts`, `authority.ts`, `config.ts`, `judgments.ts`,
 `merge-hold.ts`, the review command, its parser and the reviewer's definition,
 `footprint-area.ts`), or the
 runtime configuration installed here, which a reviewer running in a worktree of the head loads too
 (`.void/hooks/**`, `.claude/**`, `.mcp.json`, `.codex/**`, `.void/config.json`) goes to a person with the file named (`protected-path`). A rename
-counts by its source and its destination. The programme adds paths through
+counts by its source and its destination. Config adds paths through
 `autopilot.protectedPaths`; nothing removes from that floor.
 
 It never closes, cancels or deletes a ticket, and it never touches `main` or repository settings.
@@ -49,26 +49,30 @@ scope under `void-security-guidance`. Role restrictions, including read-only rev
 
 ## Consent and target
 
-The run takes no argument. `.void/config.json` may declare `autopilot` with schema 2,
-an explicit boolean `enabled`, existing targets/restrictions, progress provider/scope/states
-and human gates. Only when the block is absent does the legacy programme supply authority.
-`enabled: false` withholds autonomous admission. Enabled declarations must agree after
-normalization. Invalid, unreadable or conflicting authority refuses dependent autonomous operations; unrelated local work remains available.
-Never create consent from a flag, a checkpoint or a repair. `init` and `update` preserve it.
+The run takes no argument. Its sole authority is `.void/config.json` `autopilot`,
+with `schemaVersion: 3` and an explicit boolean `enabled`. `enabled: false`, an absent
+block, old versions, invalid or unreadable config refuse dependent autonomous actions.
+Historical programmes supply no consent or veto. Never promote v2 automatically: reconcile
+prior consent, branches, project/milestone scope, human gates, additive protections,
+verification commands and sequential ownership before a human explicitly declares v3.
+`init`, `update` and pack changes preserve old declarations and historical files.
+`next`, review, fingerprints, publication and doctor share the authority reader.
 
-The programme still supplies plan/spec and selection context during migration. Read that context
-when present; missing information needed to select work is a diagnostic, never an invented order.
-Config alone can authorize operations whose input already supplies the necessary selection.
-On resume, follow `void-checkpoint`: read the full local handoff, including Engaged work and
-Planned work, verify tickets/PRs/Git and reconcile workers before resuming or delegating. Honor
-changed intentions and real dependencies; remove completed work only after observing completion.
-An uncertain worker must not be duplicated. A removed planned item cancels no remote ticket and
-deletes no worktree. An unavailable provider blocks dependent actions, not the offline checkpoint.
-Saved observations grant no consent or fresh proof. Keep the programme during the transition
-until fresh native resume evidence on both runtimes; recover nothing beyond the last checkpoint.
-`void-machine autopilot next`, review, fingerprint and publication share the authority reader.
-A legacy programme with non-executing status or schema 1 is refused; a former
-`mergeGate: human` runs `autopilot merges --by-human` before any explicit migration.
+Resolve `progress.provider/scope/states` through native tools. Scope is the opaque native
+project-and-milestone locator; that milestone links the approved plan and decisions.
+Read the plan, complete ticket and actual membership, blockers and holds before admission.
+The kernel receives observations; it does not independently verify Linear or milestone membership.
+Milestone membership alone grants no new permission. Missing scope, plan or required provider
+capability blocks dependent selection; local checkpoint and Git work remain available.
+
+On resume, read the full checkpoint, including Engaged work and Planned work. Reconcile all
+engaged tickets, PRs, Git and native workers before acting: several engaged units are normal,
+not a reason to launch duplicates or halt independent work. An uncertain worker is reconciled
+before replacement. Remove completed work from intentions only after observing completion.
+Respect changed planned order within authorized scope and blockers. Removing a planned item
+cancels no remote ticket and deletes no worktree. Saved observations grant no consent or fresh
+proof; nothing recovers decisions after the last successful checkpoint. Preserve merge-hold,
+including its fail-closed unreadable state; former human merges remain human during migration.
 
 ## The cursor between code and model
 
@@ -107,36 +111,27 @@ Read only the context needed for the question; do not duplicate a systematic rev
 
 ## Curator
 
-Read the real state of the project before ranking anything: the programme, the specs and plans in
-flight, the code they touch, open pull requests, recent merges, tickets waiting on a human.
+Build an initial selection bounded to the authorized native project and milestone, using the
+approved plan, intended order, dependencies, open PRs and human holds. Keep at most sixteen
+queue entries; fetch complete selected units and relevant relations before declaring readiness.
+Preserve human priorities and assignments. Refresh affected units after a merge or new evidence;
+do not rescan and rerank the entire backlog after every merge.
 
-Walk the tracker in this order: **Todo, then Backlog, then Triage.** Rank by what the project needs
--- what unblocks other work, what extends the work in flight, what removes a real risk -- not by
-the priority label. The label is somebody's past guess; the ranking is today's reading of the
-project.
+- **Enrich before ready.** A vague ticket goes through `void-ticket` before it can be declared
+  `ready`. Ambiguous arrivals stay visible and non-admitted, without stopping independent work.
+- **Name the ground.** Every entry has a footprint. Colliding ownership stays sequential.
+- **New work.** A clear approved arrival belongs in the same native project and milestone;
+  write those native links and read back membership. Unclear scope needs a decision, not a guess.
+- **Never close, cancel or delete.** Preserve tickets and human ownership; planned-list changes
+  are intentions only.
 
-- **Realign the tracker with the ranking.** Change priority or status so the tracker says what the
-  queue says, and leave on every ticket you move a justification of one or two sentences. A move
-  without a reason is indistinguishable from a mistake.
-- **Enrich before ready.** A ticket too vague to implement goes through `void-ticket` before it can
-  be declared `ready`. One that stays ambiguous after that is `ambiguous`: it is set aside with its
-  reason, not guessed at.
-- **Name the ground.** Every queued entry carries a footprint: the paths it will touch, at least
-  one. A ticket without one is not admitted; the kernel routes on footprints and cannot protect
-  ground nobody named.
-- **Never close, cancel or delete.** Not a duplicate, not an obsolete ticket, not one you are sure
-  about. Say so in a comment and leave the decision to a person.
-- **Re-rank after every merge.** A merge changes what is relevant next, so the queue is only valid
-  until the next one lands.
-
-Return the queue as the typed `queue` judgment, at most sixteen entries. The curator can run in the
-orchestrator's session or as its own agent; either way its output is data the kernel admits, not an
-instruction the orchestrator follows.
+Return the typed `queue` judgment with a reason per entry. The curator can run in the
+orchestrator's session or as an agent; its output is data the kernel admits, never authority.
 
 ## Orchestrator
 
 The loop is one question asked again and again: `void-machine autopilot next --json`, with the
-tracker state on stdin. The command reads the programme, GitHub, the shared git state and the stop
+tracker state on stdin. The command reads config authority, GitHub, the shared git state and the stop
 signal itself; GitHub is the authority on a merge, so no agent reports it.
 
 What you pipe in is the tracker as you observed it -- `void-machine autopilot --help` gives the
@@ -238,7 +233,7 @@ Remove a review worktree with the ticket's own only after the pull request is ob
 **Who merges.** The loop, by default. When the person says they merge themselves, run
 `void-machine autopilot merges --by-human`; `--automatic` gives the merges back, and bare
 `merges` prints the state. The hold is a file in the machine's state,
-`.void/machine/autopilot/merge-hold.json`, never the programme, which is protected and versioned:
+`.void/machine/autopilot/merge-hold.json`, never config, which is protected and versioned:
 it takes effect on the next tick, with no pull request, and every decision reports it in
 `merges`. It hands a pull request over after the review, never before: a head is reviewed, its
 checks settle, then it goes to the person (`mark-human-wait`, `human-merge-hold`), and an armed
@@ -248,7 +243,7 @@ returns to the default the person already accepted.
 
 **No state lives in the session.** Who holds which ticket comes from the tracker (status, assignee,
 pull request link, the human-wait label); the rest comes from GitHub. The label is the one every
-decision names in `humanWaitLabel`: `autopilot.humanWaitLabel` when the programme declares it,
+decision names in `humanWaitLabel`: `autopilot.humanWaitLabel` when config declares it,
 `void:human-wait` otherwise; report `humanWait` as that label's presence, nothing else. After a restart -- an OS
 update, a cut, a saturated context -- the first `next` rebuilds the slots from those two sources,
 and a ticket already held is resumed, never seated twice. Report each ticket's branch and pull
@@ -265,7 +260,7 @@ neither, so a restart loses nothing.
 ## Workers
 
 Given: the complete current ticket contract, source identity and observed claim, its worktree,
-branch, canonical mission ID, and programme plan/spec. An immediately dispatched worker reuses
+branch, canonical mission ID, and approved milestone plan/spec. An immediately dispatched worker reuses
 that handoff without another fetch or claim. A summary is insufficient: refresh missing, truncated
 or uncertain information, and relevant status/relations after a delay, resume or material change.
 Standalone `void-implement` still owns its own intake and claim.
@@ -393,7 +388,7 @@ never from memory of the session.
 
 ## Composition
 
-Upstream: `void-ticket` authors and enriches the tickets and the programme descriptor. Per ticket:
+Upstream: `void-ticket` authors and enriches the tickets and native milestone membership and plan links. Per ticket:
 `void-implement`, entire, once, in the worker's worktree. The merge into the integration branch
 belongs to the loop, on a local verdict, or to a person who holds the merges; the promotion to the
 branch that deploys always belongs to a person.

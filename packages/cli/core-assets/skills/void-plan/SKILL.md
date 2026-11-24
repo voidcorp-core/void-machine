@@ -124,8 +124,9 @@ The next session reads the resume point and continues.
 For a provider-backed multi-unit programme, do not maintain a second mutable next-step pointer in
 the plan. Instead, add a final `Execution handoff` table that gives each plan unit a stable order
 key, title, dependency keys, estimate, and human-gate flag. After `void-ticket` creates the native
-units and dependency relations, it installs `.void/program.md`; the declared progress provider
-then owns current state and readiness.
+units and dependency relations, it places them in the native project and milestone, reads back
+membership and links this approved plan from the milestone. The provider owns current state and
+readiness; config owns explicit authority and checkpoint Planned work carries mutable intentions.
 
 ---
 
@@ -155,12 +156,13 @@ or declared human gate; continue independent authorized work while it is unresol
 
 After plan approval, transition to:
 
-- **`void-ticket`** when the plan becomes multiple provider-native units. It writes native dependencies and the programme descriptor after the pool is approved.
+- **`void-ticket`** when the plan becomes multiple provider-native units. It writes native dependencies and milestone membership after the pool is approved.
 - **`void-implement`** for a named single ticket or standalone implementation unit.
 - **`void-autopilot`** only when the user requests its attended independent-ticket flow.
 
-For a provider-backed programme, later sessions recover work through `.void/program.md` and the
-declared progress adapter; they do not mutate the plan or checkpoint to repoint the next unit.
+Later sessions read the complete checkpoint, explicit config authority and the native milestone
+plan link, then reconcile provider and worker observations. A changed planned list grants no
+permission and does not rewrite remote progress.
 
 ---
 

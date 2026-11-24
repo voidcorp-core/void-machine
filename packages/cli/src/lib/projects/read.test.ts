@@ -95,7 +95,7 @@ describe('readProjectSummary', () => {
     expect(summary.name).toBe('bare');
     expect(summary.decisions.format).toBe('none');
     expect(summary.planCount).toBe(0);
-    expect(summary.program).toBe(undefined);
+    expect(summary).not.toHaveProperty('program');
     expect(summary.resumeLine).toBe(undefined);
   });
 
@@ -154,7 +154,7 @@ describe('readProjectSummary', () => {
     const summary = readProjectSummary({ name: 'programme', path: dir }, NOW);
 
     expect(summary.planCount).toBe(1);
-    expect(summary.program).toEqual({ program: 'demo', provider: 'jira', unitCount: 2 });
+    expect(summary).not.toHaveProperty('program');
   });
 
   it('ignores a program that is not executing', () => {
@@ -164,7 +164,7 @@ describe('readProjectSummary', () => {
       '---\nschemaVersion: 1\nstatus: completed\nprogram: demo\nplan: docs/plans/demo.md\nspec: docs/specs/demo.md\nautopilot:\n  schemaVersion: 1\n  enabled: false\n  mergeGate: human\n---\n',
     );
 
-    expect(readProjectSummary({ name: 'paused', path: dir }, NOW).program).toBe(undefined);
+    expect(readProjectSummary({ name: 'paused', path: dir }, NOW)).not.toHaveProperty('program');
   });
 
   it('surfaces the first meaningful line of a checkpoint', () => {

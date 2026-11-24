@@ -23,12 +23,6 @@ export interface GitSignals {
   readonly commitsToday: number;
 }
 
-export interface ProgramSignal {
-  readonly program: string;
-  readonly provider: string | undefined;
-  readonly unitCount: number;
-}
-
 export interface CheckpointSignal {
   /** The one line that says where the last session stopped. */
   readonly resumeLine: string;
@@ -42,7 +36,6 @@ export interface SummaryInput {
   readonly git: GitSignals;
   readonly decisions: DecisionsObservation;
   readonly planCount: number;
-  readonly program?: ProgramSignal;
   /** Absent until the session checkpoint ships. Absence is a fact, not a fault. */
   readonly checkpoint?: CheckpointSignal;
 }
@@ -76,7 +69,6 @@ export interface ProjectSummary {
   readonly idleDays: number | undefined;
   readonly decisions: DecisionsObservation;
   readonly planCount: number;
-  readonly program: ProgramSignal | undefined;
   readonly resumeLine: string | undefined;
   /** Ordered most severe first. Empty means nothing at risk here. */
   readonly attention: readonly Attention[];
@@ -144,7 +136,6 @@ export function summarizeProject(input: SummaryInput): ProjectSummary {
     idleDays: idleDaysOf(input.git, input.now),
     decisions: input.decisions,
     planCount: input.planCount,
-    program: input.program,
     resumeLine: input.checkpoint?.resumeLine,
     attention: attentionOf(input),
     conformance: conformanceOf(input),

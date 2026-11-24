@@ -7,15 +7,10 @@ describe('ResumeBundle public boundary', () => {
       project: { name: 'alpha', path: '/alpha' },
       now: 0,
       git: { branch: 'main', head: 'abc', dirtyFiles: 0 },
-      program: {
-        status: 'executing',
-        program: 'shared',
-        plan: 'docs/plan.md',
-        spec: 'docs/spec.md',
-      },
       checkpoint: undefined,
     });
 
-    expect(renderResumeContext(bundle)).toContain('Program: shared');
+    expect(bundle.schemaVersion).toBe(2);
+    expect(renderResumeContext(bundle)).toBe('');
   });
 });

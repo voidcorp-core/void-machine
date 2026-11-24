@@ -11,7 +11,6 @@
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
 import { readGitSignals } from '../lib/projects/read.js';
 import { banner, blank, c, footer, glyph, heading, line, meta } from '../lib/render.js';
 import { type Checkpoint, parseCheckpoint } from '../lib/session/checkpoint.js';
@@ -19,7 +18,6 @@ import {
   composeResumeBundle,
   type CheckpointPath,
   type ResumeBundle,
-  type ResumeBundleInput,
   renderResumeContext,
 } from '../lib/session/resume-bundle.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
@@ -119,17 +117,6 @@ function renderHuman(bundle: ResumeBundle): void {
   }
 }
 
-function observeProgram(root: string): Pick<ResumeBundleInput, 'program' | 'programError'> {
-  try {
-    return { program: readProgramDescriptor(root) };
-  } catch (error) {
-    return {
-      program: undefined,
-      programError: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 function selectedFormat(args: readonly string[]): 'human' | 'json' | 'context' {
   if (args.includes('--json') || args.includes('--format=json')) return 'json';
   if (args.includes('--context') || args.includes('--format=context')) return 'context';
@@ -152,7 +139,6 @@ export async function resume(args: readonly string[]): Promise<void> {
     project: { name: root.split('/').pop() ?? root, path: root },
     now: Date.now(),
     git: { branch: git.branch, head: git.head, dirtyFiles: git.dirtyFiles },
-    ...observeProgram(root),
     checkpoint: found?.checkpoint,
     ...(found === undefined ? {} : { checkpointPath: found.path }),
     ...(found === undefined ? {} : { checkpointWrittenAt: found.writtenAt }),
@@ -174,7 +160,6 @@ export async function resume(args: readonly string[]): Promise<void> {
   if (bundle.git.dirtyFiles > 0) {
     meta('tree', `${String(bundle.git.dirtyFiles)} file(s) uncommitted`);
   }
-  if (bundle.program !== undefined) meta('program', bundle.program.program);
   if (bundle.checkpoint?.date !== undefined) meta('checkpoint', bundle.checkpoint.date);
 
   renderHuman(bundle);

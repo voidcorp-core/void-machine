@@ -182,7 +182,7 @@ describe('doctor shares Autopilot authority admission', () => {
   it('reports config-only authority and its actual source without requiring a programme', () => {
     const root = projectRecording(cliVersion());
     writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: {
-      schemaVersion: 2, enabled: true, base: 'develop', deployBranch: 'main',
+      schemaVersion: 3, enabled: true, base: 'develop', deployBranch: 'main',
       progress: { provider: 'linear', scope: 'team/project',
         states: { ready: ['Todo'], started: ['Doing'], review: ['Review'], done: ['Done'] } },
     } }));

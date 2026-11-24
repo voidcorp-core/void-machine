@@ -196,11 +196,11 @@ describe('doctor', () => {
 
     const out = await runDoctor();
 
-    expect(out).toContain('.void/program.md');
-    expect(out).toContain('no active program');
+    expect(out).toContain('config.autopilot');
+    expect(out).toContain('no config.autopilot declaration');
   });
 
-  it('runs the autopilot preconditions once a programme is declared', async () => {
+  it('ignores a historical programme when config declares no authority', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
     writeFileSync(
       join(dir, '.void', 'program.md'),
@@ -210,7 +210,7 @@ describe('doctor', () => {
 
     const out = await runDoctor();
 
-    expect(out).not.toContain('no active program');
+    expect(out).toContain('no config.autopilot declaration');
   });
 
   it('reports the source repository as self-host not-installed instead of skipping green', async () => {

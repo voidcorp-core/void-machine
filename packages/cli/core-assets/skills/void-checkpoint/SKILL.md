@@ -49,7 +49,7 @@ So the first move is triage. For every fact you are tempted to write down:
 | The fact is… | It belongs in | Never in the checkpoint |
 |---|---|---|
 | Execution state — status, assignee, blockers, links | the declared **progress source** | an authoritative current or next unit |
-| Global programme context, phase, plan and spec | **`.void/program.md`** | a session observation |
+| Approved scope and plan | **native milestone plan link; config for authority** | a session observation |
 | What the code now does | the **diff and its commit messages** | a prose summary of the change |
 | A durable rule, preference, or convention | **doctrine** (via `void-learn`) | a paragraph the next session must re-read forever |
 | A design decision with a credible alternative | an **ADR** | a bullet that loses its reasoning |
@@ -122,7 +122,7 @@ Read what you wrote as if you had never seen this work. Then:
 
 1. **Can a stranger take the next action without asking a question?** If not, the next action is
    not specific enough.
-2. **Does any line claim authority over the progress source, program, diff, or doctrine?** Link the owner; label saved observations with their date and limits.
+2. **Does any line claim authority over the progress source, config authority, diff, or doctrine?** Link the owner; label saved observations with their date and limits.
 3. **Is every claim either proven-with-evidence or labelled as an assumption?**
 4. **Would someone reading only this repeat one of your dead ends?** If yes, the dead end is
    missing or too vague.
@@ -145,10 +145,10 @@ unavailable, record that unresolved gap when it matters and still write
 `.void/machine/checkpoint.md`. Do not turn an unavailable provider into a reason to lose the
 session residue.
 
-`.void/program.md` remains the versioned global view: programme identity, plan, spec and optional
-progress locator during the transition; retain it until fresh native resume proof on both runtimes.
-The checkpoint carries observations and intentions, never authoritative current or next unit
-state. Mutable progress stays with the declared provider; the exact next action is a local
+Config is the sole explicit autonomous authority. The native milestone carries approved plan
+and decision links; preserve them in the checkpoint as context when useful. Historical programmes
+are not executable. The checkpoint carries observations and intentions, never authoritative
+current state. Mutable progress stays with the provider; the exact next action is a local
 physical resume move. No decisions after the last successful checkpoint can be recovered from it.
 
 One destination per fact. If you cannot decide, the fact probably failed Step 0.
@@ -234,7 +234,7 @@ merely stopped.
 **The hook boundary.** Checkpoint creation is explicit. Invoke this skill before `/clear`,
 compaction, or closing a session when useful residue needs saving. There is no automatic reminder
 or end-of-session audit. `SessionStart` reads semantic residue and surfaces freshness, branch,
-HEAD, programme and reference gaps; it never invents dead ends, assumptions or a next action.
+HEAD and checkpoint freshness gaps; it never invents dead ends, assumptions or a next action.
 
 ---
 
@@ -255,5 +255,5 @@ HEAD, programme and reference gaps; it never invents dead ends, assumptions or a
 ## Composition
 
 Upstream: whatever produced the work. Adjacent: `void-learn` takes durable rules out of the
-session; `void-decide` takes structural choices. Downstream: `ResumeBundle` composes the programme,
+session; `void-decide` takes structural choices. Downstream: `ResumeBundle` composes the checkpoint,
 this checkpoint and Git into the context read by the CLI and both runtimes.

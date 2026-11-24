@@ -120,7 +120,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "autopilot [sub]",
-        "description": "The kernel of the continuous delivery loop: next \u00b7 stop \u00b7 arm \u00b7 disarm \u00b7 fingerprint \u00b7 judgment; --json for the skill. Reads .void/program.md, the tracker on stdin and GitHub; decides, and acts only to arm and disarm."
+        "description": "The kernel of the continuous delivery loop: next \u00b7 stop \u00b7 arm \u00b7 disarm \u00b7 fingerprint \u00b7 judgment; --json for the skill. Reads explicit config.autopilot v3, provider observations on stdin and GitHub; decides, and acts only to arm and disarm."
       }
     ]
   },
@@ -147,7 +147,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "resume",
-        "description": "Pick this project back up: the session checkpoint, recent decisions, and what is NOT answered. Reads, never guesses."
+        "description": "Pick this project back up: the session checkpoint, Git and what is NOT answered. Reads, never guesses."
       }
     ]
   },

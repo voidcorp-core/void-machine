@@ -21,7 +21,7 @@ import {
   type StopSignal,
 } from './loop.js';
 import type { MergeHold } from './merge-hold.js';
-import { parseProgramDescriptor } from './program.js';
+import { autopilotAuthoritySchema } from './config.js';
 import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from './shared-state.js';
 
 // The kernel decides what each slot does from what Linear and GitHub say, and
@@ -31,46 +31,24 @@ import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from '
 
 interface ProgramSpec {
   readonly clusterSize?: number;
+  readonly base?: string;
+  readonly humanWaitLabel?: string;
   /** The branch that ships, when the programme names it; the repository default otherwise. */
   readonly deployBranch?: string;
   readonly protectedPaths?: readonly string[];
 }
 
-function programText(options: ProgramSpec = {}): string {
-  const declared =
-    options.protectedPaths === undefined
-      ? ''
-      : `  protectedPaths:\n${options.protectedPaths.map((path) => `    - ${path}\n`).join('')}`;
-  const deploy = options.deployBranch === undefined ? '' : `\n  deployBranch: ${options.deployBranch}`;
-  return `---
-schemaVersion: 1
-status: executing
-program: loop
-plan: docs/plans/p.md
-spec: docs/specs/s.md
-progress:
-  provider: linear
-  scope: voidcorp/DEV
-  order: [DEV-1]
-  states:
-    ready: [Todo]
-    started: [In Progress]
-    review: [In Review]
-    done: [Done, Canceled]
-autopilot:
-  schemaVersion: 2
-  clusterSize: ${options.clusterSize ?? 4}
-  base: develop${deploy}
-  ownership:
-    sequential:
-      - pnpm-lock.yaml
-      - packages/cli/core-assets/**
-${declared}---
-`;
+function authority(options: ProgramSpec = {}, enabled = true, schemaVersion: 2 | 3 = 3) {
+  const { enabled: consent, progress, humanGates, ...autopilot } = autopilotAuthoritySchema.parse({
+    schemaVersion, enabled, base: 'develop', ...options,
+    ownership: { sequential: ['pnpm-lock.yaml', 'packages/cli/core-assets/**'] },
+    progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
+      states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done', 'Canceled'] } },
+  });
+  return { status: 'executing' as const, ...(consent ? { autopilot } : {}),
+    autopilotConsentWithheld: !consent, progress, humanGates };
 }
-
-const program = (options?: ProgramSpec) =>
-  loopProgramOf(parseProgramDescriptor(programText(options)));
+const program = (options?: ProgramSpec) => loopProgramOf(authority(options));
 
 interface TicketSpec {
   readonly id: string;
@@ -635,7 +613,7 @@ describe('a held ticket and its pull request', () => {
 
   it('compares the pull request with the base as resolved, not as declared', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     const spec = { tickets };
     const decision = decideLoop({
       program: auto,
@@ -653,7 +631,7 @@ describe('a held ticket and its pull request', () => {
 
   it('never arms a merge into the branch that deploys, once `auto` resolves to it', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     const spec = { tickets };
     const onMain: GithubObservation = {
       ...github([pull({ ...reviewed('DEV-1', 11), base: 'main' })]),
@@ -1025,10 +1003,7 @@ describe('a held ticket and its pull request', () => {
         options.defaultBranch === null ? undefined : (options.defaultBranch ?? 'main'),
       );
       const decision = decideLoop({
-        program: loopProgramOf(parseProgramDescriptor(
-          programText(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch })
-            .replace('base: develop', 'base: main'),
-        )),
+        program: program({ base: 'main', ...(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch }) }),
         tracker: tracker(spec),
         github: { ...observed, base: 'main' },
         signal: 'none',
@@ -1252,8 +1227,8 @@ describe('promotion', () => {
 describe('the human-wait label', () => {
   const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
   const pulls = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
-  const input = (text: string): LoopInput => ({
-    program: loopProgramOf(parseProgramDescriptor(text)),
+  const input = (options: ProgramSpec = {}): LoopInput => ({
+    program: program(options),
     tracker: tracker({ tickets }),
     github: github(pulls),
     signal: 'none',
@@ -1266,8 +1241,8 @@ describe('the human-wait label', () => {
 
   it('names one label for every ticket handed to a person, the declared one first', () => {
     expect(HUMAN_WAIT_LABEL).toBe('void:human-wait');
-    expect(decideLoop(input(programText())).humanWaitLabel).toBe(HUMAN_WAIT_LABEL);
-    const declared = programText().replace('base: develop', 'base: develop\n  humanWaitLabel: needs-human');
+    expect(decideLoop(input()).humanWaitLabel).toBe(HUMAN_WAIT_LABEL);
+    const declared = { humanWaitLabel: 'needs-human' };
     expect(decideLoop(input(declared)).humanWaitLabel).toBe('needs-human');
   });
 });
@@ -1360,7 +1335,7 @@ describe('shared repository state', () => {
 
   it('protects the local refs of every branch the loop may merge into or ship from', () => {
     expect(protectedBranches(program({ deployBranch: 'main' }).autopilot)).toEqual(['develop', 'main']);
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     expect(protectedBranches(auto.autopilot)).toEqual(['develop', 'main']);
     expect(protectedBranches(program().autopilot)).toEqual(['develop']);
   });
@@ -1653,8 +1628,8 @@ describe('boundaries', () => {
   });
 
   it('refuses a program that did not consent to autopilot', () => {
-    const withheld = programText().replace('  schemaVersion: 2\n  clusterSize', '  enabled: false\n  schemaVersion: 2\n  clusterSize');
-    expect(() => loopProgramOf(parseProgramDescriptor(withheld))).toThrow(/autopilot/);
+    expect(() => loopProgramOf(authority({}, false))).toThrow(/autopilot/);
+    expect(() => loopProgramOf(authority({}, true, 2))).toThrow(/migration/);
   });
 
   it('reads the stop signal and refuses one it does not know', () => {

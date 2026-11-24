@@ -32,7 +32,7 @@ Usage:
   ${PRODUCT_COMMAND} autopilot review --ticket <id> --pr <number> --head <sha> --round <1|2> --mission <canonical-id> [--worktree <assigned-path>] [--json]
   echo '<ConflictClass>'         | ${PRODUCT_COMMAND} autopilot judgment conflict-class
 
-next reads .void/program.md, the Linear state on stdin, GitHub (gh) and the stop
+next reads explicit config.autopilot schemaVersion: 3, provider observations on stdin, GitHub (gh) and the stop
 signal, and prints the actions for each slot: assign, wait, hand-back-to-worker,
 mark-human-wait, review, merge, update-branch, enable-auto-merge,
 disable-auto-merge, requeue, drain, freeze, recap, with who merges this tick
@@ -60,7 +60,7 @@ Direct Git commands and external concurrent Git writers are outside this guarant
 review reads the assigned checkout selected by --worktree (relative to the coordinator
 checkout, which is the default). It validates the same repository, exact HEAD and frozen
 ticket/plan before spending an attempt. The resolved installation owns the mission journal;
-the coordinator retains its programme, rounds, locks and verdicts. It then checks out the exact head in a detached worktree at the durable worktree
+the coordinator retains its config authority, rounds, locks and verdicts. It then checks out the exact head in a detached worktree at the durable worktree
 location, checks its HEAD before and after and collects a fresh-context, read-only
 independent-code-reviewer receipt bound to exact commit, base, criteria and actual
 invocation. Awaiting-native-review asks ORCH to invoke and record it, then repeat

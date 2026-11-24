@@ -29,12 +29,12 @@ function project(withProgram = true): { readonly root: string; readonly output: 
 }
 
 describe('resume command', () => {
-  it('renders the canonical program with generic work units', async () => {
+  it('keeps historical programmes out of local resume output', async () => {
     const capture = project();
 
     await resume([]);
 
-    expect(capture.output()).toContain('demo');
+    expect(capture.output()).not.toContain('demo');
     expect(capture.output()).not.toContain('tickets');
   });
 
@@ -44,7 +44,8 @@ describe('resume command', () => {
     await resume(['--json']);
 
     const bundle = JSON.parse(capture.output()) as Record<string, unknown>;
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
+    expect(bundle).not.toHaveProperty('program');
     expect(bundle).toHaveProperty('project');
     expect(bundle).toHaveProperty('git');
     expect(bundle).not.toHaveProperty('recentDecisions');
@@ -55,7 +56,7 @@ describe('resume command', () => {
 
     await resume(['--context']);
 
-    expect(capture.output()).toContain('Program: demo');
+    expect(capture.output()).toBe('');
     expect(capture.output().length).toBeLessThanOrEqual(4_000);
   });
 

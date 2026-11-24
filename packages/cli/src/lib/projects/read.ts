@@ -13,13 +13,11 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { readProgramDescriptor } from '../autopilot/program.js';
 import { type DecisionEntry, observeDecisions } from './decisions-source.js';
 import type { DiscoveredProject } from './discover.js';
 import {
   type CheckpointSignal,
   type GitSignals,
-  type ProgramSignal,
   type ProjectSummary,
   summarizeProject,
 } from './summary.js';
@@ -160,25 +158,6 @@ function readPlanCount(root: string): number {
 }
 
 /**
- * The declared program, when the project runs one. Read for display only: the
- * declared provider owns execution state, and reaching it would put the network on the
- * path of a view that must stay offline.
- */
-export function readProgram(root: string): ProgramSignal | undefined {
-  try {
-    const descriptor = readProgramDescriptor(root);
-    if (descriptor?.status !== 'executing') return undefined;
-    return {
-      program: descriptor.program,
-      provider: descriptor.progress?.provider,
-      unitCount: descriptor.progress?.order.length ?? 0,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * The session checkpoint. Absent everywhere until it ships, which is why the
  * whole view is designed to be useful without it.
  */
@@ -216,10 +195,6 @@ export function readProjectSummary(ref: DiscoveredProject, now: number): Project
     git: readGitSignals(ref.path),
     decisions: readDecisions(ref.path),
     planCount: readPlanCount(ref.path),
-    ...(() => {
-      const program = readProgram(ref.path);
-      return program === undefined ? {} : { program };
-    })(),
     ...(() => {
       const checkpoint = readCheckpoint(ref.path);
       return checkpoint === undefined ? {} : { checkpoint };

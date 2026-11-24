@@ -1,32 +1,9 @@
 // One offline composition for every resume consumer.
 //
-// The program owns durable global context, the checkpoint owns session residue,
-// and Git owns the tree identity. This pure module composes those observations;
+// The checkpoint owns session residue and Git owns the tree identity. This pure module composes those observations;
 // it never reads a tracker, reconstructs a conversation, or invents missing state.
 
 import type { Checkpoint } from './checkpoint.js';
-
-export interface ResumeProgramInput {
-  readonly status: 'executing' | 'completed';
-  readonly program: string;
-  readonly plan: string;
-  readonly spec: string;
-  readonly progress?: {
-    readonly provider: string;
-    readonly scope: string;
-  };
-}
-
-export interface ProgramSummary {
-  readonly status: ResumeProgramInput['status'];
-  readonly program: string;
-  readonly plan: string;
-  readonly spec: string;
-  readonly progress?: {
-    readonly provider: string;
-    readonly scope: string;
-  };
-}
 
 export interface ResumeGitInput {
   readonly branch: string | undefined;
@@ -44,16 +21,12 @@ export interface ResumeBundleInput {
   readonly project: { readonly name: string; readonly path: string };
   readonly now: number;
   readonly git: ResumeGitInput;
-  readonly program: ResumeProgramInput | undefined;
-  readonly programError?: string;
   readonly checkpoint: Checkpoint | undefined;
   readonly checkpointWrittenAt?: number;
   readonly checkpointPath?: CheckpointPath;
 }
 
 export type ResumeGapReason =
-  | 'program-absent'
-  | 'program-invalid'
   | 'checkpoint-absent'
   | 'checkpoint-empty'
   | 'checkpoint-stale'
@@ -66,9 +39,8 @@ export interface ResumeGap {
 }
 
 export interface ResumeBundle {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly project: { readonly name: string; readonly path: string };
-  readonly program?: ProgramSummary;
   readonly checkpoint?: Checkpoint;
   readonly checkpointPath?: CheckpointPath;
   readonly checkpointNotice?: string;
@@ -85,36 +57,6 @@ const DAY_MS = 86_400_000;
 const STALE_DAYS = 7;
 const CONTEXT_CHARS_MAX = 4_000;
 const CHECKPOINT_NOTICE = 'Observations and intentions to verify; no authorization.';
-
-function summarizeProgram(descriptor: ResumeProgramInput): ProgramSummary {
-  return {
-    status: descriptor.status,
-    program: descriptor.program,
-    plan: descriptor.plan,
-    spec: descriptor.spec,
-    ...(descriptor.progress === undefined
-      ? {}
-      : {
-          progress: {
-            provider: descriptor.progress.provider,
-            scope: descriptor.progress.scope,
-          },
-        }),
-  };
-}
-
-function programGap(input: ResumeBundleInput): ResumeGap | undefined {
-  if (input.programError !== undefined) {
-    return { reason: 'program-invalid', detail: input.programError };
-  }
-  if (input.program === undefined) {
-    return {
-      reason: 'program-absent',
-      detail: 'no .void/program.md; resume can still use a local checkpoint and Git',
-    };
-  }
-  return undefined;
-}
 
 function checkpointGap(input: ResumeBundleInput): ResumeGap | undefined {
   if (input.checkpoint === undefined) {
@@ -167,16 +109,14 @@ function treeGaps(input: ResumeBundleInput): readonly ResumeGap[] {
 
 export function composeResumeBundle(input: ResumeBundleInput): ResumeBundle {
   const gaps = [
-    programGap(input),
     checkpointGap(input),
     ...treeGaps(input),
   ].filter(
     (gap): gap is ResumeGap => gap !== undefined,
   );
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     project: input.project,
-    ...(input.program === undefined ? {} : { program: summarizeProgram(input.program) }),
     ...(input.checkpoint === undefined ? {} : {
       checkpoint: input.checkpoint,
       checkpointPath: input.checkpointPath ?? '.void/machine/checkpoint.md',
@@ -229,12 +169,7 @@ function boundedResumeLines(
 
 export function renderResumeContext(bundle: ResumeBundle): string {
   const usefulCheckpoint = bundle.checkpoint !== undefined && !bundle.checkpoint.isEmpty;
-  if (bundle.program === undefined && !usefulCheckpoint) {
-    const invalidProgram = bundle.gaps.filter((gap) => gap.reason === 'program-invalid');
-    return invalidProgram.length === 0
-      ? ''
-      : boundedResumeLines(['[void-machine resume]'], invalidProgram.map((gap) => `Gap: ${gap.detail}`));
-  }
+  if (!usefulCheckpoint) return '';
   const required = ['[void-machine resume]'];
   if (usefulCheckpoint) {
     required.push(`Full checkpoint: ${bundle.checkpointPath ?? '.void/machine/checkpoint.md'} (project-relative)`);
@@ -244,16 +179,6 @@ export function renderResumeContext(bundle: ResumeBundle): string {
   if (bundle.git.branch !== undefined) optional.push(`Branch: ${bundle.git.branch}`);
   if (bundle.git.head !== undefined) optional.push(`HEAD: ${bundle.git.head}`);
   if (bundle.git.dirtyFiles > 0) optional.push(`Dirty files: ${String(bundle.git.dirtyFiles)}`);
-  if (bundle.program !== undefined) {
-    optional.push(`Program: ${bundle.program.program}`);
-    optional.push(`Plan: ${bundle.program.plan}`);
-    optional.push(`Spec: ${bundle.program.spec}`);
-    if (bundle.program.progress !== undefined) {
-      optional.push(
-        `Progress: ${bundle.program.progress.provider} at ${bundle.program.progress.scope}`,
-      );
-    }
-  }
   if (usefulCheckpoint && bundle.checkpoint !== undefined) {
     optional.push(...checkpointContext(bundle.checkpoint));
   }

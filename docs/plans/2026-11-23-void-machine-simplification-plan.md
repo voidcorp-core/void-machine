@@ -7,7 +7,7 @@ authority: décisions utilisateur du 20 au 23 novembre 2026, consolidation autor
 decisions: ./2026-11-23-void-machine-simplification-decisions.md
 author: Folpe + Codex
 high_risk: true
-tickets: [DEV-1372, DEV-1373, DEV-1374, DEV-1375, DEV-1376, DEV-1393, DEV-1394, DEV-1395, DEV-1396, DEV-1397, DEV-1398, DEV-1399, DEV-1400]
+tickets: [DEV-1372, DEV-1373, DEV-1374, DEV-1375, DEV-1376, DEV-1393, DEV-1394, DEV-1395, DEV-1396, DEV-1397, DEV-1398, DEV-1399, DEV-1400, DEV-1401, DEV-1402, DEV-1403, DEV-1404, DEV-1405, DEV-1406, DEV-1407, DEV-1143, DEV-1408, DEV-1409]
 ---
 
 # Épuration de Void Machine

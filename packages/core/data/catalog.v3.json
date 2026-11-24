@@ -5,7 +5,7 @@
   "source": {
     "kind": "adapter",
     "version": "3.0.0-alpha.1",
-    "rootHash": "sha256:641d8c47d6bbcd0e47271c51e7e2262dd88d864312cbf955294872dc76b97cb2"
+    "rootHash": "sha256:1b19016170f6147a58b10461d99c5f4c7cf288e48ae65771d4429c6abc8d3943"
   },
   "nodes": [
     {
@@ -3075,7 +3075,7 @@
             }
           ],
           "id": "skill:void-autopilot",
-          "lines": 399,
+          "lines": 394,
           "name": "void-autopilot",
           "owner": "folpe",
           "pack": null,
@@ -3084,7 +3084,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-autopilot/SKILL.md",
-          "staticTokens": 7859,
+          "staticTokens": 7779,
           "type": "skill"
         }
       },
@@ -3180,7 +3180,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-checkpoint/SKILL.md",
-          "staticTokens": 3248,
+          "staticTokens": 3250,
           "type": "skill"
         }
       },
@@ -3864,7 +3864,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-implement/SKILL.md",
-          "staticTokens": 6833,
+          "staticTokens": 6836,
           "type": "skill"
         }
       },
@@ -4249,7 +4249,7 @@
             }
           ],
           "id": "skill:void-plan",
-          "lines": 214,
+          "lines": 216,
           "name": "void-plan",
           "owner": "folpe",
           "pack": null,
@@ -4258,7 +4258,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-plan/SKILL.md",
-          "staticTokens": 2468,
+          "staticTokens": 2517,
           "type": "skill"
         }
       },
@@ -4744,7 +4744,7 @@
             }
           ],
           "id": "skill:void-ticket",
-          "lines": 210,
+          "lines": 184,
           "name": "void-ticket",
           "owner": "folpe",
           "pack": null,
@@ -4753,7 +4753,7 @@
             "codex"
           ],
           "source": "packages/core/skills/void-ticket/SKILL.md",
-          "staticTokens": 3060,
+          "staticTokens": 2709,
           "type": "skill"
         }
       },

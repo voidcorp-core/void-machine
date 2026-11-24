@@ -71,7 +71,7 @@ describe('computePinBumps', () => {
 
 
 it('preserves opaque authority exactly when adding/removing packs and bumping pins', () => {
-  const autopilot = { enabled: false, protectedPaths: ['private/**'], unknownFutureRestriction: 'keep' };
+  const autopilot = { schemaVersion: 2, enabled: true, protectedPaths: ['private/**'], unknownFutureRestriction: 'keep' };
   const initial = { core: '^1.0.0', packs: { '@voidcorp/old': '^1.0.0' }, autopilot };
   const packed = withPackPins(initial, { addNames: ['new'], removeNames: ['old'], pin: '^2.0.0' });
   expect(packed.autopilot).toBe(autopilot);

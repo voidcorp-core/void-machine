@@ -316,7 +316,7 @@ function renderDecision(decision: LoopDecision): string {
 }
 
 /**
- * `autopilot next`: programme, Linear on stdin, GitHub, git and the stop signal
+ * `autopilot next`: config authority, Linear on stdin, GitHub, git and the stop signal
  * in; the kernel's actions out.
  */
 export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOutput {
@@ -525,7 +525,7 @@ function mergeTargetOf(argv: readonly string[], command: string, action: string)
 
 /**
  * What `merge` and `arm` prove again where the merge happens, rather than
- * trust the tick that asked for it: the programme is migrated, no person holds
+ * trust the tick that asked for it: the config authority is migrated, no person holds
  * the merges, a clean local verdict holds exactly this head, the pull request
  * is open on it, and it targets the loop's base, never the branch that deploys.
  * The local checks run first, so a refusal asks GitHub nothing.

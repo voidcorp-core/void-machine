@@ -497,7 +497,7 @@ describe('lifecycle context', () => {
       const claude = context('claude');
       const codex = context('codex');
       expect(claude).toBe(codex);
-      expect(codex).toContain('Program: parity');
+      expect(codex).not.toContain('Program: parity');
       expect(codex).toContain('Engaged work: A-1: worker uncertain.');
       expect(codex).toContain('Planned work: A-3\nA-2');
       expect(codex).toContain('Full checkpoint: .void/machine/checkpoint.md');

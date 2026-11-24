@@ -351,7 +351,7 @@ Rules:
   path both name, since only its hashes tell a hand-edited file from an untouched one. An absent
   receipt (every fresh clone) is the degenerate case of the same mechanism, not a separate route.
   See the ownership-is-union-of-receipt-and-manifest decision.
-- `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
+- `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; local marketplace configuration checks apply only to an explicit marketplace install; remote comparisons belong to `check`. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In every repository, including the source checkout, `doctor` checks the published installation at `installRoot`. It never consults npm, marketplace remotes or GitHub authentication, and never substitutes self-host for an absent install. See `docs/CODEX.md`.
 
 Current source and published-floor maintenance follows the coordinator procedure in
 [WORKTREES.md](WORKTREES.md#current-source-and-published-installation).
@@ -561,7 +561,7 @@ source set is hashed again before publication; concurrent drift aborts.
 Publication swaps the complete directory to `.void/machine/generated/current`; a
 failed swap restores the last green artifact.
 
-The deterministic receipt records the source hash, rollout mode and every owned
+The deterministic receipt records the source hash and every owned
 file's bytes + mode. An identical sync is a no-op. `self-host doctor` separately
 reports source staleness, artifact drift, discovery, adapter hook smoke,
 canonical event replay and native runtime availability. Missing runtime CLIs are
@@ -573,8 +573,13 @@ ambient configuration never cross that process boundary.
 
 This boundary never writes `packages/core/`, root `CLAUDE.md`/`AGENTS.md`, or
 root `.claude`/`.codex`/`.agents` surfaces. All generated files and runtime probe
-metadata are gitignored. Modes `shadow` and `warn` are advisory; `enforce` and
-`release-gate` fail on structural blockers.
+metadata are gitignored. Explicit `self-host doctor` always fails on missing, stale or drifted
+artifacts and never builds them. Optional runtime absence remains degraded and untested.
+Legacy receipts with rollout modes remain readable, but cannot weaken a structural failure or
+force a rebuild solely for their mode; new receipts contain only Unix file permission modes.
+The former `--mode` flag is rejected explicitly. Ordinary doctor remains a separate local
+published-install check; `--no-remote` is a compatible no-op. Documentary conformance repair
+and its `--fix`/`--dry-run` flags have been removed; documents and decision history remain.
 
 ## Agent model tiers
 

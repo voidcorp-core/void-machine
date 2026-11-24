@@ -50,7 +50,7 @@ npx voidmachine remove pack-nextjs
 
 ### `doctor`
 
-Health-check: `.void/config.json` validity, marketplace + plugins registered in `.claude/settings.json`, the CLAUDE.md block, `jq` (required by the hooks), and version drift against the marketplace HEAD. `--no-remote` runs fully offline. Exit `0` if all checks pass, `1` otherwise.
+Health-check the published installation at `installRoot`: configuration, doctrine, file integrity, runtime wiring and CLI/layout compatibility. This is local in every repository, including the source checkout; `--no-remote` is a compatible no-op. Use `check` for remote version comparisons. Exit `0` without blockers, `1` on installation failures. The retired `--fix` and `--dry-run` flags exit `2` with a diagnostic.
 
 ```
 npx voidmachine doctor [--no-remote]

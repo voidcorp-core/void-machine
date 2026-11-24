@@ -17,7 +17,7 @@ import {
   syncSelfHost,
   type BuildHookBundle,
 } from './compile.js';
-import { readSelfHostReceipt } from './receipt.js';
+import { readSelfHostReceipt, SELF_HOST_RECEIPT_PATH } from './receipt.js';
 import {
   wireSelfHostRuntimeSurfaces,
   type WireSelfHostRuntimeSurfaces,
@@ -99,7 +99,7 @@ const wireFixtureSurfaces: WireSelfHostRuntimeSurfaces = async (input) => {
   await writeFile(join(input.artifactRoot, '.claude', 'settings.json'), '{}\n');
   await writeFile(
     join(input.artifactRoot, 'CLAUDE.md'),
-    `<!-- void-harness ${input.mode} ${input.sourceHash} -->\n`,
+    `<!-- void-harness ${input.sourceHash} -->\n`,
   );
 };
 
@@ -157,14 +157,13 @@ describe('syncSelfHost', () => {
       generatedRoot,
       buildHookBundle: copyCommittedRunner,
       wireRuntimeSurfaces: wireSelfHostRuntimeSurfaces,
-      mode: 'shadow',
     });
 
     const current = join(generatedRoot, 'current');
-    expect(result).toMatchObject({ changed: true, mode: 'shadow', artifactRoot: current });
+    expect(result).toMatchObject({ changed: true, artifactRoot: current });
     expect(result.files).toBeGreaterThan(0);
     expect(await readSelfHostReceipt(current))
-      .toMatchObject({ mode: 'shadow', sourceHash: result.sourceHash });
+      .toMatchObject({ sourceHash: result.sourceHash });
     expect((await lstat(join(current, '.void', 'hooks', '_void-hook.mjs'))).isFile())
       .toBe(true);
     for (const [index, file] of nativeFiles.entries()) {
@@ -178,7 +177,7 @@ describe('syncSelfHost', () => {
     // is, not because the reading was skipped.
     const source = await harnessSourceFixture();
     const generatedRoot = await temporaryRoot('void-self-generated');
-    const options = { ...fixtureSyncOptions(generatedRoot), mode: 'shadow' } as const;
+    const options = { ...fixtureSyncOptions(generatedRoot) } as const;
     const sourceBefore = await treeSnapshot(source);
 
     const first = await syncSelfHost(source, options);
@@ -191,25 +190,38 @@ describe('syncSelfHost', () => {
     expect(second.sourceHash).toBe(first.sourceHash);
     expect((await lstat(current)).mtimeMs).toBe(modifiedAt);
     expect(await treeSnapshot(source)).toEqual(sourceBefore);
-    expect(await readSelfHostReceipt(current)).toMatchObject({ mode: 'shadow' });
+    expect(await readSelfHostReceipt(current)).not.toHaveProperty('mode');
   });
 
+  it.each(['shadow', 'warn', 'enforce', 'release-gate'])(
+    'does not rebuild solely for legacy receipt mode %s', async (mode) => {
+      const source = await harnessSourceFixture();
+      const generatedRoot = await temporaryRoot('void-self-legacy');
+      const options = fixtureSyncOptions(generatedRoot);
+      await syncSelfHost(source, options);
+      const current = join(generatedRoot, 'current');
+      const receiptPath = join(current, SELF_HOST_RECEIPT_PATH);
+      const receipt = await readSelfHostReceipt(current);
+      await writeFile(receiptPath, JSON.stringify({ ...receipt, mode }));
+      const before = await treeSnapshot(current);
+      expect((await syncSelfHost(source, options)).changed).toBe(false);
+      expect(await treeSnapshot(current)).toEqual(before);
+    },
+  );
+
   it('restores the last green artifact when publication fails', async () => {
-    // The last green artifact was published in `shadow`. The failing attempt
-    // runs in `warn`, so it never takes the up-to-date short circuit and reaches
-    // publication whatever the hash says.
     const source = await harnessSourceFixture();
     const generatedRoot = await temporaryRoot('void-self-rollback');
-    await syncSelfHost(source, { ...fixtureSyncOptions(generatedRoot), mode: 'shadow' });
+    await syncSelfHost(source, fixtureSyncOptions(generatedRoot));
+    const before = await treeSnapshot(join(generatedRoot, 'current'));
+    await writeFile(join(source, 'packages/core/src/PHILOSOPHY.md'), '# Changed\n');
 
     await expect(syncSelfHost(source, {
       ...fixtureSyncOptions(generatedRoot),
-      mode: 'warn',
       failAfterBackup: true,
     })).rejects.toThrow('injected self-host publication failure');
 
-    expect(await readSelfHostReceipt(join(generatedRoot, 'current')))
-      .toMatchObject({ mode: 'shadow' });
+    expect(await treeSnapshot(join(generatedRoot, 'current'))).toEqual(before);
     expect(await readdir(generatedRoot)).toEqual(['current']);
   });
 
@@ -226,7 +238,6 @@ describe('syncSelfHost', () => {
         await wireFixtureSurfaces(input);
         await writeFile(join(source, 'packages/core/src/PHILOSOPHY.md'), '# Moved\n');
       },
-      mode: 'shadow',
     })).rejects.toThrow('self-host sources changed during compilation');
 
     expect(await lstat(join(generatedRoot, 'current')).catch(() => undefined))

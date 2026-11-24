@@ -1,13 +1,11 @@
 import { adaptersFor } from '../runtime-adapters.js';
 import { CORE_PLUGIN_NAME } from '../packs.js';
-import type { SelfHostMode } from './receipt.js';
 
 export interface WireSelfHostRuntimeInput {
   readonly artifactRoot: string;
   readonly overlayRoot: string;
   readonly finalRoot: string;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
 }
 
 export type WireSelfHostRuntimeSurfaces = (

@@ -9,7 +9,6 @@ describe('self-host receipt', () => {
   it('round-trips a deterministic owned-file contract', () => {
     const receipt = buildSelfHostReceipt({
       sourceHash: 'a'.repeat(64),
-      mode: 'shadow',
       files: [{
         path: '.void/hooks/_void-hook.mjs',
         content: Buffer.from('runner'),
@@ -18,8 +17,16 @@ describe('self-host receipt', () => {
     });
 
     expect(parseSelfHostReceipt(encodeSelfHostReceipt(receipt))).toEqual(receipt);
+    expect(receipt).not.toHaveProperty('mode');
     expect(receipt.runtimes).toEqual(['claude', 'codex']);
   });
+
+  it.each(['shadow', 'warn', 'enforce', 'release-gate'])(
+    'reads legacy %s receipts without carrying rollout authority', (mode) => {
+      const receipt = buildSelfHostReceipt({ sourceHash: 'a'.repeat(64), files: [] });
+      expect(parseSelfHostReceipt(JSON.stringify({ ...receipt, mode }))).toEqual(receipt);
+    },
+  );
 
   it('rejects unsafe owned paths and unknown modes', () => {
     const unsafe = JSON.stringify({

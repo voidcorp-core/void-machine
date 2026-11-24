@@ -155,10 +155,11 @@ It writes one current status snapshot without producing or pruning score history
 The graph, audit and frozen certification surfaces have been removed; see the
 [public migration note](packages/cli/README.md#graph-audit-and-score-retirement).
 
-Both surfaces also report whether your install is behind the version published
-on npm. That check is advisory, never fails a run, sends nothing about your
-machine, and reports `unknown` with a cause when the registry is unreachable
-rather than claiming you are current. `doctor --no-remote` skips it.
+`status` retains its advisory npm freshness notice, reporting `unknown` with a cause
+when the registry is unreachable. `doctor` checks only the local published installation,
+even in this source repository; `--no-remote` is a compatible no-op. Explicit `check`
+compares available versions. Current-source validation uses `self-host sync` followed
+by `self-host doctor`; it never substitutes for the published installation.
 
 `check` uses the installed bundled version from the local receipt, or the committed
 manifest on a fresh clone. Legacy plugin pins apply only to marketplace installs;

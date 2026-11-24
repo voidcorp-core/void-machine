@@ -160,6 +160,29 @@ describe('bundled credential source content enforcement', () => {
     }
   });
 
+  it.each(['claude', 'codex'])('scans ordinary tests and fixture content for %s', (runtime) => {
+    const token = `AKIA${'A1'.repeat(8)}`;
+    for (const relative of ['ordinary.test.ts', 'fixtures/ordinary.ts', '__generated__/ordinary.ts']) {
+      const path = join(workspace, relative);
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Write', tool_input: { file_path: path, content: token } }
+        : { tool_name: 'apply_patch', tool_input: {
+          patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${token}\n*** End Patch`,
+        } };
+      const result = spawnSync(process.execPath, [hook, 'enforce', 'secret-content', runtime], {
+        input: JSON.stringify(payload), encoding: 'utf8', cwd: workspace,
+        env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+      });
+      expect(result.status).toBe(runtime === 'claude' ? 2 : 0);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain('SECRET_IN_CONTENT');
+      expect(output).not.toContain(token);
+      if (runtime === 'codex') {
+        expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
+      }
+    }
+  });
+
   it.each(['claude', 'codex'])('combines filename and content protection for %s', (runtime) => {
     const path = join(workspace, 'deploy/infisical/client-secrets.mjs');
     const cases = [

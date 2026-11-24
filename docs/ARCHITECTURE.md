@@ -692,9 +692,12 @@ Two content-aware hooks sit beside the filename/path guards:
   suffix assigned a long, mixed, non-placeholder literal — excluding UUIDs, git shas,
   and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
-  test/fixture paths are skipped except credential-named source modules admitted by
-  the filename heuristic above, which receive the same content policy. The marker
-  applies only to its own line and does not exempt another line or file.
+  high-confidence signatures apply in every path, including tests, fixtures and
+  generated files. Only the ambiguous assignment heuristics retain their fixture
+  exemptions (credential-named source modules still receive all checks). Synthetic
+  values should be assembled at runtime or explicitly marked on the exact fixture
+  line. The marker applies only to its own line, never another line or file. Local
+  hooks and the CI diff driver share this policy and report locations, not values.
 
 ### Pack independence
 

@@ -28,9 +28,10 @@ const EXEMPT_PATH = /\.(?:test|spec)\.|\/__tests__\/|\/__fixtures__\/|\/fixtures
 const CREDENTIAL_SOURCE_MODULE =
   /(?:secret|credential)[^/]*\.(?:[cm]?[jt]s|[jt]sx)$/i;
 
-function lineHasSecret(line: string): boolean {
+function lineHasSecret(line: string, checkGeneric: boolean): boolean {
   if (line.includes('allow-secret-pattern:')) return false;
   if (HIGH_CONFIDENCE.some((pattern) => pattern.test(line))) return true;
+  if (!checkGeneric) return false;
   for (const pattern of [GENERIC_ASSIGNMENT, CAMEL_ASSIGNMENT]) {
     for (const assignment of line.matchAll(pattern)) {
       const value = assignment[1] ?? '';
@@ -48,9 +49,10 @@ export function secretContent(edits: readonly NormalizedEdit[]): RuleVerdict {
   const evidence: string[] = [];
   for (const edit of edits) {
     const path = edit.path.replaceAll('\\', '/');
-    if (EXEMPT_PATH.test(path) && !CREDENTIAL_SOURCE_MODULE.test(path)) continue;
+    // Fixture scope applies only to ambiguous assignment heuristics, never signatures.
+    const checkGeneric = !EXEMPT_PATH.test(path) || CREDENTIAL_SOURCE_MODULE.test(path);
     edit.addedContent.split(/\r?\n/).forEach((line, index) => {
-      if (lineHasSecret(line)) evidence.push(`${edit.path}:${index + 1}`);
+      if (lineHasSecret(line, checkGeneric)) evidence.push(`${edit.path}:${index + 1}`);
     });
   }
   return evidence.length === 0

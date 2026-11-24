@@ -87,3 +87,16 @@ commit. Clean/dirty preparation routing and failed-preparator refusal are also
 exercised by real child-process fixtures. Detailed logs remain in the task's
 local handoff evidence; CI and the independent exact-head review are coordinator
 responsibilities, still outstanding at writer handoff.
+
+## CI admission correction
+
+The first candidate run [45435504694](https://github.com/voidcorp-core/void-machine/actions/runs/45435504694)
+was rejected before any job started; this is not a failed package assertion.
+The new artifact path had used `runner.temp` in `jobs.validate.env`, where that
+context is unavailable. GitHub's [context availability table](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability)
+allows it in `jobs.<job_id>.steps.env`. The catalogue now places the variable on
+only the safety and size steps, using its existing `ciEnv` projection. The
+focused regression refuses the runner context in the job header and requires
+the two step environment bindings. No packaging, assertion, permission or
+artifact identity behavior changes; the earlier runtime measurements remain
+applicable. A new candidate CI run is still needed to establish remote admission.

@@ -82,8 +82,12 @@ export const GATES = Object.freeze([
     },
   ),
   gate('lint', 'Lint', ['pnpm', 'lint'], 'contract', 'cpu', ['source', 'tests']),
-  gate('publish-safety', 'Publish safety', ['pnpm', 'check:publish'], 'consumer', 'filesystem', ['source']),
-  gate('package-size', 'Package size report', ['pnpm', 'check:size'], 'consumer', 'filesystem', ['source']),
+  gate('publish-safety', 'Publish safety', ['pnpm', 'check:publish'], 'consumer', 'filesystem', ['source'], {
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/void-consumer-artifact/consumer.tgz' },
+  }),
+  gate('package-size', 'Package size report', ['pnpm', 'check:size'], 'consumer', 'filesystem', ['source'], {
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/void-consumer-artifact/consumer.tgz' },
+  }),
   gate('build', 'Build packages', ['pnpm', 'build'], 'contract', 'subprocess', ['source']),
   gate(
     'self-host-sync',

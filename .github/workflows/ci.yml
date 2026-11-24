@@ -92,7 +92,6 @@ jobs:
     needs: consumer-artifact
     runs-on: ubuntu-latest
     env:
-      VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
       # On pull requests, prove the reviewed branch commit rather than GitHub's
       # synthetic merge ref. Pushes and manual runs prove their triggering SHA.
       GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -172,6 +171,8 @@ jobs:
 
       - name: "[publish-safety] Publish safety"
         continue-on-error: true
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
         run: >-
           node scripts/verify.mjs --gate publish-safety
           --sha "$GATE_SHA"
@@ -179,6 +180,8 @@ jobs:
 
       - name: "[package-size] Package size report"
         continue-on-error: true
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
         run: >-
           node scripts/verify.mjs --gate package-size
           --sha "$GATE_SHA"

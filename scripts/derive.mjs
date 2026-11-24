@@ -3,7 +3,7 @@
 //
 // Repository projections are generated from skills, agents, hooks, commands,
 // packs and the verification catalogue. They include the graph catalogue and
-// compatibility model, certification manifest, consumer bundle, cheat sheet,
+// compatibility model, certification manifest, consumer bundle,
 // npm mirror and CI gate block. Each once had its own
 // build command or hand-maintained copy, and nothing declared the complete set.
 //
@@ -26,8 +26,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * In dependency order, and the order is load-bearing: the catalogue feeds the
- * certification and the bundle, the model feeds the cheat sheet, and the mirror
- * copies whatever the four before it produced.
+ * certification and the bundle; the mirror copies their generated assets.
  */
 const STEPS = [
   { label: 'CI gates', argv: ['node', 'scripts/render-ci-gates.mjs'] },
@@ -36,7 +35,6 @@ const STEPS = [
   { label: 'catalogue', argv: ['node', 'packages/cli/bin/void-machine.mjs', 'graph'] },
   { label: 'certification', argv: ['pnpm', '-F', './packages/cli', 'build:certification'] },
   { label: 'consumer bundle', argv: ['pnpm', '-F', './packages/cli', 'build:void-graph'] },
-  { label: 'cheat sheet', argv: ['node', 'scripts/build-cheatsheet.mjs'] },
   { label: 'npm mirror', argv: ['pnpm', '--filter', './packages/cli', 'build:assets'] },
 ];
 

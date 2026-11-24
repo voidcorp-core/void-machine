@@ -520,7 +520,7 @@ including older handoff wording. It preserves private project doctrine and adjac
 user skills; changed files whose ownership cannot be proved remain conflicts rather
 than being silently overwritten. No consumer update is implied by a source change.
 
-## Shared primary Node and browser preparation
+## Shared primary Node
 
 `.node-version` owns the exact primary Node version for local development, CI
 and release. The isolated publication job receives setup-node's resolved version
@@ -534,9 +534,3 @@ conservative compile-time baselines; they do not declare runtime support or
 select a CI runtime. Reusable consumer
 enforcement reads `.void-enforce-runtime/.node-version` from its immutable harness
 checkout, never a required file in the caller repository.
-
-Browser conformance reuses the same consumer tarball as install conformance.
-Its official Playwright noble image follows the exact browser tooling manifest;
-the committed npm lockfile and setup-node npm cache support reproducible installs.
-No custom image, browser cache or node_modules cache is maintained. See
-[the browser suite](../test/browser/README.md) for update and visual evidence rules.

@@ -1,4 +1,3 @@
-import { cheatsheet } from './commands/cheatsheet.js';
 import { commandName, type CommandName } from './lib/command-catalog.js';
 // CLI entry — dispatches to init / add / remove / list / doctor / help.
 
@@ -109,7 +108,6 @@ const HANDLERS = {
   'security': security,
   'self-host': selfHost,
   'install': install,
-  'cheatsheet': cheatsheet,
   'version': () => { process.stdout.write(`${version}\n`); },
   'help': () => printHelp(),
 } satisfies Record<CommandName, (args: readonly string[]) => void | Promise<void>>;

@@ -32,7 +32,7 @@ it.each([
   ['apps/example/src/main.ts', 'console.error("failed");', 'noConsole'],
   ['packages/example/test/case.test.ts', 'test.only("case", () => {});', 'noFocusedTests'],
   ['packages/core/hooks/case.test.ts', 'test.skip("case", () => {});', 'noSkippedTests'],
-  ['test/browser/case.spec.mjs', 'test.only("case", () => {});', 'noFocusedTests'],
+  ['test/example/case.spec.mjs', 'test.only("case", () => {});', 'noFocusedTests'],
   ['packages/example/src/dependency.ts', 'export { value } from "undeclared";', 'noUndeclaredDependencies'],
 ])('rejects violations at %s', (path, source, rule) => {
   const result = lint(path, source);

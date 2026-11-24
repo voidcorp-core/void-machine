@@ -68,7 +68,6 @@ flowchart LR
   Event[Ready PR / merge group / main push / dispatch] --> Validate[validate]
   Event --> Artifact[consumer-artifact]
   Event --> Graph[project-graph-conformance: Ubuntu, macOS, Windows]
-  Artifact --> Browser[browser-conformance]
   Artifact --> Install[install-conformance: Ubuntu, macOS, Windows]
   Validate --> Gates[Sequential verification gates and exact-SHA aggregation]
   Graph --> Classify[Classify inside each allocated runner]
@@ -76,9 +75,8 @@ flowchart LR
   Classify -->|Unrelated PR paths| GraphSkip[Skip graph steps]
 ```
 
-Only artifact-to-browser and artifact-to-install edges are job dependencies in
-this workflow. The other arrows inside `validate` and graph jobs show sequential
-steps. There are nine jobs after matrix expansion. `void-enforce` runs separately;
+Only the artifact-to-install edge is a job dependency in this workflow. The other
+arrows inside `validate` and graph jobs show sequential steps. There are eight jobs after matrix expansion. `void-enforce` runs separately;
 `validate` aggregates its own gate reports, not the conformance or enforcement
 jobs. GitHub protection and the local merge decision consume required results.
 
@@ -111,7 +109,7 @@ are unchanged. See the [current-check decision](decisions-log/2026-11-06-current
 
 The PR proof subject is its head SHA; merge-group checks prove the group SHA.
 The immutable consumer tarball and source manifest are produced once, then used
-by browser and three OS installation jobs. Graph conformance is a separate path.
+by the three OS installation jobs. Graph conformance is a separate path.
 Current graph classification considers package paths but needs the wider input
 and rename coverage in DEV-1144 before allocation can safely be optimized.
 

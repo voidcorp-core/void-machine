@@ -19,40 +19,11 @@ Pack names accept any form: `pack-nextjs`, `harness-nextjs`, or `nextjs`.
 
 ## Commands
 
-### `cheatsheet`
-
-Discover shipped skills, hooks, agents, specialist contracts and CLI commands,
-with local installation evidence and invocation details.
-
-```bash
-void-machine cheatsheet > cheatsheet.html
-void-machine cheatsheet --format markdown > cheatsheet.md
-void-machine cheatsheet --format json
-```
-
-HTML is a self-contained offline document with catalogue, availability and intent
-views, composable filters, selectable/copyable invocations and print styling.
-The catalogue remains readable without JavaScript. No server, browser launch,
-installation, status refresh or network request is performed by the command.
-
-JSON schema version 1 contains `installation` and stable, sorted `entries` with
-canonical `id`, `type`, `name`, `description`, `pack`, `runtimes`, `invocations`,
-`triggers`, `relatedIds` and per-runtime `availability`. Specialist roles link to
-their agent implementations; they are not two independent capabilities.
-Availability distinguishes `installed`, `absent`, `disabled`, `inactive-pack`,
-`unsupported` and `unknown`, always with a reason. Installed means a receipt-owned
-asset matches, not that runtime execution was verified. No consumer content,
-absolute machine paths or journals are exported. User-global settings and
-marketplace caches are outside the snapshot; missing proof stays unknown.
-
-Project Claude `skillOverrides: { "void-tdd": "off" }` is explicit disabled
-evidence; local settings override project settings. Manual-only visibility is
-not disabled. No Codex home configuration is read. Missing hook wiring is
-reported as undeclared rather than inferred from the hook name.
-
-Exit codes: `0` exported, `1` invalid/unavailable bundled catalogue, `2` invalid
-arguments. Diagnostics go to stderr; a corrupt local install still exports the
-global catalogue with unknown local availability.
+The generated `cheatsheet` command and its HTML, Markdown and JSON exports
+have been removed. See the [essential workflow guide](https://github.com/voidcorp-core/void-machine/blob/develop/docs/CHEATSHEET.md),
+use native skill discovery in your runtime, or run `void-machine --help`.
+Invoking the former command follows the unknown-command contract (exit 2).
+Previously exported files are left untouched.
 
 ### `init`
 

@@ -113,16 +113,10 @@ by the three OS installation jobs. Graph conformance is a separate path.
 Current graph classification considers package paths but needs the wider input
 and rename coverage in DEV-1144 before allocation can safely be optimized.
 
-## Certification and release job dependencies
+## Release job dependencies
 
 ```mermaid
 flowchart LR
-  Schedule[Sunday 03:23 UTC or manual dispatch] --> Install[Install locked dependencies]
-  Install --> Build[Build workspace once]
-  Build --> Fast[Twenty seeded fast attempts]
-  Fast --> Complete[Ten seeded complete attempts]
-  Fast --> Reports
-  Complete --> Reports[Exact-SHA reports retained even after failure]
   RP[release-please] --> VR[validate-release]
   RP --> P[publish]
   VR --> P
@@ -131,31 +125,14 @@ flowchart LR
   P --> VP
 ```
 
-Certification is an independent reliability workflow, not a PR status dependency.
-The current workflow builds the workspace once after installation, before either
-campaign. A failed build stops test execution in its own step; it does not count
-as an attempted test or a successful certification. Reports from attempted
-campaigns are retained after failure; missing reports are never green evidence.
-The 5 November audit snapshot predates this repair: its four failed weekly runs
-were missing compiled prerequisites and do not measure test reliability.
-
-Each attempt passes shuffle and its recorded seed to Vitest 5.0.1. The pnpm script
-arguments contain no extra `--` separator, which Vitest would treat as the end of
-options. The network wrapper forwards only shuffle and a positive 32-bit seed;
-its loopback probe, fixed project, thread pool, one worker and 120-second bound
-remain unchanged. Unknown arguments refuse execution. See the
-[Vitest sequence contract](https://vitest.dev/config/sequence).
-
-To reproduce on a fresh checkout, run `pnpm install --frozen-lockfile` and
-`pnpm build` once, then `node scripts/stress-proof.mjs fast 20 10401` and
-`node scripts/stress-proof.mjs complete 10 20401`. Set `VOID_STRESS_REPORT_PATH`
-per command to retain the JSON reports; defaults live under
-`.void/machine/proofs/test-certification/`. Inspect `sourceSha`, requested and
-completed attempts, every seed and the first failing command. The first failure,
-unavailable process or timeout stops the campaign without retry. A small preflight
-is not the twenty-plus-ten certification. The existing five-minute command and
-ninety-minute job budgets remain; an environment exceeding either cannot certify.
-Repairing collection increases real executed work and is not a claimed saving.
+DEV-1407 retires the weekly/manual certification workflow and its stress runner. Historical
+reports and the November audit remain historical evidence, not a requirement to rerun a
+campaign. For an explicitly requested ordering diagnosis after building prerequisites, run
+`pnpm exec vitest run path/to/file.test.ts --sequence.shuffle --sequence.seed=10401`.
+`pnpm test:network --sequence.shuffle --sequence.seed=20401` retains the bounded loopback probe,
+thread pool, one worker and one 120-second Vitest invocation. Unsupported arguments refuse;
+the first failing invocation remains red. No extra `--` separator precedes Vitest options.
+See the [Vitest sequence contract](https://vitest.dev/config/sequence).
 
 The release DAG additionally has event/result conditions: a normal promotion push proposes a
 release PR, while a created release (or supported manual recovery) admits release
@@ -186,8 +163,7 @@ job-minutes from latency and potential avoidance from demonstrated savings.
 
 Open a run from [CI](https://github.com/voidcorp-core/void-machine/actions/workflows/ci.yml),
 [enforcement](https://github.com/voidcorp-core/void-machine/actions/workflows/void-enforce.yml),
-[promotion](https://github.com/voidcorp-core/void-machine/actions/workflows/promotion.yml),
-[certification](https://github.com/voidcorp-core/void-machine/actions/workflows/test-certification.yml)
+[promotion](https://github.com/voidcorp-core/void-machine/actions/workflows/promotion.yml)
 or [release](https://github.com/voidcorp-core/void-machine/actions/workflows/release.yml).
 Each run summary shows GitHub's actual job graph and links each node to its logs.
 The graph belongs to that run, so it also shows skipped and failed jobs; this

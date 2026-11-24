@@ -203,26 +203,19 @@ jobs:
           --sha "$GATE_SHA"
           --report ".void/machine/gate-reports/skill-references.json"
 
-      - name: "[test-cpu] CPU tests"
+      - name: "[test-engine] Mission engine tests"
         continue-on-error: true
         run: >-
-          node scripts/verify.mjs --gate test-cpu
+          node scripts/verify.mjs --gate test-engine
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-cpu.json"
+          --report ".void/machine/gate-reports/test-engine.json"
 
-      - name: "[test-filesystem] Filesystem tests"
+      - name: "[test-local] Local tests"
         continue-on-error: true
         run: >-
-          node scripts/verify.mjs --gate test-filesystem
+          node scripts/verify.mjs --gate test-local
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-filesystem.json"
-
-      - name: "[test-subprocess] Subprocess tests"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate test-subprocess
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-subprocess.json"
+          --report ".void/machine/gate-reports/test-local.json"
 
       - name: "[test-network] Network and browser tests"
         continue-on-error: true

@@ -5,11 +5,26 @@ description: Pre-PR critical pass. Six dimensions (correctness, tests, security,
 
 # code-review — voidcorp craftsman edition
 
-A review examines the accepted behavior and the consequences of shipping the change. This skill provides the framework: six dimensions in order, blocker vs nit, actual review results and useful proofs, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
+A review first checks conformity to the accepted scope, then the quality and consequences of the change. This skill provides the framework: six dimensions in order, blocker vs nit, actual review results and useful proofs, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
 
 **Attribution**: see `.source` in this directory.
 
 ---
+
+## Accepted scope first
+
+Within the same independent review, compare the committed result and its evidence with every
+accepted criterion: fulfilled, missing (including incomplete or unproven), or exceeded. Identify
+implemented behavior outside the accepted scope. Missing requirements and unauthorized additions
+are equally blocking acceptance defects: cite the criterion or scope boundary, evidence and
+resolution condition. Necessary implementation details are not scope expansion; suggestions to
+broaden the mandate remain advisory.
+
+Do not begin the six quality dimensions while the candidate is nonconformant. Keep this result in
+the existing review receipt, with the same reviewer and unchanged correction budget. After a
+correction, verify conformity and continue only the dimensions not yet examined; do not restart
+the general review or repeat completed checks. This is an ordering within the existing review,
+not a second pass or a new executable gate.
 
 ## Six dimensions, in order
 
@@ -112,7 +127,7 @@ and consequence-based findings; it is not proof of correctness by itself.
 
 1. Bind the task, acceptance criteria, exact commit and base before reading. Prefer a dedicated
    worktree pinned to the commit, with native read-only permissions. The reviewer never edits.
-2. Perform one independent general review across the six dimensions. Report only demonstrated
+2. Check accepted scope first as described above, then review the six quality dimensions. Report only demonstrated
    consequences in scope. Every blocker names its violated criterion, concrete consequence,
    evidence and resolution condition. Style and optional refactoring remain advisory.
 3. Preserve the minimal review receipt and original result: reviewer, subject, conclusions,

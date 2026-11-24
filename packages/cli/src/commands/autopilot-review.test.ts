@@ -635,7 +635,15 @@ describe('native review routing', () => {
       if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
       if (line.includes('/actions/runs?')) return noWorkflowRuns;
       if (line.includes('mergeQueue(branch')) return readFileSync(new URL('queue-present.json', FIXTURES), 'utf8');
-      if (line.includes('isInMergeQueue')) return readFileSync(new URL('pr-queue-membership-absent.json', FIXTURES), 'utf8');
+      if (line.includes('isInMergeQueue')) {
+        const membership = JSON.parse(readFileSync(
+          new URL('pr-queue-membership-absent.json', FIXTURES), 'utf8',
+        )) as { data: { repository: { pullRequest: Record<string, unknown> } } };
+        if (line.includes('timelineItems')) {
+          membership.data.repository.pullRequest.timelineItems = { nodes: [] };
+        }
+        return JSON.stringify(membership);
+      }
       if (line.includes('timelineItems')) return JSON.stringify({ data: { repository: { pullRequest: {
         timelineItems: { nodes: [] },
       } } } });

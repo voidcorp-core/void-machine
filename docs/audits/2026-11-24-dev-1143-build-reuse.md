@@ -132,3 +132,31 @@ unresolved temporary identifiers). The affected verification set passes 135 test
 in 12 files; affected lint, CLI types and skill references pass. This is a bounded
 correction before the first independent review, not a replay of the earlier
 unrecorded broad test invocation. A new-head CI run remains required.
+
+## Targeted review correction: older release recovery
+
+The first independent review of 7a446ecc found one blocker: recovery called the
+historical tree's archive producer but current control required a run-bound
+manifest that the older producer did not emit. Older safety/size commands also
+repacked rather than reading the shared archive.
+
+Current `release-control/scripts/prepare-release-artifact.mjs` now owns pack,
+check and final binding against explicit `RELEASE_TREE`. The existing preparator
+accepts that source root, verifies original delivery freshness before packing,
+checks cleanliness immediately after freshness and after the lifecycle, and
+binds the actual source SHA, package version, bytes and current run. Historical
+freshness checks and package lifecycle remain owned by the historical tree;
+its obsolete producer and readers are not invoked. No legacy manifest is patched
+or relabeled as current-run evidence. Safety/size use current control readers
+on the one verified archive.
+
+The recovery regression retains the exact old producer from c8f1ba2 in a versioned
+test fixture, so CI does not need historical Git objects. Executing it reproduces
+the missing-run manifest refusal. The corrected path targets a historical fixture
+version 1.2.3, distinct from the control checkout: one actual pnpm lifecycle pack,
+current readers, byte-preserving canonical rename, and refusals for stale original
+delivery, wrong source/version/run or changed digest. Historical reader sentinels
+remain uncalled. The fresh control path and stale-before-prepack tests were RED
+before implementation, then GREEN. Earlier performance samples are not rerun or
+attributed to this correction. Targeted independent review and new-head CI remain
+required for the corrected candidate.

@@ -206,8 +206,12 @@ Actions on the routine path.
    publication authorization.
 4. `validate-release`, with `contents: read` and no OIDC, resolves the immutable
    tag, proves its commit is on protected `main`, checks original delivery freshness,
-   and packs the CLI once. Type/tests and safety/size then validate the same tree
-   and bytes. The verified `consumer.tgz` is renamed to `voidmachine-X.Y.Z.tgz`
+   and packs the CLI once. Preparation and safety/size readers come from the
+   current `release-control` checkout and explicitly target `RELEASE_TREE`, even
+   when recovering an older tag. The target tree supplies its freshness checks,
+   package lifecycle and type/tests; its historical archive producer/readers are
+   not invoked. Current control binds the fresh archive to the historical
+   source/version and the current run before any readers inspect those bytes. The verified `consumer.tgz` is renamed to `voidmachine-X.Y.Z.tgz`
    without repacking. It uploads that tarball plus an integrity
    manifest containing the release identity, SHA-256 and npm SHA-512 integrity.
 5. `publish` is the only job with `id-token: write`. It checks the artifact's exact

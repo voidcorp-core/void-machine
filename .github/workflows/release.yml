@@ -136,24 +136,24 @@ jobs:
         working-directory: release-tree
         run: pnpm install --frozen-lockfile
 
-      - name: Pack the fresh immutable release tree exactly once
-        working-directory: release-tree
+      - name: Pack the fresh immutable release tree with current control
         env:
-          VOID_CONFORMANCE_ARTIFACT_DIR: ${{ runner.temp }}/npm-release
-        run: pnpm conformance:pack
+          ARTIFACT_DIR: ${{ runner.temp }}/npm-release
+          RELEASE_COMMIT: ${{ steps.resolve.outputs.release_commit }}
+        run: node release-control/scripts/prepare-release-artifact.mjs pack
 
       - name: Validate the immutable release tree without OIDC
         working-directory: release-tree
         env:
-          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/npm-release/consumer.tgz
+          ARTIFACT_DIR: ${{ runner.temp }}/npm-release
+          RELEASE_COMMIT: ${{ steps.resolve.outputs.release_commit }}
         run: |
           pnpm version:check
           pnpm --filter @voidcorp/pack-monorepo build
           pnpm --filter @voidcorp/pack-nextjs build
           pnpm typecheck
           pnpm test
-          pnpm check:publish
-          pnpm check:size
+          node "$CONTROL_ROOT/scripts/prepare-release-artifact.mjs" check
 
       - name: Bind package identity and byte integrity
         id: prepare

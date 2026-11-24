@@ -236,7 +236,7 @@ export async function withCliArtifact(inspect) {
     return await inspect(tarball);
   }
   await checkArtifactFreshness();
-  const temporary = await mkdtemp(join(tmpdir(), 'void-cli-inspection-'));
+  const temporary = await mkdtemp(join(tmpdir(), 'cli-inspection-'));
   try {
     const pnpm = packageManagerCommand('pnpm');
     requireConformanceExit(await runConformanceProcess({

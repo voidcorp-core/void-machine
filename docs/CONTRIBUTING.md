@@ -141,3 +141,9 @@ archive, including on an edited development tree, without claiming a clean HEAD
 attestation. Full `verify` shares one invocation-owned preparation on a clean
 tree; edited trees retain independent preparation. No artifact cache or
 cross-OS node_modules transfer is involved.
+
+CI gate reports live under `RUNNER_TEMP/gate-reports` so their creation cannot
+make the inspected source checkout dirty. Explicit report paths remain bounded
+to the repository or the runner's declared temporary directory. Checkout trust
+tests own their fixture repositories and never rely on maintainer-local ignores
+or self-host outputs being absent.

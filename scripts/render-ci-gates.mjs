@@ -37,7 +37,7 @@ export function renderGateBlock(gates) {
       '        run: >-',
       `          node scripts/verify.mjs --gate ${gate.id}`,
       '          --sha "$GATE_SHA"',
-      `          --report ".void/machine/gate-reports/${gate.id}.json"`,
+      `          --report "$RUNNER_TEMP/gate-reports/${gate.id}.json"`,
       '',
     );
   }
@@ -46,7 +46,7 @@ export function renderGateBlock(gates) {
     "        if: ${{ !cancelled() && steps.admission.outcome == 'success' }}",
     '        run: >-',
     '          node scripts/verify.mjs --aggregate --sha "$GATE_SHA"',
-    '          --reports ".void/machine/gate-reports"',
+    '          --reports "$RUNNER_TEMP/gate-reports"',
     `      # verify-gates:end`,
   );
   return lines.join('\n');

@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -83,10 +83,10 @@ export const GATES = Object.freeze([
   ),
   gate('lint', 'Lint', ['pnpm', 'lint'], 'contract', 'cpu', ['source', 'tests']),
   gate('publish-safety', 'Publish safety', ['pnpm', 'check:publish'], 'consumer', 'filesystem', ['source'], {
-    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/void-consumer-artifact/consumer.tgz' },
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/consumer-artifact/consumer.tgz' },
   }),
   gate('package-size', 'Package size report', ['pnpm', 'check:size'], 'consumer', 'filesystem', ['source'], {
-    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/void-consumer-artifact/consumer.tgz' },
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/consumer-artifact/consumer.tgz' },
   }),
   gate('build', 'Build packages', ['pnpm', 'build'], 'contract', 'subprocess', ['source']),
   gate(
@@ -343,9 +343,13 @@ function runOne(gateDefinition, sha, env = {}) {
 function checkedPath(path, kind) {
   if (path === null) throw new Error(`verify: --${kind} needs a path`);
   const absolute = resolve(ROOT, path);
-  const rel = relative(ROOT, absolute);
-  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || resolve(absolute) !== absolute) {
-    throw new Error(`verify: --${kind} must stay inside the repository`);
+  // CI owns RUNNER_TEMP; reports there do not contaminate source cleanliness.
+  const roots = [ROOT, ...(process.env.RUNNER_TEMP ? [resolve(process.env.RUNNER_TEMP)] : [])];
+  if (!roots.some(root => {
+    const rel = relative(root, absolute);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  })) {
+    throw new Error(`verify: --${kind} must stay inside the repository or RUNNER_TEMP`);
   }
   return absolute;
 }
@@ -421,7 +425,7 @@ export async function withVerificationArtifact(selected, execute) {
     || run(['git', 'status', '--porcelain=v1', '--untracked-files=all'], { quiet: true }).output.trim() !== '') {
     return await execute({});
   }
-  const temporary = mkdtempSync(resolve(tmpdir(), 'void-verify-artifact-'));
+  const temporary = mkdtempSync(resolve(tmpdir(), 'verify-artifact-'));
   try {
     const { packConformanceArtifact } = await import('../packages/cli/scripts/conformance-artifact.mjs');
     const artifact = await packConformanceArtifact(resolve(temporary, 'artifact'));

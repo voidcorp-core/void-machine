@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from '../../packages/hook-runner/src/identity.js';
 
 // A real committed stale delivery: prepack would repair it before the old late check.
 function fixture(stale: boolean, failed: boolean) {
@@ -13,12 +14,12 @@ function fixture(stale: boolean, failed: boolean) {
     mkdirSync(dirname(join(root, name)), { recursive: true });
     cpSync(resolve(name), join(root, name));
   }
-  writeFileSync(join(root, 'packages/cli/package.json'), '{"name":"voidmachine","version":"7.0.2"}');
+  writeFileSync(join(root, 'packages/cli/package.json'), JSON.stringify({ name: PRODUCT_IDENTITY.packageName, version: '7.0.2' }));
   writeFileSync(join(root, 'delivery'), stale ? 'stale' : 'fresh');
   writeFileSync(join(root, '.gitignore'), 'output/\npack-invoked\n');
   writeFileSync(join(root, 'scripts/derive.mjs'), `import { readFileSync } from 'node:fs';\nif (readFileSync('delivery', 'utf8') !== 'fresh') { process.stderr.write('stale delivery'); process.exit(1); }\n`);
   mkdirSync(join(root, 'bin'));
-  writeFileSync(join(root, 'bin/pnpm'), `#!/usr/bin/env node\nimport {writeFileSync} from 'node:fs';\nwriteFileSync('pack-invoked', 'yes');\nwriteFileSync('delivery', 'fresh');\n${failed ? 'process.exit(1);' : "writeFileSync(process.argv.at(-1) + '/packed.tgz', 'bytes');"}\n`, { mode: 0o755 });
+  writeFileSync(join(root, 'bin/pnpm'), `#!/usr/bin/env node\nimport {writeFileSync} from 'node:fs';\nif (process.argv.includes('version:check')) process.exit(0);\nwriteFileSync('pack-invoked', 'yes');\nwriteFileSync('delivery', 'fresh');\n${failed ? 'process.exit(1);' : "writeFileSync(process.argv.at(-1) + '/packed.tgz', 'bytes');"}\n`, { mode: 0o755 });
   execFileSync('git', ['init', '-q', root]);
   execFileSync('git', ['-C', root, 'add', '.']);
   execFileSync('git', ['-C', root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'fixture']);
@@ -68,4 +69,24 @@ it.each([false, true])('shares one clean preparation without attesting edited so
     expect(result.stdout).toBe(String(!dirty));
     expect(existsSync(join(root, 'pack-invoked'))).toBe(!dirty);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it('writes CI reports outside the checkout and keeps unrelated external paths refused', () => {
+  const root = fixture(false, false);
+  const runner = mkdtempSync(join(tmpdir(), 'gate-report-runner-'));
+  try {
+    const report = join(runner, 'gate-reports', 'version.json');
+    const execute = (target: string) => spawnSync(process.execPath,
+      ['scripts/verify.mjs', '--gate', 'version-lockstep', '--report', target], {
+        cwd: root, encoding: 'utf8', env: { ...process.env, RUNNER_TEMP: runner,
+          PATH: `${join(root, 'bin')}:${process.env.PATH}` },
+      });
+    const accepted = execute(report);
+    expect(accepted.status, accepted.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(report, 'utf8')).status).toBe('passed');
+    expect(execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })).toBe('');
+    const refused = execute(join(runner, '..', 'outside-reports.json'));
+    expect(refused.status).toBe(2);
+    expect(existsSync(join(runner, '..', 'outside-reports.json'))).toBe(false);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(runner, { recursive: true, force: true }); }
 });

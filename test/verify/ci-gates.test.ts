@@ -32,7 +32,7 @@ describe('generated CI gate projection', () => {
     for (const gate of required) {
       expect(rendered.match(new RegExp(`--gate ${gate.id}\\b`, 'g')) ?? [], gate.id).toHaveLength(1);
       expect(rendered, gate.id).toContain(
-        `--report ".void/machine/gate-reports/${gate.id}.json"`,
+        `--report "$RUNNER_TEMP/gate-reports/${gate.id}.json"`,
       );
     }
     expect(rendered.match(/continue-on-error: true/g) ?? []).toHaveLength(required.length);
@@ -41,7 +41,7 @@ describe('generated CI gate projection', () => {
   it('aggregates exact-SHA reports after failures without running after cancellation', () => {
     expect(rendered).toMatch(/if: \$\{\{ !cancelled\(\) && steps\.admission\.outcome == 'success' \}\}/);
     expect(rendered).toContain('--aggregate --sha "$GATE_SHA"');
-    expect(rendered).toContain('--reports ".void/machine/gate-reports"');
+    expect(rendered).toContain('--reports "$RUNNER_TEMP/gate-reports"');
   });
 
   it('keeps the committed workflow byte-equal to the catalogue projection', () => {

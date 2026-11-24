@@ -100,3 +100,35 @@ focused regression refuses the runner context in the job header and requires
 the two step environment bindings. No packaging, assertion, permission or
 artifact identity behavior changes; the earlier runtime measurements remain
 applicable. A new candidate CI run is still needed to establish remote admission.
+
+## CI output isolation and existing-contract corrections
+
+[Run 45436355453](https://github.com/voidcorp-core/void-machine/actions/runs/45436355453)
+on 7644b82 passed enforcement and conformance on Linux, macOS and Windows, but
+failed validation. Its safety/size readers correctly rejected untracked gate
+reports created by earlier steps. The checkout-trust test additionally depended
+on the caller's repository cleanliness after self-host generation. Local Git
+ignores had hidden those outputs during the earlier writer checks.
+
+Generated CI now stores reports below `$RUNNER_TEMP/gate-reports`; the existing
+report reader/writer accepts that declared runner directory as well as repository
+paths and still refuses external siblings. A real-process test proves writing a
+report leaves the source checkout clean. The checkout trust fixture now uses
+owned repositories, independent of self-host outputs, and explicitly refuses both
+modified tracked bytes and a new untracked source. The production cleanliness
+guard has no new exclusions. Self-host's existing output contract is unchanged.
+
+Temporary labels no longer use the reserved skill prefix. Package fixture names
+come from the canonical product identity, and the identity guard is unchanged.
+Existing admission assertions now prove validation remains admitted after a
+failed/skipped producer unless cancelled, with draft refusal still inside the
+required job. Release assertions check preparation once, internal export builds,
+types/tests and safety/size before binding the exact tarball, without OIDC or
+repacking. The pre-generation stale-byte and canonical-rename process tests
+remain the behavioral proof for those boundaries.
+
+The CI-derived failures were reproduced before correction (five failed tests and
+unresolved temporary identifiers). The affected verification set passes 135 tests
+in 12 files; affected lint, CLI types and skill references pass. This is a bounded
+correction before the first independent review, not a replay of the earlier
+unrecorded broad test invocation. A new-head CI run remains required.

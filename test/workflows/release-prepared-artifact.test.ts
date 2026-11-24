@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
+import { PRODUCT_IDENTITY } from '../../packages/hook-runner/src/identity.js';
 import { createArtifactManifest } from '../../packages/cli/scripts/conformance-artifact.mjs';
 
 it.each([false, true])('binds only the verified consumer bytes to the canonical release filename (wrong SHA=%s)', wrong => {
@@ -13,7 +14,7 @@ it.each([false, true])('binds only the verified consumer bytes to the canonical 
     const artifact = join(root, 'artifact');
     mkdirSync(join(tree, 'package'), { recursive: true });
     mkdirSync(artifact);
-    const pkg = { name: 'voidmachine', version: '7.0.2' };
+    const pkg = { name: PRODUCT_IDENTITY.packageName, version: '7.0.2' };
     writeFileSync(join(tree, 'package/package.json'), JSON.stringify(pkg));
     writeFileSync(join(tree, 'release-please-config.json'), JSON.stringify({ packages: { '.': {
       'extra-files': [{ type: 'json', path: 'package/package.json', jsonpath: '$.version' }],
@@ -40,7 +41,7 @@ it.each([false, true])('binds only the verified consumer bytes to the canonical 
       expect(result.stderr).toContain('source SHA');
     } else {
       expect(result.status, result.stderr).toBe(0);
-      expect(readFileSync(join(artifact, 'voidmachine-7.0.2.tgz'))).toEqual(bytes);
+      expect(readFileSync(join(artifact, `${PRODUCT_IDENTITY.packageName}-7.0.2.tgz`))).toEqual(bytes);
       expect(JSON.parse(readFileSync(join(artifact, 'release-artifact.json'), 'utf8')).releaseCommit).toBe(sha);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }

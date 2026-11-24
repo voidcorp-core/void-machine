@@ -42,7 +42,7 @@ export async function installPackage(temporary, tarball) {
     fixture,
     environment,
   );
-  return join(fixture, 'node_modules', PRODUCT_IDENTITY.packageName, 'bin', `${PRODUCT_IDENTITY.commands.primary}.mjs`);
+  return join(fixture, 'node_modules', PRODUCT_IDENTITY.packageName, 'dist', 'bin', `${PRODUCT_IDENTITY.commands.primary}.mjs`);
 }
 
 // `npx <package>` resolves the command from the package manifest, not from a

@@ -1,0 +1,12 @@
+Sources for `void-source-driven-development` skill (see `docs/plans/skill-audits/void-source-driven-development.md` for full audit):
+
+- void-machine CLAUDE.md / AGENTS.md hard rule — "Read the official documentation of any third-party tool BEFORE writing its config." This skill encodes that rule and makes it enforceable.
+- Anthropic Claude Code best practices — guidance to give the model current, authoritative context (point it at official docs / fetch real references) rather than relying on training recall, which drifts across versions. https://www.anthropic.com/engineering/claude-code-best-practices
+- "Ground decisions in the official, versioned docs" principle observed from the Claude Code team's own working style — verify the installed version, read its docs, distrust dated third-party tutorials. (practice / methodology, no single canonical URL)
+- gstack /defuddle — composed for clean-markdown reads of official documentation (strips nav/ads to load-bearing prose), preferred over raw WebFetch for doc pages. (gstack skill)
+
+Strategy: distill. The repo already states the rule in one line; this skill distills the load-bearing principles (version-match the docs, docs beat memory, official beats third party, cite the reference) and adds the harness-standard Rationalizations + Verification gate. No verbatim vendoring.
+
+Composition: upstream of plan (stack decisions grounded in current docs); with commit-discipline (the "why" carries the source citation); with decide (alternatives cite official docs). Contrast with memory-driven config.
+
+Companion hooks: none in v1 (citation is prose-level discipline; a future post-commit grep for an unsourced config diff is an open question in the audit note).

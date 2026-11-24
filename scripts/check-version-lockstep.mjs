@@ -19,14 +19,16 @@ export function findDrift(canonical, entries) {
 }
 
 const PLUGIN_MANIFESTS = [
-  'packages/core/.claude-plugin/plugin.json',
-  'packages/packs/pack-monorepo/.claude-plugin/plugin.json',
-  'packages/packs/pack-react/.claude-plugin/plugin.json',
-  'packages/packs/pack-nextjs/.claude-plugin/plugin.json',
-  'packages/packs/pack-server/.claude-plugin/plugin.json',
-  'packages/packs/pack-pwa/.claude-plugin/plugin.json',
-  'packages/packs/pack-mobile/.claude-plugin/plugin.json',
-  'packages/cli/core-assets/.claude-plugin/plugin.json', // generated mirror — must match
+  'packages/core/dist/.claude-plugin/plugin.json',
+  'packages/core/src/.claude-plugin/plugin.json',
+  ...['monorepo', 'react', 'nextjs', 'server', 'pwa', 'mobile'].map((name) => `packages/packs/pack-${name}/dist/.claude-plugin/plugin.json`),
+  'packages/packs/pack-monorepo/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-react/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-nextjs/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-server/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-pwa/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-mobile/src/.claude-plugin/plugin.json',
+  'packages/cli/dist/core-assets/.claude-plugin/plugin.json', // generated mirror — must match
 ];
 const NPM_PACKAGES = [
   'packages/cli/package.json',

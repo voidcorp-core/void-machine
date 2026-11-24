@@ -233,7 +233,7 @@ describe('preflight', () => {
       const plugins = join(dir, '.claude', 'plugins');
       const marketplace = join(plugins, 'marketplaces', 'voidcorp');
       const plugin = options.record === 'installed'
-        ? join(plugins, 'cache', 'voidcorp', 'harness', '4.1.0') : join(marketplace, 'packages', 'core');
+        ? join(plugins, 'cache', 'voidcorp', 'harness', '4.1.0') : join(marketplace, 'packages', 'core', 'dist');
       mkdirSync(join(plugin, '.claude-plugin'), { recursive: true });
       mkdirSync(join(plugin, 'hooks'), { recursive: true });
       mkdirSync(join(marketplace, '.claude-plugin'), { recursive: true });
@@ -248,7 +248,7 @@ describe('preflight', () => {
         JSON.stringify({ voidcorp: { source: { source: 'github', repo: 'owner/marketplace' },
           installLocation: marketplace } }));
       writeFileSync(join(marketplace, '.claude-plugin', 'marketplace.json'),
-        JSON.stringify({ name: 'voidcorp', plugins: [{ name: 'harness', source: './packages/core' }] }));
+        JSON.stringify({ name: 'voidcorp', plugins: [{ name: 'harness', source: './packages/core/dist' }] }));
       if (options.record === 'installed') {
         writeFileSync(join(plugins, 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: {
           'harness@voidcorp': [{ scope: options.projectPath === undefined ? 'user' : 'project',

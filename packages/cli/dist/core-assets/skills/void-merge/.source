@@ -1,0 +1,8 @@
+Sources for `void-merge` skill (see `docs/plans/skill-audits/void-merge.md` for full audit):
+
+- No upstream source. Written from the seven pull requests merged by hand in this repository on
+  2026-08-19, and from the four cases a naive "merge everything green" would have failed on.
+- gstack `/land-and-deploy` — ADJACENT, not a source: it merges one named PR and then watches a
+  deployment. This skill drains a queue and never deploys.
+- GitHub branch protection semantics (`mergeStateStatus`: BEHIND, BLOCKED, DIRTY, CLEAN) —
+  the state machine the skill reads rather than reimplements.

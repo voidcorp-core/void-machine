@@ -1,7 +1,7 @@
 /**
- * Invariant: packages/cli/core-assets is a faithful mirror of packages/core.
+ * Invariant: packages/cli/dist/core-assets is a faithful mirror of packages/core.
  *
- * The CLI ships packages/core as a committed mirror (packages/cli/core-assets)
+ * The CLI ships packages/core as a committed mirror (packages/cli/dist/core-assets)
  * built by copy-core-assets.mjs. Version lockstep covers the manifests but NOT
  * the file contents, so editing a core hook/skill without rerunning
  * build:assets drifts the two copies silently (audit 2026-07-09, issue #66).
@@ -14,12 +14,15 @@
  * Test files are excluded; the pack mirror is checked against its own source.
  */
 
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-const CORE = resolve(process.cwd(), 'packages/core');
-const MIRROR = resolve(process.cwd(), 'packages/cli/core-assets');
+const CORE = resolve(process.cwd(), 'packages/core/dist');
+const MIRROR = resolve(process.cwd(), 'packages/cli/dist/core-assets');
 const PACKS_SRC = resolve(process.cwd(), 'packages/packs');
 const MIRROR_PACKS = join(MIRROR, 'packs'); // bundled from packages/packs/*/skills, not core
 
@@ -80,7 +83,7 @@ describe('core-assets mirror', () => {
     const drifted: string[] = [];
     for (const rel of walk(MIRROR_PACKS, notTest)) {
       // rel is `<pack>/skills/...`; the source lives under packages/packs/<pack>/skills/...
-      const src = join(PACKS_SRC, rel);
+      const src = join(PACKS_SRC, rel.split('/')[0]!, 'src', ...rel.split('/').slice(1));
       try {
         if (readFileSync(join(MIRROR_PACKS, rel)).equals(readFileSync(src))) continue;
         drifted.push(`content differs: ${rel}`);
@@ -90,4 +93,21 @@ describe('core-assets mirror', () => {
     }
     expect(drifted, `run: pnpm --filter ./packages/cli build:assets`).toEqual([]);
   });
+});
+
+// A stale already-dirty artifact must fail before any repair takes place.
+it('checks assembly freshness without mutating the stale delivery', () => {
+  const destination = mkdtempSync(join(tmpdir(), 'void delivery '));
+  const copier = resolve('packages/cli/scripts/copy-core-assets.mjs');
+  try {
+    const built = spawnSync(process.execPath, [copier, destination], { encoding: 'utf8' });
+    expect(built.status, built.stderr).toBe(0);
+    const doctrine = join(destination, 'PHILOSOPHY.md');
+    writeFileSync(doctrine, 'stale artifact\n');
+    const checked = spawnSync(process.execPath, [copier, destination, '--check'], { encoding: 'utf8' });
+    expect(checked.status).toBe(1);
+    expect(readFileSync(doctrine, 'utf8')).toBe('stale artifact\n');
+  } finally {
+    rmSync(destination, { recursive: true, force: true });
+  }
 });

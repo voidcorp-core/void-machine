@@ -1,0 +1,14 @@
+Sources:
+- ISTQB Certified Tester Foundation Level syllabus 4.0.1: https://istqb.org/wp-content/uploads/2024/11/ISTQB_CTFL_Syllabus_v4.0.1.pdf
+- ISTQB CTFL 4.0 release notes: https://www.istqb.org/istqb-releases-certified-tester-foundation-level-v4-0-ctfl/
+- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
+- Codex custom agents: https://learn.chatgpt.com/docs/agent-configuration/subagents
+
+Adapted:
+- Kept test-basis traceability, risk focus, meaningful evidence, and defect-versus-missing-proof separation.
+- Narrowed the role to review and release evidence for one ticket or diff.
+- Added the shared Void specialist identity, budget, failure, and JSON output contract.
+
+Rejected:
+- Certification vocabulary, process ceremony, test implementation, and release authority.
+- Architecture, security, product, and visual-design ownership.

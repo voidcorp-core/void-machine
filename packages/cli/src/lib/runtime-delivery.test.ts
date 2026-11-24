@@ -11,7 +11,7 @@ it('reports the configured local runner missing even when a healthy marketplace 
   const root = mkdtempSync(join(tmpdir(), 'runner-local-health-'));
   try {
     const cache = join(root, 'cache');
-    cpSync(resolve('packages/core'), join(cache, 'voidcorp', 'harness', '3.8.0'), { recursive: true });
+    cpSync(resolve('packages/core/dist'), join(cache, 'voidcorp', 'harness', '3.8.0'), { recursive: true });
     mkdirSync(join(root, '.claude'), { recursive: true });
     writeFileSync(join(root, '.claude/settings.json'), JSON.stringify({ hooks: {
       PreToolUse: [{ hooks: [{ command: 'node "$CLAUDE_PROJECT_DIR/.void/hooks/_void-hook.mjs"' }] }],
@@ -37,7 +37,7 @@ describe.each(['claude', 'codex'] as const)('%s obsolete worker migration', runt
         files: [{ path, content: Buffer.from(original), mode: 0o644 }],
       })));
       await adapterFor(runtime).wire({ stageRoot: stage, installRoot: root,
-        sourceRoot: resolve('packages/cli/core-assets'), enabledPlugins: ['harness'], enabledPacks: [],
+        sourceRoot: resolve('packages/cli/dist/core-assets'), enabledPlugins: ['harness'], enabledPacks: [],
         source: 'local', marketplaceRepo: 'test/harness', pinVersion: '0.0.0' });
       expect(existsSync(join(stage, path))).toBe(false);
       const prepared = await prepareInstallCommit({ projectRoot: root, stageRoot: stage,

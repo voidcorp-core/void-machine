@@ -1,0 +1,8 @@
+Sources for `void-offline-first-mutation` skill (see `docs/plans/skill-audits/void-offline-first-mutation.md` for the full audit):
+
+- Solaar `@solaar/ui/offline` implementation — primary source; pattern lifted with adaptation to be stack-neutral.
+- Stripe API idempotency-key docs — confirms the client-generates-UUID approach for HTTP idempotency.
+- RxDB / WatermelonDB conflict-resolution docs — inspiration for "server wins" baseline; richer reconciliation rejected for scope.
+- Yjs / Automerge — mentioned as out-of-scope for explicit non-coverage.
+
+Strategy: distill. Capture-queue + sync pattern distilled from Solaar and adapted to be stack-neutral.

@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
-  new URL('../../packages/core/skills/void-checkpoint/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-checkpoint/SKILL.md', import.meta.url),
   'utf8',
 );
 
@@ -35,7 +35,7 @@ describe('checkpoint frontmatter', () => {
   it('declares both runtimes, because a handoff is not a Claude-only artefact', () => {
     // The runtimes declaration is harness metadata, so it lives in the sidecar:
     // a SKILL.md carries only the six fields the Agent Skills spec defines.
-    expect(readFileSync(new URL('../../packages/core/skills/void-checkpoint/harness.yaml', import.meta.url), 'utf8'))
+    expect(readFileSync(new URL('../../packages/core/src/skills/void-checkpoint/harness.yaml', import.meta.url), 'utf8'))
       .toContain('runtimes: [claude, codex]');
   });
 
@@ -134,7 +134,7 @@ describe('the exit test can actually fail', () => {
 describe('provenance', () => {
   it('ships a .source recording what it took and what it refused', () => {
     const source = readFileSync(
-      new URL('../../packages/core/skills/void-checkpoint/.source', import.meta.url),
+      new URL('../../packages/core/src/skills/void-checkpoint/.source', import.meta.url),
       'utf8',
     );
     expect(source).toMatch(/context-save/i);

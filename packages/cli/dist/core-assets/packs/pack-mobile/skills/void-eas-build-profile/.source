@@ -1,0 +1,7 @@
+Sources for `void-eas-build-profile` skill (see `docs/plans/skill-audits/void-eas-build-profile.md` for the full audit):
+
+- Expo / EAS Build official documentation — no URL recorded in the audit — distilled the documented 3-profile eas.json convention (development/preview/production) and the per-option motivation that the docs scatter; added the void-machine defaults (APP_VARIANT side-by-side installs, secrets via `eas secret`, autoIncrement).
+
+No external skill ships this verbatim; authored by distilling the official EAS Build docs into the void-machine eas.json convention.
+
+Strategy: distill. Extract the load-bearing why behind each profile option and ship the void-machine 3-profile template, rather than copy a stale scaffold.

@@ -91,7 +91,7 @@ recursive inspection is limited to eight levels. Other shell dialects, arbitrary
 wrapper options and indirect execution remain outside its proven coverage.
 No command fixture is executed: source tests pass strings to the rule, and
 delivered tests pass JSON to both hook bundles in `packages/core` and
-`packages/cli/core-assets`.
+`packages/cli/dist/core-assets`.
 
 Semantics checked against [Git 2.54 rebase](https://git-scm.com/docs/git-rebase/2.54.0),
 [Git apply](https://git-scm.com/docs/git-apply/2.51.0),

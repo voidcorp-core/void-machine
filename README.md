@@ -229,7 +229,7 @@ The floor checks protected paths, secret content, TDD and boundaries through the
 portable Node bundle, failing closed on missing dependencies or an unresolved
 base. It complements your existing quality workflow. Keep the project's package
 manager, lockfile and Node version owner when adopting the installed `void-verify`
-[quality example](packages/core/skills/void-verify/references/ci-feedback.md).
+[quality example](packages/core/src/skills/void-verify/references/ci-feedback.md).
 For Bun projects, the optional [dependency audit](docs/DEPENDENCY-AUDIT.md) keeps
 required candidate checks and periodic advisory surveillance independent of quality.
 Do not install Bun just to add this example to an npm or pnpm project.
@@ -292,7 +292,7 @@ no magic, every convention motivated in writing).
 
 Inspired by Wing Chun's economy of means, TigerStyle from TigerBeetle, the
 citypaul dotfiles, and the compound-engineering loop. Read
-[`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) for the reasoning and the sources.
+[`packages/core/src/PHILOSOPHY.md`](packages/core/src/PHILOSOPHY.md) for the reasoning and the sources.
 
 > *Du vide naît la structure.* Build more, move fast, be better.
 

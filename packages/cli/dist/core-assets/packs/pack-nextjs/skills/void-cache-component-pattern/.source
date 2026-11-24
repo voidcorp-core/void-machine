@@ -1,0 +1,5 @@
+Sources for `void-cache-component-pattern` skill (see `docs/plans/skill-audits/void-cache-component-pattern.md` for the full audit):
+
+- No external source listed in the audit. Authored against the Next.js 16 Cache Components feature (cached-by-default model, 'use cache' / 'use no cache', revalidateTag/revalidatePath).
+
+Strategy: distill. Codified natively from the Next 16 cache model; no upstream skill was adapted.

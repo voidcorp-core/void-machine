@@ -71,7 +71,8 @@ export const PROTECTED_PATHS_FLOOR = [
   // is aggregated by verify.mjs.
   'scripts/auto-merge-contract.mjs',
   'scripts/verify.mjs',
-  'packages/core/enforce/**',
+  'packages/core/src/enforce/**',
+  'packages/core/dist/enforce/**',
   // What judges a publication: release.yml runs these from the commit it
   // releases, and the contracts they read decide what may reach npm.
   'scripts/prepare-release-artifact.mjs',
@@ -79,7 +80,8 @@ export const PROTECTED_PATHS_FLOOR = [
   'scripts/release-artifact-contract.mjs',
   'scripts/release-provenance-contract.mjs',
   '.void/program.md',
-  'packages/core/hooks/**',
+  'packages/core/src/hooks/**',
+  'packages/core/dist/hooks/**',
   // What decides to believe a verdict and to arm a merge, this floor included,
   // and the one command that writes and proves a verdict.
   'packages/cli/src/lib/autopilot/loop.ts',
@@ -108,10 +110,12 @@ export const PROTECTED_PATHS_FLOOR = [
   // Decides whether a changed file lies on protected ground at all.
   'packages/cli/src/lib/autopilot/footprint-area.ts',
   'packages/mission-engine/src/specialist/completion.ts',
-  'packages/core/agents/independent-code-reviewer.md',
-  'packages/core/specialists/independent-code-reviewer.yaml',
-  'packages/cli/core-assets/agents/independent-code-reviewer.md',
-  'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',
+  'packages/core/src/agents/independent-code-reviewer.md',
+  'packages/core/dist/agents/independent-code-reviewer.md',
+  'packages/core/src/specialists/independent-code-reviewer.yaml',
+  'packages/core/dist/specialists/independent-code-reviewer.yaml',
+  'packages/cli/dist/core-assets/agents/independent-code-reviewer.md',
+  'packages/cli/dist/core-assets/specialists/independent-code-reviewer.yaml',
   // The sources above run only after a release and a reinstall; these run now.
   // The installed runner, the files that wire it into Claude and Codex, and the
   // configuration that scopes what it enforces. The reviewer runs in a worktree

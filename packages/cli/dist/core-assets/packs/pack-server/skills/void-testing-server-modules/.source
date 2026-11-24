@@ -1,0 +1,7 @@
+Sources for `void-testing-server-modules` skill (see `docs/plans/skill-audits/void-testing-server-modules.md` for the full audit):
+
+- Next.js docs — `server-only` / `client-only` packages and their import-time throw semantics (poisoning the wrong bundle). Distilled, not copied.
+- Vitest docs — `test.alias` / `resolve.alias` resolution for replacing a module at test time. Version-matched to the installed Vitest.
+- Real-world friction from a consumer project (issue #17 cluster B / B3): a server-only import chain crashed the Vitest run before any assertion.
+
+Strategy: native. The "alias to an empty stub, keep the boundary real" framing is the void-machine adaptation — it deliberately refuses to let a test-time convenience erode the build-time server/client boundary.

@@ -1,5 +1,5 @@
 {
-  "extends": "../pack-monorepo/tsconfig.strict.json",
+  "extends": "../pack-monorepo/src/tsconfig.strict.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",

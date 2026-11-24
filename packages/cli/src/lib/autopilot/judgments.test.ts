@@ -88,9 +88,9 @@ describe('admitCuratorQueue', () => {
   });
 
   it('reads each footprint area the way footprint-area reads it', () => {
-    const queued = { ...entry('DEV-1'), footprint: ['./packages/core/templates/'] };
+    const queued = { ...entry('DEV-1'), footprint: ['./packages/core/src/templates/'] };
     const value = admitted(admitCuratorQueue({ entries: [queued] }));
-    expect(value.entries[0]?.footprint).toEqual(['packages/core/templates']);
+    expect(value.entries[0]?.footprint).toEqual(['packages/core/src/templates']);
   });
 
   it('refuses a queue over the bound', () => {

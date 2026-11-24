@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 import { parseInstallManifest } from '../../packages/cli/src/lib/install-manifest.js';
 import { readInstallReceipt } from '../../packages/cli/src/lib/receipts.js';
 
-const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/cli/bin/void-machine.mjs');
+const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/cli/dist/bin/void-machine.mjs');
 
 it('preserves project-owned Codex hooks through local init and update without claiming them', async () => {
   const root = mkdtempSync(join(tmpdir(), 'codex-project-hooks-'));

@@ -61,7 +61,7 @@ it('executes the installed CI admission driver for draft and ready pull requests
   const { proveInstalledCiAdmission } = await import('./conformance-install.mjs');
   const root = mkdtempSync(join(tmpdir(), 'installed-ci-admission-'));
   try {
-    cpSync(resolve('packages/core/skills/void-verify'), join(root, '.claude/skills/void-verify'), { recursive: true });
+    cpSync(resolve('packages/core/src/skills/void-verify'), join(root, '.claude/skills/void-verify'), { recursive: true });
     await proveInstalledCiAdmission(root, '.claude', {});
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

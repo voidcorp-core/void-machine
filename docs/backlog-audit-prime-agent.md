@@ -19,7 +19,7 @@ Deux briefs détaillés existent déjà et complètent cette liste :
 remplissage, écrire un checkpoint, repartir propre, et continuer le travail depuis ce
 checkpoint. Valable pour n'importe quelle skill, pas greffé sur `void-implement`.
 
-**Ce qui existe.** Le seuil est déjà de la doctrine : `packages/core/skills/void-context/SKILL.md:61`
+**Ce qui existe.** Le seuil est déjà de la doctrine : `packages/core/src/skills/void-context/SKILL.md:61`
 dit « keep effective usage around 40–60% ». `void-checkpoint` sait déjà quoi écrire.
 `packages/hook-runner/src/void-layout.ts:102` classe `checkpoint.md` en `observed` (gitignoré).
 
@@ -84,7 +84,7 @@ Comment formuler ça sans réintroduire la boucle qu'on cherche à couper ?
 
 ## 4. Une phrase d'honnêteté dans `void-verify`
 
-`packages/core/skills/void-verify/SKILL.md`. À intégrer dans la langue de la skill :
+`packages/core/src/skills/void-verify/SKILL.md`. À intégrer dans la langue de la skill :
 
 > Une porte qui passe ne vérifie que ce que cette porte vérifie ; atteindre une limite
 > n'implique pas que la tâche a réussi.

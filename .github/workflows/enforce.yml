@@ -39,7 +39,7 @@ jobs:
       # Admission comes from the pinned implementation, not the caller's files.
       # Keep it inside the required job: a skipped required job reports success.
       - name: Admit integration enforcement
-        run: node .void-enforce-runtime/packages/core/skills/void-verify/references/ci-admission.mjs
+        run: node .void-enforce-runtime/packages/core/src/skills/void-verify/references/ci-admission.mjs
       # The caller need not declare Node: use the pinned implementation's file.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:

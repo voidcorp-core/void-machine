@@ -118,9 +118,9 @@ guessed windows. The handler does not invoke `/clear`, `/compact`, or a semantic
 ### Secret environment reads
 
 The runtime-secret policy in
-[`void-security-guidance`](../packages/core/skills/void-security-guidance/SKILL.md)
+[`void-security-guidance`](../packages/core/src/skills/void-security-guidance/SKILL.md)
 uses the project's adopted manager for runtime injection and preserves protected legacy `.env`
-setups. The [server onboarding guide](../packages/packs/pack-server/skills/void-env-validation/SKILL.md)
+setups. The [server onboarding guide](../packages/packs/pack-server/src/skills/void-env-validation/SKILL.md)
 documents configuration without requiring a plaintext secret file.
 
 The existing `protected-file` PreToolUse handler also refuses direct reads of
@@ -187,7 +187,7 @@ runtime (auto-detected from a `.codex/` dir or `AGENTS.md`, or forced with
 1. Stages one asset into `<project>/.void/hooks/`: `_void-hook.mjs`.
    `CODEX_FLOOR_SCRIPTS` is explicit and a drift guard proves every manifest
    command resolves to that asset.
-2. Compiles `<project>/.codex/hooks.json` from `packages/core/codex/hooks.json`,
+2. Compiles `<project>/.codex/hooks.json` from `packages/core/src/codex/hooks.json`,
    turning each `node "${VOID_HOOKS_DIR}/<asset>"` into `node -e "<bootstrap>"`.
    The file is versioned, so it holds no machine path: the bootstrap walks up
    from the session directory to the nearest `.void/hooks/<asset>` and runs it.
@@ -220,7 +220,7 @@ its receipt or manifest. In that case its hooks remain the project's responsibil
 the preserved file is not evidence that the generated floor was activated.
 Claude's co-owned settings follow their separate merge contract.
 
-The former manual copy is no longer needed. `packages/core/codex/hooks.json`
+The former manual copy is no longer needed. `packages/core/src/codex/hooks.json`
 remains the single source `init` compiles from. Its top level uses only the
 Codex-supported `description` and `hooks` fields; a live `--strict-config` smoke
 guards that boundary in addition to the compiler regression test.
@@ -234,7 +234,7 @@ teaching contracts; agents provide fresh context.
 
 The v3 specialists, `solution-architect`, `security-engineer`, `test-qa-engineer`,
 `experience-designer`, and `visual-craft-director`, are authored once under
-`packages/core/specialists/*.yaml`.
+`packages/core/src/specialists/*.yaml`.
 The Claude and Codex compilers embed the exact same scope, applicability, budget,
 failure policy, and JSON result contract in their native files. Manual and
 orchestrated invocation therefore parse through one identity/version-aware output

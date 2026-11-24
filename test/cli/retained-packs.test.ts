@@ -56,7 +56,7 @@ function expectAssets(names: readonly string[]) {
   for (const pack of PACKS) {
     const directory = packDirForName(pack.name);
     if (directory === undefined) throw new Error('Expected a pack directory');
-    const skills = readdirSync(join(PACK_ROOT, directory, 'skills'));
+    const skills = readdirSync(join(PACK_ROOT, directory, 'src', 'skills'));
     for (const skill of skills) {
       for (const runtime of ['.claude', '.agents']) {
         const path = join(runtime, 'skills', skill, 'SKILL.md');

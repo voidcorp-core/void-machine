@@ -1,0 +1,5 @@
+Sources for `void-service-package` skill (see `docs/plans/skill-audits/void-service-package.md` for the full audit):
+
+- No external source. Native distillation of the `01-monorepo-layout.md` module (which describes the 5+5 topology) into a step-by-step package-creation workflow.
+
+Strategy: native. The module says "this is how packages look"; the skill says "here is exactly what to do to create one". Composes with hexagonal-architecture, DDD, and functional.

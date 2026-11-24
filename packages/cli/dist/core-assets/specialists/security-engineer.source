@@ -1,0 +1,13 @@
+Sources:
+- OWASP Application Security Verification Standard 5.0.0: https://owasp.org/www-project-application-security-verification-standard/
+- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
+- Codex custom agents: https://learn.chatgpt.com/docs/agent-configuration/subagents
+
+Adapted:
+- Kept verification-oriented, evidence-backed control review and concrete exploit paths.
+- Reduced the broad standard to the trust-boundary concerns useful for a bounded diff review.
+- Added the shared Void specialist identity, budget, failure, and JSON output contract.
+
+Rejected:
+- Checklist dumping, speculative findings, live exploitation, secret retrieval, and DAST.
+- General correctness, architecture, QA, product, and visual-design ownership.

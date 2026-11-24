@@ -39,7 +39,7 @@ afterEach(() => {
 describe('immutable consumer artifact', () => {
   it('refuses untracked source that the pack could otherwise attribute to HEAD', () => {
     expect(() =>
-      requireCleanCheckoutStatus('?? packages/core/skills/untracked/SKILL.md', 'before'),
+      requireCleanCheckoutStatus('?? packages/core/src/skills/untracked/SKILL.md', 'before'),
     ).toThrow(/checkout changed before pack/i);
   });
 

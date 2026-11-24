@@ -42,33 +42,32 @@ const RESOURCES = new Set([
 /** @type {readonly Gate[]} */
 export const GATES = Object.freeze([
   gate('sister-docs', 'Sister-doc parity', ['pnpm', 'sync:docs'], 'contract', 'filesystem', ['source']),
-  gate('philosophy', 'Doctrine parity', ['pnpm', 'sync:philosophy'], 'contract', 'filesystem', ['source']),
   gate('version-lockstep', 'Version lockstep', ['pnpm', 'version:check'], 'contract', 'filesystem', ['source']),
   gate('anti-bloat', 'Anti-bloat', ['pnpm', 'anti-bloat:check'], 'contract', 'subprocess', ['source']),
   gate(
     'hook-runner-current',
     'Generated hook runner',
-    ['pnpm', 'hooks:build'],
+    ['pnpm', 'hooks:check'],
     'consumer',
     'subprocess',
     ['source'],
     {
       artifact: true,
       fix: ['pnpm', 'hooks:build'],
-      drift: ['packages/core/hooks/_void-hook.mjs'],
+      drift: ['packages/core/dist/hooks/_void-hook.mjs'],
     },
   ),
   gate(
     'core-assets',
     'Core assets mirror',
-    ['pnpm', '--filter', './packages/cli', 'build:assets'],
+    ['pnpm', 'assets:check'],
     'consumer',
     'filesystem',
     ['source'],
     {
       artifact: true,
       fix: ['pnpm', '--filter', './packages/cli', 'build:assets'],
-      drift: ['packages/cli/core-assets'],
+      drift: ['packages/cli/dist/core-assets'],
     },
   ),
   gate('lint', 'Lint', ['pnpm', 'lint'], 'contract', 'cpu', ['source', 'tests']),
@@ -78,7 +77,7 @@ export const GATES = Object.freeze([
   gate(
     'self-host-sync',
     'Self-host compile',
-    ['node', 'packages/cli/bin/void-machine.mjs', 'self-host', 'sync', '--mode', 'release-gate'],
+    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'sync', '--mode', 'release-gate'],
     'consumer',
     'subprocess',
     ['source'],
@@ -86,7 +85,7 @@ export const GATES = Object.freeze([
   gate(
     'self-host-doctor',
     'Self-host doctor',
-    ['node', 'packages/cli/bin/void-machine.mjs', 'self-host', 'doctor', '--mode', 'release-gate'],
+    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'doctor', '--mode', 'release-gate'],
     'consumer',
     'subprocess',
     ['source'],

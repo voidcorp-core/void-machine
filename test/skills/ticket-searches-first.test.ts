@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
-  new URL('../../packages/core/skills/void-ticket/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-ticket/SKILL.md', import.meta.url),
   'utf8',
 );
 

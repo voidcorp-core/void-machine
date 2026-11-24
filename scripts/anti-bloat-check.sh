@@ -27,16 +27,16 @@ HOOK_FILES=$(find packages/core packages/packs -path '*/hooks/*.sh' "${FIND_EXCL
 # Manifest <-> disk: every hook command wired in the core plugin manifest must
 # resolve to a file on disk. A dangling reference disables enforcement silently
 # (the audited fail-open class). Parse the hooks/<name>.sh basenames out of the
-# manifest and assert each exists under packages/core/hooks/.
+# manifest and assert each exists under packages/core/src/hooks/.
 echo "  manifest <-> disk: wired hooks exist"
-PLUGIN_MANIFEST="packages/core/.claude-plugin/plugin.json"
+PLUGIN_MANIFEST="packages/core/src/.claude-plugin/plugin.json"
 if [[ -f "$PLUGIN_MANIFEST" ]] && command -v jq >/dev/null 2>&1; then
   WIRED=$(jq -r '.hooks // {} | to_entries[] | .value[]? | .hooks[]? | .command // empty' "$PLUGIN_MANIFEST" 2>/dev/null \
     | grep -oE 'hooks/[A-Za-z0-9_-]+\.sh' | sort -u || true)
   while IFS= read -r ref; do
     [[ -n "$ref" ]] || continue
-    if [[ ! -f "packages/core/$ref" ]]; then
-      echo "    FAIL: manifest references packages/core/$ref which does not exist" >&2
+    if [[ ! -f "packages/core/dist/$ref" ]]; then
+      echo "    FAIL: manifest references packages/core/dist/$ref which does not exist" >&2
       FAILED=1
     fi
   done <<<"$WIRED"
@@ -56,8 +56,8 @@ done <<<"$HOOK_FILES"
 # Above-target descriptions remain valid, but the note keeps their catalogue
 # cost visible. Only the hard cap blocks the change.
 echo "  rule 4: frontmatter description target $DESCRIPTION_TARGET chars, hard cap $DESCRIPTION_CAP chars"
-SPECIALIST_FILES=$(find packages/core/specialists -maxdepth 1 -type f -name '*.yaml' 2>/dev/null || true)
-DESC_FILES=$(printf "%s\n" "$SKILL_FILES"; ls packages/core/agents/*.md 2>/dev/null || true; printf "%s\n" "$SPECIALIST_FILES")
+SPECIALIST_FILES=$(find packages/core/src/specialists -maxdepth 1 -type f -name '*.yaml' 2>/dev/null || true)
+DESC_FILES=$(printf "%s\n" "$SKILL_FILES"; ls packages/core/src/agents/*.md 2>/dev/null || true; printf "%s\n" "$SPECIALIST_FILES")
 if ! printf "%s\n" "$DESC_FILES" \
   | node "$SCRIPT_DIR/check-description-budgets.mjs" "$DESCRIPTION_TARGET" "$DESCRIPTION_CAP"; then
   FAILED=1
@@ -67,7 +67,7 @@ fi
 # Claude tool allowlist. Without this field the runtime can inherit tools from
 # its parent context, so a missing declaration is a fail-closed packaging bug.
 echo "  agent frontmatter: every agent declares a non-empty tools allowlist"
-for f in packages/core/agents/*.md; do
+for f in packages/core/src/agents/*.md; do
   [[ -e "$f" ]] || continue
   TOOLS=$(awk '
     /^---[[:space:]]*$/ { frontmatter = !frontmatter; next }
@@ -84,7 +84,7 @@ done
 # (lowercase, hyphen-separated, no leading/trailing/double hyphen). A mismatch
 # breaks auto-discovery silently, so it is a hard gate.
 echo "  skill name == folder + naming convention"
-for f in packages/core/skills/*/SKILL.md packages/packs/*/skills/*/SKILL.md; do
+for f in packages/core/src/skills/*/SKILL.md packages/packs/*/src/skills/*/SKILL.md; do
   [[ -e "$f" ]] || continue
   DIR=$(basename "$(dirname "$f")")
   NAME=$(awk '/^name:/{ sub(/^name: */,""); print; exit }' "$f" 2>/dev/null || true)

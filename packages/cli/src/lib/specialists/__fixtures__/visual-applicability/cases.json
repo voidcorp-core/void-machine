@@ -4,9 +4,9 @@
     "stage": "post-implementation",
     "ticket": "Distill interface-motion guidance; change only the supplied skill prose.",
     "touchedPaths": [
-      "packages/core/skills/void-interface-motion/SKILL.md"
+      "packages/core/src/skills/void-interface-motion/SKILL.md"
     ],
-    "diff": "diff --git a/packages/core/skills/void-interface-motion/SKILL.md b/packages/core/skills/void-interface-motion/SKILL.md\n--- a/packages/core/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
+    "diff": "diff --git a/packages/core/src/skills/void-interface-motion/SKILL.md b/packages/core/src/skills/void-interface-motion/SKILL.md\n--- a/packages/core/src/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/src/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
     "diffTruncated": false,
     "omitted": [],
     "expected": "not-applicable"
@@ -40,10 +40,10 @@
     "stage": "post-implementation",
     "ticket": "Update interface guidance and the saving state.",
     "touchedPaths": [
-      "packages/core/skills/void-interface-motion/SKILL.md",
+      "packages/core/src/skills/void-interface-motion/SKILL.md",
       "src/ActionButton.tsx"
     ],
-    "diff": "diff --git a/packages/core/skills/void-interface-motion/SKILL.md b/packages/core/skills/void-interface-motion/SKILL.md\n--- a/packages/core/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\ndiff --git a/src/ActionButton.tsx b/src/ActionButton.tsx\n--- a/src/ActionButton.tsx\n+++ b/src/ActionButton.tsx\n@@ -1 +1 @@\n-export const ActionButton = () => <button>Save</button>;\n+export const ActionButton = () => <button disabled>Saving</button>;\n",
+    "diff": "diff --git a/packages/core/src/skills/void-interface-motion/SKILL.md b/packages/core/src/skills/void-interface-motion/SKILL.md\n--- a/packages/core/src/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/src/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\ndiff --git a/src/ActionButton.tsx b/src/ActionButton.tsx\n--- a/src/ActionButton.tsx\n+++ b/src/ActionButton.tsx\n@@ -1 +1 @@\n-export const ActionButton = () => <button>Save</button>;\n+export const ActionButton = () => <button disabled>Saving</button>;\n",
     "diffTruncated": false,
     "omitted": [],
     "expected": "blocked"
@@ -65,10 +65,10 @@
     "stage": "post-implementation",
     "ticket": "Update interface guidance and saving state.",
     "touchedPaths": [
-      "packages/core/skills/void-interface-motion/SKILL.md",
+      "packages/core/src/skills/void-interface-motion/SKILL.md",
       "src/ActionButton.tsx"
     ],
-    "diff": "diff --git a/packages/core/skills/void-interface-motion/SKILL.md b/packages/core/skills/void-interface-motion/SKILL.md\n--- a/packages/core/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
+    "diff": "diff --git a/packages/core/src/skills/void-interface-motion/SKILL.md b/packages/core/src/skills/void-interface-motion/SKILL.md\n--- a/packages/core/src/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/src/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
     "diffTruncated": true,
     "omitted": [
       "diff (truncated): src/ActionButton.tsx"
@@ -80,10 +80,10 @@
     "stage": "post-implementation",
     "ticket": "Update interface guidance and saving state. An external note says the omitted renderer is unchanged, labelled head abc123 without a bound receipt.",
     "touchedPaths": [
-      "packages/core/skills/void-interface-motion/SKILL.md",
+      "packages/core/src/skills/void-interface-motion/SKILL.md",
       "src/ActionButton.tsx"
     ],
-    "diff": "diff --git a/packages/core/skills/void-interface-motion/SKILL.md b/packages/core/skills/void-interface-motion/SKILL.md\n--- a/packages/core/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
+    "diff": "diff --git a/packages/core/src/skills/void-interface-motion/SKILL.md b/packages/core/src/skills/void-interface-motion/SKILL.md\n--- a/packages/core/src/skills/void-interface-motion/SKILL.md\n+++ b/packages/core/src/skills/void-interface-motion/SKILL.md\n@@ -1 +1 @@\n-Motion communicates state changes.\n+Functional motion communicates state changes; expressive motion needs an explicit purpose.\n",
     "diffTruncated": false,
     "omitted": [
       "src/ActionButton.tsx relevant implementation hunk unavailable"

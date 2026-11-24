@@ -1,0 +1,23 @@
+schemaVersion: 1
+id: core:ui-quality
+version: 1
+layer: core
+rules:
+  - id: core:ui-tdd
+    pass: tdd
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [ux-ui, accessibility]
+  - id: core:ux-ui
+    pass: ux-ui
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [ux-ui]
+  - id: core:accessibility
+    pass: accessibility
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [ux-ui, accessibility]

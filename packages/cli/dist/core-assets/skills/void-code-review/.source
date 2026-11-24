@@ -1,0 +1,14 @@
+Sources for `void-code-review` skill (see `docs/plans/skill-audits/void-code-review.md` for full audit):
+
+- citypaul/.dotfiles pr-reviewer skill — dimensions list, blocker vs nit distinction
+- superpowers/requesting-code-review + receiving-code-review — request perspective + absorb-feedback discipline
+- Google "engineering practices" code review docs — https://google.github.io/eng-practices/review/reviewer/ — CL Size, How to handle pushback
+- gstack /code-review — composed at effort levels low/medium/high/max/ultra (diff analysis)
+- gstack /codex review — composed for independent second opinion (different model family)
+- gstack /review (PR review) — composed at PR level for SQL safety + LLM trust boundary
+
+Strategy: distill + compose. Skill orchestrates dimensions + composition; a diff-analysis tool does the enumeration; the `doctrine-critic` agent handles the doctrine-conformance deep pass (security routes to void-security-audit).
+
+Tool repoint (DEV-399, 2026-07-10): the enumeration engine was gstack `/code-review` and the second opinion was gstack `/codex review`. Both were repointed off gstack — the enumeration now runs Claude Code's **native `/code-review`** (low→ultra, `--comment`/`--fix`), the second opinion runs the standalone **`codex` CLI** (`~/.local/bin/codex`, cross-model, survives the gstack teardown). This unblocks DEV-395 (gstack teardown); the gstack lines above are historical attribution, not live dependencies. `/benchmark` (perf) and `/ship` remain gstack-composed pending DEV-401 / DEV-400.
+
+Companion hooks: pre-PR-review-evidence, large-cl-grep, blocker-prefix-grep.

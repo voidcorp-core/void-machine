@@ -1,0 +1,15 @@
+Sources for `void-plan` skill (see `docs/plans/skill-audits/void-plan.md` for full audit):
+
+- superpowers/plan — primary source. Used to ship Phase A–C of this very harness.
+- superpowers/executing-plans — KEEP EXTERNAL. Plans transition to it. No improvement vector identified.
+- superpowers/subagent-driven-development — reference for parallelizable plans.
+- citypaul plan templates — sectioning style, numbered steps with verification gates.
+- plan-review — composed for high-risk plans (post-write review via CEO/Eng/Design/DevEx lenses; was gstack /autoplan, vendored in DEV-385).
+- gstack /spec — VENDORED (DEV-388, the planning half): the executability gate (an unfamiliar implementer/agent could execute with zero follow-up questions) + MVP-cut-first. The precision/grounding half went to brainstorm.
+
+Strategy: distill. Three deliberate changes from superpowers:
+1. TDD mode per step (declared inline)
+2. Resume point is first-class (every plan has one)
+3. Verification gates between steps map explicitly to hooks
+
+No companion hooks; the discipline is in the plan structure + downstream composition.

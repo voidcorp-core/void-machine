@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const skill = readFileSync(
-  new URL('../../packages/core/skills/void-implement/SKILL.md', import.meta.url), 'utf8',
+  new URL('../../packages/core/src/skills/void-implement/SKILL.md', import.meta.url), 'utf8',
 );
 
 describe('preparation advice in the implement cycle', () => {

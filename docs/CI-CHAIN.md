@@ -53,7 +53,7 @@ it is, then require current review and CI evidence. The merge skill preserves
 this order rather than preferring a newer green PR; real dependencies and durable
 blockers are reported explicitly, never resolved by bypassing the kernel.
 
-The shipped [CI feedback reference](../packages/core/skills/void-verify/references/ci-feedback.md#measure-feedback-before-changing-ci)
+The shipped [CI feedback reference](../packages/core/src/skills/void-verify/references/ci-feedback.md#measure-feedback-before-changing-ci)
 owns the measurement procedure and advisory latency targets. It separates waiting,
 elapsed time, summed job-minutes and billing, includes cancelled/repeated work, and
 requires actual dependency evidence before avoiding a suite on documentation changes.

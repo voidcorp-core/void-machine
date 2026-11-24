@@ -1,11 +1,11 @@
 // The product's identity: which repository hosts it, which npm package ships it, which commands
-// start it. It is written once, in packages/core/data/identity.json, and read here by every
+// start it. It is written once, in packages/core/src/data/identity.json, and read here by every
 // TypeScript consumer. The import is bundled into the CLI and into the hook runtime, so an
 // installed copy carries the identity of the release that built it and reads no file at run time.
 //
 // Manifests that cannot import (package.json, plugin.json, workflows) repeat the values; the
 // identity contract test fails the moment one of them disagrees with this source.
-import document from '../../core/data/identity.json' with { type: 'json' };
+import document from '../../core/src/data/identity.json' with { type: 'json' };
 
 export interface ProductIdentity {
   readonly repository: { readonly owner: string; readonly name: string };

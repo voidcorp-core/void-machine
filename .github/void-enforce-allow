@@ -5,9 +5,10 @@
 #
 # The harness's own secret-detection hook is legitimately NAMED for what it
 # detects, so the sensitive-path check flags "secret" in its filename. Exempt the
-# source and its generated CLI mirror.
-packages/core/hooks/secret-in-content.sh
-packages/cli/core-assets/hooks/secret-in-content.sh
+# authored source and its generated marketplace and npm deliveries.
+packages/core/src/hooks/secret-in-content.sh
+packages/core/dist/hooks/secret-in-content.sh
+packages/cli/dist/core-assets/hooks/secret-in-content.sh
 
 # The TypeScript detector and its test are the authored successors of the shell
 # adapter above. Their names describe the rule and contain no credentials.

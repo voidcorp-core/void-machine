@@ -17,7 +17,7 @@ import { globSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
-  new URL('../../packages/core/skills/void-autopilot/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-autopilot/SKILL.md', import.meta.url),
   'utf8',
 );
 
@@ -78,7 +78,7 @@ describe('the autopilot skill describes the gate the loop applies', () => {
  * So the net is the glob, not the file. A skill added later inherits it.
  */
 describe('no shipped surface claims one merge gate is the only one', () => {
-  const SURFACES = globSync('packages/core/skills/*/SKILL.md', {
+  const SURFACES = globSync('packages/core/src/skills/*/SKILL.md', {
     cwd: new URL('../../', import.meta.url).pathname,
   });
 

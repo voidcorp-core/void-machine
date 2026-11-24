@@ -1,0 +1,6 @@
+Sources for `void-env-validation` skill (see `docs/plans/skill-audits/void-env-validation.md` for the full audit):
+
+- No external source audited — native distillation of the @repo/core/env pattern (Zod-validated, fail-at-boot).
+- Tooling referenced (not vendored): Zod, the per-runtime split (Node / Edge / browser) and NEXT_PUBLIC_* convention.
+
+Strategy: native. Authored for void-machine from the @repo/core/env pattern; no upstream skill was copied.

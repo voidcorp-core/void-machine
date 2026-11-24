@@ -1,0 +1,14 @@
+Sources for `void-brainstorm` skill (see `docs/plans/skill-audits/void-brainstorm.md` for full audit):
+
+- superpowers/brainstorm — primary source. Hard gate, one-question, multi-choice preferred, 2–3 approaches, spec-write, transition to plan.
+- gstack /office-hours — VENDORED (DEV-386): the YC product diagnostic (six forcing questions, anti-sycophancy, 10x ambition move) distilled into the "Pressure-testing a raw idea" upstream mode. Builder-visual/cross-model/gstack-runtime rejected. Was composed upstream; now absorbed as the gstack teardown removes it.
+- gstack /spec — VENDORED (DEV-388, the precision half): read-code-before-asking (cite path:line, "don't ask what you can read"), the five mandatory "why" questions gate, quantify-everything, and failure-mode thinking as a first-class axis. The executability gate + MVP-cut half went to plan; the single-solution persona was NOT allowed to overwrite this skill's 2-3-approaches divergence.
+- compound-engineering (EveryInc) — plan phase referenced; rejected as primary (no clear gate between explore and implement).
+- Boris Cherny "how Boris uses Claude Code" — discipline of writing the design before code.
+
+Strategy: distill. Three deliberate changes from superpowers:
+1. Spec location: docs/specs/YYYY-MM-DD-<topic>.md (consumer convention)
+2. Transition target: plan (vendored equivalent)
+3. No trigger filter on activation (per Section 0bis hedge resolution)
+
+No companion hooks; the gate is a process discipline enforced via void-code-review flags downstream.

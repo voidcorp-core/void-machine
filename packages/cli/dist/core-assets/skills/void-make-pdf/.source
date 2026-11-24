@@ -1,0 +1,9 @@
+Sources for `void-make-pdf` skill (see `docs/plans/skill-audits/void-make-pdf.md` for full audit):
+
+- gstack /make-pdf (v1.57.10, ~/.claude/skills/gstack/make-pdf/) — REBUILT (DEV-391): kept the load-bearing pipeline (marked md->HTML, the HTML sanitizer for untrusted embedded HTML, the print-CSS design intent: metric-compatible sans stack for cross-OS diacritics, break-avoid). REJECTED: its dependency on the gstack browse daemon (browseClient.ts).
+- marked (^14) + puppeteer-core (^23) — the state-of-the-art md->PDF pipeline (researched, e.g. simonhaenisch/md-to-pdf, the marked+Puppeteer pattern). puppeteer-core drives the SYSTEM Chrome via `page.pdf()` — no bundled Chromium download. `page.pdf()` gives page-number footers (pageNumber/totalPages), printBackground, and precise margins that the raw `--headless --print-to-pdf` CLI flag cannot.
+- Puppeteer PDFOptions docs — https://pptr.dev/api/puppeteer.pdfoptions (source-driven: the displayHeaderFooter + footerTemplate page-number mechanism).
+
+Strategy: rebuild (REBUILD class), state-of-the-art. Engine in apps/make-pdf/ (@voidcorp/make-pdf): pure render + print-css modules, an impure pdf module (puppeteer) with injectable findChrome, an async CLI. 13 unit tests + a dogfood PDF (observed: 67 KB, page-number footer, French accents, table with €, code block).
+
+Enabler: adding these deps required the DEV-393-follow-up floor fix (ci-enforce allows a lockfile change accompanied by a manifest change) — see docs/DECISIONS.md (2026-07-10). No hand-rolled parser (rejected as a band-aid), no lockfile hand-edit.

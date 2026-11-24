@@ -1,0 +1,11 @@
+Sources:
+- Microsoft domain analysis guidance: https://learn.microsoft.com/en-us/azure/architecture/microservices/model/domain-analysis
+- Alistair Cockburn, Hexagonal Architecture: https://alistair.cockburn.us/hexagonal-architecture/
+- void-machine domain-driven-design doctrine: packages/core/src/skills/domain-driven-design/SKILL.md
+
+Adapted:
+- Kept bounded contexts, ubiquitous language, aggregate invariants, model translation, and inward dependency direction.
+- Separated business-model ownership from solution topology and persistence mechanics.
+
+Rejected:
+- Microservices by default, CQRS, event sourcing, generic repositories, and infrastructure selection.

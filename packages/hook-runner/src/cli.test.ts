@@ -58,7 +58,7 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
 
 describe('secret reads through the shipped manifests and bundled runner', () => {
   it.each(['claude', 'codex'])('refuses before reading for %s with a content-free diagnostic', (runtime) => {
-    const manifestPath = runtime === 'claude' ? '../core/.claude-plugin/plugin.json' : '../core/codex/hooks.json';
+    const manifestPath = runtime === 'claude' ? '../core/src/.claude-plugin/plugin.json' : '../core/src/codex/hooks.json';
     const manifest = JSON.parse(readFileSync(join(here, '..', manifestPath), 'utf8')) as {
       hooks: { PreToolUse: { matcher: string; hooks: { command: string }[] }[] };
     };

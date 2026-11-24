@@ -1,0 +1,39 @@
+Sources for `void-implement` skill (see `docs/plans/skill-audits/void-implement.md` for full audit):
+
+- Original void-machine composition skill. No single external source: it is the
+  canonical "execute one ticket end-to-end" conductor that the harness lacked.
+- The former backlog-autopilot skill, retired at the 2026-07-30 cutover, carried
+  an INLINE per-ticket cycle (plan -> TDD -> static UX/UI pass -> ...). That
+  cycle was extracted here so there is one definition, and its successor
+  autopilot delegates per ticket. Removes responsibility overlap. Named
+  in prose rather than with the routing prefix, which means "go here" and must
+  never point at a skill that no longer exists.
+- Composes (does not reimplement): tdd, testing,
+  hexagonal-architecture, domain-driven-design,
+  frontend-design, accessibility, security-guidance,
+  code-review, verify,
+  commit-discipline, security-audit, ui-review; agents
+  type-design-analyzer, doctrine-critic, silent-failure-hunter; gstack /qa
+  (browser QA until Vague 4). The impeccable audit methodology is now vendored as
+  ui-review (DEV-389), not an external dependency.
+
+- gstack /ship — VENDORED (DEV-388, cycle-level disciplines only): Test-Failure-Ownership triage (in-branch vs pre-existing), the independent fresh-context adversarial review pass (FIXABLE/INVESTIGATE + name-the-most-exploitable-finding), and bisectable commit ordering. Rejected: the Review-Army roster/gating machinery (release-gate apparatus, over-engineered for one ticket) and the VERSION/CHANGELOG/release-please steps (deployment runtime). The plan-completion-audit half of /ship went to verify.
+
+- Claude Code subagents (official): https://code.claude.com/docs/en/sub-agents — fresh context,
+  project agent discovery, permission inheritance, and native agent invocation. Adapted to require
+  one completion event per accepted structured result and to fail closed when isolation is weak.
+- Claude Code non-interactive mode (official): https://code.claude.com/docs/en/headless — `-p`,
+  structured JSON output, JSON Schema, and explicit tool/permission bounds for eval adapters.
+- Codex subagents (official): https://learn.chatgpt.com/docs/agent-configuration/subagents — project
+  custom agents, fresh spawned sessions, read-only sandbox declaration, and parent-override limit.
+- Codex non-interactive mode (official): https://learn.chatgpt.com/docs/non-interactive-mode —
+  `codex exec --json`, `--output-schema`, `--ephemeral`, and explicit read-only sandboxing.
+
+DEV-441 adaptation: prose remains the user-facing conductor, but execution truth moves to the pure
+Mission Engine controller and canonical events. Rejected: sequential self-review in the writer
+context, reviewer writes, majority voting, unbounded correction, and timeout-as-success.
+
+Strategy: author. The load-bearing idea is the predicate-keyed triage: speed
+comes from skipping passes whose trigger is false, never from skipping an
+ALWAYS pass. This is the "an expert team would cover all of it" guarantee made
+operational, and the anti-loophole against "go fast" pressure.

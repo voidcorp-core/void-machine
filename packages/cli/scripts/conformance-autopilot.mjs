@@ -66,7 +66,7 @@ try {
     });
     requireConformanceExit(installed, `autopilot conformance ${runtime} install`);
 
-    const bin = join(fixture, 'node_modules', PRODUCT_IDENTITY.packageName, 'bin', `${PRODUCT_IDENTITY.commands.primary}.mjs`);
+    const bin = join(fixture, 'node_modules', PRODUCT_IDENTITY.packageName, 'dist', 'bin', `${PRODUCT_IDENTITY.commands.primary}.mjs`);
     const init = await runConformanceProcess({
       command: process.execPath,
       args: [bin, 'init', '--runtime', runtime, '--no-interactive'],

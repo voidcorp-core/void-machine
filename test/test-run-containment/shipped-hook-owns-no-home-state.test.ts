@@ -23,8 +23,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const BUNDLES = [
-  'packages/core/hooks/_void-hook.mjs',
-  'packages/cli/core-assets/hooks/_void-hook.mjs',
+  'packages/core/dist/hooks/_void-hook.mjs',
+  'packages/cli/dist/core-assets/hooks/_void-hook.mjs',
 ] as const;
 
 /**

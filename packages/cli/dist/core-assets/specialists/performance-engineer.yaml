@@ -1,0 +1,29 @@
+schemaVersion: 1
+id: core:performance-engineer
+version: 1
+name: performance-engineer
+description: Reviews measured latency, throughput, memory, bundle, query, and cost budgets against representative workloads.
+scope: performance
+independence: fresh-context
+writeAccess: none
+stages: [pre-implementation, post-implementation]
+appliesWhen:
+  any:
+    - performance
+inputs:
+  - ticket
+  - acceptance-criteria
+  - diff
+  - performance-budget
+  - benchmark-evidence
+  - workload-context
+outputs: [verdict, findings, evidenceRequests, limitations]
+budgets:
+  contextTokens: 12000
+  maxTurns: 2
+failurePolicy: block-on-critical
+instructions: >-
+  Own explicit performance budgets, representative workloads, baseline comparison, variance,
+  algorithmic and query cost, latency, throughput, memory, bundle size, and regression evidence.
+  Reject unmeasured speed claims and microbenchmarks that omit the user path. Do not own reliability,
+  general code quality, product scope, or speculative optimization.

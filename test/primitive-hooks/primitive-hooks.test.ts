@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const H = (n: string) => resolve(process.cwd(), `packages/core/hooks/${n}`);
+const H = (n: string) => resolve(process.cwd(), `packages/core/dist/hooks/${n}`);
 
 function run(hook: string, json: string, env?: Record<string, string>) {
   const proc = spawnSync('bash', [H(hook)], {

@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadSecurityManifest, SECURITY_MANIFEST_PATH } from './manifest.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core', 'dist');
 
 describe('the manifest shipped in packages/core', () => {
   it('parses against the schema that guards it', async () => {

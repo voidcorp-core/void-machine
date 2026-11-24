@@ -5,7 +5,7 @@ import { expect, it } from 'vitest';
 
 it('type-checks the documented webhook wrapper options against the shipped contract', () => {
   const root = resolve(import.meta.dirname, '../..');
-  const document = readFileSync(resolve(root, 'packages/core/skills/void-async-safety/SKILL.md'), 'utf8');
+  const document = readFileSync(resolve(root, 'packages/core/src/skills/void-async-safety/SKILL.md'), 'utf8');
   const example = document.match(/```typescript\n([\s\S]*?)\n```/)?.[1];
   expect(example).toBeDefined();
   const wrapper = resolve(root, 'packages/packs/pack-nextjs/src/async/withWebhookSafety.ts');

@@ -34,7 +34,7 @@ const MAX_SOURCE_BYTES = 128 * 1024 * 1024;
 const MAX_ARTIFACT_FILES = 5_000;
 const MAX_ARTIFACT_BYTES = 128 * 1024 * 1024;
 const SOURCE_INPUTS = [
-  'packages/core',
+  'packages/core/src',
   'packages/cli/src',
   'packages/hook-runner/src',
   'packages/hook-runner/scripts',
@@ -42,9 +42,6 @@ const SOURCE_INPUTS = [
   'package.json',
   'pnpm-lock.yaml',
 ] as const;
-const HASH_EXCLUSIONS = new Set([
-  'packages/core/hooks/_void-hook.mjs',
-]);
 
 function lexical(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -93,8 +90,7 @@ async function sourceFiles(root: string): Promise<string[]> {
       throw new Error(`self-host source contains a symbolic link: ${relative(root, path)}`);
     }
     if (info.isFile()) {
-      const rel = relative(root, path).replaceAll('\\', '/');
-      if (!HASH_EXCLUSIONS.has(rel)) files.push(path);
+      files.push(path);
       return;
     }
     if (!info.isDirectory()) {
@@ -177,7 +173,7 @@ const defaultWireRuntimeSurfaces = async (
 };
 
 async function copyCompilerCore(root: string, destination: string): Promise<void> {
-  const source = join(root, 'packages', 'core');
+  const source = join(root, 'packages', 'core', 'src');
   const inputs = [
     '.claude-plugin',
     'agents',

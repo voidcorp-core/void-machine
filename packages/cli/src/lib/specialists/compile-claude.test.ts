@@ -13,7 +13,7 @@ const FIXTURE = join(
   'agents',
   'solution-architect.md',
 );
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core', 'dist');
 
 describe('compileClaudeSpecialist', () => {
   it('loads both UI specialists from the canonical core source', async () => {

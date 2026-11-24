@@ -12,7 +12,7 @@ import { resolveProjectRoots } from '../project-roots.js';
 import { planMission, recoverStoppedMission, recordMissionClosure } from '../../commands/mission.js';
 import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 
-const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core');
+const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core/dist');
 const ID = 'mis_0123456789abcdef0123456789abcdef';
 it('recovers with an authentic healthy degraded Codex installation without promoting its capability', async () => {
   const root = await mkdtemp(join(tmpdir(), 'void-recovery-native-'));

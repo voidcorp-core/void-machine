@@ -9,7 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { loadSpecialists } from './load.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core', 'dist');
 const HASH = `sha256:${'a'.repeat(64)}`;
 
 function profile(name: string, patterns: readonly string[]): ProfileRoutingDecision {

@@ -1,5 +1,5 @@
 /**
- * Tests for packages/core/hooks/secret-in-content.sh
+ * Tests for packages/core/dist/hooks/secret-in-content.sh
  *
  * Blocks writing a high-confidence secret into ANY file (companion to
  * protect-sensitive-files, which only guards secret FILENAMES). Reads the Claude
@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HOOK = resolve(process.cwd(), 'packages/core/hooks/secret-in-content.sh');
+const HOOK = resolve(process.cwd(), 'packages/core/dist/hooks/secret-in-content.sh');
 
 function runHook(file: string, content: string): { code: number; stderr: string } {
   const input = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file, content } });

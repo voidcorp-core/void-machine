@@ -1,0 +1,11 @@
+Sources:
+- OpenTelemetry observability primer: https://opentelemetry.io/docs/concepts/observability-primer/
+- Google Site Reliability Engineering: https://sre.google/sre-book/table-of-contents/
+- void-machine observability doctrine: packages/core/src/skills/observability/SKILL.md
+
+Adapted:
+- Combined telemetry quality with SLOs, resource bounds, failure containment, operational actionability, and recovery evidence.
+- Kept the role stack-neutral and explicitly excluded secrets and personal data from telemetry.
+
+Rejected:
+- Vendor dashboards, implementation authority, exploit review, and database migration mechanics.

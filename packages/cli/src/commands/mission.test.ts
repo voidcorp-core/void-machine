@@ -34,7 +34,7 @@ import {
   renderMissionFailure,
 } from './mission.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 
 // Each helper runs inside its test's timed body, through real Git, planning and
 // journal transitions. None injects a successful controller state.

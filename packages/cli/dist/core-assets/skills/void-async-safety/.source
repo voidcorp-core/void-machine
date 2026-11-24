@@ -1,0 +1,13 @@
+Sources for `void-async-safety` skill (see `docs/plans/skill-audits/void-async-safety.md` for full audit):
+
+- Stripe "Designing robust webhook handlers" — https://stripe.com/blog/idempotency — foundation, idempotency keys, replay protection
+- Stripe webhook signing docs — https://docs.stripe.com/webhooks#verify-events — signature + timestamp window pattern
+- Outbox pattern (Microservices.io) — https://microservices.io/patterns/data/transactional-outbox.html — DB write + external notify in one transaction
+- Pat Helland "Life Beyond Distributed Transactions" — https://queue.acm.org/detail.cfm?id=3025012 — entity/activity/contracts framing
+- Bryan Cantrill talks on distributed-systems failure modes — mental model: assume re-delivery
+- GitHub webhook redelivery docs — https://docs.github.com/en/webhooks
+- n8n / BullMQ / Inngest docs — tactical references for queue / job patterns
+
+Strategy: distill. Principles from Stripe + Outbox + Pat Helland. Stack-specific implementations (BullMQ vs Inngest vs Trigger.dev) live in packs (pack-monorepo / pack-nextjs-pwa).
+
+Companion: pack wrappers (withWebhookSafety, withJobSafety, withCronSafety). domain_events outbox table schema in pack-monorepo. No new core hooks; code-review flags surface violations.

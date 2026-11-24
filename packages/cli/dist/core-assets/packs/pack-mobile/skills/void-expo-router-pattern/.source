@@ -1,0 +1,8 @@
+Sources for `void-expo-router-pattern` skill (see `docs/plans/skill-audits/void-expo-router-pattern.md` for the full audit):
+
+- expo-router official documentation — no URL recorded in the audit — distilled the file-based routing conventions (`(tabs)/`, `(modal)/`, `(auth)/`, per-group `_layout.tsx`, typed routes via `experiments.typedRoutes`, deep-link auto-config).
+- Next.js App Router conventions — no URL recorded in the audit — used as the shared mental model expo-router mirrors by design, so a monorepo keeps one routing model across web and mobile.
+
+No external skill ships this verbatim; authored by distilling the expo-router docs and aligning them to the Next.js App Router convention.
+
+Strategy: distill. Lean on the deliberate Next.js parity so devs do not reinvent React Navigation patterns.

@@ -1,0 +1,11 @@
+Sources for `void-debug` skill (see `docs/plans/skill-audits/void-debug.md` for full audit):
+
+- gstack /investigate — VENDORED (DEV-388): the four-phase mechanism + Iron Law were already this skill's core (superpowers lineage, ~85-90% overlap); DEV-388 folded the remaining diagnostic aids (pattern-lookup table, 3-strike rule, blast-radius gate, instrument-to-confirm, recurring-bug-smell, red-flags). Everything else was deliberately NOT re-vendored (already present).
+- superpowers/debug — composed, similar discipline, cross-reference for anti-drift psychology.
+- "5 Whys" (Toyota / Taiichi Ohno) — questioning loop for the analyze phase.
+- Brian Kernighan "The Practice of Programming" debugging chapter — mental model: rubber duck, narrow search space.
+- Julia Evans "Debugging" zine + blog — https://jvns.ca — tactical tips for system debugging.
+
+Strategy: distill (gstack /investigate now fully vendored, DEV-388, not composed). void-machine composition added (TDD failing test before fix, root-cause section in PR body, observability-first when visibility is gap, refactor composition for structural roots).
+
+No new companion hooks (composed with existing tdd-guard + code-review).

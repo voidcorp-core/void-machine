@@ -12,7 +12,7 @@ import {
 import { loadSpecialists } from './specialists/load.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const CORE_ROOT = resolve(here, '..', '..', '..', 'core'); // the real agents source
+const CORE_ROOT = resolve(here, '..', '..', '..', 'core', 'dist'); // the real agents source
 
 const tmps: string[] = [];
 function tmp(prefix: string): string {

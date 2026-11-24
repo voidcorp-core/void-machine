@@ -35,7 +35,7 @@ describe('smokeInstalledHook', () => {
     const hook = join(root, '_void-hook.mjs');
     const here = dirname(fileURLToPath(import.meta.url));
     copyFileSync(
-      resolve(here, '..', '..', '..', 'core', 'hooks', '_void-hook.mjs'),
+      resolve(here, '..', '..', '..', 'core', 'dist', 'hooks', '_void-hook.mjs'),
       hook,
     );
     chmodSync(hook, 0o644);

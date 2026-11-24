@@ -16,6 +16,7 @@ const CORE_PROFILES = resolve(
   '..',
   '..',
   'core',
+  'src',
   'profiles',
 );
 

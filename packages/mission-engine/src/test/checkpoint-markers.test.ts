@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import identity from '../../../core/data/identity.json' with { type: 'json' };
+import identity from '../../../core/src/data/identity.json' with { type: 'json' };
 import { CHECKPOINT_MARKERS } from './checkpoint-markers.js';
 
 // The engine never reads the identity; its tests stand in for the hook runtime that does. This

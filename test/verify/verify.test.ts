@@ -83,7 +83,7 @@ describe('gate catalogue', () => {
 
   it('keeps shared, dependency, workflow and classifier changes conservative', () => {
     for (const path of [
-      'packages/core/hooks/secret-in-content.sh',
+      'packages/core/src/hooks/secret-in-content.sh',
       'pnpm-lock.yaml',
       '.github/workflows/ci.yml',
       'test/support/test-catalog.ts',

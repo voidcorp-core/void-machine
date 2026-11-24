@@ -1,0 +1,5 @@
+Sources for `void-state-architecture` skill (see `docs/plans/skill-audits/void-state-architecture.md` for the full audit):
+
+- No external source audited — native skill authored for void-machine.
+
+Strategy: native. Encodes a strict tier order (URL > server > local > lifted > Zustand > React Query) against React-specific state tooling that other UI stacks do not share.

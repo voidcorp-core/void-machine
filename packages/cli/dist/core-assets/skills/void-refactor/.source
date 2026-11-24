@@ -1,0 +1,9 @@
+Sources for `void-refactor` skill (see `docs/plans/skill-audits/void-refactor.md` for full audit):
+
+- Kent Beck "Tidy First?" 2023 — https://www.oreilly.com/library/view/tidy-first/9781098151232/ — separate Tidyings from Behavior Changes, Two-Hat principle
+- Martin Fowler "Refactoring" 2nd ed. 2018 — https://martinfowler.com/books/refactor.html — catalog of named refactors + smells catalog
+- Michael Feathers "Working Effectively with Legacy Code" 2004 — Sprout Method, Wrap Method for legacy/untested code
+- citypaul/.dotfiles refactor notes — Tidy-First commit cadence
+- Joshua Kerievsky "Refactoring to Patterns" — referenced, used sparingly (not daily practice)
+
+Strategy: distill. Keep small verified transformations and useful Fowler references. Coherent reviewable commits replace compulsory named moves and separate tidying commits; lexical companion hooks and their exclusive allowlist were retired in DEV-1375. Reject monolithic-rewrite framing.

@@ -23,7 +23,7 @@ import { wireSelfHostRuntimeSurfaces } from './wire.js';
 const REPO = resolve(import.meta.dirname, '../../../../..');
 const roots: string[] = [];
 const buildHookBundle: BuildHookBundle = async ({ outfile }) => {
-  await cp(join(REPO, 'packages/core/hooks/_void-hook.mjs'), outfile);
+  await cp(join(REPO, 'packages/core/dist/hooks/_void-hook.mjs'), outfile);
 };
 
 afterEach(async () => {

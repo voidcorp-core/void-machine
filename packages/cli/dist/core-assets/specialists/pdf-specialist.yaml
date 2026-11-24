@@ -1,0 +1,29 @@
+schemaVersion: 1
+id: core:pdf-specialist
+version: 1
+name: pdf-specialist
+description: Reviews PDF inputs or deliverables for safe handling, faithful rendering, pagination, accessibility, and artifact evidence.
+scope: pdf
+independence: fresh-context
+writeAccess: none
+stages: [pre-implementation, post-implementation]
+appliesWhen:
+  any:
+    - pdf
+inputs:
+  - ticket
+  - acceptance-criteria
+  - diff
+  - source-document
+  - pdf-artifact
+  - rendering-evidence
+outputs: [verdict, findings, evidenceRequests, limitations]
+budgets:
+  contextTokens: 12000
+  maxTurns: 3
+failurePolicy: block-on-critical
+instructions: >-
+  Own PDF-specific input safety or deliverable fidelity: untrusted-content boundaries, typography,
+  pagination, tables, links, metadata, accessibility, and inspection of the current artifact. Request
+  a PDF renderer or inspection engine only when the mission has a PDF input or deliverable; absent
+  required tooling yields degraded or blocked, never pass. Do not own generic docs, QA, or UI review.

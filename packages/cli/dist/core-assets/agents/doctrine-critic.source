@@ -1,0 +1,11 @@
+Sources for the `doctrine-critic` agent (see `docs/plans/skill-audits/doctrine-critic.md` for the full audit):
+
+- citypaul/.dotfiles pr-reviewer agent — frontmatter shape (name/description/tools/model), read-only tool allowlist, "manual invocation saves cost" stance. ~/.claude/agents/pr-reviewer-citypaul.md
+- superpowers/code-reviewer agent — isolated-context review, verdict-as-final-message convention
+- void-machine `void-code-review` skill — the six dimensions and blocker-vs-nit framing the agent's checklist inherits
+- void-machine `void-security-guidance` skill — the "flag trust-boundary code, route the audit to /cso" delegation the agent reuses
+- Claude Code plugin + subagent docs — https://code.claude.com/docs/en/plugins-reference.md , https://code.claude.com/docs/en/sub-agents.md — agents auto-discovered from agents/ (no plugin.json field); tools as comma-separated allowlist; read-only = omit Edit/Write/NotebookEdit
+
+Strategy: original (compose-not-duplicate). The agent does not re-implement code or security review — it judges the non-mechanical doctrine layer the 8 PreToolUse hooks cannot enforce and generic reviewers do not know, and routes the rest (security -> /cso, bugs -> /code-review).
+
+Rejected: the originally planned three agents (senior-reviewer, security-reviewer, architect-critic). See docs/DECISIONS.md "one doctrine-critic agent, not the three originally planned" — they overlapped existing capabilities 70-85% (anti-bloat rules 3 and 6).

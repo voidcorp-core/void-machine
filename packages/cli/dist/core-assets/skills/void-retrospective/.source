@@ -1,0 +1,9 @@
+Sources for `void-retrospective` skill (see `docs/plans/skill-audits/void-retrospective.md` for full audit):
+
+- gstack /retro (1770 LOC) — VENDORED (DEV-396): the git-history signal methodology (window gathering: commits/authors/files/types, hotspots, test-vs-prod ratio, PR size, regressions, recurring-fix files). Its data-gathering reads gstack state (~/.gstack/, timeline.jsonl); the harness version reads git log / PRs (gh) / .void/usage.log instead.
+- Rejected (documented): the quantified-self gamification — focus score, ship-of-the-week, personal/team streaks, the week-over-week leaderboard. Productivity gamification, not craftsman doctrine: it optimizes a number, not the code. Kept the signal methodology, dropped the scoring/ranking apparatus.
+- Rejected: all gstack runtime (preamble, gbrain, telemetry, voice, plan-mode, history-save to gstack paths).
+
+Strategy: distill + dedicated skill. Its mapped target `void-learn` no longer exists (fused into learn, issue #75), and a periodic window review is a distinct subject from learn's point capture — folding would violate one-skill-one-subject and overflow 400 LOC. So a light dedicated skill that FEEDS learn. See docs/DECISIONS.md (2026-07-10, DEV-396) and the DEV-386 split decision that spun this out.
+
+No companion hooks; it reads and reports, writing nothing into doctrine (learn owns the HITL write).

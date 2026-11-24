@@ -1,0 +1,39 @@
+schemaVersion: 1
+id: core:react
+version: 2
+name: react
+technologies:
+  - id: react
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [react]
+  files:
+    extensions: [.tsx, .jsx, .css]
+    names: []
+    pathSegments: []
+sources:
+  - title: React documentation
+    url: https://react.dev/
+reviewedAt: 2026-07-27
+expiresAfterDays: 120
+invariants:
+  - Keep rendering pure and derive state instead of synchronizing duplicates.
+  - Cover keyboard, focus, loading, empty, error, and success states where applicable.
+patterns:
+  - id: component-change
+    appliesWhen:
+      technologies: [react]
+      files:
+        extensions: [.tsx, .jsx]
+        names: []
+        pathSegments: []
+    guidance: Test behavior at the user boundary and preserve accessible semantics.
+  - id: visual-change
+    appliesWhen:
+      technologies: [react]
+      files:
+        extensions: [.css]
+        names: []
+        pathSegments: []
+    guidance: Verify responsive, focus, contrast, and interaction states in a browser.

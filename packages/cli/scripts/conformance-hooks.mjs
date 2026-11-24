@@ -287,6 +287,7 @@ async function exerciseFixture(temporary, tarball, npmCache, mode) {
     fixture,
     'node_modules',
     PRODUCT_IDENTITY.packageName,
+    'dist',
     'bin',
     `${PRODUCT_IDENTITY.commands.primary}.mjs`,
   );

@@ -6,7 +6,7 @@ they do not install dependencies or mutate consumer code.
 
 ## Catalog and extensions
 
-The certified catalog is bundled from `packages/core/profiles/*.yaml` and currently covers base,
+The certified catalog is bundled from `packages/core/src/profiles/*.yaml` and currently covers base,
 TypeScript, React, Next.js, Node server, monorepo, PWA, Expo, and SQL work.
 Next.js and Expo configuration advice lives in separate profiles with exact filename selectors. A consumer can add a
 strict project profile under:

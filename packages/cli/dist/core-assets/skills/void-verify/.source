@@ -1,0 +1,14 @@
+Sources for `void-verify` skill (see `docs/plans/skill-audits/void-verify.md` for full audit):
+
+- superpowers/verify — primary (checklist + observation discipline).
+- citypaul/.dotfiles completion checklists — TS-strict checklist items.
+- Atul Gawande "The Checklist Manifesto" — principle that checklists prevent omissions even for experts.
+- NASA Power of Ten (informal "if it cannot fail, document why").
+
+- gstack /ship — VENDORED (DEV-388): the Plan-Completion Audit (item-by-item DONE/PARTIAL/NOT-DONE/CHANGED/UNVERIFIABLE, the honesty rule "handling a deliverable is not the deliverable", per-item confirmation for UNVERIFIABLE, scope-drift) + the named-excuse rationalization list. The 12-item checklist verifies the build; this verifies you built what was specified.
+
+Strategy: distill. Slim skill. Adapted for void-machine's specific signal set (12 items, each mapped to a skill or hook).
+
+No new hooks (composes with all existing).
+
+- GitHub Actions event, concurrency and merge-queue documentation: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows ; https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency ; https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue

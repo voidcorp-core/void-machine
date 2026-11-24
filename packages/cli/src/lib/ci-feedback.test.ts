@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { isSeq, parseDocument } from 'yaml';
 
 const ROOT = resolve(import.meta.dirname, '../../../..');
-const REFERENCES = join(ROOT, 'packages/core/skills/void-verify/references');
+const REFERENCES = join(ROOT, 'packages/core/src/skills/void-verify/references');
 const contexts = {
   draft: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: true } }, run_id: 10 },
   ready: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: false } }, run_id: 11 },
@@ -61,8 +61,8 @@ describe('development feedback and integration admission', () => {
 
   it.each([
     '.github/workflows/ci.yml', '.github/workflows/void-enforce.yml',
-    'packages/core/skills/void-verify/references/quality.yml',
-    'packages/core/templates/github/void-dependency-audit.yml',
+    'packages/core/src/skills/void-verify/references/quality.yml',
+    'packages/core/src/templates/github/void-dependency-audit.yml',
   ])('%s starts fresh on ready and cancels only obsolete PR runs', (name) => {
     const ci = workflow(name);
     const types = sequence(ci, ['on', 'pull_request', 'types']);
@@ -115,7 +115,7 @@ describe('development feedback and integration admission', () => {
     const admissionIndex = steps.findIndex(step => step.run?.includes('ci-admission.mjs'));
     expect(admissionIndex).toBeGreaterThanOrEqual(0);
     expect(steps[admissionIndex]?.run).toBe(
-      'node .void-enforce-runtime/packages/core/skills/void-verify/references/ci-admission.mjs',
+      'node .void-enforce-runtime/packages/core/src/skills/void-verify/references/ci-admission.mjs',
     );
     expect(steps[admissionIndex]?.['continue-on-error']).toBeUndefined();
     const implementationIndex = steps.findIndex(step => step.with?.path === '.void-enforce-runtime');
@@ -140,7 +140,7 @@ describe('development feedback and integration admission', () => {
     for (const [path, id] of [
       ['.github/workflows/ci.yml', 'validate'],
       ['.github/workflows/void-enforce.yml', 'enforce'],
-      ['packages/core/skills/void-verify/references/quality.yml', 'quality'],
+      ['packages/core/src/skills/void-verify/references/quality.yml', 'quality'],
     ] as const) {
       const ci = workflow(path);
       expect(ci.getIn(['jobs', id, 'if'])).toBeUndefined();

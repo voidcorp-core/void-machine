@@ -4,56 +4,85 @@
     "name": "VoidCorp",
     "email": "florent.pellegrin@voidcorp.io"
   },
-  "description": "VoidCorp craftsman harness — universal core skills plus stack-specific packs. Self-hosted: every plugin is a subdirectory of this repo, versioned by its plugin.json.",
+  "description": "VoidCorp craftsman harness \u2014 universal core skills plus stack-specific packs. Self-hosted: every plugin is a subdirectory of this repo, versioned by its plugin.json.",
   "plugins": [
     {
       "name": "harness",
-      "source": "./packages/core",
+      "source": "./packages/core/dist",
       "description": "Universal craftsman skills (TDD strict, TypeScript strict, hexagonal, DDD, functional, code-review, security) plus enforcement hooks and read-only agents.",
       "category": "best-practices",
-      "tags": ["tdd", "typescript", "hexagonal", "ddd", "craftsman"]
+      "tags": [
+        "tdd",
+        "typescript",
+        "hexagonal",
+        "ddd",
+        "craftsman"
+      ]
     },
     {
       "name": "harness-monorepo",
-      "source": "./packages/packs/pack-monorepo",
+      "source": "./packages/packs/pack-monorepo/dist",
       "description": "Turborepo monorepo conventions: shared strict tsconfig, @repo/core (Result, Option, pipe), package boundary discipline.",
       "category": "stack",
-      "tags": ["turborepo", "monorepo"]
+      "tags": [
+        "turborepo",
+        "monorepo"
+      ]
     },
     {
       "name": "harness-react",
-      "source": "./packages/packs/pack-react",
+      "source": "./packages/packs/pack-react/dist",
       "description": "React 19 conventions: shadcn/Radix, accessibility-first, client/server component boundaries, form and state patterns.",
       "category": "stack",
-      "tags": ["react", "shadcn", "accessibility"]
+      "tags": [
+        "react",
+        "shadcn",
+        "accessibility"
+      ]
     },
     {
       "name": "harness-nextjs",
-      "source": "./packages/packs/pack-nextjs",
+      "source": "./packages/packs/pack-nextjs/dist",
       "description": "Next.js 16 App Router conventions: route groups, cache components, loading/error boundaries, instrumentation.",
       "category": "stack",
-      "tags": ["nextjs", "app-router"]
+      "tags": [
+        "nextjs",
+        "app-router"
+      ]
     },
     {
       "name": "harness-server",
-      "source": "./packages/packs/pack-server",
+      "source": "./packages/packs/pack-server/dist",
       "description": "Server-side trust boundaries: Server Actions, webhook safety, Zod ingress, rate limiting, Drizzle migrations, structured errors.",
       "category": "stack",
-      "tags": ["server-actions", "webhooks", "drizzle", "zod"]
+      "tags": [
+        "server-actions",
+        "webhooks",
+        "drizzle",
+        "zod"
+      ]
     },
     {
       "name": "harness-pwa",
-      "source": "./packages/packs/pack-pwa",
+      "source": "./packages/packs/pack-pwa/dist",
       "description": "PWA conventions: manifest, service worker, offline-first strategies.",
       "category": "stack",
-      "tags": ["pwa", "offline", "service-worker"]
+      "tags": [
+        "pwa",
+        "offline",
+        "service-worker"
+      ]
     },
     {
       "name": "harness-mobile",
-      "source": "./packages/packs/pack-mobile",
+      "source": "./packages/packs/pack-mobile/dist",
       "description": "Mobile conventions: Expo + React Native, EAS Build, config plugins, OTA update strategy. Composes with harness-react.",
       "category": "stack",
-      "tags": ["expo", "react-native", "mobile"]
+      "tags": [
+        "expo",
+        "react-native",
+        "mobile"
+      ]
     }
   ]
 }

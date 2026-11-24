@@ -55,7 +55,7 @@ A **public, MIT** harness installed free and account-free via `npx voidmachine` 
 ## Read before writing
 
 1. `README.md` — vision + target architecture
-2. `docs/PHILOSOPHY.md` — three pillars (safety / performance / DX) + sources
+2. `packages/core/src/PHILOSOPHY.md` — three pillars (safety / performance / DX) + sources
 3. `docs/ARCHITECTURE.md` — package boundaries + dependency direction
 4. `docs/specs/` and `docs/plans/` — approved designs, and how each was executed
 
@@ -115,7 +115,7 @@ A skill that ends up 95% the same as its source remains valuable as "voidcorp's 
 
 void-machine is installed **in void-machine**, through the same `npx voidmachine init` a consumer runs. The enforcement floor that guards a customer project guards this one: write a secret, a `console.log`, an `any` or a `null` here and the write is refused, exactly as it would be in their repo.
 
-What is active here is the **published** harness, not the working tree. That distinction is the whole safety of the arrangement: a rule broken while being developed cannot lock the repo it is being developed in. `.void/hooks/` therefore carries a released bundle, deliberately different from `packages/core/hooks/`, and is committed so a fresh clone — or an autopilot worktree — inherits the floor rather than silently losing it. `.codex/hooks.json` is committed for the same reason.
+What is active here is the **published** harness, not the working tree. That distinction is the whole safety of the arrangement: a rule broken while being developed cannot lock the repo it is being developed in. `.void/hooks/` therefore carries a released bundle, deliberately different from `packages/core/src/hooks/`, and is committed so a fresh clone — or an autopilot worktree — inherits the floor rather than silently losing it. `.codex/hooks.json` is committed for the same reason.
 
 This is separate from `void-machine self-host sync`, which compiles the **current sources** into an isolated artifact under `.void/machine/generated/` and never wires the repo root (see `docs/ARCHITECTURE.md`, "Source self-host boundary"). Two different questions: self-host asks *do the sources still compile into a working harness*, the install asks *does the shipped harness hold while we work*.
 

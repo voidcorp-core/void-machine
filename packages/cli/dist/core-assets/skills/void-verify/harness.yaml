@@ -1,0 +1,15 @@
+# Harness metadata for this skill. Not part of the Agent Skills
+# specification, and never copied into a consumer project: the SKILL.md
+# beside it stays portable and validates against the official six fields.
+# Read by this repository's graph, and by the installer for `runtimes`.
+kind: action
+activation: always
+owner: folpe
+runtimes: [claude, codex]
+enforcement:
+  floor: ci
+  inline:
+    claude: active
+    codex: active
+    hermes: ci-only
+eval_targets: [claude/anthropic/opus]

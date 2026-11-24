@@ -46,7 +46,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Admit integration validation
-        run: node packages/core/skills/void-verify/references/ci-admission.mjs
+        run: node packages/core/src/skills/void-verify/references/ci-admission.mjs
       # Auto-merge is the default way into develop: it waits for protection and
       # every required check. The live state is read, not the event payload, so
       # the step judges what is armed now. Only main refuses it: the promotion

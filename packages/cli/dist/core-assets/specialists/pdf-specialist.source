@@ -1,0 +1,11 @@
+Sources:
+- Puppeteer PDFOptions: https://pptr.dev/api/puppeteer.pdfoptions
+- W3C PDF accessibility techniques: https://www.w3.org/TR/WCAG20-TECHS/pdf.html
+- void-machine make-pdf doctrine: packages/core/src/skills/make-pdf/SKILL.md
+
+Adapted:
+- Kept safe untrusted-content handling, faithful rendering, pagination, metadata, links, accessibility, and current-artifact inspection.
+- Gated PDF engine requests on an actual PDF input or deliverable and made missing required tooling fail closed.
+
+Rejected:
+- Generic document editing, browser-daemon dependency, functional QA ownership, and unconditional PDF tooling.

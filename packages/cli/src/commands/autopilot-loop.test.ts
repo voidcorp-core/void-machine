@@ -106,17 +106,27 @@ const gh = (args: readonly string[]): string => answer(args);
 
 function answer(args: readonly string[], view: string = reviewedPull()): string {
   const line = args.join(' ');
-  if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
+  if (line.includes('mergeQueue(branch')) {
+    const queue = JSON.parse(fixture('queue-present.json')) as { data: { repository: object } };
+    const branch = JSON.parse(fixture('repo-view-default-branch.json')) as object;
+    return JSON.stringify({ data: { repository: { ...queue.data.repository, ...branch } } });
+  }
   if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
   if (line.includes('pr view 11')) return view;
   if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
   if (line.includes('/actions/runs?')) return noWorkflowRuns;
   if (line.includes('pulls/11/files')) return pullFiles();
+  if (line.includes('timelineItems')) {
+    const timeline = JSON.parse(fixture('timeline-commit-then-ejection.json').replace(
+      /"nodes":\[.*\]/,
+      '"nodes":[{"__typename":"PullRequestCommit","commit":{"oid":"x"}}]',
+    )) as { data: { repository: { pullRequest: object } } };
+    const current = JSON.parse(membership(false)) as { data: { repository: { pullRequest: object } } };
+    return JSON.stringify({ data: { repository: { pullRequest: {
+      ...timeline.data.repository.pullRequest, ...current.data.repository.pullRequest,
+    } } } });
+  }
   if (line.includes('isInMergeQueue')) return membership(false);
-  if (line.includes('timelineItems')) return fixture('timeline-commit-then-ejection.json').replace(
-    /"nodes":\[.*\]/,
-    '"nodes":[{"__typename":"PullRequestCommit","commit":{"oid":"x"}}]',
-  );
   throw new Error(`unexpected gh call: ${line}`);
 }
 

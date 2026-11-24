@@ -36,13 +36,15 @@ export interface ClaudeMdBlockInputs {
    * the call returns Unknown skill. Defaults to the primary channel.
    */
   readonly channel?: InstallSource;
+  /** Partial commands retain the published location until init/update migrates it. */
+  readonly philosophyPath?: '.void/PHILOSOPHY.md' | '.void/installed/PHILOSOPHY.md';
 }
 
 export function harnessBlock(input: ClaudeMdBlockInputs, runtime: Runtime = 'claude'): string {
   const packLines = input.enabledPacks.map((p) => `- \`${p.name}\` — ${p.description}`);
   if (runtime === 'claude') return [MARKERS.current.begin, '', '@AGENTS.md', '', MARKERS.current.end].join('\n');
   const doctrineLead = '### Doctrine — read at the start of every session';
-  const imports = ['@.void/PHILOSOPHY.md', '@.void/PROJECT-DOCTRINE.md'];
+  const imports = [`@${input.philosophyPath ?? '.void/PHILOSOPHY.md'}`, '@.void/PROJECT-DOCTRINE.md'];
   const captureLine = 'To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.';
   const ticketRunner = '`void-implement`';
   const invocationLine = 'Every skill is invoked by its name. Codex uses `$void-implement`, `$void-tdd`. Claude Code uses `/void-implement`, `/void-tdd` for local installs; marketplace plugins use `/harness:void-implement`, `/harness:void-tdd`. A skill that composes another names it the same way; use the syntax of the active runtime and installation channel.';
@@ -147,6 +149,32 @@ export async function patchRuntimeDoc(
   return patchDoc(join(projectRoot, file), file, harnessBlock(input, 'claude'));
 }
 
+/** Preserve a known published reference; partial commands do not publish doctrine. */
+export async function publishedPhilosophyPath(projectRoot: string): Promise<NonNullable<ClaudeMdBlockInputs['philosophyPath']>> {
+  for (const file of ['AGENTS.md', 'CLAUDE.md']) {
+    const text = await readFile(join(projectRoot, file), 'utf8').catch((error: unknown) => {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return '';
+      throw error;
+    });
+    // Read only delivered paths inside a recognized managed block. User prose
+    // outside the block neither changes the active doctrine nor claims ownership.
+    for (const pair of MARKERS.recognized) {
+      const start = text.indexOf(pair.begin);
+      const end = text.indexOf(pair.end, start + pair.begin.length);
+      if (start < 0 || end < 0) continue;
+      const block = text.slice(start, end);
+      for (const match of block.matchAll(/^(?:@|- `)(\.void\/(?:installed\/)?PHILOSOPHY\.md)(?:`|\s*$)/gm)) {
+        const path = match[1];
+        if ((path === '.void/PHILOSOPHY.md' || path === '.void/installed/PHILOSOPHY.md')
+          && existsSync(join(projectRoot, path))) return path;
+      }
+    }
+  }
+  return !existsSync(join(projectRoot, '.void/PHILOSOPHY.md'))
+    && existsSync(join(projectRoot, '.void/installed/PHILOSOPHY.md'))
+    ? '.void/installed/PHILOSOPHY.md' : '.void/PHILOSOPHY.md';
+}
+
 /**
  * Refresh existing runtime documents and their common AGENTS owner. Never create
  * CLAUDE.md in a Codex-only project. Used by `add` / `remove`, which update the current plugin list
@@ -158,9 +186,10 @@ export async function patchExistingRuntimeDocs(
   input: ClaudeMdBlockInputs,
 ): Promise<Runtime[]> {
   const patched: Runtime[] = [];
+  const publishedInput = { ...input, philosophyPath: input.philosophyPath ?? await publishedPhilosophyPath(projectRoot) };
   for (const runtime of ['claude', 'codex'] as const) {
     if (existsSync(join(projectRoot, docFileFor(runtime)))) {
-      await patchRuntimeDoc(projectRoot, runtime, input);
+      await patchRuntimeDoc(projectRoot, runtime, publishedInput);
       patched.push(runtime);
     }
   }

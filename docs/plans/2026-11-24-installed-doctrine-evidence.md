@@ -75,3 +75,18 @@ and ownership/migration/loading cases were added. No suite disappeared through p
 Types, lint, anti-bloat, version lockstep, skill references and delivery freshness passed.
 Lint retains the existing 68 warnings and 1,012 informational diagnostics. Package size
 remains within the unchanged ceilings; no version or dependency change was made.
+
+## Independent-review correction: partial legacy commands
+
+Runtime additions and marketplace pack changes refresh instructions without publishing
+philosophy. They now retain the existing managed reference to either known published
+path; only init/update switches that reference with the doctrine transaction. Modified
+legacy doctrine and an unclaimed new destination remain untouched. Adding Codex also
+refreshes an existing legacy CLAUDE document to import the common owner, preserving
+project text outside its managed block.
+
+The reported four command paths failed before the correction. Focused command tests
+cover both runtime directions, marketplace add/remove, absent and conflicting new
+locations, edited legacy doctrine, and a refused runtime preparation that leaves the
+previous instructions intact. The common fresh-install output is unchanged, so the
+native-loading observations above remain applicable; no new native-loading claim is made.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -43,6 +43,16 @@ describe('patchClaudeMd / patchAgentsMd', () => {
     await expect(patchClaudeMd(dir, input)).rejects.toThrow('symbolic link');
     expect(readFileSync(join(dir, 'user.md'), 'utf8')).toBe('KEEP');
     expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('keeps the current published reference despite an old copy and stale user prose', async () => {
+    mkdirSync(join(dir, '.void/installed'), { recursive: true });
+    writeFileSync(join(dir, '.void/installed/PHILOSOPHY.md'), 'retained user edits');
+    writeFileSync(join(dir, '.void/PHILOSOPHY.md'), 'published');
+    const prose = '@.void/installed/PHILOSOPHY.md\n';
+    writeFileSync(join(dir, 'AGENTS.md'), prose + harnessBlock(input, 'codex'));
+    await patchExistingRuntimeDocs(dir, input);
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toBe(prose + harnessBlock(input, 'codex'));
   });
 
   it('creates common instructions for Claude alone and keeps one doctrine after adding Codex', async () => {

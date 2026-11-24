@@ -15,7 +15,7 @@ Three path groups replace the recursive import/annotation classifier and its pro
 | --- | --- | --- |
 | engine | I/O-free `packages/mission-engine/src` | Four workers, group 0 |
 | local | Remaining package, repository and app tests | One worker, group 1 |
-| network | CLI UI and native daemon test families | One thread, group 2 |
+| network | CLI UI and native daemon/note/signal families | One thread, group 2 |
 
 The mission-engine package is explicitly pure in ARCHITECTURE.md. Local tests include indirect
 Git/process fixtures, so their budget is conservative. This reduces concurrency for cheap tests
@@ -71,7 +71,7 @@ remain tested. No new campaign, cadence or benchmark replaces the removed syntax
 
 The baseline commit `19f1bc6c` and admitted base `150f99b6` have the identical tree
 `c3faab426dc2f11593795b1d32081f70d11ef88e`. Its existing successful runtime collection is
-reused, not recollected. After migration, the same native command ran with
+reused, not recollected. On the initial migrated candidate, the same native command ran with
 `list --no-static-parse --maxWorkers=1 --json=<file>`. Both exited zero.
 The comparison counts `(repository-relative file, name)` as a **multiset**, including repeated
 names. Worktree prefixes are normalized in both filenames and dynamically generated names.
@@ -90,7 +90,8 @@ names. Worktree prefixes are normalized in both filenames and dynamically genera
 Two retained descriptions are renamed (campaign → diagnostic seeds; classifier → test setup),
 paired one-for-one rather than counted as new behavior. Every other retained `(file, name)`
 multiplicity is identical. The same ten repeated keys remain; no duplicate is newly introduced.
-Final projects collect engine 765 cases/44 files, local 4,381/291, network 48/4.
+After the routing correction below, projects collect engine 765 cases/44 files, local 4,312/286,
+network 117/9.
 The complete raw before/after collections, normalized comparison and execution logs are retained
 in the ignored DEV-1407 task evidence directory; collection alone claims no body execution.
 
@@ -100,7 +101,7 @@ in the ignored DEV-1407 task evidence directory; collection alone claims no body
   failed (3 failures, 14 passes). A subsequent targeted run exposed a missing ignored
   mission-engine export; building workspace prerequisites resolved that environment failure.
 - GREEN: changed collection/verify/runner tests, 60 passes; receipt reader tests, 9 passes.
-- One full `pnpm test` invocation exited zero: engine 765 passes in 1.79 s, local 4,381 passes
+- One full `pnpm test` invocation on the initial candidate exited zero: engine 765 passes in 1.79 s, local 4,381 passes
   in 364.35 s, network 48 passes in 4.79 s. One pre-existing conditional real-Semgrep case is
   skipped because Semgrep is unavailable. These are observed Vitest durations, not a before/after
   speedup or isolated benchmark. The local duration includes import/worker overhead; preparation
@@ -118,3 +119,30 @@ Structurally, default suite orchestration now launches three Vitest processes in
 workflow and the non-executing oracle are removed. This does not measure elapsed-time savings,
 and the reduced local concurrency can cost throughput. No saving is attributed to already
 retired engines, the syntax benchmark, build/pack reuse or the still-existing gate generator.
+
+## Corrected indirect socket routing
+
+Review preparation compared resource membership as well as retained case counts. The initial
+candidate incorrectly moved `cli-note-contract.test.ts` (40 cases) and `process-signal.test.ts`
+(one case) from the old network group into local. Both import `test/process-signal.ts`, which
+opens a real TCP listener on 127.0.0.1. Their fixture bounds (20-second children, 30-second CLI
+tests), socket teardown and child cleanup survived, but the local route omitted the required
+capability probe and network wrapper's 120-second thread-pool bound. Passing the full suite in a
+socket-capable environment did not prove correct capability routing.
+
+The network path now owns the natural daemon/note/signal families. The existing native collection
+regression proves that both indirect consumers actually collect in `network`; it failed before
+this correction and passes after it. This moves five files (69 cases) from the initial candidate's
+local group: CLI note 40, process signal one, note contract 23, legacy note journals three and
+runtime note two. Grouping their family also contains future note/signal fixtures without a
+per-file exception registry. Alongside the three cheap UI cases grouped with their server,
+the corrected network group contains 117 cases versus the original scanner's 86.
+
+Affected verification only: 17 collection/runner tests pass; one network invocation passes all
+117 cases in nine files in 25.91 s, within the unchanged 120-second ceiling; changed-file lint
+passes. Actual runtime collection of the affected runtime/UI/support paths returns 459 cases.
+Its `(file, name)` multiset exactly matches those paths in the prior full collection. Composing
+that actual targeted result with unchanged prior entries preserves all 5,194 cases, 339 files
+and ten repeated keys. `correction-collection-composed.json` is explicitly a composition, not a
+claim of a new full collection. The actual targeted JSON and comparison metadata are retained
+separately. Unaffected full-suite proofs are reused; no second full campaign is run.

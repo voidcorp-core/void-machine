@@ -77,7 +77,7 @@ accepts the same two options while retaining its fixed worker and timeout bounds
 - The root config uses [Vitest 5 native projects](https://vitest.dev/guide/projects).
   `pnpm test:engine` runs the I/O-free mission-engine package with four workers;
   `pnpm test:local` runs the remaining local package/repository tests with one worker because
-  they include indirect subprocess fixtures; `pnpm test:network` owns the UI and daemon families
+  they include indirect subprocess fixtures; `pnpm test:network` owns the UI, daemon, note and signal families
   with one thread. Native `sequence.groupOrder` separates these groups when running all projects.
   Shared global setup, per-file isolation and cleanup apply to every project.
 - Target a regression directly: `pnpm exec vitest run path/to/file.test.ts`, optionally adding

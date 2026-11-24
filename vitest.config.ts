@@ -6,7 +6,7 @@ import { sharedVitestTestOptions } from './test/support/vitest-options.js';
 const engine = ['packages/mission-engine/src/**/*.test.ts'];
 const network = [
   'packages/cli/src/lib/ui/**/*.test.ts',
-  'packages/void-machine/test/*daemon*.test.ts',
+  'packages/void-machine/test/{*daemon*,*note*,*signal*}.test.ts',
 ];
 
 export default defineConfig({

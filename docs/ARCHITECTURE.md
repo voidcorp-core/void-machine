@@ -312,7 +312,7 @@ Rules:
   Windows; elapsed time is an observation, never a correctness threshold. ProjectGraph stays in a
   separate path-filtered matrix because it is a distinct published package and portability
   boundary. Test execution uses native Vitest projects for the pure mission engine, local
-  integration fixtures and loopback-dependent UI/daemon families. Ordering investigations use
+  integration fixtures and loopback-dependent UI/daemon/note/signal families. Ordering investigations use
   explicit native shuffle/seed arguments; there is no recurring certification campaign.
 - **Runtimes are added a posteriori without friction**: `void-machine runtime add <runtime>` wires exactly that runtime's layer on an already-`init`-ed project, touching nothing the other runtime owns (verified byte-for-byte in tests). `runtime list` shows which are wired. This is the `void runtime add` command from the multi-runtime spec.
 - **Pack and update lifecycle uses the same transaction.** Local `add`/`remove` compile the exact

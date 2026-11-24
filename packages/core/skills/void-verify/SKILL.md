@@ -80,17 +80,6 @@ the existing task/review evidence; summarize it when it explains a real omission
 For a standalone sequential plan, update its existing resume point. For a programme, the declared tracker alone owns mutable progress; do not add a current/next unit to the plan.
 The PR evidence and final report reuse the same observed results rather than duplicate work.
 
-Once at ticket end, the coordinator closes each explicitly bound source with
-`void-machine mission usage-unbind --id <mission> --source <session-journal>`; this remains possible
-after mission closure. Close is final for that source/mission pair and retries never reopen it.
-Never recreate a mission to bypass a verdict or reopen proof. Then, if a mission ID exists,
-include the informational recap from
-`void-machine mission inspect --id <mission> --usage` (`--json` for structured output).
-Reuse that recap in the final report; do not run it per edit or chain its exit status as a new
-completion gate. Its exit status remains the mission verdict, not telemetry coverage. Missing
-mission linkage or telemetry is explicitly unknown. Codex skill reads are not invocation hits.
-For the complete catalogue and triggers, use `void-machine cheatsheet --format markdown`.
-
 ## Bounded review evidence
 
 Use the review receipt from `void-implement`: exact commit and base, acceptance criteria,

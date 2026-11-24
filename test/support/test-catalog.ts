@@ -47,8 +47,6 @@ const CERTIFICATION_PREFIX = 'packages/harness-graph/src/certification/';
 const RESOURCE_OVERRIDES: Readonly<Record<string, ResourceClass>> = {
   // These tests call an injected adapter whose implementation owns the import,
   // so source scanning cannot see the subprocess at the test boundary.
-  'apps/eval-harness/src/runtime/mission-team.test.ts': 'subprocess',
-  'apps/eval-harness/src/runtime/process.test.ts': 'subprocess',
 };
 
 const NETWORK_IMPORT = /(?:from\s+|require\()['"]node:(?:http|https|net|tls)['"]/;

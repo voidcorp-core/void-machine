@@ -27,7 +27,6 @@ import { applyRepair, conformanceRules, inspectConformance } from '../lib/confor
 import { checkGlyph, checkShowsFix } from '../lib/doctor-render.js';
 import { publishedVersionCheck } from '../lib/freshness-check.js';
 import { INSTALL_MANIFEST_PATH, parseInstallManifest, verifyInstallManifest } from '../lib/install-manifest.js';
-import { judgeInvocation, observeInvocation } from '../lib/invocation-health.js';
 import { inspectHarnessLintExclusion } from '../lib/lint-exclusion.js';
 import { observeKeptTracked } from '../lib/git-exclude.js';
 import { type ObservedPathObservation, observedWriteCandidates } from '../lib/observed-write-paths.js';
@@ -308,11 +307,6 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // Layout hygiene: does this project actually keep observed state out of its
   // history? Proven with git, not inferred from the ignore file being present.
   checks.push(...judgeLayout(await observeLayout(root)));
-
-  // Is the invocation surface still reachable? A harness cannot observe its own
-  // refused calls, so this reads the traces one leaves: a recorded name that no
-  // longer resolves, and a silence across missions that demonstrably worked.
-  checks.push(judgeInvocation(observeInvocation(root)));
 
   // The one thing the collapsed ignore block can swallow: a skill this project
   // wrote by hand, beside the ones the harness generates.

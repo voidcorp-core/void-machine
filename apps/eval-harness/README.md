@@ -1,92 +1,54 @@
-# @voidcorp/eval-harness
+# Retained behavioral scenarios and historical reports
 
-Behavioral evals for skills. The `test/` suite proves a skill's **form** (frontmatter,
-size, structure). This proves its **effect**: does the skill's prose actually change
-the agent's behavior in the intended direction?
+DEV-1400 retired the evaluation engine, paid campaign runner, scorers and reporters.
+This directory is no longer a workspace package. There is no `pnpm eval` command.
+These scenarios are optional, on-demand checks in a native runtime, never an automatic
+campaign or a replacement for product regression tests. Repeated automatic A/B comparison
+is deliberately lost; a manual observation is not equivalent statistical evidence.
 
-It runs a fixture task twice — once with the skill's `SKILL.md` **body** (frontmatter
-excluded) appended to the system prompt, once without — N times each, then scores the
-resulting sandbox. A skill "works" when the with-skill score beats the without-skill score
-by more than run-to-run noise.
+Use a disposable project and the current installed skills. Record the actual task,
+observations and limitations only when useful to the request. No model call is authorized
+by this document. Do not run vulnerable examples against a real service.
 
-Why the body, not the whole file: a loaded skill contributes its instructions, and the
-frontmatter `description` often summarizes the entire skill — appending it would leak the
-signal into the gutted-skill sensitivity run. The sensitivity check surfaced exactly this.
+| Scenario | Task and seed | Observable criteria |
+| --- | --- | --- |
+| Commit discipline | Start with `export const add = (a: number, b: number): number => a + b;` in `src/math.ts`. Add `subtract` and commit; do not push. | Correct subtraction; Conventional Commit with a reason; no unrelated edits or push. |
+| Test-first function | Implement `fizzbuzz(n: number): string` in a project using its existing test runner. | Cover 3, 5, 15 and ordinary numbers; observe relevant RED before implementation and GREEN afterward. A test file alone does not prove ordering. |
+| Product premise | “I want a mobile app that reminds people to drink water every hour. Help me get started.” | Resolve the concrete user/problem and assumptions with useful questions; identify weak assumptions; avoid premature scaffolding. Do not force a particular ambition or number of questions. |
+| Security audit | Review the illustrative vulnerable handler below without fixing it. | Identify SQL injection and missing authorization with code evidence and a concrete exploit explanation; no live attack or generic findings list. |
+| Frontend TDD | Copy `fixtures/ui/frontend-tdd` to a disposable project. Fix ActionMenu opening by keyboard, test-first, using component tests. | Observe RED then GREEN; accessible queries and actual keyboard interactions prove the fix; preserve pointer behavior. No unnecessary E2E wrapper. |
+| UI craft | Copy `fixtures/ui/ui-craft` to a disposable project. Audit and polish it according to its DESIGN.md. | Inspect default/error states on mobile/desktop; visible focus and usable keyboard navigation; preserve the design direction. Report concrete rendered evidence, without a score threshold or JSON ceremony. |
+| Mission review | Review the defects below without editing. | Report the untrusted-role authorization bypass, domain-to-infrastructure dependency, and missing admin regression coverage with file evidence. No clean verdict with unresolved blockers; actual independent review receipts remain the product's evidence authority. |
 
-Private maintainer tooling. Never published; not part of the distributed plugin.
+Security seed (`src/handler.ts`):
 
-## Run
-
-```bash
-pnpm eval commit-discipline                 # 3 runs/condition (default)
-pnpm eval tdd --runs 5                       # more runs = less noise, more cost
-pnpm eval commit-discipline --sensitivity    # also run a GUTTED skill, prove the prose carries the signal
-pnpm eval -- --suite mission-team --runtime claude,codex --runs 1
+```ts
+import { db } from './db';
+export async function getUser(req: { query: { id: string; role: string } }): Promise<unknown> {
+  return db.raw(`SELECT * FROM users WHERE id = '${req.query.id}'`);
+}
 ```
 
-Each run spends tokens (a cheap model, `haiku`, by default). Cost is printed and archived
-in the report. A run is executed in a throwaway git sandbox; nothing touches your repo.
+Mission-review seeds:
 
-Output: a verdict (`skill-helps` / `no-signal` / `skill-hurts`), the mean score per
-condition, reliability (`ok runs`), and total cost. Archived to `reports/<skill>.md`.
+```ts
+// src/auth.ts: authorization must derive from the authenticated principal.
+export function canReadAccount(input: { claimedRole: string }): boolean {
+  return input.claimedRole === 'admin';
+}
+// src/domain/order.ts: domain must remain independent from infrastructure.
+import { database } from '../infrastructure/database';
+export const loadOrder = (id: string) => database.orders.find(id);
+// src/discount.ts: regular and admin paths both need regression coverage.
+export const discount = (role: string) => role === 'admin' ? 50 : 5;
+// src/discount.test.ts: intentionally incomplete.
+import { expect, it } from 'vitest';
+import { discount } from './discount';
+it('returns the user discount', () => expect(discount('user')).toBe(5));
+```
 
-The `mission-team` suite uses the same vulnerable auth, dependency-boundary, and untested-branch
-fixture on Claude and Codex. Its deterministic scorer requires all three blockers and assigns zero
-to a false-green verdict. Runtime adapters normalize native structured output to the same
-`specialist.completed`/`specialist.failed` envelope before replay.
-Each specialist is a fresh native role session using the installed definition. The reports retain
-the scorecard while adjacent `.events.jsonl` files retain the canonical replay evidence.
-
-## How isolation works (and its limits)
-
-- The sandbox is a fresh temp dir with the fixture committed — no inherited project `CLAUDE.md`.
-- `claude -p --setting-sources ""` loads zero **settings**, so global plugins/skills (and the
-  harness's own hooks) do not reach the run. OAuth auth is preserved (the config dir is **not**
-  relocated; `--bare` would drop it). `--setting-sources` governs settings, not memory — but a probe
-  (`-p "list any global instructions you were given"` in a clean temp cwd) returns `NONE`, so the
-  user-level `~/.claude/CLAUDE.md` does **not** in fact leak into `-p` runs here.
-- The eval measures the **delta** between conditions, so any bias present in **both** arms cancels —
-  provided it is roughly additive. Scores saturate at `[0, 1]`, so a strong global bias on the very
-  signal being measured could compress the delta toward a false `no-signal`; the observed baselines
-  (well below ceiling, e.g. commit-discipline without-skill ≈ 44%) confirm that is not happening here.
-  The appended skill prose remains the only intended difference between arms.
-
-## Containment (read before evaluating an untrusted skill)
-
-Each run spawns a real agent that writes files and runs tools. It is confined to a throwaway temp
-`cwd`, runs with `--permission-mode acceptEdits` + a scoped `--allowedTools` allow-list (no arbitrary
-shell — no `curl`/`ssh`), and receives a **scrubbed minimal env** (no API keys / tokens / cloud creds
-from your shell). It does **not** use `--dangerously-skip-permissions`.
-
-It is **not** an OS path-jail: `acceptEdits` can still write outside `cwd`, and there is no network
-isolation. For your own trusted skills this is fine. Before evaluating an **untrusted / vendored**
-skill body (which could carry a prompt injection), run the eval inside a disposable environment (VM /
-container / CI sandbox). A built-in OS sandbox (macOS Seatbelt / a container) is a deferred hardening.
-
-## Add an eval
-
-1. Add an `EvalCase` to `src/cases.ts`:
-   - `skill`: the skill folder name under `packages/core/skills/` (its `SKILL.md` is what gets appended).
-   - `prompt`: the task, identical in both conditions.
-   - `fixture`: the mini-repo files, committed by value.
-   - `scorer`: **deterministic first**. Only reach for an LLM judge when a check genuinely
-     cannot be expressed as an assertion over files / git state.
-2. If you need a new scorer, add it to `src/scorers.ts` and unit-test it in `scorers.test.ts`.
-   Scorers are pure functions over a `RunOutcome` — test them without spending a token.
-3. Run `pnpm eval <skill> --sensitivity` and confirm the full skill beats its gutted version.
-   If it does not, the eval is not measuring the prose — fix the task or the scorer, not the score.
-
-## Architecture
-
-Hexagonal, so the logic is testable without an LLM:
-
-- `scorers.ts` — pure scorers (`RunOutcome -> ScoreResult`). Unit-tested.
-- `runner.ts` — pure orchestration: N runs per condition, aggregate, verdict. Unit-tested with a fake port.
-- `claude-adapter.ts` — the imperative shell: sandbox + `claude -p` + outcome collection. The only
-  impure part; validated by the real run, not unit tests.
-- `cli.ts` — argument parsing, report archival.
-
-## Not in v1 (deferred)
-
-All ~30 skills, a blocking CI gate (LLM cost), evals for hooks (already unit-testable), cross-model
-benchmarks, agent evals. A third pilot on a vague-1 vendored skill waits for that skill to land (DEV-385).
+The nine files in `reports/` are preserved byte-for-byte: six native mission-team
+journals, their two Markdown reports and the commit-discipline report. They are
+historical observations, not current certification. Existing user journals and caches
+are not deleted. The still-supported certification reader may read historical JSON
+reports if present; it does not import or execute the retired engine.

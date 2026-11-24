@@ -1,6 +1,9 @@
 # Evaluation runner runbook
 
-Status: approved implementation reference, 2026-09-07.
+Status: historical reference, retired by DEV-1400. The engine, campaign commands
+and protocol inputs described below no longer ship. Preserve these observations
+for history; they are not executable instructions. For optional native scenarios,
+see [the retained scenario guide](../apps/eval-harness/README.md). No paid run is authorized.
 
 This document is the durable operating model for the autonomous-value
 evaluation path. It exists to keep the implementation reproducible, bounded and

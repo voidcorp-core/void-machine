@@ -1,8 +1,8 @@
 // Build the frozen certification manifest `packages/core/data/certification.json` by joining the
-// committed graph model (capability contract) with the eval-harness JSON reports (proof). Monorepo-
+// committed graph model (capability contract) with historical JSON reports (proof). Monorepo-
 // only: default writes the artifact, `--check` fails on drift (CI gate).
 // Today there are no eval JSON reports, so every capability ships `verified` with zero `effective` —
-// the honest current state; effective populates in Phase E when the paid evals run and emit JSON.
+// the honest current state. The retired evaluation engine produces no new reports.
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

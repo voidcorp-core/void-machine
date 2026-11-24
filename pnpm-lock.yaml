@@ -28,24 +28,6 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@24.13.6)(vite@8.1.3(@types/node@24.13.6)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
 
-  apps/eval-harness:
-    devDependencies:
-      '@types/node':
-        specifier: ^24.13.6
-        version: 24.13.6
-      '@voidcorp/mission-engine':
-        specifier: workspace:*
-        version: link:../../packages/mission-engine
-      tsx:
-        specifier: ^4.19.0
-        version: 4.22.4
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: ^5.0.1
-        version: 5.0.1(@types/node@24.13.6)(vite@8.1.3(@types/node@24.13.6)(esbuild@0.28.1)(tsx@4.22.4)(yaml@2.9.0))
-
   apps/graph-studio:
     dependencies:
       3d-force-graph:

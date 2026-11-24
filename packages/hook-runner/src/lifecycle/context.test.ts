@@ -49,27 +49,6 @@ describe('sessionStartOutput', () => {
     );
   });
 
-  it('carries the invocation alert, which is the only place it can be read', () => {
-    const context = sessionStartOutput(
-      '3.0.0',
-      undefined,
-      'void-machine: 2 recorded skill(s) no longer resolve: brainstorming, ticket-writer.',
-    ).hookSpecificOutput.additionalContext;
-    expect(context).toContain('no longer resolve');
-    expect(context).toContain('ticket-writer');
-  });
-
-  it('starts the alert on its own line, so it does not trail off the end of the floor', () => {
-    const context = sessionStartOutput('3.0.0', undefined, 'ALERT-MARKER').hookSpecificOutput.additionalContext;
-    expect(context).toContain('\nALERT-MARKER');
-  });
-
-  it('adds nothing at all when the invocation surface is healthy', () => {
-    expect(sessionStartOutput('3.0.0', undefined, undefined).hookSpecificOutput.additionalContext).toBe(
-      sessionStartOutput('3.0.0').hookSpecificOutput.additionalContext,
-    );
-  });
-
   it('keeps the non-negotiable floor ahead of the notice', () => {
     const context = sessionStartOutput('0.17.0', 'UPGRADE-MARKER').hookSpecificOutput.additionalContext;
     expect(context.indexOf('Non-negotiable floor')).toBeLessThan(context.indexOf('UPGRADE-MARKER'));
@@ -78,7 +57,6 @@ describe('sessionStartOutput', () => {
   it('appends the ResumeBundle context after the safety floor', () => {
     const context = sessionStartOutput(
       '3.4.0',
-      undefined,
       undefined,
       '[void-machine resume]\nProgram: portable-resume\n',
     ).hookSpecificOutput.additionalContext;

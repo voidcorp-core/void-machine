@@ -434,42 +434,19 @@ describe('lifecycle context', () => {
     return result.stdout ?? '';
   }
 
-  function projectWith(skill: string, recorded: string): string {
+  it('ignores historical usage alerts without rewriting user history', () => {
     const root = mkdtempSync(join(tmpdir(), 'void-banner-'));
-    mkdirSync(join(root, '.claude', 'skills', skill), { recursive: true });
-    writeFileSync(join(root, '.claude', 'skills', skill, 'SKILL.md'), '---\n---\n');
-    const mission = join(root, '.void', 'machine', 'runs', 'mis_aaaaaaaaaaaaaaaa');
-    mkdirSync(mission, { recursive: true });
-    writeFileSync(
-      join(mission, 'events.jsonl'),
-      `${JSON.stringify({
-        kind: 'runtime.tool.started',
-        subject: `skill:${recorded}`,
-        ts: new Date().toISOString(),
-        payload: { category: 'skill', tool: 'Skill' },
-      })}\n`,
-    );
-    return root;
-  }
-
-  it('names a skill the project recorded but can no longer resolve, from the session after', () => {
-    const root = projectWith('void-ticket', 'ticket-writer');
+    const machine = join(root, '.void', 'machine');
+    mkdirSync(machine, { recursive: true });
+    const cache = join(machine, 'invocation.json');
+    const historical = JSON.stringify({ version: 2, fingerprint: 'historical', alert: 'STALE-USAGE-ALERT' });
+    writeFileSync(cache, historical);
     try {
-      // The first opening computes the verdict after its own stdout, so it is
-      // the next one that carries it. One session of delay costs nothing here,
-      // and it is what keeps the start instant.
-      expect(banner(root)).not.toContain('ticket-writer');
-      expect(banner(root)).toContain('ticket-writer');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('says nothing extra when every recorded name still resolves', () => {
-    const root = projectWith('void-ticket', 'void-ticket');
-    try {
-      banner(root);
-      expect(banner(root)).not.toContain('cannot resolve');
+      expect(banner(root)).not.toContain('STALE-USAGE-ALERT');
+      expect(readFileSync(cache, 'utf8')).toBe(historical);
+      rmSync(cache);
+      expect(banner(root)).toContain('Non-negotiable floor');
+      expect(existsSync(cache)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -683,15 +660,12 @@ describe('a hook fired from a worktree', () => {
     renameSync(second, join(main, 'retired-second'));
     const replay = replayEventLog(readFileSync(join(main, '.void/machine/runs', mission, 'events.jsonl'), 'utf8'));
     expect(replay.continuity).toBe('complete');
-    expect(replay.events).toHaveLength(9);
-    expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(replay.events).toHaveLength(3);
+    expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3]);
     expect(replay.events.every((event) => event.missionId === mission && event.correlationId === mission)).toBe(true);
     expect(replay.events.filter((event) => event.kind.startsWith('runtime.'))).toHaveLength(3);
     const outcomes = replay.events.filter((event) => event.kind === 'hook.completed');
-    expect(outcomes).toHaveLength(6);
-    for (const event of outcomes) {
-      expect(event.payload).toEqual(expect.objectContaining({ status: expect.stringMatching(/^(ok|skipped)$/) }));
-    }
+    expect(outcomes).toEqual([]);
   });
 
   it('writes its event under the installation root, never under the worktree it ran in', () => {

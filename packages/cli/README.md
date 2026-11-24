@@ -118,3 +118,19 @@ Print the command reference.
 ## License
 
 MIT.
+
+## Evaluation and usage retirement (breaking removal)
+
+The `mission usage-bind`, `mission usage-unbind`, `mission advisory-start` commands
+and `mission inspect --usage` option are removed. Use ordinary `mission inspect`
+for mission verdicts and `agents status` for observed workers. The eval workspace
+and root `pnpm eval` script no longer exist; optional scenarios and historical
+reports remain in `apps/eval-harness/README.md`.
+
+The `@voidcorp/hook-runner` invocation-health exports are removed:
+`cachedInvocationAlert`, `refreshInvocationVerdict`, `invocationAlert`, `journalFingerprint`,
+`installedSkillNames`, `resolutionVerdict`, `livenessVerdict`, `replacementFor`,
+`withSuccessor`, `ResolutionVerdict` and `LivenessVerdict`. Consumers should remove
+usage-based health calls; no replacement absence-of-use heuristic is provided.
+Doctor retains installation and runtime wiring diagnostics. Existing journals and
+caches remain untouched; startup no longer reads or refreshes invocation alerts.

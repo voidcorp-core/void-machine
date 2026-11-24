@@ -47,15 +47,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Pack the exact checked-out consumer artifact once
         env:
-          VOID_CONFORMANCE_ARTIFACT_DIR: ${{ runner.temp }}/void-consumer-artifact
+          VOID_CONFORMANCE_ARTIFACT_DIR: ${{ runner.temp }}/consumer-artifact
         run: pnpm conformance:pack
       - name: Upload the immutable tarball and its source manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
-            ${{ runner.temp }}/void-consumer-artifact/consumer.tgz.json
+            ${{ runner.temp }}/consumer-artifact/consumer.tgz
+            ${{ runner.temp }}/consumer-artifact/consumer.tgz.json
           if-no-files-found: error
           include-hidden-files: true
           compression-level: 0
@@ -83,11 +83,13 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/void-consumer-artifact
+          path: ${{ runner.temp }}/consumer-artifact
       - name: Exercise install, hooks and Autopilot from the same tarball
-        run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"
+        run: pnpm conformance:consumer --tarball "${{ runner.temp }}/consumer-artifact/consumer.tgz"
 
   validate:
+    if: ${{ !cancelled() }}
+    needs: consumer-artifact
     runs-on: ubuntu-latest
     env:
       # On pull requests, prove the reviewed branch commit rather than GitHub's
@@ -118,122 +120,132 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Download the same checked consumer archive
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/consumer-artifact
+
       # verify-gates:begin
+      - name: "[generated-artifacts] Generated artifacts"
+        continue-on-error: true
+        run: >-
+          node scripts/verify.mjs --gate generated-artifacts
+          --sha "$GATE_SHA"
+          --report "$RUNNER_TEMP/gate-reports/generated-artifacts.json"
+
       - name: "[version-lockstep] Version lockstep"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate version-lockstep
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/version-lockstep.json"
+          --report "$RUNNER_TEMP/gate-reports/version-lockstep.json"
 
       - name: "[anti-bloat] Anti-bloat"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate anti-bloat
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/anti-bloat.json"
+          --report "$RUNNER_TEMP/gate-reports/anti-bloat.json"
 
       - name: "[hook-runner-current] Generated hook runner"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate hook-runner-current
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/hook-runner-current.json"
+          --report "$RUNNER_TEMP/gate-reports/hook-runner-current.json"
 
       - name: "[core-assets] Core assets mirror"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate core-assets
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/core-assets.json"
+          --report "$RUNNER_TEMP/gate-reports/core-assets.json"
 
       - name: "[lint] Lint"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate lint
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/lint.json"
+          --report "$RUNNER_TEMP/gate-reports/lint.json"
 
       - name: "[publish-safety] Publish safety"
         continue-on-error: true
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/consumer-artifact/consumer.tgz
         run: >-
           node scripts/verify.mjs --gate publish-safety
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/publish-safety.json"
+          --report "$RUNNER_TEMP/gate-reports/publish-safety.json"
 
       - name: "[package-size] Package size report"
         continue-on-error: true
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/consumer-artifact/consumer.tgz
         run: >-
           node scripts/verify.mjs --gate package-size
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/package-size.json"
+          --report "$RUNNER_TEMP/gate-reports/package-size.json"
 
       - name: "[build] Build packages"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate build
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/build.json"
+          --report "$RUNNER_TEMP/gate-reports/build.json"
 
       - name: "[self-host-sync] Self-host compile"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate self-host-sync
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/self-host-sync.json"
+          --report "$RUNNER_TEMP/gate-reports/self-host-sync.json"
 
       - name: "[self-host-doctor] Self-host doctor"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate self-host-doctor
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/self-host-doctor.json"
-
-      - name: "[generated-artifacts] Generated artifacts"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate generated-artifacts
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/generated-artifacts.json"
+          --report "$RUNNER_TEMP/gate-reports/self-host-doctor.json"
 
       - name: "[skill-references] Skill references"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate skill-references
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/skill-references.json"
+          --report "$RUNNER_TEMP/gate-reports/skill-references.json"
 
       - name: "[test-engine] Mission engine tests"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate test-engine
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-engine.json"
+          --report "$RUNNER_TEMP/gate-reports/test-engine.json"
 
       - name: "[test-local] Local tests"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate test-local
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-local.json"
+          --report "$RUNNER_TEMP/gate-reports/test-local.json"
 
       - name: "[test-network] Network and browser tests"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate test-network
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-network.json"
+          --report "$RUNNER_TEMP/gate-reports/test-network.json"
 
       - name: "[typecheck] Typecheck"
         continue-on-error: true
         run: >-
           node scripts/verify.mjs --gate typecheck
           --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/typecheck.json"
+          --report "$RUNNER_TEMP/gate-reports/typecheck.json"
 
       - name: Aggregate exact-SHA gate reports
         if: ${{ !cancelled() && steps.admission.outcome == 'success' }}
         run: >-
           node scripts/verify.mjs --aggregate --sha "$GATE_SHA"
-          --reports ".void/machine/gate-reports"
+          --reports "$RUNNER_TEMP/gate-reports"
       # verify-gates:end

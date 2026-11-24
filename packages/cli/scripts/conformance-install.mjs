@@ -199,10 +199,10 @@ async function main() {
   const temporary = await mkdtemp(join(tmpdir(), 'void-install-conformance-'));
   try {
     const durations = await exerciseInstalledRuntimes(
-      () => installPackage(temporary, tarball),
+      () => process.env.VOID_CONFORMANCE_BIN ?? installPackage(temporary, tarball),
       (bin, runtime) => exerciseRuntime(temporary, bin, runtime),
     );
-    await execByPackageName(temporary, tarball);
+    if (!process.env.VOID_CONFORMANCE_BIN) await execByPackageName(temporary, tarball);
     durations.sort((left, right) => left - right);
     const medianMs = Math.round(durations[Math.floor(durations.length / 2)] ?? 0);
     process.stdout.write(

@@ -133,7 +133,7 @@ describe('the human gate and the publish path are untouched', () => {
 
   it('validates the tagged tree before publishing it', () => {
     expect(releaseWorkflow).toContain('pnpm version:check');
-    expect(releaseWorkflow).toContain('pnpm check:publish');
+    expect(releaseWorkflow).toContain('node "$CONTROL_ROOT/scripts/prepare-release-artifact.mjs" check');
   });
 });
 
@@ -162,14 +162,26 @@ describe('the release tree is validated and packed without OIDC', () => {
     expect(validateReleaseJob).toContain('path: release-tree');
   });
 
-  it('validates before packing the final tarball exactly once', () => {
+  it('prepares the fresh CLI once, then validates and binds those exact bytes without repacking', () => {
     expect(validateReleaseJob).toContain('package_json_file: release-tree/package.json');
-    expect(validateReleaseJob).toContain('pnpm version:check');
-    expect(validateReleaseJob).toContain('pnpm build');
-    expect(validateReleaseJob).toContain('pnpm typecheck');
-    expect(validateReleaseJob).toContain('pnpm test');
-    expect(validateReleaseJob).toContain('pnpm check:publish');
-    expect(validateReleaseJob.match(/pnpm --filter \.\/packages\/cli pack/g)).toHaveLength(1);
+    const commands = ['node release-control/scripts/prepare-release-artifact.mjs pack', 'pnpm version:check',
+      'pnpm --filter @voidcorp/pack-monorepo build', 'pnpm --filter @voidcorp/pack-nextjs build',
+      'pnpm typecheck', 'pnpm test', 'node "$CONTROL_ROOT/scripts/prepare-release-artifact.mjs" check',
+      'node release-control/scripts/prepare-release-artifact.mjs prepare'];
+    const positions = commands.map(command => validateReleaseJob.indexOf(command));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(validateReleaseJob.match(/prepare-release-artifact\.mjs pack/g)).toHaveLength(1);
+    for (const historicalScript of ['pnpm conformance:pack', 'pnpm check:publish', 'pnpm check:size']) {
+      expect(validateReleaseJob).not.toContain(historicalScript);
+    }
+    expect(validateReleaseJob).not.toContain('pnpm --filter ./packages/cli pack');
+    expect(validateReleaseJob).not.toMatch(/^\s+id-token:\s*write/m);
+    expect(validateReleaseJob).toMatch(/ARTIFACT_DIR:.*npm-release/);
+    expect(validateReleaseJob).toContain('RELEASE_TREE:');
+    expect(validateReleaseJob).toContain('RELEASE_COMMIT:');
+    // historical-release-preparation.test.ts executes the producer's pre-generation freshness refusal.
+    // release-prepared-artifact.test.ts proves the canonical rename preserves those bytes.
   });
 
   it('uploads one short-lived integrity-bound artifact and exposes its identity', () => {

@@ -24,6 +24,7 @@ function fixture(): { root: string; tarball: string } {
         packageName: PRODUCT_IDENTITY.packageName,
         packageVersion: '3.6.0',
         sourceSha: SHA,
+        runIdentity: 'local',
       }),
       null,
       2,
@@ -51,6 +52,7 @@ describe('immutable consumer artifact', () => {
       packageName: PRODUCT_IDENTITY.packageName,
       packageVersion: '3.6.0',
       sourceSha: SHA,
+        runIdentity: 'local',
       tarballSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
   });
@@ -70,4 +72,12 @@ describe('immutable consumer artifact', () => {
     mkdirSync(join(root, 'other'));
     expect(() => verifyConformanceArtifact(missing, SHA)).toThrow(/artifact|tarball/i);
   });
+});
+
+it('rejects an artifact from another workflow run or package version', () => {
+  const { tarball } = fixture();
+  expect(() => verifyConformanceArtifact(tarball, SHA, { runIdentity: '12:2' }))
+    .toThrow(/run/i);
+  expect(() => verifyConformanceArtifact(tarball, SHA, { packageVersion: '9.9.9' }))
+    .toThrow(/version/i);
 });

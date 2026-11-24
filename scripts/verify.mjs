@@ -5,12 +5,15 @@ import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
+  rmSync,
   readFileSync,
   readdirSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +44,15 @@ const RESOURCES = new Set([
 
 /** @type {readonly Gate[]} */
 export const GATES = Object.freeze([
+  gate(
+    'generated-artifacts',
+    'Generated artifacts',
+    ['pnpm', 'derive:check'],
+    'consumer',
+    'subprocess',
+    ['source'],
+    { artifact: true, fix: ['pnpm', 'derive'] },
+  ),
   gate('version-lockstep', 'Version lockstep', ['pnpm', 'version:check'], 'contract', 'filesystem', ['source']),
   gate('anti-bloat', 'Anti-bloat', ['pnpm', 'anti-bloat:check'], 'contract', 'subprocess', ['source']),
   gate(
@@ -70,8 +82,12 @@ export const GATES = Object.freeze([
     },
   ),
   gate('lint', 'Lint', ['pnpm', 'lint'], 'contract', 'cpu', ['source', 'tests']),
-  gate('publish-safety', 'Publish safety', ['pnpm', 'check:publish'], 'consumer', 'filesystem', ['source']),
-  gate('package-size', 'Package size report', ['pnpm', 'check:size'], 'consumer', 'filesystem', ['source']),
+  gate('publish-safety', 'Publish safety', ['pnpm', 'check:publish'], 'consumer', 'filesystem', ['source'], {
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/consumer-artifact/consumer.tgz' },
+  }),
+  gate('package-size', 'Package size report', ['pnpm', 'check:size'], 'consumer', 'filesystem', ['source'], {
+    ciEnv: { VOID_CONFORMANCE_TARBALL: '${{ runner.temp }}/consumer-artifact/consumer.tgz' },
+  }),
   gate('build', 'Build packages', ['pnpm', 'build'], 'contract', 'subprocess', ['source']),
   gate(
     'self-host-sync',
@@ -88,15 +104,6 @@ export const GATES = Object.freeze([
     'consumer',
     'subprocess',
     ['source'],
-  ),
-  gate(
-    'generated-artifacts',
-    'Generated artifacts',
-    ['pnpm', 'derive:check'],
-    'consumer',
-    'subprocess',
-    ['source'],
-    { artifact: true, fix: ['pnpm', 'derive'] },
   ),
   gate(
     'skill-references',
@@ -312,11 +319,11 @@ function snapshot(paths) {
   return run(['git', 'status', '--porcelain', '--', ...paths], { quiet: true }).output;
 }
 
-function runOne(gateDefinition, sha) {
+function runOne(gateDefinition, sha, env = {}) {
   const before = snapshot(gateDefinition.drift);
   const startedAt = new Date().toISOString();
   const started = performance.now();
-  const outcome = run(gateDefinition.run);
+  const outcome = run(gateDefinition.run, { env });
   const after = snapshot(gateDefinition.drift);
   const drifted = before !== null && after !== null && before !== after;
   const exitCode = outcome.exitCode === 0 && !drifted ? 0 : 1;
@@ -336,9 +343,13 @@ function runOne(gateDefinition, sha) {
 function checkedPath(path, kind) {
   if (path === null) throw new Error(`verify: --${kind} needs a path`);
   const absolute = resolve(ROOT, path);
-  const rel = relative(ROOT, absolute);
-  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || resolve(absolute) !== absolute) {
-    throw new Error(`verify: --${kind} must stay inside the repository`);
+  // CI owns RUNNER_TEMP; reports there do not contaminate source cleanliness.
+  const roots = [ROOT, ...(process.env.RUNNER_TEMP ? [resolve(process.env.RUNNER_TEMP)] : [])];
+  if (!roots.some(root => {
+    const rel = relative(root, absolute);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+  })) {
+    throw new Error(`verify: --${kind} must stay inside the repository or RUNNER_TEMP`);
   }
   return absolute;
 }
@@ -406,7 +417,23 @@ function usage() {
   ].join('\n');
 }
 
-function main() {
+// An invocation-owned temporary is reusable only while the checkout is clean.
+// Edited local sources retain standalone inspection without a false HEAD attestation.
+export async function withVerificationArtifact(selected, execute) {
+  if (process.env.VOID_CONFORMANCE_TARBALL
+    || !['publish-safety', 'package-size'].every(id => selected.some(gate => gate.id === id))
+    || run(['git', 'status', '--porcelain=v1', '--untracked-files=all'], { quiet: true }).output.trim() !== '') {
+    return await execute({});
+  }
+  const temporary = mkdtempSync(resolve(tmpdir(), 'verify-artifact-'));
+  try {
+    const { packConformanceArtifact } = await import('../packages/cli/scripts/conformance-artifact.mjs');
+    const artifact = await packConformanceArtifact(resolve(temporary, 'artifact'));
+    return await execute({ VOID_CONFORMANCE_TARBALL: artifact.tarball });
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+}
+
+async function main() {
   try {
     validateCatalogue();
     const options = parseArgs(process.argv.slice(2));
@@ -445,7 +472,8 @@ function main() {
         if (run(item.fix).exitCode !== 0) throw new Error(`verify: could not regenerate ${item.id}`);
       }
     }
-    const failed = selected.map((item) => runOne(item, sha)).filter((report) => report.status === 'failed');
+    const failed = await withVerificationArtifact(selected, env =>
+      selected.map(item => runOne(item, sha, env)).filter(report => report.status === 'failed'));
     if (failed.length === 0) {
       process.stdout.write(`verify: ${String(selected.length)} gate(s) passed on ${sha}.\n`);
       return;
@@ -468,4 +496,4 @@ function validateCatalogue() {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

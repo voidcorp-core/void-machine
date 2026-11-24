@@ -28,10 +28,10 @@ function sequence(document: ReturnType<typeof workflow>, path: readonly string[]
   return node.toJSON() as unknown[];
 }
 
-function evaluate(value: unknown, github: object): unknown {
+function evaluate(value: unknown, github: object, extra: Record<string, unknown> = {}): unknown {
   if (typeof value !== 'string') return value;
   return value.replace(/\$\{\{([\s\S]*?)\}\}/g, (_match, expression: string) =>
-    String(runInNewContext(expression, { github }, { timeout: 100 })));
+    String(runInNewContext(expression, { github, ...extra }, { timeout: 100 })));
 }
 
 function admission(eventName: string, event: object) {
@@ -56,7 +56,20 @@ describe('development feedback and integration admission', () => {
         expect(evaluate(condition, context), job).toBe('true');
       }
     }
-    expect(ci.getIn(['jobs', 'validate', 'if'])).toBeUndefined();
+    expect(ci.getIn(['jobs', 'validate', 'if'])).toBe(`\${{ !cancelled() }}`);
+  });
+
+  it.each(['success', 'failure', 'skipped'])('keeps required validation admitted after producer %s unless cancelled', result => {
+    const ci = workflow('.github/workflows/ci.yml');
+    expect(ci.getIn(['jobs', 'validate', 'needs'])).toBe('consumer-artifact');
+    const condition = ci.getIn(['jobs', 'validate', 'if']);
+    for (const cancelled of [false, true]) {
+      expect(evaluate(condition, contexts.draft, {
+        needs: { 'consumer-artifact': { result } }, cancelled: () => cancelled,
+      })).toBe(String(!cancelled));
+    }
+    // Draft refusal still executes inside the admitted required job.
+    expect(admission('pull_request', contexts.draft.event).status).toBe(1);
   });
 
   it.each([
@@ -143,7 +156,7 @@ describe('development feedback and integration admission', () => {
       ['packages/core/src/skills/void-verify/references/quality.yml', 'quality'],
     ] as const) {
       const ci = workflow(path);
-      expect(ci.getIn(['jobs', id, 'if'])).toBeUndefined();
+      expect(ci.getIn(['jobs', id, 'if'])).toBe(id === 'validate' ? `\${{ !cancelled() }}` : undefined);
       const steps = sequence(ci, ['jobs', id, 'steps']) as {
         run?: string; uses?: string; 'continue-on-error'?: boolean;
       }[];

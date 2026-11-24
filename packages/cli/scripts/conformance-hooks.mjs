@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
+import { installPackage } from './conformance-install.mjs';
 import { conformanceArtifactFromEnvironment } from './conformance-artifact.mjs';
 import {
   assertCanonicalHookReplay,
@@ -22,7 +22,6 @@ import {
 } from './conformance-hooks-lib.mjs';
 import {
   conformanceFixtureEnvironment,
-  packageManagerCommand,
   requireConformanceExit,
   runConformanceProcess,
 } from './conformance-process.mjs';
@@ -264,33 +263,10 @@ async function assertBrokenWiring(bin, fixture, mode, env) {
   }
 }
 
-async function exerciseFixture(temporary, tarball, npmCache, mode) {
+async function exerciseFixture(temporary, bin, mode) {
   const fixture = join(temporary, `fixture ${mode}`);
   await mkdir(join(fixture, 'tmp'), { recursive: true });
-  const env = conformanceFixtureEnvironment(fixture, {
-    npm_config_cache: npmCache,
-  });
-  await run(
-    npm.executable,
-    [
-      ...npm.prefixArguments,
-      'install',
-      '--offline',
-      '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
-      tarball,
-    ],
-    { cwd: fixture, env },
-  );
-  const bin = join(
-    fixture,
-    'node_modules',
-    PRODUCT_IDENTITY.packageName,
-    'dist',
-    'bin',
-    `${PRODUCT_IDENTITY.commands.primary}.mjs`,
-  );
+  const env = conformanceFixtureEnvironment(fixture);
   await requireRegularFile(bin, `${mode} installed CLI`);
   await writeFile(join(fixture, 'example.py'), 'print("safe")\n', 'utf8');
   await run(
@@ -330,15 +306,13 @@ async function exerciseFixture(temporary, tarball, npmCache, mode) {
   return shells;
 }
 
-const npm = packageManagerCommand('npm');
 const temporary = await mkdtemp(join(tmpdir(), 'void hook conformance-'));
 try {
   const { manifest, tarball } = await conformanceArtifactFromEnvironment();
-  const npmCache = join(temporary, 'npm-cache');
-  await mkdir(npmCache, { recursive: true });
+  const bin = process.env.VOID_CONFORMANCE_BIN ?? await installPackage(temporary, tarball);
   const codexShells = new Set();
   for (const mode of ['claude', 'codex', 'both']) {
-    for (const shell of await exerciseFixture(temporary, tarball, npmCache, mode)) {
+    for (const shell of await exerciseFixture(temporary, bin, mode)) {
       codexShells.add(shell);
     }
   }

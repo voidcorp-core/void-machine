@@ -11,6 +11,7 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PRODUCT_IDENTITY } from '../../../scripts/product-identity.mjs';
@@ -22,12 +23,12 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..');
-const CLI_MANIFEST = resolve(HERE, '..', 'package.json');
 const SOURCE_SHA = /^[0-9a-f]{40}$/;
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$/;
 const MANIFEST_KEYS = [
   'packageName',
   'packageVersion',
+  'runIdentity',
   'schemaVersion',
   'sourceSha',
   'tarballSha256',
@@ -43,6 +44,10 @@ function artifactBytes(value) {
 }
 
 function requireIdentity(identity) {
+  if (identity?.runIdentity !== undefined && identity.runIdentity !== 'local'
+    && !/^[1-9][0-9]*:[1-9][0-9]*$/.test(identity.runIdentity)) {
+    fail('run identity must contain the workflow run and attempt');
+  }
   if (identity?.packageName !== PRODUCT_IDENTITY.packageName) {
     fail(`package name must be ${PRODUCT_IDENTITY.packageName}`);
   }
@@ -58,6 +63,7 @@ export function createArtifactManifest(bytes, identity) {
   requireIdentity(identity);
   return Object.freeze({
     schemaVersion: 1,
+    runIdentity: identity.runIdentity ?? 'local',
     packageName: identity.packageName,
     packageVersion: identity.packageVersion,
     sourceSha: identity.sourceSha,
@@ -88,7 +94,7 @@ function readManifest(path) {
   }
 }
 
-export function verifyConformanceArtifact(tarballPath, expectedSourceSha) {
+export function verifyConformanceArtifact(tarballPath, expectedSourceSha, expectedIdentity = {}) {
   if (typeof tarballPath !== 'string' || tarballPath === '') {
     fail('tarball path is required');
   }
@@ -104,6 +110,10 @@ export function verifyConformanceArtifact(tarballPath, expectedSourceSha) {
   if (manifest.sourceSha !== expectedSourceSha) {
     fail('artifact source SHA does not match the checked-out source');
   }
+  if (manifest.runIdentity !== (expectedIdentity.runIdentity ?? 'local')) fail('artifact run does not match this invocation');
+  if (expectedIdentity.packageVersion !== undefined && manifest.packageVersion !== expectedIdentity.packageVersion) {
+    fail('artifact package version does not match the checkout');
+  }
   const expected = createArtifactManifest(readFileSync(tarballPath), manifest);
   if (manifest.tarballSha256 !== expected.tarballSha256) {
     fail('tarball digest does not match its bytes');
@@ -111,13 +121,13 @@ export function verifyConformanceArtifact(tarballPath, expectedSourceSha) {
   return expected;
 }
 
-async function gitText(args) {
+async function gitText(args, root = REPO_ROOT) {
   const result = await runConformanceProcess({
     command: 'git',
     // Checkout's temporary HOME is not inherited by the isolated conformance process.
     // Trust only this source checkout, for this command; never write global Git config.
-    args: ['-c', `safe.directory=${REPO_ROOT}`, '-C', REPO_ROOT, ...args],
-    cwd: REPO_ROOT,
+    args: ['-c', `safe.directory=${root}`, '-C', root, ...args],
+    cwd: root,
   });
   return requireConformanceExit(result, `git ${args[0]}`).stdout.trim();
 }
@@ -126,8 +136,8 @@ export function requireCleanCheckoutStatus(status, phase) {
   if (status !== '') fail(`checkout changed ${phase} pack:\n${status}`);
 }
 
-async function requireCleanCheckout(phase) {
-  const status = await gitText(['status', '--porcelain=v1', '--untracked-files=all']);
+async function requireCleanCheckout(phase, root = REPO_ROOT) {
+  const status = await gitText(['status', '--porcelain=v1', '--untracked-files=all'], root);
   requireCleanCheckoutStatus(status, phase);
 }
 
@@ -143,22 +153,25 @@ export async function verifyConformanceArtifactForCheckout(configured) {
   if (typeof configured !== 'string' || configured === '') {
     fail('tarball path is required');
   }
+  await requireCleanCheckout('before consuming');
   const tarball = resolve(configured);
   const sourceSha = await gitText(['rev-parse', '--verify', 'HEAD']);
-  const manifest = verifyConformanceArtifact(tarball, sourceSha);
+  const manifest = verifyConformanceArtifact(tarball, sourceSha, await packageIdentity(sourceSha));
   return { manifest, tarball };
 }
 
-async function packageIdentity(sourceSha) {
-  const manifest = JSON.parse(await readFile(CLI_MANIFEST, 'utf8'));
+async function packageIdentity(sourceSha, root = REPO_ROOT) {
+  const manifest = JSON.parse(await readFile(resolve(root, 'packages/cli/package.json'), 'utf8'));
   return {
     packageName: manifest.name,
     packageVersion: manifest.version,
     sourceSha,
+    runIdentity: process.env.GITHUB_RUN_ID === undefined ? 'local'
+      : `${process.env.GITHUB_RUN_ID}:${process.env.GITHUB_RUN_ATTEMPT}`,
   };
 }
 
-export async function packConformanceArtifact(outputDirectory) {
+export async function packConformanceArtifact(outputDirectory, root = REPO_ROOT) {
   if (typeof outputDirectory !== 'string' || outputDirectory === '') {
     fail('output directory is required');
   }
@@ -166,8 +179,10 @@ export async function packConformanceArtifact(outputDirectory) {
   if (existsSync(destination)) fail(`output already exists: ${destination}`);
   const tarball = join(destination, 'consumer.tgz');
   const manifestPath = `${tarball}.json`;
-  await requireCleanCheckout('before');
-  const sourceSha = await gitText(['rev-parse', '--verify', 'HEAD']);
+  await requireCleanCheckout('before', root);
+  const sourceSha = await gitText(['rev-parse', '--verify', 'HEAD'], root);
+  await checkArtifactFreshness(root);
+  await requireCleanCheckout('after freshness', root);
   await mkdir(dirname(destination), { recursive: true });
   const temporary = await mkdtemp(join(dirname(destination), '.harness-conformance-pack-'));
   try {
@@ -182,28 +197,57 @@ export async function packConformanceArtifact(outputDirectory) {
         '--pack-destination',
         temporary,
       ],
-      cwd: REPO_ROOT,
+      cwd: root,
     });
     requireConformanceExit(packed, 'pack consumer artifact');
-    await requireCleanCheckout('after');
-    if (await gitText(['rev-parse', '--verify', 'HEAD']) !== sourceSha) {
+    await requireCleanCheckout('after', root);
+    if (await gitText(['rev-parse', '--verify', 'HEAD'], root) !== sourceSha) {
       fail('checked-out source changed while the artifact was packed');
     }
 
     const names = (await readdir(temporary)).filter((name) => name.endsWith('.tgz'));
     if (names.length !== 1) fail('pack must produce exactly one tarball');
     const bytes = await readFile(join(temporary, names[0]));
-    const manifest = createArtifactManifest(bytes, await packageIdentity(sourceSha));
+    const manifest = createArtifactManifest(bytes, await packageIdentity(sourceSha, root));
     await writeFile(join(temporary, 'consumer.tgz.json'), `${JSON.stringify(manifest, null, 2)}\n`, {
       flag: 'wx',
     });
     await rename(join(temporary, names[0]), join(temporary, 'consumer.tgz'));
-    verifyConformanceArtifact(join(temporary, 'consumer.tgz'), sourceSha);
+    verifyConformanceArtifact(join(temporary, 'consumer.tgz'), sourceSha, await packageIdentity(sourceSha, root));
     await rename(temporary, destination);
     return { manifest, manifestPath, tarball };
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+}
+
+// This check compares original delivery bytes before prepack can regenerate them.
+export async function checkArtifactFreshness(root = REPO_ROOT) {
+  requireConformanceExit(await runConformanceProcess({
+    command: process.execPath, args: ['scripts/derive.mjs', '--check'], cwd: root,
+  }), 'check original delivery freshness');
+}
+
+// Standalone inspection supports edited sources without claiming clean-commit evidence.
+// CI supplies the exact attested archive instead; no fallback after invalid evidence.
+export async function withCliArtifact(inspect) {
+  if (process.env.VOID_CONFORMANCE_TARBALL) {
+    const { tarball } = await conformanceArtifactFromEnvironment();
+    return await inspect(tarball);
+  }
+  await checkArtifactFreshness();
+  const temporary = await mkdtemp(join(tmpdir(), 'cli-inspection-'));
+  try {
+    const pnpm = packageManagerCommand('pnpm');
+    requireConformanceExit(await runConformanceProcess({
+      command: pnpm.executable,
+      args: [...pnpm.prefixArguments, '--filter', './packages/cli', 'pack', '--pack-destination', temporary],
+      cwd: REPO_ROOT,
+    }), 'pack CLI for standalone inspection');
+    const names = (await readdir(temporary)).filter(name => name.endsWith('.tgz'));
+    if (names.length !== 1) fail('pack must produce exactly one tarball');
+    return await inspect(join(temporary, names[0]));
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 }
 
 const invokedPath = process.argv[1] === undefined ? '' : resolve(process.argv[1]);

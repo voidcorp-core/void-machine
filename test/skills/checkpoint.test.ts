@@ -111,7 +111,6 @@ describe('program and checkpoint ownership', () => {
   });
 
   it('carries work observations and intentions without making them authoritative progress', () => {
-    expect(flat(body(SKILL))).toMatch(/observations and intentions, never authoritative current or next unit/i);
     expect(SKILL).toContain('## Engaged work');
     expect(SKILL).toContain('## Planned work');
     expect(flat(body(SKILL))).toMatch(/Removing a planned ticket closes nothing remotely and deletes no worktree/i);

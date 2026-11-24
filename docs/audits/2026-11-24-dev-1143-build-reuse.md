@@ -55,3 +55,35 @@ candidate workflow runs. No remote permissions or publication settings changed.
 Official semantics used: [pnpm 10 pack lifecycle](https://pnpm.io/10.x/cli/pack),
 [upload-artifact v7 immutability](https://github.com/actions/upload-artifact/tree/v7),
 [download-artifact v7 current-run downloads](https://github.com/actions/download-artifact/tree/v7).
+
+## Observed candidate comparison
+
+Candidate b5cd39580c56fb2712c0efeaa4de1bcef536bc3a, same machine/tools and
+installed dependencies, one sequential sample of each retained command:
+
+| Candidate command | Packs | `build:cli` | Elapsed seconds |
+| --- | ---: | ---: | ---: |
+| `pnpm conformance:pack` | 1 | 1 | 5.60 |
+| `pnpm check:publish` with that artifact | 0 | 0 | 0.38 |
+| `pnpm check:size` with that artifact | 0 | 0 | 0.37 |
+| Total | 1 | 1 | 6.35 |
+
+The producer includes the new pre-generation freshness proof, costing one
+additional mission-engine build. The trace therefore records six individual
+package/asset build calls after, versus fifteen before; it does not pretend
+freshness is free. Total local elapsed for this path was 14.42 s before and
+6.35 s after. This is a single comparable local observation, not a CI latency
+or billing forecast.
+
+Real conformance, against each candidate's own verified CLI archive, passed all
+three suites: 19.84 s before, 17.11 s after. The npm trace proves six installs
+plus one package-name exec before, one install plus one package-name exec after.
+The baseline used an isolated clean clone of c8f1ba2; the candidate used its
+clean worktree. Each invocation created fresh fixture homes/caches, with no
+shared node_modules or consumer data across these measurements.
+
+The same candidate passed standalone safety and size on an edited tree before
+commit. Clean/dirty preparation routing and failed-preparator refusal are also
+exercised by real child-process fixtures. Detailed logs remain in the task's
+local handoff evidence; CI and the independent exact-head review are coordinator
+responsibilities, still outstanding at writer handoff.

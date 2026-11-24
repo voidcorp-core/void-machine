@@ -28,6 +28,7 @@ describe('checkout trust without ambient HOME', () => {
     const bytes = Buffer.from('packed bytes');
     writeFileSync(tarball, bytes);
     writeFileSync(`${tarball}.json`, JSON.stringify(createArtifactManifest(bytes, {
+      runIdentity: process.env.GITHUB_RUN_ID === undefined ? 'local' : `${process.env.GITHUB_RUN_ID}:${process.env.GITHUB_RUN_ATTEMPT}`,
       packageName: PRODUCT_IDENTITY.packageName, packageVersion: JSON.parse(readFileSync(join(checkout, 'packages/cli/package.json'), 'utf8')).version, sourceSha,
     })));
     const init = spawnSync('git', ['init', root], { encoding: 'utf8' });

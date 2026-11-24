@@ -2,9 +2,10 @@
 
 How to ship a new version. One model, one number — everything moves together.
 
-## Model: total lockstep (pre-1.0)
+## Model: total lockstep
 
-While the harness is pre-1.0, **one version governs everything** that carries a version (below).
+**One release version governs the retained package and plugin manifests listed below.**
+This lockstep policy continues after 1.0; private tooling versions are independent.
 Distinguish **versioned** (all manifests, in lockstep) from **published to npm** (only the CLI):
 
 - Plugin manifests (each `plugin.json`; the catalog is self-hosted at `.claude-plugin/marketplace.json`) — versioned.
@@ -21,9 +22,9 @@ A skill change, a CLI bugfix, and a runtime helper addition all ship under the s
 
 - **Coherence.** A skill that references a runtime helper ships in the same version as that helper.
 - **Trace.** `void-machine --version` matches `pnpm view voidmachine version` matches the marketplace HEAD.
-- **No skew incidents.** Pre-1.0, every divergence is a support nightmare. Lockstep eliminates the question.
+- **No skew incidents.** Every divergence is a support nightmare. Lockstep eliminates the question.
 
-### When we might split (post-1.0)
+### When we might split
 
 If runtime npm packages and Claude Code plugins develop genuinely independent cadences (multiple pack runtime patches between marketplace releases), we revisit. Until that's a real observed problem, single number stays.
 
@@ -348,9 +349,20 @@ Transient registry errors and delayed attestations are retried only within the
 documented bounds. Exhaustion stays red; it is never converted into a successful
 publish merely because the version is visible.
 
-`pnpm version:check` keeps every live package and plugin manifest at the canonical
-version. Frozen certification artifacts and their release-please entries have
-been retired; hook and core-asset freshness checks remain.
+`pnpm version:check` keeps the 18 retained release manifests at the canonical core
+plugin version. Development CI and local changed-file selection skip this check
+only for explanatory documentation, known test-only edits and the pure engine
+policies already recognized by impact selection. Manifest, release configuration,
+generation and uncertain changes keep it; promotion to `main` and the tagged
+publication candidate always run it. Hook and core-asset freshness checks remain.
+
+DEV-1409 retains the publication and back-merge controls unchanged. Native npm and
+GitHub signature verification alone does not establish the expected current run
+and attempt versus an existing publication's producer, or bind those identities
+to this release archive. No equivalent replacement for the complete existing
+contract was demonstrated, so no provenance-check reduction is claimed. The
+30-minute job ceiling and 12-minute pause allowance remain; no release timing was
+remeasured and no publication or back-merge was triggered to test this change.
 
 Release PRs receive the same five checks as feature PRs, and getting there took
 three releases to get right — so the reason is worth keeping.
@@ -411,9 +423,9 @@ existing suite deadlines remain unchanged.
 Install conformance and later
 runtime-invocation certification remain separate gates.
 
-There is no manual release fallback. `scripts/bump-version.mjs` remains a local
-maintenance utility, but repository versions, release tags and npm publication
-belong to release-please and the protected chain. A release failure is recovered
+There is no manual release fallback. Release Please owns version and changelog
+updates, including a deliberate version through its native `Release-As` footer.
+The protected release workflow owns npm publication. A release failure is recovered
 with the immutable tag retry above or with a new fix and version.
 
 Consumers on a project pull the new version with:
@@ -439,29 +451,25 @@ necessary ceiling revision requires a measured archive and a documented reason.
 
 ## What counts as breaking
 
-For pre-1.0 we use caret-incompatible semver (`^0.5.x` matches `0.5.*`, not `0.6.*`):
+The existing SemVer policy applies to the shared release version:
 
-- **Major** (or any minor bump pre-1.0): removes/renames a skill, hook, agent, or manifest field consumers reference. Changes the location of doctrine files. Changes a runtime npm package's public API in a breaking way.
+- **Major**: removes/renames a skill, hook, agent, or manifest field consumers reference. Changes the location of doctrine files. Changes a runtime npm package's public API in a breaking way.
 - **Minor**: new skill, new hook, new pack, new runtime export. Additive change to PHILOSOPHY.md.
 - **Patch**: skill content edits, hook bugfixes, CLI bugfixes, internal refactors with no consumer-visible API change.
 
 When in doubt, prefer minor over patch — consumers are alerted either way.
 
-## First-bump formatting note
-
-The first run of `bump-version.mjs` normalizes JSON formatting (2-space indent, multi-line arrays). Subsequent bumps touch only the `version` line. Intentional — the script uses `JSON.stringify(value, null, 2)` so we don't carry a hand-tuned formatter just for these manifests.
-
 ## Why release-please, not changesets
 
 We chose **release-please**: it derives the bump from Conventional Commits (which
 we already enforce), so there is no per-PR ceremony, and its `extra-files` config
-bumps all our non-npm manifests (marketplace + 7 plugin.json + mirror) in lockstep
-from one canonical version. The release PR keeps a human gate.
+updates the retained package and plugin manifests in lockstep from one canonical
+version. The release PR keeps a human gate.
 
 [changesets](https://github.com/changesets/changesets) was used earlier for CLI
 npm versioning and removed in v0.5.4: its model (independent versions per package,
 per-package CHANGELOGs) contradicts the single-number lockstep. If runtime npm
-cadence ever splits from marketplace cadence (post-1.0), revisit.
+cadence ever splits from marketplace cadence, revisit.
 
 ## CHANGELOG
 

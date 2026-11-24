@@ -13,6 +13,25 @@ describe('bounded native impact selection', () => {
     'packages/cli/src/commands/init.ts', 'packages/core/src/data/identity.json', 'unknown/file.ts', 'packages/unknown/value.test.ts'])('broadens %s', path => {
     expect(selectImpact([{ path }])).toMatchObject({ engine: true, local: true, network: true, consumer: true, crossPlatform: true });
   });
+  it('targets version coherence without weakening uncertain or release inputs', () => {
+    for (const path of ['docs/guide.md', 'test/verify/verify.test.ts', 'packages/mission-engine/src/risk/value.ts']) {
+      expect(selectImpact([{ path }]).version).toBe(false);
+      expect(ids([{ path }])).not.toContain('version-lockstep');
+    }
+    for (const path of ['packages/cli/package.json', 'packages/core/src/.claude-plugin/plugin.json',
+      'packages/core/dist/.claude-plugin/plugin.json', 'packages/cli/dist/core-assets/.claude-plugin/plugin.json',
+      'release-please-config.json', '.release-please-manifest.json', '.github/workflows/release.yml',
+      'scripts/check-version-lockstep.mjs', 'packages/cli/scripts/copy-core-assets.mjs', 'unknown/file.ts']) {
+      expect(selectImpact([{ path }]).version).toBe(true);
+      expect(ids([{ path }])).toContain('version-lockstep');
+    }
+    expect(selectImpact([{ path: 'docs/guide.md' }, { path: 'package.json' }]).version).toBe(true);
+    expect(selectImpact([{ path: 'docs/deleted.md', status: 'deleted' }]).version).toBe(true);
+    const changes = [{ path: 'test/verify/verify.test.ts' }];
+    expect(ciImpact('pull_request', { pull_request: { base: { ref: 'main', sha: 'a'.repeat(40) } } }, changes).version).toBe(true);
+    expect(ciImpact('merge_group', { merge_group: { base_sha: 'a'.repeat(40) } }, changes).version).toBe(false);
+    expect(ciImpact('push', {}, changes).version).toBe(true);
+  });
   it('selects an existing test project without dropping source dependents', () => {
     expect(selectImpact([{ path: 'packages/mission-engine/src/risk/value.test.ts' }])).toMatchObject({ engine: true, local: false, network: false, crossPlatform: false });
     expect(selectImpact([{ path: 'packages/mission-engine/src/risk/value.ts' }])).toMatchObject({ engine: true, local: true, network: true, consumer: true, crossPlatform: false });

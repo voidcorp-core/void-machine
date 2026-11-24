@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// Lockstep version guard. Pre-1.0, ONE version governs everything (see
-// docs/RELEASING.md). This fails CI if ANY version-carrying file diverges from
-// the canonical version (marketplace.json plugins[0].version) — catching a miss
-// by the release automation, the manual bumper, or a hand-edit, before it ships
-// a skewed install. The mirror (core-assets) is included on purpose.
+// Lockstep version guard: one version governs the retained release manifests
+// (see docs/RELEASING.md). Fail on divergence from the core plugin version,
+// including its generated mirror, before a skewed install ships.
 //
 // Usage: node scripts/check-version-lockstep.mjs   (exit 0 aligned, 1 drift)
 // Exported: findDrift(canonical, entries) — pure, unit-tested.

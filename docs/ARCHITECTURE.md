@@ -1354,7 +1354,7 @@ TypeScript compiler settings or the separate static guards.
 ## Versioning
 
 Lockstep: one number governs the CLI, the runtime npm packages, and the
-marketplace plugins. Bumped with `scripts/bump-version.mjs` (see RELEASING.md).
+marketplace plugins. Release Please owns version updates (see RELEASING.md).
 Changesets were removed in v0.5.4 because independent per-package versions
 contradict the lockstep model.
 
@@ -1397,8 +1397,8 @@ installation path checks remain in their existing owners.
 
 Roadmap (documented intent, not yet wired): skill front-matter schema check,
 per-hook smoke tests on a sample repo, CLI integration tests on a fresh fixture.
-Releases are cut with `scripts/bump-version.mjs` (lockstep), not changesets; the
-`.changeset/` directory is unused.
+Release Please prepares lockstep releases; the protected release workflow publishes
+the validated CLI archive. See [Releasing](RELEASING.md).
 
 ## Server-side floor (the void-enforce Action)
 

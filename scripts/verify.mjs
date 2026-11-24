@@ -24,15 +24,15 @@ export const GATES = [
   { id: 'test-network', run: ['pnpm', 'test:network'] },
 ];
 const CHEAP = new Set(['version-lockstep', 'anti-bloat', 'skill-references', 'lint']);
-const fullImpact = () => ({ docs: false, engine: true, local: true, network: true, consumer: true, crossPlatform: true });
+const fullImpact = () => ({ docs: false, version: true, engine: true, local: true, network: true, consumer: true, crossPlatform: true });
 
 export function selectImpact(changes) {
   if (changes.length === 0 || changes.some(change => !change.path || ['deleted', 'renamed'].includes(change.status))) return fullImpact();
   const paths = changes.flatMap(change => [change.path, change.previousPath].filter(Boolean));
   if (paths.some(path => typeof path !== 'string' || path.includes('..') || path.includes('\\'))) return fullImpact();
   const docs = path => /^docs\/.+\.md$/.test(path) || ['README.md', 'CONTRIBUTING.md'].includes(path);
-  if (paths.every(docs)) return { docs: true, engine: false, local: false, network: false, consumer: false, crossPlatform: false };
-  const result = { docs: false, engine: false, local: false, network: false, consumer: false, crossPlatform: false };
+  if (paths.every(docs)) return { docs: true, version: false, engine: false, local: false, network: false, consumer: false, crossPlatform: false };
+  const result = { docs: false, version: false, engine: false, local: false, network: false, consumer: false, crossPlatform: false };
   for (const path of paths) {
     if (docs(path)) continue;
     // Test-only edits select the existing Vitest project. Shared fixtures/config broaden.
@@ -57,6 +57,7 @@ export function selectGates(changes) {
   const impact = selectImpact(changes);
   return GATES.filter(gate => {
     if (impact.docs) return gate.id === 'skill-references';
+    if (gate.id === 'version-lockstep') return impact.version;
     if (gate.id.startsWith('test-')) return impact[gate.id.slice(5)];
     return true;
   });

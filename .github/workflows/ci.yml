@@ -52,7 +52,7 @@ jobs:
         run: pnpm skills:check-references
       - name: Version lockstep
         id: version
-        if: ${{ steps.impact.outputs.docs != 'true' }}
+        if: ${{ steps.impact.outputs.version != 'false' }}
         continue-on-error: true
         run: pnpm version:check
       - name: Anti-bloat
@@ -68,7 +68,7 @@ jobs:
       - name: Require every applicable cheap check
         if: ${{ !cancelled() }}
         env:
-          CHECKS_PASSED: ${{ steps.references.outcome == 'success' && (steps.impact.outputs.docs == 'true' || (steps.version.outcome == 'success' && steps.structure.outcome == 'success' && steps.lint.outcome == 'success')) }}
+          CHECKS_PASSED: ${{ steps.references.outcome == 'success' && (steps.impact.outputs.version == 'false' || steps.version.outcome == 'success') && (steps.impact.outputs.docs == 'true' || (steps.structure.outcome == 'success' && steps.lint.outcome == 'success')) }}
         run: test "$CHECKS_PASSED" = true
       # conformance:pack checks original committed deliveries before lifecycle generation.
       - name: Pack the exact candidate once

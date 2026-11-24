@@ -46,14 +46,21 @@ Remove a redundant post-merge run only after checking that no release, promotion
 needs it, and that the protected integration path proves the merged result. The
 example has no push trigger; add one where it provides distinct release evidence.
 
-For reusable enforcement, the caller must also declare `ready_for_review` and
-`converted_to_draft`, keeping its existing check names. Preserve
+For reusable enforcement, the caller must also declare `ready_for_review`, `converted_to_draft` and
+`edited` (including base retargeting), keeping its existing check names. Preserve
 `merge_group: checks_requested` where a queue is configured. Put concurrency only
 in that caller; the called workflow inherits `github.workflow` and must not cancel the same group. Its admission guard runs
 from the immutable harness checkout before Node setup and floor execution.
 GitHub-hosted runner usage belongs to the caller, even when the reusable workflow
 is public and the caller private. Compare latency and job-minutes before making
 any billing claim.
+
+The reusable implementation and installed reference assets are versioned harness
+sources. Extend quality through separate native project jobs/workflows; preserve
+the floor's pinned implementation and required context. A pin protects implementation
+identity, not invocation: this installer does not own the caller workflow or remote
+branch rules. Inspect required checks and caller protection before claiming that a
+consumer cannot omit enforcement. No automatic remote protection change is implied.
 
 Dependency audit is a separate project-owned job, without a `needs` edge that
 prevents lint/tests/build from running during an advisory-service outage. Preserve

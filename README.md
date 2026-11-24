@@ -206,7 +206,7 @@ filters. For a new caller, `.github/workflows/void-enforce.yml` can contain:
 name: void-enforce
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   merge_group:
     types: [checks_requested]
 permissions:
@@ -241,7 +241,10 @@ required candidate checks and periodic advisory surveillance independent of qual
 Do not install Bun just to add this example to an npm or pnpm project.
 
 Adoption is explicit: neither installation nor update overwrites your workflows
-or changes branch protection. Check the actual required names before rollout.
+or changes branch protection. The pinned floor protects implementation identity,
+not invocation: a removable caller or an unrequired check can still omit it. Inspect
+the actual caller protection and required names before claiming enforced coverage.
+Add project-specific quality jobs separately while keeping the versioned floor intact.
 GitHub-hosted runner usage for this public reusable workflow is billed to the
 caller, including a private caller; reuse does not transfer billing to this repo.
 See GitHub's [reusable workflow contract](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).

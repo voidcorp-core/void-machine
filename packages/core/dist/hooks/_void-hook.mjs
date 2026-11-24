@@ -7365,7 +7365,7 @@ function controlCharacter(edits) {
   }
   return evidenceVerdict(
     "CONTROL_CHARACTER_IN_SOURCE",
-    "control character in a source file; it is invisible in the diff and drops the file out of the project graph. A fixture that needs the byte builds it (String.fromCharCode(0), Buffer.concat) instead of holding it literally.",
+    "control character in a source file; it is invisible in the diff and drops the file out of text indexing. A fixture that needs the byte builds it (String.fromCharCode(0), Buffer.concat) instead of holding it literally.",
     evidence
   );
 }

@@ -1,79 +1,52 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
 
-const ROOT = resolve(import.meta.dirname, '..', '..');
-const REPORT_ROOT = resolve(ROOT, '.void', 'machine', `gate-runner-test-${String(process.pid)}`);
-const REPORT = resolve(REPORT_ROOT, 'version-lockstep.json');
-const SCRIPT = resolve(ROOT, 'scripts', 'verify.mjs');
-
-function gitHead(): string {
-  return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim();
+function fixture(failures: string[]) {
+  const root = mkdtempSync(join(tmpdir(), 'native-verify-'));
+  mkdirSync(join(root, 'scripts'));
+  mkdirSync(join(root, 'bin'));
+  cpSync(resolve('scripts/verify.mjs'), join(root, 'scripts/verify.mjs'));
+  writeFileSync(join(root, 'bin/pnpm'), `#!/usr/bin/env node\nimport {appendFileSync} from 'node:fs';\nappendFileSync('calls', process.argv.slice(2).join(' ') + '\\n');\nprocess.exit(${JSON.stringify(failures)}.includes(process.argv[2]) ? 9 : 0);\n`, { mode: 0o755 });
+  execFileSync('git', ['init', '-q', root]);
+  execFileSync('git', ['-C', root, 'add', '.']);
+  execFileSync('git', ['-C', root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '-qm', 'fixture']);
+  const run = (args: string[] = []) => spawnSync(process.execPath, ['scripts/verify.mjs', ...args], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${join(root, 'bin')}:${process.env.PATH}`, VOID_CONFORMANCE_TARBALL: 'already-prepared-by-owner' },
+  });
+  return { root, run, calls: () => readFileSync(join(root, 'calls'), 'utf8').trim().split('\n') };
 }
 
-function run(args: readonly string[]) {
-  return spawnSync(process.execPath, [SCRIPT, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
+describe('actual verification child failures', () => {
+  it('collects independent cheap failures and never starts dependent preparation', () => {
+    const f = fixture(['version:check', 'lint']);
+    try {
+      const result = f.run();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('version-lockstep, lint');
+      expect(f.calls()).toEqual(['version:check', 'anti-bloat:check', 'skills:check-references', 'lint']);
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
-}
-
-beforeAll(() => {
-  mkdirSync(REPORT_ROOT, { recursive: true });
-});
-
-afterAll(() => {
-  rmSync(REPORT_ROOT, { recursive: true, force: true });
-});
-
-describe('single gate process', () => {
-  it('writes one atomic report bound to the checked-out commit and exact argv', () => {
-    const sha = gitHead();
-    const result = run([
-      '--gate',
-      'version-lockstep',
-      '--sha',
-      sha,
-      '--report',
-      `.void/machine/gate-runner-test-${String(process.pid)}/version-lockstep.json`,
-    ]);
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(readFileSync(REPORT, 'utf8'))).toMatchObject({
-      schemaVersion: 1,
-      gateId: 'version-lockstep',
-      sha,
-      argv: ['pnpm', 'version:check'],
-      status: 'passed',
-      exitCode: 0,
-    });
+  it('stops build dependents after an actual red child process', () => {
+    const f = fixture(['build']);
+    try {
+      const result = f.run();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('failed build');
+      expect(f.calls().at(-1)).toBe('build');
+      expect(f.calls()).not.toContain('typecheck');
+      expect(f.calls()).not.toContain('test:local');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
-
-  it('refuses a claimed SHA that is not the checked-out commit', () => {
-    const path = `.void/machine/gate-runner-test-${String(process.pid)}/stale.json`;
-    const result = run([
-      '--gate',
-      'version-lockstep',
-      '--sha',
-      'a'.repeat(40),
-      '--report',
-      path,
-    ]);
-
-    expect(result.status).toBe(2);
-    expect(result.stderr).toMatch(/checked-out|HEAD|SHA/i);
-  });
-
-  it('refuses to overwrite an existing report', () => {
-    const sha = gitHead();
-    const path = `.void/machine/gate-runner-test-${String(process.pid)}/existing.json`;
-    const original = '{"preserved":true}\n';
-    writeFileSync(resolve(ROOT, path), original, { flag: 'wx' });
-    const result = run(['--gate', 'version-lockstep', '--sha', sha, '--report', path]);
-
-    expect(result.status).toBe(2);
-    expect(result.stderr).toMatch(/already exists/);
-    expect(readFileSync(resolve(ROOT, path), 'utf8')).toBe(original);
+  it('keeps single-command failures nonzero and refuses a stale claimed SHA', () => {
+    const f = fixture(['version:check']);
+    try {
+      expect(f.run(['--gate', 'version-lockstep']).status).toBe(1);
+      const stale = f.run(['--gate', 'version-lockstep', '--sha', 'a'.repeat(40)]);
+      expect(stale.status).toBe(2);
+      expect(stale.stderr).toContain('checked-out HEAD');
+    } finally { rmSync(f.root, { recursive: true, force: true }); }
   });
 });

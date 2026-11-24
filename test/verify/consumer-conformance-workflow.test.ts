@@ -20,11 +20,11 @@ function job(id: string): string {
 describe('packed consumer CI topology', () => {
   it('packs once and fans the same immutable artifact out to every operating system', () => {
     const producer = job('consumer-artifact');
-    const consumers = job('install-conformance');
+    const consumers = job('install-linux');
     expect(producer).not.toBe('');
     expect(consumers).toContain('needs: consumer-artifact');
 
-    expect(producer.match(/conformance:pack/g) ?? []).toHaveLength(1);
+    expect(producer.match(/run: pnpm conformance:pack/g) ?? []).toHaveLength(1);
     expect(producer).toContain('actions/upload-artifact@');
     expect(consumers).toContain('actions/download-artifact@');
     expect(consumers).toContain('conformance:consumer');
@@ -80,12 +80,10 @@ it('aligns every first-party declared Node floor with the exact runtime CI prove
   }
 });
 
-it('reuses the producer archive in validation and binds the current run', () => {
-  expect(job('validate')).toContain('needs: consumer-artifact');
-  expect(job('validate')).toContain(`if: ${expression('!cancelled()')}`);
-  const validation = job('validate');
-  // GitHub permits runner in step env, but not in jobs.<job_id>.env.
-  expect(validation.split('    steps:')[0]).not.toContain(expression('runner.temp'));
-  expect(validation.match(/^ {10}VOID_CONFORMANCE_TARBALL:/gm)).toHaveLength(2);
-  expect(job('validate')).toContain('actions/download-artifact@');
+it('inspects the same producer archive before uploading it to consumers', () => {
+  const producer = job('consumer-artifact');
+  expect(producer.match(/^ {10}VOID_CONFORMANCE_TARBALL:/gm)).toHaveLength(2);
+  expect(producer).toContain('pnpm check:publish');
+  expect(producer).toContain('pnpm check:size');
+  expect(producer.indexOf('conformance:pack')).toBeLessThan(producer.indexOf('run: pnpm check:publish'));
 });

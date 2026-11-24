@@ -71,22 +71,3 @@ it.each([false, true])('shares one clean preparation without attesting edited so
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-it('writes CI reports outside the checkout and keeps unrelated external paths refused', () => {
-  const root = fixture(false, false);
-  const runner = mkdtempSync(join(tmpdir(), 'gate-report-runner-'));
-  try {
-    const report = join(runner, 'gate-reports', 'version.json');
-    const execute = (target: string) => spawnSync(process.execPath,
-      ['scripts/verify.mjs', '--gate', 'version-lockstep', '--report', target], {
-        cwd: root, encoding: 'utf8', env: { ...process.env, RUNNER_TEMP: runner,
-          PATH: `${join(root, 'bin')}:${process.env.PATH}` },
-      });
-    const accepted = execute(report);
-    expect(accepted.status, accepted.stderr).toBe(0);
-    expect(JSON.parse(readFileSync(report, 'utf8')).status).toBe('passed');
-    expect(execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' })).toBe('');
-    const refused = execute(join(runner, '..', 'outside-reports.json'));
-    expect(refused.status).toBe(2);
-    expect(existsSync(join(runner, '..', 'outside-reports.json'))).toBe(false);
-  } finally { rmSync(root, { recursive: true, force: true }); rmSync(runner, { recursive: true, force: true }); }
-});

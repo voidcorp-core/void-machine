@@ -65,27 +65,45 @@ preserving project edits. Existing consumer workflows remain project-owned.
 
 ```mermaid
 flowchart LR
-  Event[Ready PR / merge group / main push / dispatch] --> Validate[validate]
-  Event --> Artifact[consumer-artifact]
-  Event --> Graph[project-graph-conformance: Ubuntu, macOS, Windows]
-  Artifact --> Install[install-conformance: Ubuntu, macOS, Windows]
-  Validate --> Gates[Sequential verification gates and exact-SHA aggregation]
-  Graph --> Classify[Classify inside each allocated runner]
-  Classify -->|Relevant or uncertain| GraphProof[Build, tests, types and packed graph conformance]
-  Classify -->|Unrelated PR paths| GraphSkip[Skip graph steps]
+  Event[PR / merge group / main / dispatch] --> Prepare[Admission and bounded impact]
+  Prepare --> Cheap[Independent reference/version/structure/lint feedback]
+  Cheap -->|Every applicable outcome successful| Archive[Original freshness then one archive]
+  Archive --> Validate[Build, types, self-host and selected Vitest projects]
+  Archive --> Linux[Linux installed consumer]
+  Archive -->|Platform risk or promotion| Mac[macOS installed consumer]
+  Archive -->|Platform risk or promotion| Windows[Windows installed consumer]
 ```
 
-Only the artifact-to-install edge is a job dependency in this workflow. The other
-arrows inside `validate` and graph jobs show sequential steps. There are eight jobs after matrix expansion. `void-enforce` runs separately;
-`validate` aggregates its own gate reports, not the conformance or enforcement
-jobs. GitHub protection and the local merge decision consume required results.
+The producer `consumer-artifact` runs admission before dependency installation. A
+required `validate` job runs even after producer failure and explicitly refuses any
+producer result other than success. The four independent cheap steps collect errors
+with native outcomes; their barrier rejects missing/skipped/cancelled required work
+before archive preparation. Build failure stops build-dependent checks. No test retry
+or suite bail is imposed. The source freshness comparison precedes lifecycle repairs.
 
-For draft PRs, `consumer-artifact` and graph jobs are skipped; downstream consumer
-jobs cannot run. `validate` and `void-enforce` stop at their early admission guard
-with non-success before installing dependencies. Marking the PR ready triggers
-complete checks without needing another commit. A conversion back to draft
-invalidates obsolete PR work. Distinct merge groups, dispatches and release runs
-have isolated concurrency keys. Unknown graph relevance currently runs tests.
+Three explicit OS jobs retain the exact required names `install conformance
+(ubuntu-latest)`, `(macos-latest)` and `(windows-latest)`. Native YAML anchors share their
+steps. A non-applicable job is skipped, not a passed consumer test; unlike a filtered
+workflow or omitted matrix row, its required context remains conclusive. The separate
+`enforce` job remains required. There are five CI job instances at full scope, plus
+separate enforcement, with no generator or gate-report round trip.
+
+Selection uses the complete local Git diff against the event base. Queue groups diff
+the combined HEAD against `merge_group.base_sha`; they never reuse isolated PR proof.
+Explanatory Markdown under `docs/` plus root README/CONTRIBUTING retains references
+and enforcement. Product Markdown and build inputs are not exempt. Test-only edits
+select the corresponding existing Vitest project. Pure engine policy leaves retain
+all three projects because CLI/runtime depend on them, with Linux consumer coverage.
+Everything else, including rename/delete, shared fixtures, lockfiles, CI, install,
+file/process concerns, unknown paths and unavailable/incomplete diffs, runs full scope.
+
+Develop PRs prove their branch head. Main PRs prove the current synthetic merge SHA
+and run all projects and supported OS; strict main protection requires an up-to-date
+candidate. Main push/manual runs are full too. Draft admission remains explicitly
+non-success before heavy work. Ready/synchronize events refresh proof; existing ready
+promotions remain ready and new promotions stay draft until a human prepares them.
+Only obsolete PR runs cancel. Main publication and distinct queue groups never coalesce.
+No operation here marks ready, merges or publishes to main.
 
 Autopilot reads current checks through one adapter for both its tick and the
 merge/arm guard. GitHub's rollup can retain a draft failure alongside the ready
@@ -106,12 +124,6 @@ status contexts remain checks; a confirmed empty repository still reports none.
 This requires read access to the Actions API as well as checks; an access failure
 is explicit, never a green fallback. Queue proof semantics and GitHub protection
 are unchanged. See the [current-check decision](decisions-log/2026-11-06-current-pull-request-checks--40cc09ad-6073-4521-aa02-f034818028e0.md).
-
-The PR proof subject is its head SHA; merge-group checks prove the group SHA.
-The immutable consumer tarball and source manifest are produced once, then used
-by the three OS installation jobs. Graph conformance is a separate path.
-Current graph classification considers package paths but needs the wider input
-and rename coverage in DEV-1144 before allocation can safely be optimized.
 
 ## Release job dependencies
 
@@ -138,26 +150,14 @@ The release DAG additionally has event/result conditions: a normal promotion pus
 release PR, while a created release (or supported manual recovery) admits release
 validation. See [release policy](RELEASING.md) for the full authority contract.
 
-## Approved changes and measurement order
+## Measurement limits
 
-```mermaid
-flowchart LR
-  A[1139: promotion drafts] --> B[1140: consumer CI examples]
-  B --> C[1141: repair certification]
-  C --> D[1142: profile subprocess]
-  D --> E[1143: deduplicate preparation]
-  E --> F[1144: repair graph classifier, then allocation]
-  F --> G[1145: bounded local proof applicability]
-```
-
-These arrows show the requested execution order. Linear owns real blockers;
-DEV-1142 depends on DEV-1141's reliability prerequisite. One worker preserves
-ordering across shared files. Protected PRs wait for a person's merge after
-review; other admissible PRs use the existing autopilot path. New promotion PRs
-are drafts in the DEV-1139 source change, while an existing ready promotion keeps
-its human-selected state. Hosted rollout still follows the protected merge.
-The full [baseline and limits](specs/2026-11-05-ci-economy.md) distinguish total
-job-minutes from latency and potential avoidance from demonstrated savings.
+DEV-1408 removes CI generation/reports and the remaining repository pre-commit.
+In selector fixtures, docs avoid all three test projects and consumer jobs; an engine
+test edit avoids two projects and three consumer jobs; a pure policy source keeps all
+projects and avoids two OS consumers. These are structural savings, not measured
+runner minutes or billing. Prior graph/browser/test-campaign removals and DEV-1143
+archive reuse are not counted again. Actual remote OS evidence belongs to each run.
 
 ## Open the real graph
 

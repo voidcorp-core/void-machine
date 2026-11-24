@@ -8,10 +8,8 @@ const SOURCE_EXTENSIONS = /\.(?:ts|tsx|js|mjs|json|md|yaml|sh)$/;
 
 /**
  * The three a text file legitimately holds. Everything else below `0x20`, plus
- * `0x7f`, is a control character -- the same definition `containsControl` uses
- * in the graph's workspace extractor, restated here rather than imported: the
- * hook runner is bundled into the shipped hook and must not take a dependency on
- * the graph to answer a question about a string.
+ * `0x7f`, is a control character. Keep this byte-level rule local to the portable hook
+ * runner; it requires no indexing service.
  */
 const ALLOWED = new Set([0x09, 0x0a, 0x0d]);
 
@@ -35,8 +33,8 @@ function hexPoint(point: number): string {
  * was blocked, and neither was visible.
  *
  * The cost is not cosmetic. A source file holding a NUL is excluded from
- * indexing, so it drops out of the project graph entirely -- its imports, its
- * symbols and its tests stop existing for every query, and nothing says so.
+ * text indexing and can be treated as binary by search and diff tools, hiding
+ * its imports, symbols and tests from inspection.
  *
  * It refuses rather than strips. Rewriting the content silently would leave the
  * author believing they wrote what they read, which is the failure mode again
@@ -59,7 +57,7 @@ export function controlCharacter(edits: readonly NormalizedEdit[]): RuleVerdict 
   return evidenceVerdict(
     'CONTROL_CHARACTER_IN_SOURCE',
     'control character in a source file; it is invisible in the diff and drops the file'
-      + ' out of the project graph. A fixture that needs the byte builds it'
+      + ' out of text indexing. A fixture that needs the byte builds it'
       + ' (String.fromCharCode(0), Buffer.concat) instead of holding it literally.',
     evidence,
   );

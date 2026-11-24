@@ -6,12 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CHECKS = [
-  ['node', 'scripts/render-ci-gates.mjs', '--check'],
   ['pnpm', 'hooks:check'],
   ['node', 'packages/cli/scripts/copy-core-assets.mjs', '--check'],
 ];
 const BUILDS = [
-  ['node', 'scripts/render-ci-gates.mjs'],
   ['pnpm', 'build:cli'],
 ];
 for (const [command, ...args] of process.argv.includes('--check') ? CHECKS : BUILDS) {

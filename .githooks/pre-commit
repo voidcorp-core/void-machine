@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Read-only local gates. Regenerate deliveries explicitly with pnpm derive.
-set -euo pipefail
-ROOT="$(git rev-parse --show-toplevel)"
-bash "$ROOT/scripts/anti-bloat-check.sh"

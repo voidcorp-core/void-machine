@@ -25,8 +25,9 @@ Markdown is compiled from canonical YAML into delivery, never authored twice.
 
 Run `pnpm derive` explicitly after changing sources. `pnpm derive:check` compares
 temporary expected assemblies before changing any tracked delivery, including
-already-dirty artifacts, missing files and orphans. Pre-commit performs only the
-remaining read-only document/discovery gates; it neither generates nor stages.
+already-dirty artifacts, missing files and orphans. Run focused checks during work;
+CI retains the structural floor. There is no repository pre-commit or auto-install
+of Git hook configuration; personal Git hooks remain project-owner configuration.
 
 Builds use versioned inputs and explicit built dependencies. Source self-host
 compilation stays isolated. Source-repository init/update preservation reads only

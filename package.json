@@ -14,7 +14,6 @@
     "url": "https://github.com/voidcorp-core/void-machine/issues"
   },
   "scripts": {
-    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || exit 0",
     "build": "pnpm -r --filter '!void-harness' build && pnpm --filter ./packages/cli build:assets",
     "build:cli": "pnpm --filter @voidcorp/mission-engine build && pnpm --filter @voidcorp/hook-runner build && pnpm --filter @voidcorp/void-machine build && pnpm --filter ./packages/cli build && pnpm --filter ./packages/cli build:assets",
     "cli": "pnpm build:cli >/dev/null && node packages/cli/dist/bin/void-machine.mjs",
@@ -36,8 +35,6 @@
     "conformance:hooks": "node packages/cli/scripts/conformance-consumer.mjs --suite hooks",
     "conformance:autopilot": "node packages/cli/scripts/conformance-consumer.mjs --suite autopilot",
     "verify": "node scripts/verify.mjs",
-    "ci:gates:render": "node scripts/render-ci-gates.mjs",
-    "ci:gates:check": "node scripts/render-ci-gates.mjs --check",
     "derive": "node scripts/derive.mjs",
     "derive:check": "node scripts/derive.mjs --check",
     "skills:check-references": "node scripts/check-skill-references.mjs",

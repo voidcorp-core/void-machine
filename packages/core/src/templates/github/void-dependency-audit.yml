@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   merge_group:
     types: [checks_requested]
   # New advisories can affect an unchanged lockfile. Surveillance is not PR proof.

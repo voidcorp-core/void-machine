@@ -2,8 +2,8 @@ name: void-machine enforce
 description: >-
   Replay the void-machine enforcement floor (protected files, leaked secrets,
   TDD order, @repo/* import direction) over a pull-request diff. Critical rules
-  run through the same Node bundle as local hooks, so no author
-  (human, local agent, cloud agent) can bypass it.
+  run through the same Node bundle as local hooks. Blocking merges additionally
+  requires a protected caller and the resulting check required by branch rules.
 
 inputs:
   base-ref:

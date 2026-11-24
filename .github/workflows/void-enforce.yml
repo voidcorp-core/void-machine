@@ -13,7 +13,7 @@ on:
   # gate that blocks forever instead of a gate that judges.
   pull_request:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, auto_merge_enabled, auto_merge_disabled]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft, auto_merge_enabled, auto_merge_disabled]
   # The merge queue on `develop` waits for its required checks on this event
   # only. `enforce` then diffs the group commit against the group base, which
   # the composite reads from the merge_group payload.

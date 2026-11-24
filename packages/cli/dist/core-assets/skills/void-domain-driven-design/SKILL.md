@@ -221,7 +221,7 @@ Aggregates collect events; use-cases dispatch them via an injected `EventBusPort
 
 ### CQRS, event sourcing, mediator, generic `Repository<T>`
 
-All rejected per `.void/installed/PHILOSOPHY.md` Wing Chun. Re-introducing any of them is an ADR, written through the `void-decide` skill.
+All rejected per `.void/PHILOSOPHY.md` Wing Chun. Re-introducing any of them is an ADR, written through the `void-decide` skill.
 
 ### Anemic models (data + setters, logic elsewhere)
 

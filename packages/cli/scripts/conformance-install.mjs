@@ -71,7 +71,7 @@ async function assertDoctrine(fixture, bin, stage) {
   const custom = await readFile(join(fixture, '.void', 'PROJECT-DOCTRINE.md'), 'utf8');
   if (custom !== CUSTOM_DOCTRINE) throw new Error(`${stage} changed customized PROJECT-DOCTRINE bytes`);
   const expected = await readFile(join(dirname(bin), '..', 'core-assets', 'PHILOSOPHY.md'), 'utf8');
-  const installed = await readFile(join(fixture, '.void', 'installed', 'PHILOSOPHY.md'), 'utf8');
+  const installed = await readFile(join(fixture, '.void', 'PHILOSOPHY.md'), 'utf8');
   if (installed !== expected || !installed.includes('${VOID_WORKTREES:-${XDG_DATA_HOME:-$HOME/.local/share}/git-worktrees}')
     || !installed.includes('git worktree move') || !installed.includes('git worktree prune')) {
     throw new Error(`${stage} did not deliver the packaged universal worktree invariant`);

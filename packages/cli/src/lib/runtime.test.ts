@@ -16,6 +16,15 @@ describe('detectRuntimes', () => {
     expect([...detectRuntimes(dir)].sort()).toEqual(['claude', 'codex']);
   });
 
+  it('does not mistake common AGENTS imported by Claude for Codex wiring', () => {
+    const dir = scratch();
+    writeFileSync(join(dir, 'CLAUDE.md'), '@AGENTS.md\n');
+    writeFileSync(join(dir, 'AGENTS.md'), '# shared');
+    expect([...detectRuntimes(dir)]).toEqual(['claude']);
+    mkdirSync(join(dir, '.codex'));
+    expect([...detectRuntimes(dir)]).toEqual(['claude', 'codex']);
+  });
+
   it('detects claude from a .claude/ directory alone', () => {
     const dir = scratch();
     mkdirSync(join(dir, '.claude'));

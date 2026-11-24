@@ -159,7 +159,9 @@ describe('claude adapter', () => {
     expect(existsSync(join(dir, '.claude', 'agents', 'visual-craft-director.md'))).toBe(true);
     expect(existsSync(join(dir, '.void', 'hooks', '_void-hook.mjs'))).toBe(true);
     expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(true);
-    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true);
+    expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
+    expect(adapterFor('codex').detect(dir)).toBe(false);
     const settings = JSON.parse(readFileSync(join(dir, '.claude', 'settings.json'), 'utf8')) as {
       hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
       extraKnownMarketplaces?: unknown;
@@ -213,6 +215,15 @@ describe('claude adapter', () => {
 
   it('has no account, gh or jq prerequisite in local mode', () => {
     expect(adapterFor('claude').prerequisites('repo', 'local')).toEqual([]);
+  });
+
+  it('doctor rejects a Claude import whose common instruction owner is missing', async () => {
+    const dir = scratch();
+    await adapterFor('claude').wire(ctxFor(dir));
+    const { unlinkSync } = await import('node:fs');
+    unlinkSync(join(dir, 'AGENTS.md'));
+    const checks = await adapterFor('claude').doctorChecks(dir);
+    expect(checks.find((check) => check.name === 'CLAUDE.md')?.ok).toBe(false);
   });
 
   it('doctorChecks reds a missing settings.json', async () => {

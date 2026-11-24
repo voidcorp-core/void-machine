@@ -13,7 +13,6 @@ import {
   VOID_MACHINE_DIR,
   VOID_OWNERSHIP,
   migratedName,
-  voidInstalledPath,
   gitignoreBlock,
   isMachineEntry,
   legacyVoidPath,
@@ -74,19 +73,13 @@ describe('the three natures of .void', () => {
     expect(voidMachinePath('/p', 'runs', 'mis_1')).toBe(join('/p', '.void', 'machine', 'runs', 'mis_1'));
   });
 
-  /**
-   * The rule the whole layout exists to make true: everything at the top of
-   * `.void/` is committed, and the two subdirectories are not. It was false
-   * before — PHILOSOPHY.md and hooks/ sat at the top while being ignored, so
-   * "is this committed" had no answer you could see.
-   */
-  it('files what install restores under .void/installed', () => {
-    expect(voidInstalledPath('/p', 'hooks')).toBe(join('/p', '.void', 'installed', 'hooks'));
+  it('classifies delivered doctrine beside project-owned declarations', () => {
     expect(ownershipOf('PHILOSOPHY.md')).toBe('derived');
+    expect(ownershipOf('PROJECT-DOCTRINE.md')).toBe('project');
     expect(ownershipOf('hooks')).toBe('derived');
   });
 
-  it('leaves nothing derived at the top of .void', () => {
+  it('keeps declared entries outside machine state', () => {
     const atTop = Object.keys(VOID_OWNERSHIP).filter((entry) => ownershipOf(entry) === 'project');
     for (const entry of atTop) expect(isMachineEntry(entry), entry).toBe(false);
     expect(atTop).toContain('config.json');
@@ -294,7 +287,7 @@ describe('ownership comes from the receipt, never from the directory', () => {
     const rules = gitignoreBlock().split('\n').filter((l) => l !== '' && !l.startsWith('#'));
 
     expect(rules).toContain('.void/machine/');
-    expect(rules).toContain('.void/installed/');
+    expect(rules).not.toContain('.void/installed/');
     expect(rules).toContain('.void/local/');
     // config.json, PROJECT-DOCTRINE.md and hooks/ live at the top of .void/ and
     // are never named: the block ignores two subdirectories, not the directory.
@@ -314,7 +307,7 @@ describe('the ignore rule', () => {
     const rescues = rules.filter((rule) => rule.startsWith('!'));
 
     expect(rules).toContain('.void/machine/');
-    expect(rules).toContain('.void/installed/');
+    expect(rules).not.toContain('.void/installed/');
     expect(rules).toContain('.void/local/');
     expect(rescues).toContain('!.claude/settings.json');
     expect(rescues).toContain('!.codex/hooks.json');

@@ -33,7 +33,6 @@
     "lint": "biome lint --max-diagnostics=none",
     "typecheck": "pnpm -r --filter '!void-harness' typecheck",
     "anti-bloat:check": "bash scripts/anti-bloat-check.sh",
-    "sync:docs": "bash scripts/sync-agent-docs.sh",
     "version:check": "node scripts/check-version-lockstep.mjs",
     "check:publish": "node scripts/check-publish-safety.mjs",
     "check:size": "node scripts/check-package-size.mjs",

@@ -77,12 +77,12 @@ afterAll(() => {
 });
 
 describe('add / remove refresh existing docs per-runtime', () => {
-  it('refreshes every doctrine doc the project has (parity across existing docs)', async () => {
+  it('refreshes common doctrine while retaining the Claude import', async () => {
     // A both-runtime project: both docs already carry the managed block.
     writeFileSync(join(dir, 'CLAUDE.md'), `# CLAUDE.md\n${BLOCK}`);
     writeFileSync(join(dir, 'AGENTS.md'), `# AGENTS.md\n${BLOCK}`);
     await add(['harness-nextjs']);
-    expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toContain('harness-nextjs');
+    expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
     expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toContain('harness-nextjs');
   });
 
@@ -124,11 +124,15 @@ describe('add / remove refresh existing docs per-runtime', () => {
    * direction: a local install must never write a namespaced skill name, because
    * a local install resolves none of them.
    */
-  it('writes no namespaced skill name into a locally installed doctrine doc', async () => {
+  it('keeps runtime and channel invocation syntax in the common owner', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
     const doc = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
     expect(doc).toMatch(/void-machine:begin/);
     expect(doc).not.toMatch(/(?<!void-)\bharness:[a-z]/);
-    expect(doc).toContain('invoked by its name');
+    expect(doc).toContain('@AGENTS.md');
+    const common = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+    expect(common).toContain('invoked by its name');
+    expect(common).toContain('`/void-implement`, `/void-tdd` for local installs');
+    expect(common).toContain('`$void-implement`');
   });
 });

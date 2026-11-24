@@ -3,8 +3,8 @@
 //
 // The archetype: you `init` with Claude, work for weeks, then decide to add
 // Codex. `void-machine runtime add codex` wires exactly Codex's layer (its safety
-// floor + AGENTS.md) and touches nothing Claude. Idempotent, adapter-driven —
-// the command never branches on a runtime name.
+// floor + AGENTS.md) and refreshes the common instruction owner and its Claude
+// import. Idempotent, adapter-driven; the command never branches on a runtime name.
 
 import * as p from '@clack/prompts';
 import { existsSync } from 'node:fs';
@@ -19,6 +19,7 @@ import { detectRuntimes, parseRuntimeArg, type Runtime } from '../lib/runtime.js
 import { banner, blank, c, footer, glyph, line, meta } from '../lib/render.js';
 import { prepareInstallCommit, seedInstallStage } from '../lib/local-install.js';
 import { commitFileTransaction } from '../lib/transaction.js';
+import { patchExistingRuntimeDocs, publishedPhilosophyPath } from '../lib/claude-md.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 export async function runtime(args: readonly string[]): Promise<void> {
@@ -83,6 +84,7 @@ async function runtimeAdd(rest: readonly string[]): Promise<void> {
   meta('adding', adapters.map((a) => a.label).join(' + '));
   blank();
 
+  const philosophyPath = await publishedPhilosophyPath(projectRoot);
   const nextSteps: string[] = [];
   const alreadyDetected = detectRuntimes(projectRoot);
   const resultingRuntimes = [...new Set([...alreadyDetected, ...requested])];
@@ -116,6 +118,9 @@ async function runtimeAdd(rest: readonly string[]): Promise<void> {
         throw new Error(`${adapter.label} staged doctor failed`);
       }
     }
+    // Adding a runtime does not publish doctrine. Refresh both document owners
+    // against the already-published path, including a legacy Claude document.
+    await patchExistingRuntimeDocs(stageRoot, { enabledPlugins, enabledPacks, philosophyPath });
     const prepared = await prepareInstallCommit({
       projectRoot,
       stageRoot,

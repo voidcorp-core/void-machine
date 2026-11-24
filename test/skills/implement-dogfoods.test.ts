@@ -45,7 +45,7 @@ describe('void-implement requires the shipped surface to be run', () => {
 });
 
 describe('the doctrine points at the ship pass without a number that drifts', () => {
-  it.each(['CLAUDE.md', 'AGENTS.md'])('%s names the pass rather than counting to it', (file) => {
+  it.each(['AGENTS.md'])('%s names the pass rather than counting to it', (file) => {
     const doc = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
     const row = doc.split('\n').find((line) => line.includes('Ship a PR')) ?? '';
     expect(row).not.toMatch(/pass \d+/);

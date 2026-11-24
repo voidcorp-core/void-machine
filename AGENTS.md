@@ -4,20 +4,20 @@
 
 ## Void Machine (managed by `void-machine init`)
 
-Codex doctrine active in this project:
+Shared doctrine active in this project:
 
 - `void` — universal craftsman skills (TDD, TypeScript strict, hexagonal, DDD, ...)
 
 ### Doctrine — read at the start of every session
 
-- `.void/installed/PHILOSOPHY.md`
-- `.void/PROJECT-DOCTRINE.md`
+- Read exactly one published universal doctrine: `.void/PHILOSOPHY.md` when present, otherwise `.void/installed/PHILOSOPHY.md`. Never substitute working product sources.
+@.void/PROJECT-DOCTRINE.md
 
 `PHILOSOPHY.md` is the universal Void Machine doctrine (managed — overwritten on init). `PROJECT-DOCTRINE.md` holds project-specific rules: context, ADRs, in-flight decisions (yours; init never overwrites what you have written in it).
 
 To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.
 
-Every skill is invoked by its name: `$void-implement`, `$void-tdd`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.
+Every skill is invoked by its name: Codex uses `$void-implement`, `$void-tdd`; Claude Code uses `/void-implement`, `/void-tdd` in this locally installed repository. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.
 
 ### Resume and autonomous selection
 
@@ -31,7 +31,9 @@ Run `void-machine doctor` to verify the install.
 
 <!-- void-machine:end -->
 
-> **Sister doc**: `CLAUDE.md` is the Claude Code-flavored mirror of this file. The two are maintained in sync — any change to one MUST be reflected in the other in the same commit. CI enforces this on every push (`pnpm sync:docs`, which compares section headings after terminology normalization); the pre-commit hook in `.githooks/` refuses a commit that stages one sister doc without the other, and `pnpm install` wires it through the root `prepare` script so a fresh clone inherits the check instead of having to opt in. Adapted terminology only (Codex/tools ↔ Claude/Skill tool); the doctrine is identical.
+> **Published source-checkout floor**: the explicit philosophy read above works before and after a separately authorized installed migration without importing both copies. Consumer instructions directly reference `.void/PHILOSOPHY.md`; changing source documentation never activates working doctrine.
+
+> **Common instructions**: this file is the shared source. `CLAUDE.md` imports it with native `@AGENTS.md`; runtime-specific invocation syntax is stated explicitly here. Edit the owner rather than maintaining a second copy.
 
 You are working inside the **void-machine** repo itself — the meta-repo that produces the harness (Codex + Claude Code) for every VoidCorp project. This file governs work **on the harness**, not work on projects that consume it.
 

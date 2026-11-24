@@ -5,7 +5,7 @@ the trade-offs already settled, the rules it has paid for. Loaded into every ses
 only what you want read every time.
 
 This file is yours. `void-machine init` creates it, and never overwrites one you have written in.
-Universal rules live in `.void/installed/PHILOSOPHY.md` and belong to the harness.
+Universal rules live in `.void/PHILOSOPHY.md` and belong to the harness.
 
 Say a rule out loud — "ajoute la règle…", "always X here", "never Y" — and `void-learn` proposes
 the wording, waits for your yes, then writes it here. Sections appear as you use them.

@@ -3,14 +3,15 @@
 void-machine targets two runtimes from one doctrine. This page states honestly
 what is parity-real today and what is opt-in or pending.
 
-## One doctrine, per-runtime docs
+## One common instruction owner
 
-`CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) carry identical doctrine,
-terminology adapted (Skill tool ↔ tools, Claude ↔ Codex): `CLAUDE.md` uses
-`@imports`, `AGENTS.md` uses explicit "read at session start" pointers (Codex has
-no `@import`). In the **harness repo itself** the `scripts/sync-agent-docs.sh`
-gate keeps both in lockstep (section-heading parity in CI + a both-or-neither
-pre-commit check).
+`AGENTS.md` carries common instructions for both runtimes. Claude loads it through
+`CLAUDE.md`'s native `@AGENTS.md` import, which also expands its doctrine imports.
+Codex discovers `AGENTS.md` directly and follows its instruction to read the two
+doctrine files; Codex does not expand `@` imports. Claude-only consumers receive
+AGENTS too, while Codex-only consumers need no CLAUDE file. Existing project text
+outside managed blocks is preserved. Native loading observations replace the
+retired heading-parity and sister-document staging checks.
 
 The shared agent-doc generator gives both runtimes the same bounded merge-consent
 rule: an authorized merge includes the coordinator's routine local synchronization
@@ -324,7 +325,7 @@ plainly is the point — this is the only place where "prerequisite" keeps meani
 
 ## Status (verified vs pending)
 
-- **Verified**: sister-doc gate; `init` emits `AGENTS.md` and auto-wires
+- **Verified**: shared instruction loading; `init` emits `AGENTS.md` and auto-wires
   `.codex/hooks.json` (one staged runner + compiled manifest, unit-tested); `doctor`
   checks the wiring; the hooks parse both runtimes' payload shapes, including
   multi-file `apply_patch` (unit-tested); all ten agents compile from the real

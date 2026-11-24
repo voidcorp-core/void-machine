@@ -58,9 +58,9 @@ function linkedWorktree(main: string): string {
 
 /** What `init` leaves behind and hides from git: the core pin and the installed doctrine. */
 function install(root: string): void {
-  mkdirSync(join(root, '.void', 'installed'), { recursive: true });
+  mkdirSync(join(root, '.void'), { recursive: true });
   writeFileSync(join(root, '.void', 'config.json'), JSON.stringify({ core: INSTALLED_PIN }));
-  writeFileSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'), PHILOSOPHY);
+  writeFileSync(join(root, '.void', 'PHILOSOPHY.md'), PHILOSOPHY);
 }
 
 /** A marketplace one core release ahead of the install, with the same doctrine, answered without gh. */
@@ -96,6 +96,14 @@ function report(out: string): string {
 }
 
 describe('check from a linked worktree', () => {
+  it('checks the current philosophy rather than a preserved legacy copy', async () => {
+    const main = repository();
+    install(main);
+    mkdirSync(join(main, '.void/installed'), { recursive: true });
+    writeFileSync(join(main, '.void/installed/PHILOSOPHY.md'), '# preserved user copy');
+    expect(await checkFrom(main)).toContain('in sync');
+  });
+
   it('reads the pins and the installed doctrine of the main checkout', async () => {
     const main = repository();
     install(main);

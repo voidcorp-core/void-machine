@@ -41,7 +41,6 @@ const RESOURCES = new Set([
 
 /** @type {readonly Gate[]} */
 export const GATES = Object.freeze([
-  gate('sister-docs', 'Sister-doc parity', ['pnpm', 'sync:docs'], 'contract', 'filesystem', ['source']),
   gate('version-lockstep', 'Version lockstep', ['pnpm', 'version:check'], 'contract', 'filesystem', ['source']),
   gate('anti-bloat', 'Anti-bloat', ['pnpm', 'anti-bloat:check'], 'contract', 'subprocess', ['source']),
   gate(

@@ -185,8 +185,8 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // reported missing while it sits one directory away is a false alarm that
   // sends someone reinstalling for nothing.
   const havePhilo =
-    existsSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'))
-    || existsSync(join(root, '.void', 'PHILOSOPHY.md'));
+    existsSync(join(root, '.void', 'PHILOSOPHY.md'))
+    || existsSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'));
   const doctrinePath = join(root, '.void', 'PROJECT-DOCTRINE.md');
   const haveDoctrine = existsSync(doctrinePath);
   if (havePhilo && haveDoctrine) {

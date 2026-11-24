@@ -30,7 +30,7 @@ describe('co-owned manifest paths', () => {
     '.claude/skills/void-tdd/SKILL.md', '.agents/skills/void-tdd/SKILL.md',
     '.claude/agents/reviewer.md', '.codex/agents/reviewer.toml',
     '.claude/commands/check.md', '.void/hooks/runner.mjs', '.codex/hooks.json',
-    '.void/installed/PHILOSOPHY.md', 'nested/CLAUDE.md', 'nested/AGENTS.md',
+    '.void/PHILOSOPHY.md', '.void/installed/PHILOSOPHY.md', 'nested/CLAUDE.md', 'nested/AGENTS.md',
     'nested/.void/config.json', '.void/PROJECT-DOCTRINE.md.bak', 'AGENTS.md.bak',
     'claude.md', 'agents.md', '.VOID/config.json', '.claude/settings.json/extra',
   ])('keeps manifest-owned assets and namesakes exclusive: %s', (path) => {

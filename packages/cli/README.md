@@ -31,7 +31,7 @@ Sets up the current project:
 
 - Creates `.void/config.json` (pinned plugin versions, stack, paths, TDD modes)
 - Registers the marketplace in `.claude/settings.json` and enables `harness` plus the chosen packs
-- Patches `CLAUDE.md` / `AGENTS.md` (sister docs, cross-referenced)
+- Patches common `AGENTS.md`; Claude receives a native `@AGENTS.md` import in `CLAUDE.md`
 
 ```
 npx voidmachine init [--pack <name>...] [--all-packs] [--force]

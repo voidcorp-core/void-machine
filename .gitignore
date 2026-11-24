@@ -53,3 +53,15 @@ Thumbs.db
 
 .gstack/
 dist-singlefile/
+
+# Complete Git-delivered marketplace and npm assets.
+!packages/core/dist/
+!packages/packs/*/dist/
+packages/packs/*/dist/*.js
+packages/packs/*/dist/*.map
+packages/packs/*/dist/*.ts
+packages/packs/*/dist/async/
+!packages/cli/dist/
+packages/cli/dist/*
+!packages/cli/dist/core-assets/
+!packages/cli/dist/bin/

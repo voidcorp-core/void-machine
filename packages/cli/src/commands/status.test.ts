@@ -26,7 +26,7 @@ describe('status facts', () => {
 });
 
 describe('status from a linked worktree', () => {
-  const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'void-machine.mjs');
+  const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist', 'bin', 'void-machine.mjs');
   const INSTALLED_VERSION = '1.0.0';
   const PUBLISHED_VERSION = '9.9.9';
 

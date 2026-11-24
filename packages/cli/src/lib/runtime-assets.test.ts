@@ -9,7 +9,7 @@ import {
   wireClaudeLocalAssets,
 } from './runtime-assets.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 const CLAUDE_PLUGIN_ROOT = '$' + '{CLAUDE_PLUGIN_ROOT}';
 
 function scratch(): string {
@@ -84,7 +84,7 @@ describe('wireClaudeLocalAssets', () => {
 
   it('treats Windows CRLF in a generated agent as the same canonical doctrine', async () => {
     const fixture = scratch();
-    const source = join(fixture, 'core');
+    const source = join(fixture, 'core', 'dist');
     cpSync(CORE_ROOT, source, { recursive: true });
     const generated = join(source, 'agents', 'security-engineer.md');
     writeFileSync(generated, readFileSync(generated, 'utf8').replaceAll('\n', '\r\n'));

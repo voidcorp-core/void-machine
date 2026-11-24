@@ -1,0 +1,19 @@
+Sources for `void-frontend-design` skill (see `docs/plans/skill-audits/void-frontend-design.md` for full audit):
+
+- Vercel `frontend-design` plugin (installed globally as `frontend-design:frontend-design`) — https://github.com/vercel-labs/agent-skills — vendored with void-machine additions (mobile-first dual-quality, matrix integration, shadcn composition)
+- citypaul/.dotfiles UI patterns — density, hierarchy notes
+- Refactoring UI (Adam Wathan + Steve Schoger) — book — foundation, density, hierarchy, motion principles
+- Apple HIG visual design chapter — https://developer.apple.com/design/human-interface-guidelines — mobile layout heuristics
+- Folpe DESIGN.md convention (per-project) — brand identity belongs in consumer DESIGN.md
+- pbakaus/impeccable-design — referenced by citypaul
+- impeccable (standalone skill) — VENDORED (DEV-389, build-time half): the current-AI-tell absolute bans (side-stripe, gradient-text, glassmorphism, hero-metric, eyebrow/numbered-markers, cream/sand body, text-overflow), the color-strategy commitment axis, and the type/layout/motion/interaction specifics. Its audit/critique/refine half went to the new `void-ui-review`; its browser runtime is deferred to Vague 4.
+- gstack /design-review — the Krug reading model (scan/satisfice/muddle) vendored here (DEV-389); its designer's-eye QA went to ui-review.
+
+Strategy: vendor-plugin + distill. Fork Vercel plugin for Void Machine invariant (mobile-first dual-quality) + matrix integration; DEV-389 enriched it with impeccable's build-time craft so the harness is self-contained on UI (no external impeccable dependency).
+
+Companion hooks: viewport-screenshot-gate (shared with accessibility), anti-ai-slop-grep.
+
+Stack-specific @repo/ui + design system tokens + Tailwind config in pack-nextjs-pwa.
+
+DEV-444 adaptation: consumes a fresh-context Experience Designer brief before build; independent
+post-build judgment remains downstream in ui-review and Visual Craft Director.

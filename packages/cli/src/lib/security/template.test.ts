@@ -18,6 +18,7 @@ const TEMPLATE = resolve(
   '..',
   '..',
   'core',
+  'src',
   'templates',
   'github',
   'void-security.yml',

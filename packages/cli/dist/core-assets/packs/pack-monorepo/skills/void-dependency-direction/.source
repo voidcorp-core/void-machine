@@ -1,0 +1,5 @@
+Sources for `void-dependency-direction` skill (see `docs/plans/skill-audits/void-dependency-direction.md` for the full audit):
+
+- No external source. Native concretization of the `01-monorepo-layout.md` module's abstract `@repo/*` import rules into worked examples.
+
+Strategy: native. Distills the module topology into concrete violation-plus-fix examples; core `void-hexagonal-architecture` is the generic doctrine, this is the monorepo-specific operational guide.

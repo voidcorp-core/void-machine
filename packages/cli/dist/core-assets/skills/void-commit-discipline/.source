@@ -1,0 +1,9 @@
+Sources for `void-commit-discipline` skill (see `docs/plans/skill-audits/void-commit-discipline.md` for full audit):
+
+- Conventional Commits spec — https://www.conventionalcommits.org — foundation, allowed type list, footer conventions.
+- Folpe "always say why" rule (from DECLIK CLAUDE.md) — load-bearing addition: substantive commits MUST explain rationale.
+- citypaul/.dotfiles commit guidance — body wrapping, subject style.
+
+Strategy: original. Slim skill. Conventional Commits + Folpe "why" + scope guidance.
+
+Companion hooks: commitlint-precommit (pack-monorepo), tidying-commit-prefix (core, already shipped), refactor-named-grep (core, already shipped), no-emdash-no-emoji-in-commit-msg (pack-monorepo).

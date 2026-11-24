@@ -1,0 +1,96 @@
+# Security scanners the harness knows how to drive.
+#
+# Every adapter here is OPTIONAL. The core depends on no vendor: a project with
+# none of these tools installed still runs its security baseline, and the scan
+# is reported degraded — never green — for the surface it could not measure.
+#
+# Nothing in this file is installed or executed by being listed. Each `command`
+# is a bare binary name the runner resolves from PATH, with no shell; a tool
+# that is absent is absent, and the harness says so rather than fetching it.
+#
+# No entry may carry a severity, a verdict or a waiver. What a finding is worth
+# is decided from its class by the mission engine, because a scanner grading its
+# own findings is the failure mode this whole layer exists to prevent.
+schemaVersion: 1
+adapters:
+  # Local rules only. `--config auto` is deliberately not used: it authenticates
+  # against the Semgrep registry and reports usage metrics, which would make the
+  # core depend on a vendor account. A project supplies its own ruleset.
+  - id: semgrep
+    kind: sast
+    description: Pattern-based static analysis of the working tree against the project's own ruleset.
+    command: semgrep
+    args: [scan, --config, .semgrep.yml, --json, --metrics=off, --quiet]
+    versionArgs: [--version]
+    reach: none
+    provides: [static-analysis]
+    limits:
+      timeoutSeconds: 900
+      maxOutputBytes: 16777216
+    # 0 clean, 1 findings. Everything else (7 is a missing ruleset) is a failure
+    # to run, and a scan that did not run proves nothing.
+    exitCodes:
+      clean: [0]
+      findings: [1]
+
+  # `dir` and not `git`: the baseline runs on every ticket, and walking the
+  # whole history each time costs minutes to re-answer a question that only
+  # changes at the tip. Auditing history is the periodic workflow's job.
+  #
+  # `--redact` matters more than it looks: without it, a finding report is
+  # itself a place a secret now lives.
+  - id: gitleaks
+    kind: secrets
+    description: Entropy and pattern scan of the working tree for committed credentials.
+    command: gitleaks
+    args: [dir, --redact, --no-banner, --report-format, json, .]
+    versionArgs: [version]
+    outputFlag: --report-path
+    reach: none
+    provides: [secret-scan]
+    limits:
+      timeoutSeconds: 600
+      maxOutputBytes: 8388608
+    exitCodes:
+      clean: [0]
+      findings: [1]
+
+  # Queries the OSV database, which is egress but not a target under test. An
+  # offline run uses `--offline-vulnerabilities` against a cached database and
+  # declares reach: none in its own manifest.
+  - id: osv-scanner
+    kind: dependency
+    description: Resolves the project's lockfiles against the OSV vulnerability database.
+    command: osv-scanner
+    args: [scan, --recursive, --format, json, .]
+    versionArgs: [--version]
+    reach: advisory-service
+    provides: [dependency-audit]
+    limits:
+      timeoutSeconds: 600
+      maxOutputBytes: 8388608
+    # 128 is a scan error; 1 is vulnerabilities found.
+    exitCodes:
+      clean: [0]
+      findings: [1]
+
+  # Baseline only: it spiders and scans passively, and performs no attack. The
+  # target never appears here — it arrives at run time from an authorization
+  # naming the host, its authorizer and an expiry.
+  - id: zap-baseline
+    kind: dast
+    description: Passive, non-destructive baseline scan of a running application over an authorized target.
+    command: zap-baseline.py
+    args: [-I, -j]
+    versionArgs: [-h]
+    targetFlag: -t
+    outputFlag: -J
+    reach: authorized-target
+    provides: [dast-baseline]
+    limits:
+      timeoutSeconds: 1800
+      maxOutputBytes: 16777216
+    # 0 no alert, 1 fail-level alert, 2 warn-level alert. 3 is a usage error.
+    exitCodes:
+      clean: [0]
+      findings: [1, 2]

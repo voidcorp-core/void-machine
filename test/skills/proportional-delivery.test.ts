@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 function skill(name: string): string {
-  return readFileSync(new URL(`../../packages/core/skills/${name}/SKILL.md`, import.meta.url), 'utf8').replace(/\s+/g, ' ');
+  return readFileSync(new URL(`../../packages/core/src/skills/${name}/SKILL.md`, import.meta.url), 'utf8').replace(/\s+/g, ' ');
 }
 
 describe('proportional delivery preserves quality without improvement loops', () => {

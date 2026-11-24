@@ -13,7 +13,7 @@ are managed by the harness; to change one, open an issue on `voidcorp-core/void-
 the heading when you have something to put under it, and delete one that stops being true.
 
 The list of section kinds has one owner: the section routing table of `void-learn`
-(`packages/core/skills/void-learn/SKILL.md`). This page shows the shape of each kind under the
+(`packages/core/src/skills/void-learn/SKILL.md`). This page shows the shape of each kind under the
 same name, and adds none. `void-learn` places a rule by meaning: it appends under the heading
 your file already has for that kind, whatever its wording, creates the table's name only when no
 heading names the kind, and asks you when two headings could hold the rule.

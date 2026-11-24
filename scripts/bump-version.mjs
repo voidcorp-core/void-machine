@@ -4,7 +4,7 @@
 // in packages/. CLI, runtime helpers, and Claude Code skills ship together.
 //
 // Files touched (any that exist):
-//   - packages/core/.claude-plugin/plugin.json
+//   - packages/core/src/.claude-plugin/plugin.json
 //   - packages/packs/<pack>/.claude-plugin/plugin.json         (six packs)
 //   - packages/cli/package.json                                (npm)
 //   - packages/packs/<pack>/package.json                       (npm — three current)
@@ -25,13 +25,13 @@ const ROOT = resolve(HERE, '..');
 
 
 const PLUGIN_MANIFESTS = [
-  resolve(ROOT, 'packages/core/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-monorepo/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-react/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-nextjs/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-server/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-pwa/.claude-plugin/plugin.json'),
-  resolve(ROOT, 'packages/packs/pack-mobile/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/core/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-monorepo/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-react/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-nextjs/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-server/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-pwa/src/.claude-plugin/plugin.json'),
+  resolve(ROOT, 'packages/packs/pack-mobile/src/.claude-plugin/plugin.json'),
 ];
 
 const NPM_PACKAGES = [

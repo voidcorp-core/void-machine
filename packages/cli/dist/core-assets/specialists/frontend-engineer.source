@@ -1,0 +1,11 @@
+Sources:
+- React documentation, keeping components pure: https://react.dev/learn/keeping-components-pure
+- Next.js server and client components: https://nextjs.org/docs/app/getting-started/server-and-client-components
+- void-machine frontend-design doctrine: packages/core/src/skills/frontend-design/SKILL.md
+
+Adapted:
+- Kept explicit UI states, rendering boundaries, state derivation, responsive implementation, design-system composition, and browser evidence.
+- Separated implementation structure from pre-build UX, visual-craft approval, accessibility audit, and functional QA.
+
+Rejected:
+- Framework lock-in, brand invention, self-approval, and code-writing authority.

@@ -31,7 +31,7 @@ it.each([
   ['packages/example/src/value.ts', 'export type Value = any;', 'noExplicitAny'],
   ['apps/example/src/main.ts', 'console.error("failed");', 'noConsole'],
   ['packages/example/test/case.test.ts', 'test.only("case", () => {});', 'noFocusedTests'],
-  ['packages/core/hooks/case.test.ts', 'test.skip("case", () => {});', 'noSkippedTests'],
+  ['packages/core/src/hooks/case.test.ts', 'test.skip("case", () => {});', 'noSkippedTests'],
   ['test/example/case.spec.mjs', 'test.only("case", () => {});', 'noFocusedTests'],
   ['packages/example/src/dependency.ts', 'export { value } from "undeclared";', 'noUndeclaredDependencies'],
 ])('rejects violations at %s', (path, source, rule) => {

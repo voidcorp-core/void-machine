@@ -11,10 +11,10 @@ function fixture(files: Readonly<Record<string, string>>) {
     copyFileSync(new URL(`../../scripts/${name}`, import.meta.url), join(root, 'scripts', name));
   }
   // The checker reads the product's own names from the identity, which is never a skill.
-  mkdirSync(join(root, 'packages/core/data'), { recursive: true });
-  copyFileSync(new URL('../../packages/core/data/identity.json', import.meta.url), join(root, 'packages/core/data/identity.json'));
+  mkdirSync(join(root, 'packages/core/src/data'), { recursive: true });
+  copyFileSync(new URL('../../packages/core/src/data/identity.json', import.meta.url), join(root, 'packages/core/src/data/identity.json'));
   for (const [path, content] of Object.entries({
-    'packages/core/skills/void-tdd/SKILL.md': '---\nname: void-tdd\n---\n',
+    'packages/core/src/skills/void-tdd/SKILL.md': '---\nname: void-tdd\n---\n',
     'packages/hook-runner/src/retired-skills.ts': "export const retired = { 'void-compounding': 'void-tdd' };",
     ...files,
   })) {
@@ -28,9 +28,9 @@ function fixture(files: Readonly<Record<string, string>>) {
 
 describe('plugin description CLI validation', () => {
   it.each([
-    'packages/core/.claude-plugin/plugin.json',
-    'packages/cli/core-assets/.claude-plugin/plugin.json',
-    'packages/packs/pack-react/.claude-plugin/plugin.json',
+    'packages/core/src/.claude-plugin/plugin.json',
+    'packages/cli/dist/core-assets/.claude-plugin/plugin.json',
+    'packages/packs/pack-react/src/.claude-plugin/plugin.json',
   ])('rejects a missing explicit skill in %s', (path) => {
     const result = fixture({ [path]: JSON.stringify({ description: 'Use void-does-not-exist.' }) });
     expect(result.status).toBe(1);
@@ -43,14 +43,14 @@ describe('plugin description CLI validation', () => {
     { description: '' },
     {},
   ])('accepts live references and ordinary prose: %j', (manifest) => {
-    expect(fixture({ 'packages/core/.claude-plugin/plugin.json': JSON.stringify(manifest) }).status).toBe(0);
+    expect(fixture({ 'packages/core/src/.claude-plugin/plugin.json': JSON.stringify(manifest) }).status).toBe(0);
   });
 
   it('resolves new core and pack skills from their shipped sources without generated data', () => {
     const result = fixture({
-      'packages/core/skills/void-example/SKILL.md': '---\nname: void-example\n---\n',
-      'packages/packs/pack-example/skills/void-pack-example/SKILL.md': '---\nname: void-pack-example\n---\n',
-      'packages/core/.claude-plugin/plugin.json': '{"description":"void-example and void-pack-example"}',
+      'packages/core/src/skills/void-example/SKILL.md': '---\nname: void-example\n---\n',
+      'packages/packs/pack-example/src/skills/void-pack-example/SKILL.md': '---\nname: void-pack-example\n---\n',
+      'packages/core/src/.claude-plugin/plugin.json': '{"description":"void-example and void-pack-example"}',
     });
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
@@ -61,7 +61,7 @@ describe('plugin description CLI validation', () => {
     expect(fixture(history).status).toBe(0);
     const result = fixture({
       ...history,
-      'packages/core/.claude-plugin/plugin.json': '{"description":"void-compounding"}',
+      'packages/core/src/.claude-plugin/plugin.json': '{"description":"void-compounding"}',
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('void-compounding');
@@ -70,7 +70,7 @@ describe('plugin description CLI validation', () => {
   it('preserves the existing namespace refusal, including in plugin descriptions', () => {
     expect(fixture({ 'README.md': 'Use harness:tdd.' }).status).toBe(1);
     const result = fixture({
-      'packages/core/.claude-plugin/plugin.json': '{"description":"Use harness:tdd."}',
+      'packages/core/src/.claude-plugin/plugin.json': '{"description":"Use harness:tdd."}',
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('harness:tdd');
@@ -107,7 +107,7 @@ describe('code reference CLI validation', () => {
     const result = fixture(Object.fromEntries([
       'packages/probe.test.ts',
       'docs/decisions/old.md',
-      'packages/cli/core-assets/probe.ts',
+      'packages/cli/dist/core-assets/probe.ts',
       'packages/example/dist/probe.js',
       'packages/example/node_modules/probe.js',
       'packages/example/coverage/probe.js',

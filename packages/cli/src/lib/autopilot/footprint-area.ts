@@ -11,7 +11,7 @@
 // review.
 //
 // Normalisation is the other half, and it was a silent guard failure rather than
-// a cosmetic one. `packages/core/templates/` -- the most natural way to write a
+// a cosmetic one. `packages/core/src/templates/` -- the most natural way to write a
 // directory in a path list -- claimed nothing: not the exact path, not the
 // prefix (which would need a doubled slash), and picomatch matches no file
 // against a trailing slash either. A file stolen from that area came back
@@ -94,7 +94,7 @@ function reachOf(area: string): string {
  *
  * picomatch 4.0.5 documents `dot` as defaulting to false and `*` as matching no
  * "hidden file or directory" unless the pattern spells the dot itself. Applied
- * to a footprint that is not a filter, it is a hole: `packages/core/skills/**`
+ * to a footprint that is not a filter, it is a hole: `packages/core/src/skills/**`
  * -- the shape an estimator writes for "touch the skills" -- claimed every
  * `SKILL.md` and not one of the `.source` files the sourcing discipline puts
  * beside them. The DIRECTORY spelling of that same area claims them, through
@@ -151,10 +151,10 @@ function reachesNest(left: string, right: string): boolean {
  * Asking whether one area claims the other's NAME is not asking whether their
  * files intersect, and for a glob the two questions come apart. An extension
  * glob matches no bare directory, so `packages/**\/*.test.ts` and
- * `packages/core/b` -- "add tests across the packages" beside "refactor
- * packages/core/b", the shape an estimator writes -- read as disjoint and ran
+ * `packages/core/src/b` -- "add tests across the packages" beside "refactor
+ * packages/core/src/b", the shape an estimator writes -- read as disjoint and ran
  * at once, while the audit was willing to read both claims on
- * `packages/core/b/x.test.ts` and call it a draw. That leniency is justified by
+ * `packages/core/src/b/x.test.ts` and call it a draw. That leniency is justified by
  * THIS step having sequenced them, so the pair it cannot see is the one that
  * arrives unrefused and unreported.
  *

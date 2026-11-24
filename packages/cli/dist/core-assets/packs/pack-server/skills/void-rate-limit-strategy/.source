@@ -1,0 +1,6 @@
+Sources for `void-rate-limit-strategy` skill (see `docs/plans/skill-audits/void-rate-limit-strategy.md` for the full audit):
+
+- No external source audited — native distillation of the void-machine rate-limit presets per action class.
+- Doctrine referenced (not vendored): `void-security-guidance` ("rate limit at every boundary"); this skill supplies the HOW (window / max / key).
+
+Strategy: native. Presets and key strategies authored for void-machine; no upstream skill was copied.

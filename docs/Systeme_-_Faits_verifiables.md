@@ -7,20 +7,20 @@ commit `15d6689` ; les règles de garde restent actualisées lorsqu'elles change
 
 | Élément | Nombre | Preuve |
 |---|---:|---|
-| Agents (`.md`) | 21 | `packages/core/agents/` |
-| Fichiers `.source` accompagnant un agent | 5 | `packages/core/agents/*.source` |
-| Skills | 37 | `packages/core/skills/*/SKILL.md` |
-| Commandes | 6 | `packages/core/commands/` |
-| Scripts de hook (`.sh`) | 33 | `packages/core/hooks/*.sh` |
-| Workflows YAML | 2 | `packages/core/workflows/` |
+| Agents (`.md`) | 21 | `packages/core/src/agents/` |
+| Fichiers `.source` accompagnant un agent | 5 | `packages/core/src/agents/*.source` |
+| Skills | 37 | `packages/core/src/skills/*/SKILL.md` |
+| Commandes | 6 | `packages/core/src/commands/` |
+| Scripts de hook (`.sh`) | 33 | `packages/core/src/hooks/*.sh` |
+| Workflows YAML | 2 | `packages/core/src/workflows/` |
 | Enregistrements de décision | 132 | `docs/decisions-log/*.md` |
 | Workflows GitHub Actions | 4 | `.github/workflows/` |
 
 ## Agents
 
-- 21 agents déclarent `tools: Read, Grep, Glob` ; 5 d'entre eux ajoutent `Bash` : `code-explorer`, `doctrine-critic`, `migration-planner`, `silent-failure-hunter`, `type-design-analyzer`. Preuve : frontmatter de `packages/core/agents/*.md`.
-- Aucun agent ne déclare `Edit` ou `Write`. Preuve : frontmatter de `packages/core/agents/*.md`.
-- 5 agents déclarent un `model` : `sonnet` pour `code-explorer`, `doctrine-critic`, `silent-failure-hunter`, `type-design-analyzer` ; `opus` pour `migration-planner`. Les 16 autres n'ont pas de champ `model`. Preuve : frontmatter de `packages/core/agents/*.md`.
+- 21 agents déclarent `tools: Read, Grep, Glob` ; 5 d'entre eux ajoutent `Bash` : `code-explorer`, `doctrine-critic`, `migration-planner`, `silent-failure-hunter`, `type-design-analyzer`. Preuve : frontmatter de `packages/core/src/agents/*.md`.
+- Aucun agent ne déclare `Edit` ou `Write`. Preuve : frontmatter de `packages/core/src/agents/*.md`.
+- 5 agents déclarent un `model` : `sonnet` pour `code-explorer`, `doctrine-critic`, `silent-failure-hunter`, `type-design-analyzer` ; `opus` pour `migration-planner`. Les 16 autres n'ont pas de champ `model`. Preuve : frontmatter de `packages/core/src/agents/*.md`.
 
 ## Commandes
 
@@ -30,7 +30,7 @@ lit dans `packages/cli/src/lib/command-catalog.ts`.
 
 ## Hooks câblés
 
-`packages/core/.claude-plugin/plugin.json` et `packages/core/codex/hooks.json`
+`packages/core/src/.claude-plugin/plugin.json` et `packages/core/src/codex/hooks.json`
 portent le câblage natif des événements. Leurs listes sont la référence pour les
 entrées et matchers ; les hooks de cycle de vie restent distincts de l'enforcement.
 
@@ -39,7 +39,7 @@ Les quatre règles `enforce` conservées en `PreToolUse` sont `protected-file`,
 syntaxe et de sélection des tests passent dans la validation configurée du projet.
 `activation` reste une observation distincte, non une règle `enforce`.
 
-Toutes les entrées invoquent le même exécutable, `packages/core/hooks/_void-hook.mjs`. Preuve : champ `command` de chaque entrée dans `packages/core/.claude-plugin/plugin.json`.
+Toutes les entrées invoquent le même exécutable, `packages/core/dist/hooks/_void-hook.mjs`. Preuve : champ `command` de chaque entrée dans `packages/core/src/.claude-plugin/plugin.json`.
 
 Le trim automatique des sorties a été retiré des deux runtimes ; aucun hook ne réécrit les résultats des outils.
 
@@ -98,15 +98,15 @@ Exécuté sur `ubuntu-latest`, `macos-latest`, `windows-latest` : installation h
 ### CI — job `enforce` (`.github/workflows/void-enforce.yml`)
 
 Rejoue `protected-file` sur les chemins et `secret-content` sur le contenu ajouté
-via `packages/core/enforce/ci-enforce.sh`. La validation des imports, des types et
+via `packages/core/src/enforce/ci-enforce.sh`. La validation des imports, des types et
 de la sélection des tests appartient aux commandes configurées du projet ; le
 workflow ne prétend pas configurer un linter chez les consommateurs.
 
-`dangerous-command` n'est pas rejouée sur le diff. Le fichier en donne la raison : « A destructive PATTERN committed into a file is a weak signal that self-matches the harness's own detector, security docs, and test fixtures » — `packages/core/enforce/ci-enforce.sh:184-188`.
+`dangerous-command` n'est pas rejouée sur le diff. Le fichier en donne la raison : « A destructive PATTERN committed into a file is a weak signal that self-matches the harness's own detector, security docs, and test fixtures » — `packages/core/src/enforce/ci-enforce.sh:184-188`.
 
-Le script échoue fermé sur prérequis manquant : « FAIL-CLOSED (DEV-393, the #62-64 class) » — `packages/core/enforce/ci-enforce.sh:7`.
+Le script échoue fermé sur prérequis manquant : « FAIL-CLOSED (DEV-393, the #62-64 class) » — `packages/core/src/enforce/ci-enforce.sh:7`.
 
-Des exemptions par glob de chemin sont lisibles dans `.github/void-enforce-allow`. Preuve : `packages/core/enforce/ci-enforce.sh:60-66`.
+Des exemptions par glob de chemin sont lisibles dans `.github/void-enforce-allow`. Preuve : `packages/core/src/enforce/ci-enforce.sh:60-66`.
 
 ### Release (`.github/workflows/release.yml`)
 
@@ -118,7 +118,7 @@ Deux jobs : `release-please` et `publish`. `publish` est conditionné à `releas
 - Le merge d'une PR : refusé par la CLI, absent de tout workflow.
 - La sélection du backlog : `CLAUDE.md:115` la place derrière HITL.
 - L'écriture dans la doctrine : `CLAUDE.md:111`.
-- La détection `dangerous-command` sur un diff de PR : `packages/core/enforce/ci-enforce.sh:184-188`.
+- La détection `dangerous-command` sur un diff de PR : `packages/core/src/enforce/ci-enforce.sh:184-188`.
 
 ## Enregistrements de décision
 
@@ -129,7 +129,7 @@ Deux jobs : `release-please` et `publish`. `publish` est conditionné à `releas
 
 ## Enforcement déclaré par les skills
 
-Les 37 skills déclarent `enforcement.floor: ci`. Preuve : frontmatter de `packages/core/skills/*/SKILL.md`.
+Les 37 skills déclarent `enforcement.floor: ci`. Preuve : frontmatter de `packages/core/src/skills/*/SKILL.md`.
 
 ## Protection de branche
 

@@ -13,7 +13,7 @@ describe('governingSkill', () => {
   it('names a skill that exists on disk for every rule', () => {
     for (const rule of RULE_NAMES) {
       const skill = governingSkill(rule);
-      const path = join(packages, 'core', 'skills', skill, 'SKILL.md');
+      const path = join(packages, 'core', 'src', 'skills', skill, 'SKILL.md');
       expect(readFileSync(path, 'utf8'), `${rule} points at ${skill}`).toContain('---');
     }
   });

@@ -14,10 +14,10 @@ import { RETIRED_SKILLS, wasEverOurs } from './retired-skills.js';
  */
 function shippedSkills(): ReadonlySet<string> {
   const packages = join(fileURLToPath(import.meta.url), '..', '..', '..');
-  const roots = [join(packages, 'core', 'skills')];
+  const roots = [join(packages, 'core', 'src', 'skills')];
   const packs = join(packages, 'packs');
   for (const pack of readdirSync(packs, { withFileTypes: true })) {
-    if (pack.isDirectory()) roots.push(join(packs, pack.name, 'skills'));
+    if (pack.isDirectory()) roots.push(join(packs, pack.name, 'src', 'skills'));
   }
   const names = new Set<string>();
   for (const root of roots) {

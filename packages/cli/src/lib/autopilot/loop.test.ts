@@ -41,7 +41,7 @@ interface ProgramSpec {
 function authority(options: ProgramSpec = {}, enabled = true, schemaVersion: 2 | 3 = 3) {
   const { enabled: consent, progress, humanGates, ...autopilot } = autopilotAuthoritySchema.parse({
     schemaVersion, enabled, base: 'develop', ...options,
-    ownership: { sequential: ['pnpm-lock.yaml', 'packages/cli/core-assets/**'] },
+    ownership: { sequential: ['pnpm-lock.yaml', 'packages/cli/dist/core-assets/**'] },
     progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
       states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done', 'Canceled'] } },
   });
@@ -426,8 +426,8 @@ describe('slot assignment', () => {
 
   it('admits one ticket at a time on a path the program declares sequential', () => {
     const tickets = [
-      queued('DEV-1', ['packages/cli/core-assets/a']),
-      queued('DEV-2', ['packages/cli/core-assets/b']),
+      queued('DEV-1', ['packages/cli/dist/core-assets/a']),
+      queued('DEV-2', ['packages/cli/dist/core-assets/b']),
       queued('DEV-3', ['packages/core']),
     ];
     expect(assigned(decide({ tickets }))).toEqual(['DEV-1', 'DEV-3']);
@@ -1056,7 +1056,10 @@ describe('protected paths', () => {
       '.github/workflows/ci.yml',
       '.github/actions/void-enforce/action.yml',
       '.void/program.md',
-      'packages/core/hooks/_void-hook.mjs',
+      'packages/core/dist/hooks/_void-hook.mjs',
+      'packages/core/src/hooks/secret-in-content.sh',
+      'packages/core/dist/agents/independent-code-reviewer.md',
+      'packages/core/src/specialists/independent-code-reviewer.yaml',
       // What actually runs here: the installed runner, and the files that wire
       // it into each runtime or scope what it enforces.
       '.void/hooks/_void-hook.mjs',
@@ -1086,7 +1089,7 @@ describe('protected paths', () => {
     for (const file of [
       'scripts/auto-merge-contract.mjs',
       'scripts/verify.mjs',
-      'packages/core/enforce/ci-enforce.sh',
+      'packages/core/src/enforce/ci-enforce.sh',
     ]) {
       const action = actionFor(decide({ tickets }, { pulls: [touching(['docs/a.md', file])] }), 'DEV-1');
       expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
@@ -1134,8 +1137,8 @@ describe('protected paths', () => {
       'packages/cli/src/commands/autopilot.ts',
       'packages/cli/src/lib/autopilot/footprint-area.ts',
       'packages/mission-engine/src/specialist/completion.ts',
-      'packages/core/agents/independent-code-reviewer.md',
-      'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',
+      'packages/core/src/agents/independent-code-reviewer.md',
+      'packages/cli/dist/core-assets/specialists/independent-code-reviewer.yaml',
       '.claude/agents/independent-code-reviewer.md',
       '.claude/settings.local.json',
       '.mcp.json',

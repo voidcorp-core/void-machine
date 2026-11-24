@@ -27,8 +27,8 @@ https://github.com/voidcorp-core/void-machine/blob/main/docs/PROJECT-DOCTRINE-FO
 ## Hard rules
 
 - **Worktrees Git** : appliquer l'invariant universel
-  [Git worktree placement and lifetime](https://github.com/voidcorp-core/void-machine/blob/develop/packages/core/PHILOSOPHY.md#git-worktree-placement-and-lifetime),
-  porté dans `packages/core/PHILOSOPHY.md` et sa copie `docs/PHILOSOPHY.md`.
+  [Git worktree placement and lifetime](https://github.com/voidcorp-core/void-machine/blob/develop/packages/core/src/PHILOSOPHY.md#git-worktree-placement-and-lifetime),
+  porté dans `packages/core/src/PHILOSOPHY.md`.
   Il couvre emplacement durable, réutilisation, migration conservatrice et cycle
   de vie lié au ticket, indépendamment des outils d'affichage.
   - **Why** : une seule règle autoritaire partagée par les consommateurs et les skills.

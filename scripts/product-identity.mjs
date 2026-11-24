@@ -1,6 +1,6 @@
 // The product identity, for the plain-ESM scripts that cannot import TypeScript.
 //
-// It reads packages/core/data/identity.json relative to this file, never relative to the working
+// It reads packages/core/src/data/identity.json relative to this file, never relative to the working
 // directory: a guard that runs from a trusted checkout therefore reads the identity of that same
 // checkout, never one a pull request brought along. The TypeScript accessor
 // (packages/hook-runner/src/identity.ts) derives the same fields, and
@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 
 const document = JSON.parse(
-  readFileSync(new URL('../packages/core/data/identity.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('../packages/core/src/data/identity.json', import.meta.url), 'utf8'),
 );
 const { owner, name } = document.repository;
 const namespaces = [document.markers.namespace, ...document.markers.deprecated];

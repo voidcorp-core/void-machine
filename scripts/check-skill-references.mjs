@@ -137,16 +137,16 @@ const SURFACES = [
   '.void/PROJECT-DOCTRINE.md',
   'docs/ARCHITECTURE.md',
   'docs/PHILOSOPHY.md',
-  'packages/core/PHILOSOPHY.md',
-  'packages/core/PROJECT-DOCTRINE.template.md',
-  'packages/core/.claude-plugin/plugin.json',
-  'packages/cli/core-assets/.claude-plugin/plugin.json',
+  'packages/core/src/PHILOSOPHY.md',
+  'packages/core/src/PROJECT-DOCTRINE.template.md',
+  'packages/core/src/.claude-plugin/plugin.json',
+  'packages/cli/dist/core-assets/.claude-plugin/plugin.json',
   'docs/HARNESS_EVOLUTION.md',
   'docs/CHEATSHEET.md',
-  'packages/core/skills',
-  'packages/core/agents',
-  'packages/core/commands',
-  'packages/core/hooks',
+  'packages/core/src/skills',
+  'packages/core/src/agents',
+  'packages/core/src/commands',
+  'packages/core/src/hooks',
   'packages/packs',
 ];
 
@@ -208,7 +208,7 @@ function walk(path, code = false, seen = []) {
 
 function knownNames() {
   const names = new Set();
-  for (const root of ['packages/core/skills', 'packages/packs']) {
+  for (const root of ['packages/core/src/skills', 'packages/packs']) {
     for (const file of walk(resolve(ROOT, root))) {
       if (basename(file) === 'SKILL.md') names.add(basename(dirname(file)));
       if (basename(file) === 'plugin.json') {
@@ -217,7 +217,7 @@ function knownNames() {
       }
     }
   }
-  for (const root of ['packages/core/agents', 'packages/core/commands']) {
+  for (const root of ['packages/core/src/agents', 'packages/core/src/commands']) {
     for (const file of walk(resolve(ROOT, root))) {
       if (file.endsWith('.md')) names.add(basename(file, '.md'));
     }

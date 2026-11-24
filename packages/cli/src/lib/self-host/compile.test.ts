@@ -33,7 +33,7 @@ async function temporaryRoot(name: string): Promise<string> {
 }
 
 const copyCommittedRunner: BuildHookBundle = async ({ outfile }) => {
-  await cp(join(REPO, 'packages/core/hooks/_void-hook.mjs'), outfile);
+  await cp(join(REPO, 'packages/core/dist/hooks/_void-hook.mjs'), outfile);
 };
 
 afterEach(async () => {
@@ -69,14 +69,14 @@ const HARNESS_SOURCE_FIXTURE: Readonly<Record<string, string>> = {
   'packages/hook-runner/src/cli.ts': 'export const hook = true;\n',
   'packages/hook-runner/scripts/build-runtime.mjs': 'export const builder = true;\n',
   'packages/mission-engine/src/index.ts': 'export const engine = true;\n',
-  'packages/core/.claude-plugin/plugin.json':
+  'packages/core/src/.claude-plugin/plugin.json':
     `${JSON.stringify({ name: 'harness-core', hooks: {} })}\n`,
-  'packages/core/agents/doctrine-critic.md': '---\nname: doctrine-critic\n---\n',
-  'packages/core/skills/void-tdd/SKILL.md': '---\nname: void-tdd\n---\n',
-  'packages/core/specialists/catalog.json': '[]\n',
-  'packages/core/codex/hooks.json': '{}\n',
-  'packages/core/PHILOSOPHY.md': '# Philosophy\n',
-  'packages/core/PROJECT-DOCTRINE.template.md': '# Doctrine\n',
+  'packages/core/src/agents/doctrine-critic.md': '---\nname: doctrine-critic\n---\n',
+  'packages/core/src/skills/void-tdd/SKILL.md': '---\nname: void-tdd\n---\n',
+  'packages/core/src/specialists/catalog.json': '[]\n',
+  'packages/core/src/codex/hooks.json': '{}\n',
+  'packages/core/src/PHILOSOPHY.md': '# Philosophy\n',
+  'packages/core/src/PROJECT-DOCTRINE.template.md': '# Doctrine\n',
 };
 
 async function harnessSourceFixture(): Promise<string> {
@@ -132,7 +132,7 @@ describe('hashSelfHostSource', () => {
   it('changes when a current source input changes', async () => {
     const root = await harnessSourceFixture();
     const before = await hashSelfHostSource(root);
-    const skill = join(root, 'packages/core/skills/void-tdd/SKILL.md');
+    const skill = join(root, 'packages/core/src/skills/void-tdd/SKILL.md');
     const current = await readFile(skill, 'utf8');
     await writeFile(skill, `${current}\nsource drift\n`);
     expect(await hashSelfHostSource(root)).not.toBe(before);
@@ -224,7 +224,7 @@ describe('syncSelfHost', () => {
       ...fixtureSyncOptions(generatedRoot),
       wireRuntimeSurfaces: async (input) => {
         await wireFixtureSurfaces(input);
-        await writeFile(join(source, 'packages/core/PHILOSOPHY.md'), '# Moved\n');
+        await writeFile(join(source, 'packages/core/src/PHILOSOPHY.md'), '# Moved\n');
       },
       mode: 'shadow',
     })).rejects.toThrow('self-host sources changed during compilation');

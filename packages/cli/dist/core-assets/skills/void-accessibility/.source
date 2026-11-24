@@ -1,0 +1,15 @@
+Sources for `void-accessibility` skill (see `docs/plans/skill-audits/void-accessibility.md` for full audit):
+
+- WCAG 2.2 AA — https://www.w3.org/WAI/WCAG22/quickref/ — target level
+- Radix UI primitives — https://www.radix-ui.com — no hand-rolled a11y
+- Apple HIG touch targets — https://developer.apple.com/design/human-interface-guidelines — ≥ 44×44 minimum
+- WAI-ARIA Authoring Practices — https://www.w3.org/WAI/ARIA/apg/ — reference for custom widgets
+- axe-core — https://www.deque.com/axe/ — static analysis baseline
+- Folpe mobile-first dual-quality — PHILOSOPHY.md (this repo)
+- citypaul/.dotfiles a11y notes
+
+Strategy: distill. Compose with frontend-design (separate skill, vendored from Vercel plugin).
+
+Companion hooks: axe-precommit, viewport-screenshot-gate (shared with frontend-design).
+
+Stack-specific Tappable helper + Radix-wrapped @repo/ui + axe-core integration in pack-nextjs-pwa.

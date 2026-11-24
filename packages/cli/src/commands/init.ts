@@ -717,9 +717,8 @@ export interface DoctrineInstallRoots {
    */
   readonly installRoot?: string | undefined;
   /**
-   * An installation whose philosophy is canonical rather than derived — the
-   * source repo, where `docs/PHILOSOPHY.md` is the original and the packaged
-   * copy is necessarily behind it.
+   * Preserve the source repository’s active published doctrine. Working source
+   * and delivery copies must never repair or activate that installation.
    */
   readonly preserveFrom?: string | undefined;
 }
@@ -769,20 +768,16 @@ export async function installDoctrineFiles(
   // a glance.
   const philosophyDst = join(voidDir, 'installed', 'PHILOSOPHY.md');
   await mkdir(join(voidDir, 'installed'), { recursive: true });
-  // Source repositories own docs/PHILOSOPHY.md. The installed copy is derived,
-  // not an authority that may freeze a stale doctrine across updates.
-  const canonical = preserveFrom === undefined
-    ? undefined
-    : join(preserveFrom, 'docs', 'PHILOSOPHY.md');
+  // Working sources must never activate unpublished doctrine in the source repository.
   const previous = preserveFrom === undefined
     ? undefined
     : join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md');
-  if (canonical !== undefined && existsSync(canonical)) {
-    await cp(canonical, philosophyDst);
-    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical here)')}`);
-  } else if (previous !== undefined && existsSync(previous)) {
+  if (previous !== undefined) {
+    if (!existsSync(previous)) {
+      throw new Error('Cannot preserve published doctrine: active installed philosophy is missing or unreadable.');
+    }
     await cp(previous, philosophyDst);
-    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical source unavailable)')}`);
+    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (published floor)')}`);
   } else if (existsSync(philosophySrc)) {
     await cp(philosophySrc, philosophyDst);
     line(`${c.green(glyph.check)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}written (managed)`);

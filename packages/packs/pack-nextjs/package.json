@@ -1,7 +1,7 @@
 {
   "name": "@voidcorp/pack-nextjs",
   "version": "7.0.2",
-  "description": "Next.js 16 App Router conventions for Void Machine — route groups, Cache Components, instrumentation. Composes with @voidcorp/pack-react (UI) and @voidcorp/pack-server (Server Actions, webhooks).",
+  "description": "Next.js 16 App Router conventions for Void Machine \u2014 route groups, Cache Components, instrumentation. Composes with @voidcorp/pack-react (UI) and @voidcorp/pack-server (Server Actions, webhooks).",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,15 +15,14 @@
       "import": "./dist/async/index.js",
       "types": "./dist/async/index.d.ts"
     },
-    "./claude/*": "./claude/*"
+    "./claude/*": "./dist/claude/*"
   },
   "files": [
     "dist",
-    "claude",
     "README.md"
   ],
   "scripts": {
-    "build": "tsup && tsc --emitDeclarationOnly --declarationMap false",
+    "build": "tsup && tsc --emitDeclarationOnly --declarationMap false && node ../../cli/scripts/copy-core-assets.mjs --pack pack-nextjs",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

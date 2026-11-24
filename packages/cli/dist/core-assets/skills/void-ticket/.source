@@ -1,0 +1,18 @@
+Sources for `void-ticket` skill (see `docs/plans/skill-audits/void-ticket.md` for full audit):
+
+- loomcrafthq/ticket-craft — reference for the platform-agnostic tracker template
+  (Context / Scope / Technical Specs / AC / DoD / Edge Cases) and T-shirt sizing.
+  KEEP EXTERNAL as a generic fallback; this skill is the doctrine-aware,
+  harness-composing version. Distilled, not vendored.
+- Composes upstream: brainstorm, plan (the thinking
+  this skill captures). Downstream: implement (consumes the ticket and
+  its declared passes).
+
+Strategy: author + distill. Three deliberate additions over ticket-craft:
+1. INGEST-first: the ticket records decisions already made (spec, plan, ADR,
+   conversation), it never invents scope.
+2. Estimate + labels + parent are REQUIRED native fields, not optional metadata.
+   This is the observed baseline failure (tickets shipped without them).
+3. Two new slots tie it to the harness: a TDD-mode-per-ticket and a
+   "runner passes that apply" declaration, so implement does not
+   re-derive the conditional passes. Plus an all-angles sweep before saving.

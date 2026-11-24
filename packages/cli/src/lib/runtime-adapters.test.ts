@@ -14,7 +14,7 @@ import {
   type RuntimeWireContext,
 } from './runtime-adapters.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 
 function scratch(): string {
   return mkdtempSync(join(tmpdir(), 'void-adapters-'));

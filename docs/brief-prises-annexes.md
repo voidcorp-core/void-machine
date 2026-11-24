@@ -12,7 +12,7 @@ La gestion mécanique du contexte fait l'objet d'un **brief séparé** et n'est 
 
 **Le constat, vérifié :** cette règle n'existe nulle part dans le harnais. Ni dans
 `packages/hook-runner/src/rules/dangerous-command.ts`, ni dans `CLAUDE.md`, ni dans
-`packages/core/skills/void-commit-discipline/SKILL.md`. Elle ne vit que dans la mémoire de
+`packages/core/src/skills/void-commit-discipline/SKILL.md`. Elle ne vit que dans la mémoire de
 Folpe, écrite après un incident réel : 2,4 Mo d'images embarquées par accident dans une PR.
 
 Or `.void/installed/PHILOSOPHY.md` pose que « Rules without enforcement should NOT be added to
@@ -60,7 +60,7 @@ doit s'inverser : dans le doute, relancer. Écris ce renversement dans le code, 
 
 ## 3. Une phrase d'honnêteté dans `void-verify`
 
-`packages/core/skills/void-verify/SKILL.md`. À intégrer dans la langue de la skill, pas à coller
+`packages/core/src/skills/void-verify/SKILL.md`. À intégrer dans la langue de la skill, pas à coller
 tel quel :
 
 > Une porte qui passe ne vérifie que ce que cette porte vérifie ; atteindre une limite

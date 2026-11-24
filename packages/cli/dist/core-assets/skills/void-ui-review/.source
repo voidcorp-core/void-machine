@@ -1,0 +1,12 @@
+Sources for `void-ui-review` skill (see `docs/plans/skill-audits/void-ui-review.md` for the full distribution matrix):
+
+- impeccable (standalone skill, ~/.claude/skills/impeccable/, v3.8.0) — VENDORED (DEV-389): the audit/critique/refine methodology (the AI-slop two-altitude category-reflex test, the register split brand-vs-product, the refine-mode menu polish/bolder/quieter/distill/harden/clarify/layout/typeset). Per Folpe's directive "tout dans le harnais", impeccable's prose value is internalised so the harness does not depend on an external skill. Rejected: its browser-driven command runtime (scripts/, reference/*.md command files, `live` mode, comparison board) — deferred to Vague 4.
+- gstack /design-review (1953 LOC) — VENDORED: the designer's-eye QA (first-impression, squint/blur test, interaction-state coverage, emotional arc). Its live-screenshot driver + atomic-fix loop are deferred to Vague 4; its 80-item audit rubric + A-F slop scoring + slop blacklist went to forge:critique / SLOP-REGISTRY (issues).
+- gstack /design-consultation (1188 LOC) — the DESIGN.md file contract is KEPT (already a harness contract, consumed by frontend-design + pack-nextjs; produced by `impeccable document`/`init` or by hand); its consultation runtime + design-vocabulary rosters went to forge:design-prompt (issues). No consultation skill needed.
+- gstack /design-shotgun (1331 LOC) — the multi-variant + anti-convergence method went to forge:design-prompt (issues); its comparison board is Vague 4.
+- Steve Krug "Don't Make Me Think" — the reading model (scan/satisfice/muddle) went to frontend-design; cited, not pasted.
+
+Strategy: distill + split. Build-time craft → frontend-design (enriched, DEV-389); audit-time methodology → this new skill (the ceiling). Mirrors security-guidance/security-audit and plan/plan-review. Browser capture is composed through `void-qa`; the comparison board and .void/SLOP-REGISTRY remain outside this skill.
+
+DEV-444 adaptation: the rubric now feeds a fresh-context Visual Craft Director with a six-dimension
+8/10 floor. Browser/current-diff evidence stays owned by qa; LLM-only certification is rejected.

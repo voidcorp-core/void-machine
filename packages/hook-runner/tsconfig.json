@@ -1,5 +1,5 @@
 {
-  "extends": "../packs/pack-monorepo/tsconfig.strict.json",
+  "extends": "../packs/pack-monorepo/src/tsconfig.strict.json",
   "compilerOptions": {
     "rootDir": "./src",
     "module": "NodeNext",

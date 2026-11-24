@@ -1,0 +1,7 @@
+Sources for `void-server-action` skill (see `docs/plans/skill-audits/void-server-action.md` for the full audit):
+
+- Next.js 16 docs — `'use server'` and defineAction semantics — distilled, not copied.
+- Vercel security guidance — trust-boundary obligations for Server Actions.
+- Solaar's webhook safety implementation — real-world source for withWebhookSafety / defineAction / defineFormAction patterns.
+
+Strategy: native. Distilled from the three sources above and adapted to the void-machine convention where services own domain logic and actions are pure trust-boundary wrappers.

@@ -1,5 +1,5 @@
 {
-  "extends": "../../packages/packs/pack-monorepo/tsconfig.strict.json",
+  "extends": "../../packages/packs/pack-monorepo/src/tsconfig.strict.json",
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

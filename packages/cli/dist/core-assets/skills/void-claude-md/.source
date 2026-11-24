@@ -1,0 +1,15 @@
+Sources for `void-claude-md` skill (see `docs/plans/skill-audits/void-claude-md.md` for full audit):
+
+- HumanLayer — "Writing a good CLAUDE.md" — the load-bearing insight: Claude Code wraps CLAUDE.md in a system-reminder framed "may or may not be relevant," the system prompt already carries ~50 instructions, and every added line competes for finite attention. Hence: keep it minimal and universal, never put code-style rules in it (send a linter, not an LLM), reference file:line instead of inlining rotting snippets, defer detail to docs (progressive disclosure), and prune by asking "would removing this cause an error?". https://www.humanlayer.dev/blog/writing-a-good-claude-md
+
+- HumanLayer — "Advanced Context Engineering" — context is the scarce resource; an always-on prompt spends from the same budget as every task. Push certainties to hooks (deterministic, fires 100% of the time) rather than instructions (probabilistic), use narrowly-scoped conditional guidance, and keep the file runnable. https://www.humanlayer.dev/blog/advanced-context-engineering
+
+- Anthropic Claude Code best practices — CLAUDE.md is appended to the system prompt as context the model weighs, not a hard contract; keep it concise, use it for run/build/test commands and repo conventions, and prefer settings.json for deterministic config (permissions, tool attribution). https://www.anthropic.com/engineering/claude-code-best-practices
+
+- Field reports / issues on CLAUDE.md being ignored — observed failure mode where a long CLAUDE.md's rules are dropped silently; the cure is fewer, sharper, runnable lines plus mechanical enforcement (hooks/linters/settings) rather than more prose. (community reports / GitHub issues, no single canonical URL)
+
+Strategy: distill. The HumanLayer articles supply the principles; this skill rewrites them as enforceable harness doctrine for the CLAUDE.md files the harness PRODUCES in consumer projects, adds an "Auditing an existing CLAUDE.md" pruning checklist, and the harness-standard Rationalizations + Verification sections. No verbatim vendoring.
+
+Composition: context (context is the constraint), source-driven-development (deferred docs ground config in version-matched sources), harness-evolution (the harness generates consumer CLAUDE.md files this skill governs), capture-rule (where a stated project rule lands — hook / settings / lean CLAUDE.md line / deferred doc).
+
+Companion hooks: none in v1. A future informational lint (e.g. claude-md-length / snippet-detector) is an open question in the audit note, not a v1 deliverable.

@@ -11,7 +11,7 @@
       "packages/**/src/**/*.{ts,tsx,js,mjs,cjs}",
       "packages/**/test/**/*.{ts,tsx,js,mjs,cjs}",
       "packages/**/*.{test,spec}.{ts,tsx,js,mjs,cjs}",
-      "packages/core/hooks/*.test.ts",
+      "packages/core/src/hooks/*.test.ts",
       "packages/**/*.config.ts",
       "apps/**/src/**/*.{ts,tsx,js,mjs,cjs}",
       "apps/**/scripts/**/*.ts",

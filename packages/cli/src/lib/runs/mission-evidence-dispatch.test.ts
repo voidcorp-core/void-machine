@@ -16,7 +16,7 @@ import { createMission, inspectMission, missionControllerRoutingHash, recordMiss
 import { computeProjectState } from './project-state.js';
 import { requestSpecialistEvidence, recordSpecialistEvidence } from './specialist-evidence.js';
 
-const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core');
+const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core/dist');
 const ID = 'mis_0123456789abcdef0123456789abcdef';
 
 it.each(['pre-implementation', 'post-implementation'] as const)(

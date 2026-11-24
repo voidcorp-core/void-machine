@@ -40,7 +40,7 @@ function createFixture(
   const root = mkdtempSync(join(tmpdir(), 'void-description-budget-'));
   fixtures.push(root);
 
-  const skillDirectory = join(root, 'packages', 'core', 'skills', 'void-example');
+  const skillDirectory = join(root, 'packages', 'core', 'src', 'skills', 'void-example');
   const skillDescription = owner === 'skill'
     ? descriptionField(descriptionLength, style)
     : 'description: A short discovery description.';
@@ -52,10 +52,10 @@ function createFixture(
   write(join(skillDirectory, '.source'), 'Fixture source.\n');
   write(join(root, 'docs', 'plans', 'skill-audits', 'void-example.md'), '# Fixture audit\n');
 
-  let relativePath = 'packages/core/skills/void-example/SKILL.md';
+  let relativePath = 'packages/core/src/skills/void-example/SKILL.md';
   if (owner === 'pack') {
-    relativePath = 'packages/packs/example/skills/void-pack-example/SKILL.md';
-    const packSkillDirectory = join(root, 'packages', 'packs', 'example', 'skills', 'void-pack-example');
+    relativePath = 'packages/packs/example/src/skills/void-pack-example/SKILL.md';
+    const packSkillDirectory = join(root, 'packages', 'packs', 'example', 'src', 'skills', 'void-pack-example');
     write(
       join(packSkillDirectory, 'SKILL.md'),
       `---\nname: void-pack-example\n${descriptionField(descriptionLength, style)}\n---\n\n# Pack example\n`,
@@ -66,15 +66,15 @@ function createFixture(
   }
 
   if (owner === 'agent') {
-    relativePath = 'packages/core/agents/example-agent.md';
+    relativePath = 'packages/core/src/agents/example-agent.md';
     write(
-      join(root, 'packages', 'core', 'agents', 'example-agent.md'),
+      join(root, 'packages', 'core', 'src', 'agents', 'example-agent.md'),
       `---\nname: example-agent\n${descriptionField(descriptionLength, style)}\ntools: Read, Grep, Glob\n---\n\n# Example agent\n`,
     );
   }
 
   if (owner === 'specialist') {
-    relativePath = 'packages/core/specialists/example-agent.yaml';
+    relativePath = 'packages/core/src/specialists/example-agent.yaml';
     write(
       join(root, relativePath),
       `name: example-agent\n${descriptionField(descriptionLength, style)}\n`,
@@ -120,7 +120,7 @@ describe('discovery description budget', () => {
 
     expect(result.status).toBe(0);
     expect(output).toContain(
-      `NOTE: packages/core/skills/void-example/SKILL.md description is ${descriptionLength} chars ` +
+      `NOTE: packages/core/src/skills/void-example/SKILL.md description is ${descriptionLength} chars ` +
         '(target 250, cap 500)',
     );
   });
@@ -131,7 +131,7 @@ describe('discovery description budget', () => {
 
     expect(result.status).toBe(1);
     expect(output).toContain(
-      'FAIL: packages/core/skills/void-example/SKILL.md description is 501 chars (cap 500)',
+      'FAIL: packages/core/src/skills/void-example/SKILL.md description is 501 chars (cap 500)',
     );
   });
 
@@ -140,7 +140,7 @@ describe('discovery description budget', () => {
     const output = `${result.stdout}${result.stderr}`;
 
     expect(result.status).toBe(1);
-    expect(output).toContain('FAIL: packages/core/agents/example-agent.md description is 501 chars (cap 500)');
+    expect(output).toContain('FAIL: packages/core/src/agents/example-agent.md description is 501 chars (cap 500)');
   });
 
   it('rejects an agent without a tools allowlist', () => {

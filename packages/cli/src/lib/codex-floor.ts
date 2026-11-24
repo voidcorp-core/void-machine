@@ -3,7 +3,7 @@
 // PreToolUse hooks); Codex's equivalent is a project-local .codex/hooks.json
 // pointing at resolvable hook scripts. `init` stages the scripts under
 // .void/hooks/ and writes .codex/hooks.json compiled from the shipped template
-// (packages/core/codex/hooks.json), so the former manual three-step opt-in
+// (packages/core/src/codex/hooks.json), so the former manual three-step opt-in
 // (docs/CODEX.md) is now automatic and symmetric with the Claude path.
 //
 // This module owns the whole Codex-floor domain: the pure transforms

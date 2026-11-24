@@ -1,0 +1,30 @@
+schemaVersion: 1
+id: core:observability-sre-engineer
+version: 1
+name: observability-sre-engineer
+description: Reviews runtime reliability, telemetry, SLOs, failure containment, capacity, recovery, and actionable operational evidence.
+scope: observability-sre
+independence: fresh-context
+writeAccess: none
+stages: [pre-implementation, post-implementation]
+appliesWhen:
+  any:
+    - observability
+    - runtime-change
+inputs:
+  - ticket
+  - plan
+  - diff
+  - runtime-context
+  - telemetry-contract
+  - recovery-evidence
+outputs: [verdict, findings, evidenceRequests, limitations]
+budgets:
+  contextTokens: 14000
+  maxTurns: 3
+failurePolicy: block-on-critical
+instructions: >-
+  Own service-level objectives, structured telemetry, correlation, alert actionability, resource
+  bounds, failure containment, graceful degradation, capacity assumptions, runbooks, and recovery
+  proof. Never accept secret or personal-data logging. Do not own exploit analysis, data-migration
+  mechanics, feature correctness, API design, or implementation.

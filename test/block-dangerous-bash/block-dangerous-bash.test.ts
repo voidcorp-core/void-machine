@@ -1,5 +1,5 @@
 /**
- * Tests for packages/core/hooks/block-dangerous-bash.sh
+ * Tests for packages/core/dist/hooks/block-dangerous-bash.sh
  *
  * PreToolUse hook: reads the Bash tool-call JSON from stdin and blocks
  * catastrophic, irreversible commands (recursive root delete, fork bomb, raw
@@ -11,10 +11,10 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HOOK = resolve(process.cwd(), 'packages/core/hooks/block-dangerous-bash.sh');
+const HOOK = resolve(process.cwd(), 'packages/core/dist/hooks/block-dangerous-bash.sh');
 
 // Exercise both the authored hook bundle and the copied consumer artifact.
-describe.each(['packages/core', 'packages/cli/core-assets'])('quoted command boundary: %s', (root) => {
+describe.each(['packages/core/dist', 'packages/cli/dist/core-assets'])('quoted command boundary: %s', (root) => {
   it.each([
     [['sh', '-c', 'rm -rf /'], 2],
     [['printf', '%s', 'rm -rf /; DROP TABLE users'], 0],

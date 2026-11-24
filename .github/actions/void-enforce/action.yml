@@ -35,4 +35,4 @@ runs:
         [ -z "$base" ] && base="${MERGE_GROUP_BASE_SHA:-}"
         [ -z "$base" ] && [ -n "${PR_BASE_REF:-}" ] && base="origin/${PR_BASE_REF}"
         # A missing base is handled fail-closed by the script itself (red check).
-        "${GITHUB_ACTION_PATH}/../../../packages/core/enforce/ci-enforce.sh" --base "$base"
+        "${GITHUB_ACTION_PATH}/../../../packages/core/dist/enforce/ci-enforce.sh" --base "$base"

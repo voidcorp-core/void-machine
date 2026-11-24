@@ -1,0 +1,5 @@
+Sources for `void-instrumentation-setup` skill (see `docs/plans/skill-audits/void-instrumentation-setup.md` for the full audit):
+
+- No external source listed in the audit. Authored against the Next.js 16 instrumentation.ts mechanism (register() export, NEXT_RUNTIME edge/node split) and the Sentry + OpenTelemetry + pino composition.
+
+Strategy: distill. Wiring pattern authored natively for Next 16; no upstream skill was adapted.

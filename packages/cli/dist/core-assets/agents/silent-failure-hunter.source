@@ -1,0 +1,8 @@
+Sources for the `silent-failure-hunter` agent (see `docs/plans/skill-audits/silent-failure-hunter.md` for the full audit):
+
+- everything-claude-code (affaan-m) — the "silent failure" agent concept: a narrow hunter for swallowed errors rather than a general reviewer. https://github.com/affaan-m/everything-claude-code
+- void-machine `void-async-safety` skill — un-awaited promises, missing error propagation in concurrent code (the agent flags, the skill prescribes).
+- void-machine `void-observability` skill — swallowed errors are an observability hole; the agent surfaces them, observability says how to log.
+- Claude Code sub-agent docs — https://code.claude.com/docs/en/sub-agents.md — read-only tool allowlist (omit Edit/Write), verdict-as-final-message.
+
+Strategy: original (distill + compose). Narrow scope by anti-bloat rule 6: empty catches, swallowed exceptions, ignored return codes, un-awaited promises, `.catch(() => {})`. Routes generic bugs to /code-review, doctrine to doctrine-critic. model: sonnet (recognition/breadth task).

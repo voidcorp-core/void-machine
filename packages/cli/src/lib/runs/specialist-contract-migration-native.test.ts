@@ -20,7 +20,7 @@ import { appendMissionEvent, createMission, eventLogPath, inspectMission,
 import { recordSpecialistLifecycle, recordSpecialistRequests } from './specialist-lifecycle.js';
 import { requestSpecialistEvidence, recordSpecialistEvidence } from './specialist-evidence.js';
 import { verifyMissionCommand } from './verify.js';
-const SOURCE_CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
+const SOURCE_CORE = fileURLToPath(new URL('../../../../core/dist/', import.meta.url));
 const ID = 'mis_native_migration_0123456789';
 const VISUAL = 'core:visual-craft-director' as const;
 

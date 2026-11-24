@@ -1,0 +1,13 @@
+Sources for `void-migrations` skill (see `docs/plans/skill-audits/void-migrations.md` for full audit):
+
+- GoCardless "Zero-Downtime Postgres Migrations" — https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts/ — foundation, locking analysis + two-phase patterns
+- Strong Migrations (Rails) — https://github.com/ankane/strong_migrations — rule catalog ported to TS/Drizzle
+- Drizzle migrations docs — https://orm.drizzle.team/docs/migrations — tactical syntax
+- Neon branching — https://neon.tech/docs/introduction/branching — test on dev branch first
+- Supabase migration patterns — https://supabase.com/docs/guides/cli/local-development
+- pgroll (Xata) — https://github.com/xataio/pgroll — multi-version online schema escape hatch
+- Postgres ALTER TABLE locking docs — https://www.postgresql.org/docs/current/sql-altertable.html
+
+Strategy: original. No single TS source covers this; combined the disciplined narrative (GoCardless) with the rule catalog (Strong Migrations) and the void-stack tactical layer (Drizzle + Neon).
+
+Companion hooks: migration-lint, migration-pr-template.

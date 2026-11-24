@@ -10,7 +10,7 @@ const ROOT = new URL('../../', import.meta.url);
 /** Skills that exist on disk, which is what a name has to resolve to. */
 function skillExists(name: string): boolean {
   try {
-    readFileSync(new URL(`packages/core/skills/${name}/SKILL.md`, ROOT), 'utf8');
+    readFileSync(new URL(`packages/core/src/skills/${name}/SKILL.md`, ROOT), 'utf8');
     return true;
   } catch {
     return false;
@@ -30,7 +30,7 @@ describe('every enforcement rule names the doctrine it enforces', () => {
    * refused, which is the only place it does any good.
    */
   it('names the doctrine in the refusal a consumer sees', () => {
-    const bundle = fileURLToPath(new URL('packages/core/hooks/_void-hook.mjs', ROOT));
+    const bundle = fileURLToPath(new URL('packages/core/dist/hooks/_void-hook.mjs', ROOT));
     // The same silence, one screen down: this returned green when the bundle was
     // absent, so the only check that proves the sentence reaches a refused person
     // was skipped by whoever had not run `pnpm hooks:build` — reported as passing.

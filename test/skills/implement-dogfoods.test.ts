@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const SKILL = readFileSync(
-  new URL('../../packages/core/skills/void-implement/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-implement/SKILL.md', import.meta.url),
   'utf8',
 );
 const flat = SKILL.replace(/\s+/g, ' ').toLowerCase();

@@ -20,26 +20,26 @@ function statedCount(label: string): number {
 
 describe('the README composition table matches shipped sources', () => {
   it('counts core skills', () => {
-    expect(statedCount('Core skills')).toBe(filesAt('packages/core/skills').filter(name => existsSync(resolve(ROOT, 'packages/core/skills', name, 'SKILL.md'))).length);
+    expect(statedCount('Core skills')).toBe(filesAt('packages/core/src/skills').filter(name => existsSync(resolve(ROOT, 'packages/core/src/skills', name, 'SKILL.md'))).length);
   });
 
   it('counts stack pack skills', () => {
     const count = filesAt('packages/packs').reduce((total, pack) =>
-      total + filesAt(`packages/packs/${pack}/skills`).length, 0);
+      total + filesAt(`packages/packs/${pack}/src/skills`).length, 0);
     expect(statedCount('Stack pack skills')).toBe(count);
   });
 
   it('counts executable hook entries, excluding private libraries and bundles', () => {
-    const count = filesAt('packages/core/hooks').filter(name => name.endsWith('.sh') && !name.startsWith('_')).length;
+    const count = filesAt('packages/core/src/hooks').filter(name => name.endsWith('.sh') && !name.startsWith('_')).length;
     expect(statedCount('Hooks')).toBe(count);
   });
 
   it('counts agent definitions', () => {
-    expect(statedCount('Agents')).toBe(filesAt('packages/core/agents').filter(name => name.endsWith('.md')).length);
+    expect(statedCount('Agents')).toBe(filesAt('packages/core/dist/agents').filter(name => name.endsWith('.md')).length);
   });
 
   it('counts specialist contracts', () => {
-    expect(statedCount('Specialists')).toBe(filesAt('packages/core/specialists').filter(name => name.endsWith('.yaml')).length);
+    expect(statedCount('Specialists')).toBe(filesAt('packages/core/src/specialists').filter(name => name.endsWith('.yaml')).length);
   });
 });
 

@@ -26,7 +26,7 @@ travail. Pas un mécanisme greffé sur `void-implement`.
 
 ## Ce qui existe déjà, et qu'il ne faut pas réinventer
 
-- **Le seuil est déjà écrit.** `packages/core/skills/void-context/SKILL.md:61` : « Aim to keep
+- **Le seuil est déjà écrit.** `packages/core/src/skills/void-context/SKILL.md:61` : « Aim to keep
   effective usage around **40–60%** ». C'est de la doctrine, pas un mécanisme. Le chantier
   consiste à lui donner son mécanisme.
 - **Le contenu du checkpoint est déjà conçu.** `void-checkpoint` sait quoi écrire et quoi
@@ -35,7 +35,7 @@ travail. Pas un mécanisme greffé sur `void-implement`.
 - **L'emplacement est déjà classé.** `packages/hook-runner/src/void-layout.ts:102` classe
   `checkpoint.md` en `observed`, donc sous `.void/machine/` et gitignoré. Volontaire : c'est ce
   que *cette machine* a observé.
-- **Les hooks câblés aujourd'hui**, lus dans `packages/core/.claude-plugin/plugin.json` :
+- **Les hooks câblés aujourd'hui**, lus dans `packages/core/src/.claude-plugin/plugin.json` :
   `PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`. **`PreCompact` n'est câblé nulle part.**
 - Le runner de hooks vit dans `packages/hook-runner/src/lifecycle/`. `context.ts` produit
   aujourd'hui la bannière de `SessionStart`.
@@ -141,7 +141,7 @@ Deux différences à connaître, aucune bloquante :
   Ne construis rien qui dépende du blocage : le dénominateur commun est l'observation.
 - Codex garantit `model` dans l'entrée de `SessionStart` ; Claude ne le garantit pas.
 
-Le gabarit Codex vit dans `packages/core/codex/hooks.json`, compilé vers `.codex/hooks.json`
+Le gabarit Codex vit dans `packages/core/src/codex/hooks.json`, compilé vers `.codex/hooks.json`
 par `wireCodexFloor`. Il câble aujourd'hui les quatre mêmes événements que le côté Claude, avec
 les matchers doublés (`apply_patch|Edit|Write`, `Bash|shell`) — respecte cette convention.
 

@@ -249,7 +249,7 @@ async function matureDraft() {
   const assigned = join(repo.worktrees, 'assigned');
   git(repo.root, 'worktree', 'add', '-q', '--detach', assigned, repo.base);
   await adapterFor('codex').wire({ stageRoot: repo.root, installRoot: repo.root,
-    sourceRoot: resolve('packages/core'), enabledPlugins: ['harness'], enabledPacks: [],
+    sourceRoot: resolve('packages/core/dist'), enabledPlugins: ['harness'], enabledPacks: [],
     source: 'local', marketplaceRepo: 'acme/harness', pinVersion: '7.0.0' });
   const ticket = '.void/machine/tickets/DEV-1.md';
   mkdirSync(join(assigned, '.void/machine/tickets'), { recursive: true });
@@ -551,7 +551,7 @@ describe('native review routing', () => {
     git(repo.root, 'worktree', 'add', '-q', '--detach', coordinator, repo.base);
     git(repo.root, 'worktree', 'add', '-q', '--detach', assigned, repo.base);
     await adapterFor('codex').wire({ stageRoot: repo.root, installRoot: repo.root,
-      sourceRoot: resolve('packages/core'), enabledPlugins: ['harness'], enabledPacks: [],
+      sourceRoot: resolve('packages/core/dist'), enabledPlugins: ['harness'], enabledPacks: [],
       source: 'local', marketplaceRepo: 'acme/harness', pinVersion: '7.0.0' });
     writeFileSync(join(repo.root, '.void', 'program.md'), 'unreadable installation programme');
     writeFileSync(join(coordinator, '.void', 'config.json'), PROGRAM.replace('program: loop', 'program: coordinator'));

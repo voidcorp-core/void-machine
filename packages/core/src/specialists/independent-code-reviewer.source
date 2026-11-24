@@ -1,0 +1,10 @@
+Sources:
+- Google engineering practices, code review: https://google.github.io/eng-practices/review/reviewer/
+- void-machine code-review doctrine: packages/core/src/skills/code-review/SKILL.md
+
+Adapted:
+- Kept correctness-first, evidence-backed findings, bounded change scope, maintainability, and clear blocker severity.
+- Converted the final pass into a fresh-context read-only contract that defers deep domains to their owners.
+
+Rejected:
+- Style enumeration, majority voting, implementation authority, and duplication of security, QA, accessibility, or performance audits.

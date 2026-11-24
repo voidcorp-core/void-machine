@@ -1,0 +1,39 @@
+schemaVersion: 1
+id: core:typescript
+version: 2
+name: typescript
+technologies:
+  - id: typescript
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [typescript]
+  files:
+    extensions: [.ts, .tsx, .mts, .cts]
+    names: [tsconfig.json]
+    pathSegments: []
+sources:
+  - title: TypeScript documentation
+    url: https://www.typescriptlang.org/docs/
+reviewedAt: 2026-07-27
+expiresAfterDays: 180
+invariants:
+  - Keep strict type checking enabled and validate untrusted runtime input.
+  - Prefer narrow types and pure helpers over assertions and ambient mutation.
+patterns:
+  - id: typed-source
+    appliesWhen:
+      technologies: [typescript]
+      files:
+        extensions: [.ts, .tsx, .mts, .cts]
+        names: []
+        pathSegments: []
+    guidance: Model domain states explicitly and keep unsafe narrowing at named boundaries.
+  - id: compiler-config
+    appliesWhen:
+      technologies: [typescript]
+      files:
+        extensions: []
+        names: [tsconfig.json]
+        pathSegments: []
+    guidance: Preserve strictness and verify the effective compiler configuration.

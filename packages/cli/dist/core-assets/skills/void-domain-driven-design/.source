@@ -1,0 +1,13 @@
+Sources for `void-domain-driven-design` skill (see `docs/plans/skill-audits/void-domain-driven-design.md` for full audit):
+
+- Eric Evans "Domain-Driven Design: Tackling Complexity in the Heart of Software" 2003 — book — foundation, strategic DDD vocabulary
+- Vaughn Vernon "Implementing Domain-Driven Design" 2013 — book — tactical patterns, "small aggregates" rule
+- Scott Wlaschin "Domain Modeling Made Functional" — https://pragprog.com/titles/swdddf — DDD + FP synthesis, make illegal states unrepresentable
+- Khalil Stemmler practical DDD in TypeScript — https://khalilstemmler.com/articles/categories/domain-driven-design/ — TS-flavored tactical examples
+- Vlad Khorikov "Domain Modeling" course/blog — https://enterprisecraftsmanship.com — always-valid domain model, Result over exceptions
+- Vaughn Vernon "Domain-Driven Design Distilled" 2016 — book — shorter intro
+- citypaul/.dotfiles DDD notes — ubiquitous language enforcement
+
+Strategy: distill. Reject CQRS, event sourcing, mediator, generic Repository<T> as defaults (per docs/PHILOSOPHY.md Wing Chun). Sub-domain analysis (Core/Supporting/Generic) delegated upstream to brainstorm / plan-review (CEO lens).
+
+Companion hook: ubiquitous-language-lint (advisory).

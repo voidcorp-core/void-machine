@@ -102,7 +102,7 @@ jobs:
       # Keep validate red on a draft: skipped required jobs report success.
       - name: Admit integration validation
         id: admission
-        run: node packages/core/skills/void-verify/references/ci-admission.mjs
+        run: node packages/core/src/skills/void-verify/references/ci-admission.mjs
 
       - name: Setup pnpm
         # No `version:` here: action-setup reads it from packageManager in
@@ -125,13 +125,6 @@ jobs:
           node scripts/verify.mjs --gate sister-docs
           --sha "$GATE_SHA"
           --report ".void/machine/gate-reports/sister-docs.json"
-
-      - name: "[philosophy] Doctrine parity"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate philosophy
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/philosophy.json"
 
       - name: "[version-lockstep] Version lockstep"
         continue-on-error: true

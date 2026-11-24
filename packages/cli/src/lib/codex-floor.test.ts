@@ -21,7 +21,7 @@ import {
 // Reading it here makes the drift guard meaningful: adding a hook to the
 // template without staging its script fails this suite.
 const here = dirname(fileURLToPath(import.meta.url));
-const CORE_ROOT = resolve(here, '..', '..', '..', 'core');
+const CORE_ROOT = resolve(here, '..', '..', '..', 'core', 'dist');
 const templatePath = resolve(CORE_ROOT, 'codex', 'hooks.json');
 const template = readFileSync(templatePath, 'utf8');
 

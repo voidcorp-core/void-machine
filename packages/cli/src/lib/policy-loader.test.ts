@@ -22,7 +22,7 @@ rules:
 
 async function fixture(): Promise<{ root: string; core: string }> {
   const root = await mkdtemp(join(tmpdir(), 'void-policy-loader-'));
-  const core = join(root, 'core');
+  const core = join(root, 'core', 'dist');
   await mkdir(core, { recursive: true });
   await writeFile(join(core, 'core.yaml'), CORE_POLICY, 'utf8');
   await writeFile(

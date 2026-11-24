@@ -36,10 +36,10 @@ function sourceManifests(): string[] {
     readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => join(root, entry.name));
-  const core = skillDirs(join(REPO_ROOT, 'packages', 'core', 'skills'));
+  const core = skillDirs(join(REPO_ROOT, 'packages', 'core', 'src', 'skills'));
   const packs = skillDirs(join(REPO_ROOT, 'packages', 'packs')).flatMap((pack) => {
     try {
-      return skillDirs(join(pack, 'skills'));
+      return skillDirs(join(pack, 'src', 'skills'));
     } catch {
       return []; // A pack that ships no skills has no skills/ directory.
     }
@@ -131,7 +131,7 @@ describe('every source harness.yaml', () => {
 
   it('covers the core skills and the pack skills', () => {
     const rel = manifests.map((path) => relative(REPO_ROOT, path));
-    expect(rel.some((path) => path.startsWith('packages/core/skills/'))).toBe(true);
+    expect(rel.some((path) => path.startsWith('packages/core/src/skills/'))).toBe(true);
     expect(rel.some((path) => path.startsWith('packages/packs/'))).toBe(true);
   });
 

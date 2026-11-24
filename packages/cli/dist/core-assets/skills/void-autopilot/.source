@@ -1,0 +1,21 @@
+Sources for `void-autopilot` (see `docs/plans/skill-audits/void-autopilot.md` for the audit):
+
+- void-machine `backlog-autopilot`, then the cluster engine that replaced it (this repo) — the
+  attended parallel burst, its worktree isolation and its footprint collisions. The continuous
+  loop keeps the isolation and the collisions, and drops the integration pull request, its
+  reconciliation and its grant.
+- TypeSafe, "Introducing System One models and Jev"
+  (https://typesafe.ai/blog/introducing-system-one-models-and-jev) — the cursor between code and
+  model: the model renders narrow typed judgments, the code applies the policy. Adapted: each
+  judgment is admitted by a Zod schema in the CLI, and a refused answer is never read charitably.
+- GitHub merge queue and auto-merge
+  (https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)
+  — the combined commit is rebuilt and retested before every merge, which replaces the
+  reconciliation this repo wrote itself. Checks in the queue answer `merge_group`, and a commit
+  status triggers no workflow, hence the reviewer's re-run of `independent-review`.
+- git worktrees (native) — per-ticket isolation so parallel edits cannot corrupt one working
+  tree. Real filesystem isolation for the working tree, the index and `HEAD`, and nothing else:
+  the shared refs and config are fingerprinted around each unit.
+- Codex subagents (native) — workers when no cockpit surface is available. Subagents share
+  filesystem access, so the isolation comes from the pre-created worktrees and explicit workdirs,
+  never from an assumed sandbox.

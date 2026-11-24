@@ -1,0 +1,13 @@
+Sources:
+- AWS Well-Architected Framework (2024-11-06 revision): https://docs.aws.amazon.com/wellarchitected/2025-02-25/framework/welcome.html
+- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
+- Codex custom agents: https://learn.chatgpt.com/docs/agent-configuration/subagents
+
+Adapted:
+- Kept evidence-based trade-off review, system qualities, and bounded remediation.
+- Made the role stack-neutral and repository-grounded rather than AWS-specific.
+- Added the shared Void specialist identity, budget, failure, and JSON output contract.
+
+Rejected:
+- AWS service recommendations, migration prescriptions, and implementation authority.
+- Security, QA, product, and visual-design ownership, which belong to separate specialists.

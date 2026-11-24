@@ -10,6 +10,30 @@ The topology below describes implementation, not a claim that a general Cortex
 integration is delivered. `packages/core/` is the development harness's discipline;
 `packages/void-machine/src/core/` holds the bounded generic mission primitives.
 
+## Authored sources and assembled delivery
+
+Product assets live under each package's `src`: core doctrine, skills, authored
+agents such as `doctrine-critic`, specialist YAML, modules, hooks, policies and templates; pack skills,
+plugin manifests, hooks, modules and shipped configs; CLI entrypoints in `src/bin`.
+`packages/core/src/PHILOSOPHY.md` is the only authored universal doctrine.
+
+Existing builders assemble `packages/core/dist` and `packages/packs/*/dist` as
+complete marketplace plugin roots. Those static deliveries are tracked because a
+marketplace clone runs no build. The CLI ships `dist/bin`, `dist/main.js` and
+`dist/core-assets`; pack TypeScript exports remain under `dist`. Specialist agent
+Markdown is compiled from canonical YAML into delivery, never authored twice.
+
+Run `pnpm derive` explicitly after changing sources. `pnpm derive:check` compares
+temporary expected assemblies before changing any tracked delivery, including
+already-dirty artifacts, missing files and orphans. Pre-commit performs only the
+remaining read-only document/discovery gates; it neither generates nor stages.
+
+Builds use versioned inputs and explicit built dependencies. Source self-host
+compilation stays isolated. Source-repository init/update preservation reads only
+the active installed published doctrine, never the working source philosophy.
+The installed `.void/installed/PHILOSOPHY.md` and native documents do not migrate
+in this source-layout change.
+
 ## Topology
 
 ```
@@ -19,13 +43,8 @@ void-machine/
 │   │   ├── src/commands/          # install, add, update, doctor, init
 │   │   └── package.json
 │   ├── core/                      # harness plugin (static assets, not an npm package)
-│   │   ├── .claude-plugin/        # plugin.json — wires hooks, declares the plugin
-│   │   ├── modules/               # 01-philosophy.md, 02-tdd.md, 03-tigerstyle.md...
-│   │   ├── skills/                # craftsman skills (TDD, refactor, hexagonal, ...)
-│   │   ├── agents/                # doctrine-critic and peers + generated specialist agents
-│   │   ├── specialists/           # canonical, runtime-neutral specialist YAML
-│   │   ├── profiles/              # versioned stack expertise and applicability selectors
-│   │   └── hooks/                 # portable runner and targeted security guards
+│   │   ├── src/                   # authored assets: doctrine, skills, agents, YAML, hooks
+│   │   └── dist/                  # complete tracked marketplace delivery
 │   ├── mission-engine/            # pure event/evidence contracts and verdict reducers
 │   ├── hook-runner/               # Node adapter compiled into the portable hook asset
 │   └── packs/                     # one workspace + plugin per capability
@@ -193,7 +212,7 @@ recommends the removed commands. See the declared-intent reader contract below.
 
 ## Stack baseline
 
-The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `docs/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
+The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `packages/core/src/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
@@ -262,7 +281,7 @@ their provenance, and `status` says why a run has no view.
 
 ## Stack profile compilation
 
-`packages/core/profiles/*.yaml` is the certified stack-knowledge catalog. Consumer extensions use
+`packages/core/src/profiles/*.yaml` is the certified stack-knowledge catalog. Consumer extensions use
 `.void/profiles/*.profile.yaml`; the explicit suffix lets policy overlays coexist in the same
 directory. The CLI loads both through a bounded, alias-free, root-confined YAML adapter and the
 mission engine validates and routes the resulting declarative contracts without filesystem I/O.
@@ -589,7 +608,7 @@ separate concern. See the [native model choice decision](decisions-log/2026-10-2
 ## Native specialist contracts
 
 The 16 canonical product, architecture, engineering, review, and conditional PDF roles live under
-`packages/core/specialists/*.yaml`. The strict loader
+`packages/core/src/specialists/*.yaml`. The strict loader
 bounds files, disables YAML aliases, rejects unknown keys and duplicate identities, then each
 runtime compiler embeds the same instructions and structured result schema. Claude receives
 `.claude/agents/*.md`; Codex receives `.codex/agents/*.toml`. The five older Markdown critics also
@@ -701,7 +720,7 @@ reuse the appropriate existing capabilities; this document defines no new API.
 ### Product identity: one source
 
 Which repository hosts the product, which npm package ships it and which commands start it are
-written once, in `packages/core/data/identity.json`, with the names it carried before (a former
+written once, in `packages/core/src/data/identity.json`, with the names it carried before (a former
 repository slug, a former package and its last major). Nothing else spells them in code:
 
 - TypeScript reads `PRODUCT_IDENTITY` from `@voidcorp/hook-runner` (`src/identity.ts`, which
@@ -1249,7 +1268,7 @@ into the same transaction as everything else, and is committed.
 
 1. **It refuses to run unless the CLI is the version the manifest names**, and
    prints `npx <package>@<version> hydrate`, where `<package>` is the name that version
-   was published under (`packageFor` in `packages/core/data/identity.json`: a rename
+   was published under (`packageFor` in `packages/core/src/data/identity.json`: a rename
    does not move old releases). It does not fetch that version:
    `npx` already selects versions, and doing it inside the CLI would buy a network
    surface and a class of partial failures for nothing. Silently hydrating with
@@ -1356,7 +1375,7 @@ Implemented today in `.github/workflows/ci.yml` (all block the PR on failure):
 |---|---|
 | Shell syntax | `bash -n` on every hook |
 | Manifest ↔ disk | fails if `plugin.json` wires a `hooks/<name>.sh` that does not exist on disk |
-| core-assets sync | regenerates `core-assets` and fails if it drifted from `packages/core` |
+| core-assets sync | compares source assemblies with tracked `dist` deliveries without repairing them |
 | Publish safety | packs each npm package with pnpm and fails if a `workspace:` specifier survives into the tarball |
 | Lint | `pnpm lint` (Biome) over first-party TypeScript |
 | Build | `pnpm build` (packs must build before typecheck resolves their exports) |

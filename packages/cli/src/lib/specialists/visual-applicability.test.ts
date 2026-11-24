@@ -8,7 +8,7 @@ import { parseSpecialistYaml } from './load.js';
 import { parseSpecialistCompletion } from './schema.js';
 
 const DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const SOURCE = resolve(DIRECTORY, '../../../../core/specialists/visual-craft-director.yaml');
+const SOURCE = resolve(DIRECTORY, '../../../../core/src/specialists/visual-craft-director.yaml');
 const BASELINE = resolve(DIRECTORY, '__fixtures__/visual-applicability/visual-craft-director-v2.yaml');
 const current = parseSpecialistYaml(readFileSync(SOURCE, 'utf8'), SOURCE);
 const previous = parseSpecialistYaml(readFileSync(BASELINE, 'utf8'), BASELINE);
@@ -41,7 +41,7 @@ describe('visual applicability contract isolation', () => {
   );
 
   it('ships the current contract through the versioned native agent projection', () => {
-    const agent = resolve(DIRECTORY, '../../../../core/agents/visual-craft-director.md');
+    const agent = resolve(DIRECTORY, '../../../../core/dist/agents/visual-craft-director.md');
     expect(readFileSync(agent, 'utf8')).toBe(compileClaudeSpecialist(current).content);
   });
 

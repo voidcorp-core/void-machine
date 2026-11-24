@@ -12,7 +12,7 @@ import { cliVersion } from '../lib/paths.js';
 // told a healthy 2.7.0 project that its doctrine was missing, its hooks never
 // fired and five packs were unwired. Four failures, none real, each with a
 // remedy that would have damaged a correct install.
-const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'void-machine.mjs');
+const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist', 'bin', 'void-machine.mjs');
 
 function projectRecording(version: string): string {
   const root = mkdtempSync(join(tmpdir(), 'doctor-cmd-'));

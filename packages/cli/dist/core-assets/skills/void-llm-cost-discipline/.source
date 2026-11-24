@@ -1,0 +1,13 @@
+Sources for `void-llm-cost-discipline` skill (see `docs/plans/skill-audits/void-llm-cost-discipline.md` for full audit):
+
+- Anthropic prompt caching docs — https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching — foundation (cache_control, hit rate signals, TTL options)
+- Anthropic batch API — https://docs.anthropic.com/en/docs/build-with-claude/batch-processing — 50% discount for non-interactive workloads
+- Anthropic model card pricing — https://docs.anthropic.com/en/docs/about-claude/pricing — Opus 4.7 / Sonnet 4.6 / Haiku 4.5 cost ratios
+- gstack /claude-api skill — SDK mechanics, composed (we extend, not replace)
+- gstack /benchmark-models — escalation for model selection
+- OpenAI batch API docs — https://platform.openai.com/docs/api-reference/batch — tactical reference for OpenAI consumers
+- LangChain model-router patterns — partially kept (model selection logic)
+
+Strategy: original + adapt. Discipline layer on top of claude-api SDK mechanics.
+
+Companion hook: llm-cost-precommit.

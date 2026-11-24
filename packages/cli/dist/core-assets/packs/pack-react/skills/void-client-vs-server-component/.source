@@ -1,0 +1,5 @@
+Sources for `void-client-vs-server-component` skill (see `docs/plans/skill-audits/void-client-vs-server-component.md` for the full audit):
+
+- No external source audited — native skill authored for void-machine.
+
+Strategy: native. Codifies "server by default, client at the leaf" for React 19 / Next 14+ Server Components, a construct that does not exist in non-RSC stacks.

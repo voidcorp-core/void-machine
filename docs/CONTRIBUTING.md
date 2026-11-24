@@ -5,7 +5,7 @@ The working rules for this repo live in `CLAUDE.md` (mirrored as `AGENTS.md` for
 ## Before you write code
 
 1. Read `CLAUDE.md` — the anti-bloat discipline (eight hard rules), sourcing discipline, and hard rules for any added code. A PR that violates the anti-bloat rules is blocked.
-2. Read `docs/PHILOSOPHY.md` — the three pillars (safety / performance / DX) and why they win.
+2. Read `packages/core/src/PHILOSOPHY.md` — the three pillars (safety / performance / DX) and why they win.
 3. Read `docs/ARCHITECTURE.md` — package boundaries and dependency direction.
 4. Read the relevant Markdown records in `docs/decisions-log/`; `docs/DECISIONS.md` preserves the older history. Link a new record to its predecessor when materially changing a settled choice.
 

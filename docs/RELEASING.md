@@ -10,7 +10,7 @@ Distinguish **versioned** (all manifests, in lockstep) from **published to npm**
 - Plugin manifests (each `plugin.json`; the catalog is self-hosted at `.claude-plugin/marketplace.json`) — versioned.
 - Packs (`@voidcorp/pack-monorepo`, `@voidcorp/pack-nextjs`, …) are versioned;
   their skills ship via the marketplace and CLI assets.
-- **CLI npm package (`voidmachine`, named in `packages/core/data/identity.json`) — the only package
+- **CLI npm package (`voidmachine`, named in `packages/core/src/data/identity.json`) — the only package
   published to npm.** Self-contained (the kernel is bundled in), so `npx voidmachine` needs nothing
   else from the registry. Releases up to 3.x were published under the former name the identity
   keeps in `formerPackages`.
@@ -178,12 +178,12 @@ The bump script touches **all of these**. Don't edit them by hand.
 
 | File | What it's for |
 |---|---|
-| `packages/core/.claude-plugin/plugin.json` | Core plugin manifest. |
+| `packages/core/src/.claude-plugin/plugin.json` | Core plugin manifest. |
 | `packages/packs/<pack>/.claude-plugin/plugin.json` (6 files) | Each pack's plugin manifest. |
 | `packages/cli/package.json` | CLI npm package version. |
 | `packages/packs/<pack>/package.json` (pack-monorepo, pack-nextjs) | Runtime npm packages with shipped code. |
 
-`packages/cli/core-assets/.claude-plugin/plugin.json` is **generated** at `prepack` time — do not edit.
+`packages/cli/dist/core-assets/.claude-plugin/plugin.json` is **generated** at `prepack` time — do not edit.
 
 ## The normal flow: exactly two PR merges
 
@@ -495,7 +495,7 @@ release runs remain on `main`. Push to `main` and manual CI still run. No remote
 protection is changed. Work on merge-control paths still requires human integration.
 
 Consumers receive the same executable guard and workflow template beside installed
-`void-verify` skills. See [the adoption procedure](../packages/core/skills/void-verify/references/ci-feedback.md).
+`void-verify` skills. See [the adoption procedure](../packages/core/src/skills/void-verify/references/ci-feedback.md).
 Adoption is explicit and preserves each project's real validation commands, review
 and enforcement. The reusable enforcement caller declares ready/draft transitions
 and merge-group events, and alone owns PR cancellation; the callee uses an immutable

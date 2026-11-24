@@ -14,7 +14,7 @@ import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
 import { parseMissionRecoveryRequest } from './mission-recovery.js';
 import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 
-const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core');
+const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../core/dist');
 const ID = 'mis_0123456789abcdef0123456789abcdef';
 
 it.each(['fresh', 'historically-stopped'] as const)(

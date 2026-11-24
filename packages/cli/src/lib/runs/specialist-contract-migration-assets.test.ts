@@ -7,7 +7,7 @@ import { expect, it } from 'vitest';
 import { loadSpecialists, parseSpecialistYaml } from '../specialists/load.js';
 import { compileCodexSpecialist } from '../specialists/compile-codex.js';
 import { observeSpecialistMigrationAssets } from './specialist-contract-migration.js';
-const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
+const CORE = fileURLToPath(new URL('../../../../core/dist/', import.meta.url));
 const FROM = 'sha256:56c4ff8694184f0d8b3b4baa474b76cb60e2b49a7cd52be9cd0bd59542248dd1';
 const TO = 'sha256:333f5d2cd8dc21cb5f059c926f5db5a19b8511e2a3dd7ea0764a40b4502c2ca3';
 it('observes the exact released archive and actually installed v3 agent without installing anything', async () => {

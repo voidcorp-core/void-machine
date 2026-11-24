@@ -1,0 +1,85 @@
+# Periodic security baseline.
+#
+# Copy into `.github/workflows/` and adjust the schedule. Nothing here depends
+# on a security vendor: the baseline runs whatever scanners the runner happens
+# to have, names the ones it did not find, and reports the surface it could not
+# measure as degraded or blocked — never green.
+#
+# That is the point of running it with no scanner installed at all: the result
+# is honest about measuring almost nothing, instead of a green tick that means
+# "we did not look".
+#
+# Third-party actions are pinned by commit SHA, with the tag in a comment. A
+# mutable tag is a supply-chain hole: whoever controls it controls what runs
+# with your token.
+name: void-security
+
+on:
+  schedule:
+    # Weekly, Monday 04:17 UTC. Change this to whatever cadence you can act on:
+    # a scan nobody reads on Monday morning is a scan that is not being run.
+    # Avoid the top of the hour — GitHub queues those the heaviest.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Mission mode to judge findings against
+        required: false
+        default: team
+        type: choice
+        options: [fast, team, fortress]
+      prelaunch:
+        description: Hold the run to the stricter pre-launch bar
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    # A scan that hangs must not hold a runner all day.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # `dir` scanning reads the working tree, so no history is needed. A
+          # full-history secret audit is its own job — see the note at the end.
+          fetch-depth: 1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+
+      # Optional. Delete either line and the baseline still runs; it will name
+      # the missing tool and refuse to call the result complete.
+      #
+      # Both are installed from their own release channel rather than through a
+      # marketplace action, so nothing third-party runs with this job's token.
+      - name: Install optional scanners
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet semgrep
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | sh -s -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Security baseline
+        run: >
+          npx --yes voidmachine security scan
+          --mode ${{ inputs.mode || 'team' }}
+          ${{ inputs.prelaunch && '--prelaunch' || '' }}
+          --json
+# The scan exits non-zero when the verdict is `blocked`, which fails this job.
+# That is deliberate: a scan that errored or could not reach its required proof
+# has not told you the code is fine, only that nobody looked properly.
+#
+# Not covered here, on purpose:
+#
+#   - A DAST run needs `--target` and an authorization naming the host, its
+#     authorizer and an expiry. It belongs in a workflow of its own, against an
+#     ephemeral environment, and never on a schedule that outlives the grant.
+#   - Auditing the full git history for secrets is a separate, slower job:
+#     `gitleaks git` walks every commit, which costs minutes to re-answer a
+#     question that only changes at the tip.

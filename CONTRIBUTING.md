@@ -20,7 +20,7 @@ These are not style preferences. A PR violating them fails `validate`:
 | Discovery `description` target ≤250 and hard cap 500; valid skill identity, agent tool isolation and hook syntax | `pnpm anti-bloat:check` |
 | `CLAUDE.md` and `AGENTS.md` stay in section parity | `pnpm sync:docs` |
 | Every version-carrying manifest at the same version | `pnpm version:check` |
-| `packages/cli/core-assets` mirrors `packages/core` | rebuild with `pnpm --filter ./packages/cli build:assets` |
+| `packages/cli/dist/core-assets` mirrors `packages/core` | rebuild with `pnpm --filter ./packages/cli build:assets` |
 
 If you edit anything under `packages/core/`, run:
 

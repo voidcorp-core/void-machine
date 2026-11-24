@@ -214,15 +214,6 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
-  "cheatsheet": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "cheatsheet [--format html|markdown|json]",
-        "description": "Discover the shipped catalogue and local availability. Offline document on stdout; HTML by default."
-      }
-    ]
-  },
   "version": {
     "aliases": [
       "--version",

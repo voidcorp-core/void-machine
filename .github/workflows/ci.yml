@@ -32,8 +32,6 @@ jobs:
   consumer-artifact:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: packed consumer artifact
-    outputs:
-      playwright-version: ${{ steps.browser-version.outputs.version }}
     runs-on: ubuntu-latest
     env:
       GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -46,19 +44,6 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
-      - name: Resolve the matching browser image version
-        id: browser-version
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, appendFileSync } from 'node:fs';
-          const manifest = JSON.parse(readFileSync('test/browser/package.json', 'utf8'));
-          const version = manifest.dependencies['@playwright/test'];
-          if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version) ||
-              manifest.overrides['playwright-core'] !== version) {
-            throw new Error('Playwright must have an exact version and matching core override');
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
-          NODE
       - run: pnpm install --frozen-lockfile
       - name: Pack the exact checked-out consumer artifact once
         env:
@@ -75,64 +60,6 @@ jobs:
           include-hidden-files: true
           compression-level: 0
           retention-days: 1
-
-  browser-conformance:
-    name: browser conformance
-    needs: consumer-artifact
-    runs-on: ubuntu-24.04
-    container:
-      image: mcr.microsoft.com/playwright:v${{ needs.consumer-artifact.outputs.playwright-version }}-noble
-      options: --ipc=host
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ env.GATE_SHA }}
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: test/browser/package-lock.json
-      - name: Resolve paths inside the browser container
-        id: browser-paths
-        run: echo "temp=$RUNNER_TEMP" >> "$GITHUB_OUTPUT"
-      - name: Download the exact packed consumer artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact
-      - name: Generate synthetic documents from the verified offline installation
-        env:
-          VOID_CONFORMANCE_TARBALL: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact/consumer.tgz
-        run: node test/browser/prepare.mjs
-      - name: Install source-only browser QA tooling in runner temporary storage
-        # Sources: test/browser/README.md; no dependency or lockfile in the consumer package.
-        run: |
-          mkdir "$RUNNER_TEMP/browser-qa"
-          cp test/browser/package.json test/browser/package-lock.json test/browser/*.mjs "$RUNNER_TEMP/browser-qa/"
-          cd "$RUNNER_TEMP/browser-qa"
-          npm ci --ignore-scripts --no-audit --no-fund --omit=optional
-          npm ls --all --json > tooling-tree.json
-      - name: Exercise the regenerated offline documents
-        working-directory: ${{ steps.browser-paths.outputs.temp }}/browser-qa
-        run: node node_modules/@playwright/test/cli.js test
-      - name: Preserve browser evidence for the tested source SHA
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: browser-evidence-${{ env.GATE_SHA }}
-          path: |
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/playwright-report/
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/test-results/
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/tooling-tree.json
-            ${{ steps.browser-paths.outputs.temp }}/cheatsheet-fixture/evidence.json
-          if-no-files-found: error
-          retention-days: 14
 
   install-conformance:
     name: install conformance (${{ matrix.os }})

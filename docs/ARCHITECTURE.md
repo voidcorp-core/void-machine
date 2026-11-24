@@ -535,28 +535,13 @@ Only Claude's latest complete `message.usage` record and a configured positive
 transcripts produce none. No cursor, checkpoint, lock, revision or threshold state is written.
 This does not change Herdr's optional discovery or verified-target command boundary.
 
-### Installed capability discovery
+### Workflow and command discovery
 
-`void-machine cheatsheet` owns the consumer discovery projection in the CLI's
-`lib/cheatsheet/` boundary. The shipped graph and specialist contracts provide
-canonical identities; `lib/command-catalog.ts` supplies the same metadata to
-dispatch, help and discovery. The handler map is exhaustive over its keys.
-The source-only Markdown generator and Linear index are not imported.
-
-Pure catalogue/availability projection feeds JSON schema version 1, Markdown
-and self-contained HTML. The I/O adapter resolves linked installation roots,
-validates local receipts/configuration and performs bounded, contained reads.
-It never calls status, runtime smoke probes, registries or journals. Local
-assets are checked against receipt hashes; configuration is not execution proof.
-Hook events/matchers come from shipped manifests, associated through their
-owner wrapper's declared runner invocation. Unknown wrapper shapes remain
-undeclared. No handwritten hook-name mapping is introduced.
-
-Project Claude skill overrides can establish explicit disabled evidence.
-Home settings and marketplace caches are outside this bounded read, so effective
-runtime visibility stays unverified. The HTML embeds fixed enhancement code;
-metadata is escaped as text and never interpolated into executable JavaScript.
-See [the discovery projection decision](decisions-log/2026-09-13-installed-discovery-projection--00d39aef-2cb8-4809-9545-128295b1c012.md).
+The [essential workflow guide](CHEATSHEET.md) is maintained by hand. Native
+runtime discovery owns skill availability; `void-machine --help` owns CLI
+reference and `doctor` diagnoses installation wiring. The generated cheatsheet
+and export command have been retired. `lib/command-catalog.ts` still supplies
+metadata to dispatch and help, with an exhaustive typed handler map.
 
 ### Source self-host boundary
 
@@ -1714,24 +1699,6 @@ committed pattern self-matches the detector/docs/fixtures, a net-negative false
 positive for a floor check (see DECISIONS). The project test gate stays the
 consumer's own CI (this Action enforces the doctrine floor, not general quality —
 it must not double the existing CI).
-
-## Isolated consumer browser verification
-
-The source-only `test/browser/` suite tests regenerated synthetic cheatsheets on
-a GitHub-hosted runner. It consumes the same immutable archive as install
-conformance, verified against the checkout SHA and tarball digest. Playwright
-and axe are pinned QA tooling outside the shipped CLI and pnpm workspace; they
-do not add a consumer runtime dependency. The runner installs the archive
-offline, and browser contexts disable network access. The official Playwright image
-is derived from the pinned tooling manifest; npm ci and the setup-node npm cache
-reuse standard dependency installation without a browser or node_modules cache. No personal browser,
-developer export or home directory is an input.
-
-`browser conformance` retains SHA-bound reports, document digests, screenshots,
-print output and failure traces for fourteen days. Zero retries and finite
-execution limits keep a failure red. Visual review and real assistive testing
-remain separate from automated assertions; see [the suite contract](../test/browser/README.md)
-and [the decision](decisions-log/2026-09-13-isolated-consumer-browser-ci--392e4254-fb63-4743-af1f-4c99a035170d.md).
 
 ## Bounded independent review
 

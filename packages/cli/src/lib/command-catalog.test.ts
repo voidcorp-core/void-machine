@@ -21,7 +21,6 @@ describe('canonical CLI command metadata', () => {
     for (const command of Object.values(COMMAND_CATALOG)) {
       for (const row of command.help) expect(output).toContain(row.signature);
     }
-    expect(asksForHelp('cheatsheet', ['--help'])).toBe(true);
     expect(asksForHelp('init', ['--help'])).toBe(true);
     expect(asksForHelp('mission', ['--help'])).toBe(false);
   });

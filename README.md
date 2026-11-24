@@ -83,15 +83,11 @@ Agents work the same way: `doctrine-critic` judges a diff against the doctrine,
 while `solution-architect`, `security-engineer` and `test-qa-engineer` each
 review in their own fresh context.
 
-**[The cheat sheet](docs/CHEATSHEET.md) lists every one of them**, grouped by
-what it is for, with what each hook actually blocks. It is generated from the
-same catalogue these counts come from, so it cannot drift from what ships.
-
-To explore that catalogue alongside your project's installation evidence, run
-`void-machine cheatsheet > cheatsheet.html`. Open the resulting file offline:
-search by intention, filter by runtime, pack or type, and copy invocations.
-`--format markdown` and `--format json` export the same information. Inspection
-writes only to stdout; creating the file is your shell redirection.
+The [essential workflow guide](docs/CHEATSHEET.md) explains where to start.
+Use your runtime's native skill discovery for available skills and
+`void-machine --help` for CLI commands. The generated cheatsheet and its
+HTML, Markdown and JSON export command have been removed; existing exports
+remain your files.
 
 For your own project rather than the catalogue, `npx voidmachine status` reports
 what is installed, active and actually used.

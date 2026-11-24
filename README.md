@@ -71,7 +71,7 @@ What is installed, in numbers:
 
 | | Count | How it fires |
 |---|---|---|
-| Core skills | 42 | Automatically, when what you are doing matches |
+| Core skills | 40 | Automatically, when what you are doing matches |
 | Stack pack skills | 28 | Same, for the packs you activated |
 | Hooks | 15 | Native tool guards and optional diagnostics; see the runtime manifests |
 | Agents | 21 | Delegated by a skill, or invoked by name |
@@ -139,16 +139,16 @@ Some things are honestly incomplete:
 ## See what is actually there
 
 ```
-npx voidmachine status     # per-capability lifecycle, offline, no model call
+npx voidmachine status     # installation facts and runtime observations
 npx voidmachine doctor     # health check of the wiring itself
 npx voidmachine check      # version freshness for the installed channel
 ```
 
-`status` reads a frozen capability certification plus local telemetry and shows
-each capability's state: `available`, `installed`, `verified`, `used`,
-`effective`. The distinction is the point. A skill that is installed and never
-invoked is not doing anything for you, and the report says so instead of
-counting it as a win.
+`status` reports the installed version and each detected runtime's installation,
+wiring, hook firing and observation facts. Missing evidence stays `unknown`.
+It writes one current status snapshot without producing or pruning score history.
+The graph, audit and frozen certification surfaces have been removed; see the
+[public migration note](packages/cli/README.md#graph-audit-and-score-retirement).
 
 Both surfaces also report whether your install is behind the version published
 on npm. That check is advisory, never fails a run, sends nothing about your
@@ -263,12 +263,9 @@ commands have been removed; see the [migration note](packages/cli/README.md#deci
 
 ## Contributing
 
-Source maintainers: consult the [Linear idea index](docs/LINEAR-INDEX.md) before
-revisiting backlog decisions. After a confirmed Linear issue or comment write,
-follow its incremental-refresh procedure; a local failure never replays the
-remote write. The index and `pnpm backlog:index` are private-workspace tooling,
-excluded from consumer installations. Export data stays under the source-only
-ignore rules in `.void/.gitignore`.
+Source maintainers read complete issues and relations through the native tracker.
+The local backlog index generator has been retired; existing exports and indexes
+are left untouched. See [tracker access](docs/LINEAR-INDEX.md).
 
 ```bash
 pnpm install

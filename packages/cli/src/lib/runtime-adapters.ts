@@ -27,7 +27,7 @@ import { existsSync } from 'node:fs';
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { PRODUCT_COMMAND, PRODUCT_IDENTITY, voidReadPath } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, PRODUCT_IDENTITY, readMissionJournals, voidReadPath } from '@voidcorp/hook-runner';
 import type { SpecialistRuntimeCapability } from '@voidcorp/mission-engine';
 import { parseEventLine } from '@voidcorp/mission-engine/events';
 import { docFileFor, hasHarnessBlock, patchRuntimeDoc } from './claude-md.js';
@@ -47,7 +47,6 @@ import {
   wireCodexFloor,
 } from './codex-floor.js';
 import { CODEX_SKILLS_DIR, codexSkillsHealth, wireCodexSkills } from './codex-skills.js';
-import { loadCanonicalEventBody } from './graph-io.js';
 import { smokeInstalledHook } from './hook-smoke.js';
 import {
   CORE_PLUGIN_NAME,
@@ -203,7 +202,7 @@ function effectiveSpecialistCapability(
 }
 
 function observedRuntime(root: string, runtime: Runtime): boolean | null {
-  const body = loadCanonicalEventBody(root);
+  const body = readMissionJournals(root);
   if (body === '') return existsSync(voidReadPath(root, 'runs')) ? null : false;
   let malformed = false;
   for (const line of body.split(/\r?\n/)) {

@@ -144,9 +144,12 @@ gh issue create --repo voidcorp-core/void-machine \
 
 The tracker **is** the triage zone: taking the issue promotes it, closing it declines it. No `promoted/` / `discarded/` bookkeeping, no `feedback push` step. A promoted issue becomes a normal PR (usually an audit note + SKILL.md + matrix row) citing the originating project. Nothing merges without human review. If `gh` is missing or unauthenticated, say so and stop — do not silently swallow the failure.
 
-### Outbound audit (obsolescence detection)
+### Requested evaluation
 
-The obsolescence side runs from the CLI, not from prose here: `void-machine audit` (and `--all-projects` / `--push`, #72) reads canonical `.void/runs/*/events.jsonl` journals plus legacy history and reports skills that are active / stale / never-fired, plus expensive/should-have-fired via `void-graph`. This skill's job in audit mode is to **interpret** that report and, per proposal, draft a deprecation/fusion PR — hand-authored, HITL. The audit never removes a skill, edits a SKILL.md, or touches doctrine automatically.
+When the user requests an evaluation of the harness, inspect concrete failures,
+current sources and retained execution/review evidence. Propose a bounded change
+through this skill's existing human decision process. There is no automatic usage
+audit, scoring or absence-of-use inference.
 
 ---
 

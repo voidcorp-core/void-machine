@@ -60,21 +60,6 @@
           "type": "json",
           "path": "packages/packs/pack-nextjs/package.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "packages/harness-graph/package.json",
-          "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "packages/core/data/certification.json",
-          "jsonpath": "$.harnessVersion"
-        },
-        {
-          "type": "json",
-          "path": "packages/cli/core-assets/data/certification.json",
-          "jsonpath": "$.harnessVersion"
         }
       ]
     }

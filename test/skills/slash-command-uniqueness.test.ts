@@ -75,8 +75,8 @@ describe('slash command namespace', () => {
     expect(shared).toEqual([]);
   });
 
-  /** The three CLI-facing gestures keep their names, as skills every runtime receives. */
-  it.each(['void-doctor', 'void-audit', 'void-graph'])('keeps %s invocable, as a skill', (name) => {
+  /** The retained diagnostic gesture is a skill every runtime receives. */
+  it.each(['void-doctor'])('keeps %s invocable, as a skill', (name) => {
     const skill = join(ROOT, 'packages/core/skills', name, 'SKILL.md');
     expect(existsSync(skill)).toBe(true);
     const body = readFileSync(skill, 'utf8');

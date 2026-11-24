@@ -8,9 +8,8 @@ While the harness is pre-1.0, **one version governs everything** that carries a 
 Distinguish **versioned** (all manifests, in lockstep) from **published to npm** (only the CLI):
 
 - Plugin manifests (each `plugin.json`; the catalog is self-hosted at `.claude-plugin/marketplace.json`) — versioned.
-- Packs (`@voidcorp/pack-monorepo`, `@voidcorp/pack-nextjs`, …) and the `@voidcorp/harness-graph`
-  kernel — versioned, but **not published to npm**: packs ship via the marketplace, and the kernel is
-  bundled into the CLI (see DECISIONS.md 2026-07-22).
+- Packs (`@voidcorp/pack-monorepo`, `@voidcorp/pack-nextjs`, …) are versioned;
+  their skills ship via the marketplace and CLI assets.
 - **CLI npm package (`voidmachine`, named in `packages/core/data/identity.json`) — the only package
   published to npm.** Self-contained (the kernel is bundled in), so `npx voidmachine` needs nothing
   else from the registry. Releases up to 3.x were published under the former name the identity
@@ -182,7 +181,6 @@ The bump script touches **all of these**. Don't edit them by hand.
 | `packages/core/.claude-plugin/plugin.json` | Core plugin manifest. |
 | `packages/packs/<pack>/.claude-plugin/plugin.json` (6 files) | Each pack's plugin manifest. |
 | `packages/cli/package.json` | CLI npm package version. |
-| `packages/harness-graph/package.json` | harness-graph kernel npm package version. |
 | `packages/packs/<pack>/package.json` (pack-monorepo, pack-nextjs) | Runtime npm packages with shipped code. |
 
 `packages/cli/core-assets/.claude-plugin/plugin.json` is **generated** at `prepack` time — do not edit.
@@ -344,12 +342,9 @@ Transient registry errors and delayed attestations are retried only within the
 documented bounds. Exhaustion stays red; it is never converted into a successful
 publish merely because the version is visible.
 
-Two CI gates fail the build on a drift so a version bump can never ship a stale
-artifact: `pnpm version:check` (every manifest at the canonical version) and
-`pnpm certification:check` (the frozen `certification.json` matches the model +
-its `harnessVersion` stamp). Both the release-please flow (via `extra-files`) and
-the manual script bump the certification's `harnessVersion` in lockstep, so a
-release never breaks CI on a forgotten regenerate.
+`pnpm version:check` keeps every live package and plugin manifest at the canonical
+version. Frozen certification artifacts and their release-please entries have
+been retired; hook and core-asset freshness checks remain.
 
 Release PRs receive the same five checks as feature PRs, and getting there took
 three releases to get right — so the reason is worth keeping.
@@ -430,7 +425,7 @@ bundle sizes are diagnostics, not budgets. Every size prints on every run, breac
 reads as a trajectory rather than a one-day alarm.
 
 Ceilings live in `PACKAGE_LIMITS` in that script, set 2026-08-06 with roughly one sixth of headroom
-over the sizes measured then (the CLI 728.2 kB, harness-graph 85.7 kB, packs under 8 kB).
+over the sizes measured then (the CLI 728.2 kB and packs under 8 kB).
 
 **Raising a ceiling is normal.** Do it in the same commit as the change that needs the room, with
 the reason in the commit message, so the growth is a decision on the record rather than a drift

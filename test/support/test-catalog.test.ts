@@ -18,7 +18,7 @@ describe('test proof catalogue', () => {
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths).toContain('test/support/test-catalog.test.ts');
     expect(new Set(catalog.map((entry) => entry.tier))).toEqual(
-      new Set(['pure', 'contract', 'consumer', 'system', 'certification']),
+      new Set(['pure', 'contract', 'consumer', 'system']),
     );
   });
 
@@ -47,12 +47,6 @@ describe('test proof catalogue', () => {
     expect(byPath.get('packages/cli/src/lib/projects/catalog.test.ts')?.resource).toBe(
       'filesystem',
     );
-    expect(byPath.get('packages/harness-graph/src/project/build.test.ts')?.resource).toBe(
-      'filesystem',
-    );
-    expect(
-      byPath.get('packages/harness-graph/src/project/build-subprocess.test.ts')?.resource,
-    ).toBe('subprocess');
     expect(byPath.get('packages/mission-engine/src/events/schema.test.ts')?.resource).toBe('cpu');
   });
 

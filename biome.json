@@ -50,27 +50,12 @@
   "overrides": [
     {
       "includes": [
-        "packages/cli/src/commands/install.ts",
-        "packages/cli/src/commands/graph.ts",
-        "packages/cli/src/void-graph.ts",
-        "apps/graph-studio/src/logger.ts"
+        "packages/cli/src/commands/install.ts"
       ],
       "linter": {
         "rules": {
           "suspicious": {
             "noConsole": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "packages/harness-graph/src/project/test-fixtures/monorepo/packages/app/src/index.specimen.ts"
-      ],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUndeclaredDependencies": "off"
           }
         }
       }

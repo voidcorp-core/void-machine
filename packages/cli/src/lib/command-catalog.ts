@@ -54,7 +54,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "status",
-        "description": "Project health: the five-state capability lifecycle + a score. Deterministic, offline, no LLM."
+        "description": "Installation facts, runtime observations and version freshness; unavailable evidence stays unknown."
       }
     ]
   },
@@ -94,42 +94,12 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
-  "graph": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "graph <sub>",
-        "description": "Build / gate / report the skill-agent graph (build, check, audit, live, behavior)."
-      },
-      {
-        "signature": "graph <query> <file>",
-        "description": "Ask this project's graph: explain \u00b7 path \u00b7 impact \u00b7 subgraph \u00b7 owners \u00b7 tests-for \u00b7 staleness. Bounded (--max-nodes/--max-depth), read-only, and explicit when the answer may be incomplete."
-      },
-      {
-        "signature": "graph project-build|project-check",
-        "description": "Generate .void/knowledge.json or verify its freshness against a new ProjectGraph build."
-      }
-    ]
-  },
-  "why": {
-    "aliases": [],
-    "help": [{ "signature": "why <file>", "description": "Explain declared decisions, invariants and verification references with provenance; report incomplete knowledge and dangling references." }]
-  },
   "autopilot": {
     "aliases": [],
     "help": [
       {
         "signature": "autopilot [sub]",
         "description": "The kernel of the continuous delivery loop: next \u00b7 stop \u00b7 arm \u00b7 disarm \u00b7 fingerprint \u00b7 judgment; --json for the skill. Reads explicit config.autopilot v3, provider observations on stdin and GitHub; decides, and acts only to arm and disarm."
-      }
-    ]
-  },
-  "audit": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "audit",
-        "description": "Self-evolution audit: surface stale / never-fired skills as deprecation candidates. HITL."
       }
     ]
   },
@@ -156,7 +126,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "ui",
-        "description": "Serve the projects view on localhost, read per request. Loopback only, one-shot token, stops with the command."
+        "description": "Serve the projects view on localhost, read per request. Loopback only, process-local launch token, stops with the command."
       }
     ]
   },

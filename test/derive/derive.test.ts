@@ -43,16 +43,3 @@ describe('producedBy', () => {
   });
 });
 
-// The bundler's output is not guaranteed byte-identical across environments, so
-// comparing it would fail on a runner whose toolchain differs by a patch. It
-// keeps its own gate on the model it bakes, which is the fact that matters.
-describe('producedBy and the one artefact not byte-compared', () => {
-  it('ignores the consumer bundle', () => {
-    const after = new Set(['packages/core/graph/void-graph.mjs', 'docs/CHEATSHEET.md']);
-    expect(producedBy(new Set(), after)).toEqual(['docs/CHEATSHEET.md']);
-  });
-
-  it('takes the exclusion as an argument, so the rule is visible in the test', () => {
-    expect(producedBy(new Set(), new Set(['a', 'b']), new Set(['a']))).toEqual(['b']);
-  });
-})

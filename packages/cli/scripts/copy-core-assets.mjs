@@ -31,9 +31,6 @@ await rm(TARGET, { recursive: true, force: true });
 await mkdir(dirname(TARGET), { recursive: true });
 // Mirror runtime assets only. Excluded:
 //  - test files (*.test.ts): dev-time, must not ship in the consumer tarball.
-//  - core/graph/ (the ~1.9MB void-graph.mjs bundle): the npm CLI ships the small state-input JSON
-//    (data/, below) that `status` needs, not the heavy studio bundle; the marketplace channel still
-//    ships packages/core directly for the live graph studio.
 // What `packages/core/` is allowed to put in the published tarball, and why.
 //
 // The copy below is recursive, so without this list anything dropped into
@@ -53,9 +50,8 @@ const SHIPPED = new Map([
   ['agents', 'the specialist agent definitions each runtime stages'],
   ['codex', 'the Codex safety floor (hooks.json)'],
   ['contract-history', 'immutable released contracts required by declared open-mission migrations'],
-  ['data', 'the state-input JSON `status` scores against'],
+  ['data', 'the product identity consumed by the runtime'],
   ['enforce', 'the enforcement floor configuration'],
-  ['graph', 'excluded from the copy below; declared so its absence is deliberate'],
   ['hooks', 'the runtime hook bundle a consumer executes'],
   ['modules', 'extension point `install --global` copies when present'],
   ['policies', 'the routing policies the mission engine merges'],
@@ -76,18 +72,11 @@ if (undeclared.length > 0) {
   process.exit(1);
 }
 
-const GRAPH_DIR = join(SOURCE, 'graph');
 await cp(SOURCE, TARGET, {
   recursive: true,
-  filter: (src) => !src.endsWith('.test.ts') && src !== GRAPH_DIR && !src.startsWith(`${GRAPH_DIR}/`),
+  filter: (src) => !src.endsWith('.test.ts'),
 });
 console.log(`copy-core-assets: copied ${SOURCE} -> ${TARGET}`);
-
-// The catalogue used to live in packages/harness-graph/ and had to be fetched
-// from there by name, which is how a script that assembles core's assets ended
-// up reading another package. It now lives in packages/core/data/ and rides the
-// recursive copy above like every other core directory, so this special case is
-// gone rather than rewritten.
 
 // Bundle each pack's skills so a --pack install can materialize them for Codex
 // (packs are not a separate npm package; without this a pack install on Codex

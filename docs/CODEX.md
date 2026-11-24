@@ -61,32 +61,12 @@ plugin marketplace remains available only through explicit opt-in.
 [build-skills]: https://learn.chatgpt.com/docs/build-skills
 [build-plugins]: https://learn.chatgpt.com/docs/build-plugins
 
-### Usage measurement (a Codex platform limit)
+### Runtime observations
 
-`status`/`void-graph` count skill **usage** from observable invocations — on
-Claude, a skill runs through the `Skill` tool, which the activation-meter hook
-records. Codex loads skills as context and fires **no hook event** for them (its
-hooks cover `Bash`, `apply_patch`, MCP and other function tools, not skill use).
-So on a Codex-only project the usage counts reflect Claude usage only — a low
-count means "not observed", not "not useful". This is a Codex limitation, not a
-gap in the harness; nothing to instrument until Codex surfaces skill use.
-
-The invocation-health check preserves the event's runtime source. Only
-`runtime:claude` tool calls enter its three-working-mission silence window.
-Codex and missing/unknown sources remain explicitly **not observable**, with
-collected tool-call counts and an unknown activation count. `doctor` reports
-`unknown`, never a passing zero; the session banner states the same limitation.
-The banner and doctor inspect the same bounded journal corpus (64 MiB, at most
-10,000 mission directories per location); runtime filtering precedes the
-three-mission window, so newer Codex missions cannot evict Claude evidence. Recorded retired
-skill names still fail independently of runtime. Reading `SKILL.md` or declaring
-that a skill was applied never synthesizes a skill activation.
-
-The verdict cache is versioned so an unchanged journal cannot preserve a verdict
-computed under the old, runtime-blind rule. Collection and enforcement hooks are
-unchanged. This follows the [Codex skill-loading contract][build-skills] and
-[documented hook coverage](https://learn.chatgpt.com/docs/hooks#tool-coverage).
-
+`status` reports installation and runtime facts from the existing adapters.
+Unavailable observations stay `unknown`. Usage scores, graph reporting and the
+invocation-health cache are retired; no missing skill-use event is interpreted
+as proof that a skill is unused. Canonical mission and worker journals remain.
 
 ## The hooks (a full mirror, not a floor)
 
@@ -271,14 +251,10 @@ subagent configuration].
 
 ## The commands
 
-Claude gets `/void-graph`, `/void-doctor`, `/void-audit`, `/void-feedback` and
-`/void-autopilot` as plugin commands. Nothing is missing on Codex:
-
-- `void-autopilot` **is already a skill**, so it is staged like any other.
-- The `void-*` commands are thin wrappers around the CLI, which is
-  runtime-agnostic. Under Codex, invoke it directly: `void-machine doctor`,
-  `void-machine audit`, `void-graph`. Codex custom prompts are not an option
-  regardless — they are deprecated and live only in `~/.codex`, never in a repo.
+`void-doctor` and `void-autopilot` are skills available on both runtimes.
+The CLI is runtime-agnostic: invoke `void-machine doctor` or the applicable
+operational command directly. Graph and usage audit commands are retired; see
+[the public migration note](../packages/cli/README.md#graph-audit-and-score-retirement).
 
 ## Parallel fan-out
 

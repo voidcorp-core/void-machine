@@ -10,9 +10,8 @@
 // found them weeks later rather than the build. A rename should be mechanical,
 // not an act of vigilance.
 //
-// What exists is read from the generated catalogue, never from a list kept here:
-// a second inventory would drift from the first, which is the failure this whole
-// check is about.
+// Resolve names directly from the skill files and other source owners shipped
+// to runtimes. No generated catalogue or parallel inventory is required.
 //
 // Live surfaces only. Specs, plans and decision records cite retired skills on
 // purpose, because they record what was decided at the time and must read as
@@ -28,7 +27,6 @@ import { fileURLToPath } from 'node:url';
 import { PRODUCT_IDENTITY } from './product-identity.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const CATALOGUE = resolve(ROOT, 'packages/core/data/model.json');
 const RETIREMENTS = resolve(ROOT, 'packages/hook-runner/src/retired-skills.ts');
 
 /**
@@ -51,8 +49,7 @@ const SCANNED = ['packages', 'apps', 'scripts'];
 
 /**
  * Not scanned, each for its own reason and none of them "it was noisy":
- * `core-assets` is a byte mirror of `packages/core`; `void-graph.mjs` is a
- * bundle whose inputs are already checked; tests name skills
+ * `core-assets` is a byte mirror of `packages/core`; tests name skills
  * as fixtures, and a broken reference in a test already fails as a test.
  */
 const NOT_SCANNED = [
@@ -60,7 +57,6 @@ const NOT_SCANNED = [
   'dist',
   'coverage',
   join('packages', 'cli', 'core-assets'),
-  join('packages', 'core', 'graph', 'void-graph.mjs'),
 ];
 
 /**
@@ -71,7 +67,6 @@ const NOT_SCANNED = [
  */
 const DECLARED = [
   { name: 'void-autopilot-conformance', reason: 'conformance run label, `packages/cli/scripts/`' },
-  { name: 'void-continuity', reason: 'graph studio live-render channel' },
   { name: 'void-doctor-smoke', reason: 'scratch prefix for the doctor hook smoke test' },
   { name: 'void-enforce', reason: 'name of the enforcement prerequisite check' },
   { name: 'void-eval', reason: 'eval harness sandbox prefix' },
@@ -82,15 +77,11 @@ const DECLARED = [
   { name: 'void-install-conformance', reason: 'conformance run label, `packages/cli/scripts/`' },
   { name: 'void-internal', reason: 'marker for sidecars a consumer never receives' },
   { name: 'void-journal-anchor', reason: 'reserved basename of a change-journal sentinel' },
-  { name: 'void-last-event-id', reason: 'graph studio live-render cursor' },
   { name: 'void-layout', reason: 'module owning the void directory layout' },
   { name: 'void-machine-legacy', reason: 'portable legacy conformance contract family' },
   { name: 'void-machine', reason: 'private TypeScript Machine package, `packages/void-machine/`' },
   { name: 'void-migration', reason: 'name of the void layout migration check' },
   { name: 'void-probe', reason: 'observed write path written by the hook probe' },
-  { name: 'void-project-benchmark', reason: 'project-graph benchmark fixture prefix' },
-  { name: 'void-project-graph-conformance', reason: 'conformance run label, `scripts/`' },
-  { name: 'void-project-graph-orphan', reason: 'conformance run label, `scripts/`' },
   { name: 'void-review', reason: 'basename of the versioned review public key, `.github/`' },
   { name: 'void-consumer', reason: 'scratch prefix for isolated consumer workspaces' },
   { name: 'void-package', reason: 'scratch prefix for extracted package artifacts' },
@@ -216,8 +207,22 @@ function walk(path, code = false, seen = []) {
 }
 
 function knownNames() {
-  const model = JSON.parse(readFileSync(CATALOGUE, 'utf8'));
-  return new Set((model.nodes ?? []).map((node) => node.name).filter(Boolean));
+  const names = new Set();
+  for (const root of ['packages/core/skills', 'packages/packs']) {
+    for (const file of walk(resolve(ROOT, root))) {
+      if (basename(file) === 'SKILL.md') names.add(basename(dirname(file)));
+      if (basename(file) === 'plugin.json') {
+        const name = JSON.parse(readFileSync(file, 'utf8')).name;
+        if (typeof name === 'string') names.add(name);
+      }
+    }
+  }
+  for (const root of ['packages/core/agents', 'packages/core/commands']) {
+    for (const file of walk(resolve(ROOT, root))) {
+      if (file.endsWith('.md')) names.add(basename(file, '.md'));
+    }
+  }
+  return names;
 }
 
 /** The retired names, read from the register that owns them rather than re-listed. */

@@ -14,7 +14,7 @@ function fixture(files: Readonly<Record<string, string>>) {
   mkdirSync(join(root, 'packages/core/data'), { recursive: true });
   copyFileSync(new URL('../../packages/core/data/identity.json', import.meta.url), join(root, 'packages/core/data/identity.json'));
   for (const [path, content] of Object.entries({
-    'packages/core/data/model.json': JSON.stringify({ nodes: [{ name: 'void-tdd' }, { name: 'void-graph' }] }),
+    'packages/core/skills/void-tdd/SKILL.md': '---\nname: void-tdd\n---\n',
     'packages/hook-runner/src/retired-skills.ts': "export const retired = { 'void-compounding': 'void-tdd' };",
     ...files,
   })) {
@@ -44,6 +44,16 @@ describe('plugin description CLI validation', () => {
     {},
   ])('accepts live references and ordinary prose: %j', (manifest) => {
     expect(fixture({ 'packages/core/.claude-plugin/plugin.json': JSON.stringify(manifest) }).status).toBe(0);
+  });
+
+  it('resolves new core and pack skills from their shipped sources without generated data', () => {
+    const result = fixture({
+      'packages/core/skills/void-example/SKILL.md': '---\nname: void-example\n---\n',
+      'packages/packs/pack-example/skills/void-pack-example/SKILL.md': '---\nname: void-pack-example\n---\n',
+      'packages/core/.claude-plugin/plugin.json': '{"description":"void-example and void-pack-example"}',
+    });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('refuses retired names without treating historical records as live descriptions', () => {
@@ -98,7 +108,6 @@ describe('code reference CLI validation', () => {
       'packages/probe.test.ts',
       'docs/decisions/old.md',
       'packages/cli/core-assets/probe.ts',
-      'packages/core/graph/void-graph.mjs',
       'packages/example/dist/probe.js',
       'packages/example/node_modules/probe.js',
       'packages/example/coverage/probe.js',

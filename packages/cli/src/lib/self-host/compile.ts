@@ -43,7 +43,6 @@ const SOURCE_INPUTS = [
   'pnpm-lock.yaml',
 ] as const;
 const HASH_EXCLUSIONS = new Set([
-  'packages/core/graph/void-graph.mjs',
   'packages/core/hooks/_void-hook.mjs',
 ]);
 

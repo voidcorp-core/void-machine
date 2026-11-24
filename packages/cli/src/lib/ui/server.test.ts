@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { COMMAND_CENTER_HTML } from './page.js';
 import { readProjectsPayload } from './payload.js';
-import { startCommandCenter } from './server.js';
+import { corsFor, startCommandCenter } from './server.js';
 
 /**
  * The parity test is the point of this file: the served route and the CLI must
@@ -14,7 +14,7 @@ import { startCommandCenter } from './server.js';
  * becomes a third implementation beside the Core and the CLI, and the three
  * disagree about what a project's state is with no way to tell which is right.
  *
- * The rest asserts the posture: loopback, one-shot token, read-only.
+ * The rest asserts the posture: loopback, process-local token, read-only.
  */
 
 let park: string;
@@ -115,8 +115,7 @@ describe('command centre server', () => {
     expect((await fetch(`${base}/auth?token=wrong`, { redirect: 'manual' })).status).toBe(403);
   });
 
-  // The token stays valid for the life of the process, unlike the live graph
-  // server's one-shot exchange. A dashboard is opened again and again — second
+  // The token stays valid for the life of the process. A dashboard is opened again and again — second
   // browser, second screen, after clearing cookies — and a one-shot link turns
   // each of those into "restart the command". The secret is printed on the
   // owner's own terminal and dies with the process; anyone who can read that
@@ -164,6 +163,8 @@ describe('command centre server', () => {
 
     expect(response.headers.get('x-frame-options')).toBe('DENY');
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
   it('reads on every request rather than once at startup', async () => {
@@ -176,5 +177,25 @@ describe('command centre server', () => {
 
     expect((before as { projects: unknown[] }).projects).toHaveLength(0);
     expect((after as { projects: unknown[] }).projects).toHaveLength(1);
+  });
+});
+
+describe('corsFor', () => {
+  it('reflects a localhost origin for an authorized local browser', () => {
+    expect(corsFor('http://localhost:5173')).toEqual({
+      'Access-Control-Allow-Origin': 'http://localhost:5173',
+      'Access-Control-Allow-Credentials': 'true',
+      Vary: 'Origin',
+    });
+    expect(corsFor('http://127.0.0.1:4317')['Access-Control-Allow-Origin']).toBe('http://127.0.0.1:4317');
+  });
+
+  it('sends NO cors header for a foreign origin (a website cannot read the local data)', () => {
+    expect(corsFor('https://evil.example.com')).toEqual({});
+    expect(corsFor('https://localhost.evil.com')).toEqual({});
+  });
+
+  it('sends no cors header when there is no Origin (same-origin / curl)', () => {
+    expect(corsFor(undefined)).toEqual({});
   });
 });

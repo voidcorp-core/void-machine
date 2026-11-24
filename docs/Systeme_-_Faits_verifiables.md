@@ -24,7 +24,9 @@ commit `15d6689` ; les règles de garde restent actualisées lorsqu'elles change
 
 ## Commandes
 
-`void-autopilot`, `void-checkpoint`, `void-audit`, `void-doctor`, `void-feedback`, `void-graph`. Preuve : `packages/core/commands/`.
+Les anciens wrappers sont devenus des skills. Les gestes graphe et audit sont
+retirés ; `void-doctor` reste disponible comme skill. Le catalogue CLI actif se
+lit dans `packages/cli/src/lib/command-catalog.ts`.
 
 ## Hooks câblés
 

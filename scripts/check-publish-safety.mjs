@@ -25,7 +25,6 @@ const ROOT = resolve(HERE, '..');
 // Packages that publish to npm (mirror NPM_PACKAGES in bump-version.mjs).
 const PACKAGES = [
   'packages/cli',
-  'packages/harness-graph',
   'packages/packs/pack-monorepo',
   'packages/packs/pack-nextjs',
 ];

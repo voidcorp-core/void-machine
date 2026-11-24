@@ -28,7 +28,6 @@ void-machine/
 │   │   └── hooks/                 # portable runner and targeted security guards
 │   ├── mission-engine/            # pure event/evidence contracts and verdict reducers
 │   ├── hook-runner/               # Node adapter compiled into the portable hook asset
-│   ├── harness-graph/             # graph kernel + telemetry projections
 │   └── packs/                     # one workspace + plugin per capability
 │       ├── pack-monorepo/         # @voidcorp/pack-monorepo  (plugin harness-monorepo)
 │       ├── pack-react/            # @voidcorp/pack-react      (plugin harness-react)
@@ -37,7 +36,6 @@ void-machine/
 │       ├── pack-pwa/              # @voidcorp/pack-pwa        (plugin harness-pwa)
 │       └── pack-mobile/           # @voidcorp/pack-mobile     (plugin harness-mobile)
 ├── apps/                          # private, unpublished tooling
-│   ├── graph-studio/              # the graph visualiser (Vite)
 │   └── eval-harness/              # retained scenarios and historical reports; no package
 ├── test/                          # automated skill tests (citypaul-style)
 └── docs/                          # doctrine, architecture, release and decisions
@@ -189,7 +187,7 @@ promise against history rewriting. Doctrine updates retain `void-learn` approval
 
 The public `decisions new`, `decisions check` and `decisions render` commands and
 their dedicated authoring, schema, immutability and projection engine are removed.
-Existing projects and graph/why readers retain their bounded parsing and historical
+Existing project readers retain their bounded parsing and historical
 compatibility. Project conformance remains a separate capability; it no longer
 recommends the removed commands. See the declared-intent reader contract below.
 
@@ -783,13 +781,8 @@ cli  →  core  ←  packs
 
 ## apps/ (surfaces)
 
-`apps/*` are private, unpublished surfaces that consume the packages. They may
-depend on `packages/*` (e.g. `apps/graph-studio` devDepends on
-`@voidcorp/harness-graph`), never the reverse. They are applications rather than skills (they are apps, not skills) and from version lockstep (private, not
-shipped). `apps/graph-studio` is the maintainer 3D view of the component graph
-(spec §7): a Node prebuild runs the kernel's `analyze()` into static JSON, and the
-browser bundle is a pure renderer of that JSON (functional core / imperative shell,
-the same split the kernel uses).
+`apps/*` contains private, unpublished applications that may depend on packages,
+never the reverse. The graph studio has been retired.
 
 The former `apps/eval-harness` workspace has been retired. Its directory now holds
 [optional native scenarios and historical reports](../apps/eval-harness/README.md),
@@ -797,170 +790,20 @@ without an execution/scoring/reporting engine or campaign. Manual checks do not
 provide the removed repeated A/B comparison. Product mission/review/worker tests
 remain the behavioral authority for those retained contracts.
 
-## Consumer graph delivery (`/void-graph`)
+## Retired graph and audit surfaces
 
-The graph kernel uses a common node-link envelope at `schemaVersion: 3` for CatalogGraph,
-MissionGraph, EvidenceGraph, and ProjectGraph. Every node, edge, and hyperedge has a
-namespaced stable ID, typed origin, numeric confidence, and bounded provenance. The source carries
-its producer version and a SHA-256 `rootHash`; validation rejects duplicate IDs, dangling
-relations, invalid observation timestamps, path escapes, oversized payloads, and hash drift.
-Graph deltas name their base and resulting root hashes and are applied only after both the delta and
-the resulting snapshot validate.
+The graph kernel, studio, ProjectGraph API, graph/audit/why commands and their
+exclusive generated artifacts are removed. No replacement topology or automatic
+impact engine is introduced. Use repository search, Git, compiler, linter and
+applicable tests for their respective purposes; these are not equivalent to the
+removed graph analysis. [Public API migration](../packages/cli/README.md#graph-audit-and-score-retirement)
+includes the removed `@voidcorp/harness-graph/project` export.
 
-ProjectGraph is extracted locally through replaceable root-identity, filesystem, workspace,
-Git, cache, change-journal, and TypeScript Compiler API ports. The default Node adapters skip
-project-entry symlinks, stream directory entries, revalidate canonical root, parent, and descriptor
-identities at use, bound file/entry/directory/depth/aggregate/peak-heap/cache/process resources,
-and execute a trusted absolute Git through argv without a shell, protocols, hooks, external diff,
-textconv, repository clean/process filters, or ambient config. Git HEAD, changes, and ownership
-report degradation separately. Validated `HEAD` reads bracket their complete collection; a mismatch
-degrades the whole Git snapshot rather than combining evidence from different repository states.
-Commands that depend on a commit use the initial object ID, which also closes `HEAD` ABA transitions.
-On macOS, fixed Homebrew locations precede the system Git fallback, avoiding Apple's Xcode
-launcher when a direct Git is installed. Absolute executable validation, the closed environment,
-and the five-second default process ceiling remain unchanged; repository `PATH` entries are ignored.
-Apple documents the system launchers in [TN2339](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
-SHA-256 extraction records plus an explicitly authoritative accepted change-journal generation make
-unchanged builds perform zero traversal, extraction reads, hashing, and AST passes without trusting
-mutable JSON. The default Node `fs.watch` journal is advisory, so default builds verify sources before
-reuse; callers may inject an authoritative loss-detecting journal to unlock the fast path.
-The builder's default is a bounded LRU memory cache scoped to the current process. The explicit Node
-repository-cache adapter ignores all repository cache bytes and refuses publication because a
-repository author can reseal a self-hash and portable Node cannot close path-based parent-swap races.
-A complete build whose selected cache port cannot publish remains usable but reports `degraded`.
-Trusted ports prepare and commit an invisible candidate. Finalize validates canonical
-root identity and the same change-journal generation, then publishes with an immediate
-compare-and-swap and no async interleaving; abort only releases pending state. It does not re-read or
-re-hash the tree. The resulting `observed-content-v1` token commits to the canonical root key and
-root/parent identity, root-entry journal generation, observed path/device/inode/size/mtime/ctime and
-content-hash manifest, Git state, and extractor version. The ordinary file-change generation gates
-acceptance and publication without becoming part of the content token. Later mutation is a new
-observation rather than retroactive invalidation. Cached tokens are never accepted as freshness
-evidence. The same memory adapter is injectable for isolated workflows and tests. `.void/cache/` is
-gitignored.
-A stable advisory Node watcher brackets Git with two complete bounded source observations. A watcher
-unavailable before extraction forces a complete degraded rebuild; capability lost during
-the build produces partial or degraded evidence according to the last validated phase. Neither path
-reuses or publishes cache state.
-Cached tombstones, bounded composed lineage with its original Git HEAD/ref proofs, and Git HEAD
-preserve deleted/renamed identity across
-unchanged builds and committed renames. A partial or concurrently-mutated build
-keeps the last green cache and stays explicitly `partial`, so downstream context
-selection falls back to source instead of trusting incomplete topology. Git
-proof is the only authority for `previous-id` rename continuity.
-Declared intent is compiled into the same ProjectGraph: direct ADR Markdown files under
-`docs/decisions-log/` produce `decision` nodes, and direct YAML files under
-`.void/knowledge/invariants/` produce `invariant` nodes. The scanner admits only that
-specific hidden directory in addition to its existing public configuration paths. The
-existing descriptor, root, file and aggregate bounds still apply. Modern ADRs declare
-`id`, `title`, `status`, optional `supersedes` and `affects`; historical date/title ADRs
-retain the existing `legacy:<basename>` identity and accepted status. An invariant
-requires `id`, `scope`, `severity`, `statement`, `enforced_by`, `verified_by` and
-`decided_by`; references are explicit file paths or decision IDs, never inferred.
-
-Implementation files point to decisions through `decided_by` and to invariants through
-`constrained_by`; invariants point to verification files through `verified_by` and to
-decisions through `decided_by`. These three spellings extend only binary relation kind
-validation. New intent nodes and relations carry `origin: declared`, confidence 1 and
-the declaring source's exact SHA-256. Supersession is preserved as readable data, with no
-arbitration of contradictory decisions. Duplicate identities, malformed declarations
-and unresolved references produce source diagnostics without inventing entities.
-
-The declarative YAML adapter uses the existing yaml dependency and explicit bounded
-validators inside the graph package, never CLI parsing code. Declaration extraction is
-stored in the existing cache and its new extraction version invalidates older entries.
-`void-machine why <file>` always observes that incremental builder, preserving current
-diagnostics even when `.void/knowledge.json` already exists; it never writes that artifact.
-It renders decisions, invariants and declared verification evidence with provenance,
-explicit absence and partial/degraded caveats. Traversal uses the existing 500-node,
-12-level default; terminal output and diagnostics are bounded with announced truncation.
-
-Seven read-only queries answer the impact and targeted-context questions over an extracted
-snapshot: `explain`, `path`, `impact`, `subgraph`, `owners`, `testsFor`, and `staleness`. Each is
-deterministic, takes a node/depth budget, and reports `truncated` rather than returning a silently
-short answer. `ownersOf` and `testsFor` answer an explicit `unknown` with a reason where nothing was
-extracted, never an empty list, because "the graph does not know" and "nothing owns/tests this" are
-different claims and only one is safe to act on. `impact` walks dependents and counts
-`dynamic-imports` exactly like `imports`, since a dropped dynamic edge under-reports impact. A
-Git-proven rename is followed forward from the retired path, so a caller holding a pre-rename path is
-told what the file became rather than that nothing depends on it. The CLI surface
-(`void-machine graph <query> <file>`, backed by `packages/cli/src/lib/project-graph-store.ts`) takes
-and answers in repository-relative paths, refuses a target outside the project root, renders owners
-by label because an owner id is hashed when the name is not id-safe, and prints an explicit source
-fallback naming the count, codes, and paths extraction left out whenever the build is `partial` or
-`degraded` or the observed root hash moved. Accuracy is proved against a graph the extractor actually
-produced (`query-corpus.test.ts`: cycles, tsconfig aliases, dynamic imports, renames), and the seven
-queries carry their own seeded benchmark and regression gates
-(`benchmarks/project-graph-query/`, `pnpm benchmark:query`), separate from the extraction benchmark
-so a query regression cannot hide behind extraction cost.
-
-ProjectGraph is exposed from `@voidcorp/harness-graph/project`, keeping its
-TypeScript runtime adapter out of the legacy single-file CatalogGraph bundle.
-The project snapshot can also be materialized as the versioned `.void/knowledge.json` artifact
-with `void-machine graph project-build` and checked against a fresh build with
-`void-machine graph project-check`. The artifact is a validated projection carrying the snapshot
-root hash and build state; project graph queries read it when valid, while missing, corrupt, or
-unknown artifacts trigger a rebuild. It is distinct from `.void/machine/`, whose observation cache
-is disposable and never becomes an authority. The freshness check measures the generated file so
-CI can reject a hand-edited or stale projection.
-Diagnostic counts remain in build reports and do not enter the graph identity:
-an unavailable watcher must not change the hash of otherwise identical partial
-content. Observation state remains part of the graph and artifact. A state
-difference is explicitly refused before content comparison; this does not turn
-degraded observation into a fresh proof or relax cache publication. Existing
-artifacts containing the former root diagnostic count require one regeneration.
-Native file identities use an additive `identity: { device, inode }` pair of
-canonical uint64 decimal strings read through Node's BigInt stats API. Existing
-optional numeric device/inode fields keep their types and are emitted only when
-exact. Valid numeric v1 cache entries remain readable without rewriting their
-checksum. Both representations must agree when present; malformed exact pairs
-cannot fall back to legacy evidence. Snapshot identity includes the exact pair.
-The extractor resolves bounded root-confined string or ordered-array `tsconfig` inheritance with
-official Compiler API option origins, treats `pnpm-workspace.yaml` as authoritative over the package
-workspace fallback, applies pnpm-compatible positive and `!`-excluded patterns before indexing child
-manifests, recognizes a bounded Vitest call grammar, and preserves
-volume-specific case behavior. ESM clauses, re-exports, wildcards, and
-defaults are explicit export surfaces; CommonJS assignment exports are limited to JavaScript input.
-An edge static analysis cannot determine — a non-literal dynamic import, a specifier that is not a
-bounded printable string — is reported as `unresolved-import` on the file that holds it and does not
-degrade the build state, because a whole project marked partial by one ordinary lazy import made the
-source fallback fire unconditionally and therefore say nothing; the query surface reports that
-uncertainty against the files in an answer instead. `invalid-source` is kept for a file that genuinely
-does not parse, and declaration files are no longer transpiled for diagnostics (they have no output,
-and asking for one threw). Stable per-path exclusions — oversized, binary, symlink, permission — never
-abandon the advisory verification scan nor count as a path-set change, so one large generated artifact
-can no longer switch off the check that catches a tree mutated during evidence collection; identical
-issues observed by both passes are reported once. Invalid config chains remain explicit partial
-evidence. CI runs
-package tests/typecheck, a two-track ProjectGraph benchmark, and a packed
-`@voidcorp/harness-graph/project` consumer import on Ubuntu, macOS, and Windows. The performance
-track injects a deterministic authoritative journal port and explicitly emits every fixture mutation,
-while a separate native track classifies the real watcher as advisory, unavailable, or mixed. The
-native track never claims fast-path latency; unavailable and mixed are supported degraded capabilities,
-never relabeled as performance.
-
-The current source catalog is adapted to v3 first. `catalog.v3.json` is the canonical versioned
-snapshot; `model.json` is its read-only v1 compatibility projection for Graph Studio, audit,
-certification, status, and the existing consumer bundle. Those readers also pass v1 through the v3
-validator before use. `graph live` serves both `/catalog.v3.json` and `/model.json`. Rollback can
-restore direct v1 reads and remove the v3 artifact because the adapter never mutates its input.
-
-The graph tooling also ships to consumers, not just the monorepo. A build step
-(`packages/cli/scripts/build-void-graph.ts`) bundles the kernel + `graph` CLI into one
-self-contained `packages/core/graph/void-graph.mjs`: `model.json` is baked in via the
-`__VOID_BUNDLED_MODEL__` esbuild define, and the single-file vite studio is inlined via
-`__VOID_BUNDLED_STUDIO__`. The marketplace ships `packages/core` directly, so the artifact
-reaches consumers with zero npm publish. The `/void-graph` command runs it from
-`${CLAUDE_PLUGIN_ROOT}/graph/void-graph.mjs`.
-
-On a consumer the CLI runs in **bundled mode**: it loads the baked model instead of scanning a
-source tree (no monorepo paths), filters it to the packs enabled in `.claude/settings.json`, and
-correlates it with local mission journals (`.void/machine/runs/*/events.jsonl`, plus
-read-only v2 import, and transcripts). `graph live` serves the inlined studio
-and a `/studio-data.json` endpoint on loopback - fully offline. Freshness
-is gated by `graph check-bundle` (the artifact's embedded compatibility model must match
-`model.json`); see
-DECISIONS.md (2026-07-01). The artifact is excluded from the `core-assets` mirror.
+The Projects UI and project discovery remain. `lib/ui/auth.ts` owns its existing
+process-local token/cookie exchange; `lib/ui/server.ts` owns the unchanged CORS
+and response security headers. `harness-manifest.ts` owns `EnforcementTier` and
+validates the existing skill manifest. Runtime adapters read canonical journals
+directly through the hook-runner's `readMissionJournals` export.
 
 ## Mission event journal (`.void/machine/runs/<mission-id>/events.jsonl`)
 
@@ -1029,18 +872,9 @@ failure. The same generated dependency-free Node bundle also owns the critical
 inline/CI enforcement rules. It is rebuilt by `pnpm hooks:build` and gated for
 drift before `core-assets` is mirrored.
 
-Graph behavior, cost, audit, status and Studio consume the canonical journal.
-Legacy `.void/activations.jsonl`, `.void/outcomes.jsonl` and `.void/usage.log`
-remain read-only transition inputs; current hooks never append to them. Every
-cross-project reader uses the same bounded scan of configured roots for the
-versioned `.void/config.json` marker. Event capture writes only inside its project.
-
-`graph live` binds loopback only. A random launch token is exchanged once for a
-process-local `HttpOnly; SameSite=Strict` cookie, foreign browser origins are
-rejected, and every data/SSE route requires the session. SSE uses the stable
-event ID, honors `Last-Event-ID` (or the first-connect `after` cursor), backfills
-the bounded snapshot and reports discontinuity as `PARTIAL`, never as live truth.
-Studio renders `LIVE`, `RECONNECTING`, `STALE`, `PARTIAL`, `REPLAY` and `OFFLINE`.
+Runtime adapters and mission/review/worker readers consume the canonical journal.
+Historical logs remain on disk; retirement does not prune or rewrite them.
+Event capture writes only inside its project.
 
 ### Evidence, findings and verdicts
 
@@ -1176,16 +1010,9 @@ native `spawn_agent`; Claude Code with native `Agent`.
 
 ### Harness learning loop
 
-Hooks own measurement and certain enforcement, never orchestration. Skills conduct workflows,
-canonical contracts decide applicability, and agents supply bounded independent judgment.
-`void-graph` joins those declared relations to human-session activations, outcomes and cost;
-`void-audit` reduces the joined evidence to one prioritized proposal per component. Telemetry repair
-precedes behavioral conclusions. Failure repair precedes retirement. Retirement is reviewable only
-after twenty human sessions, while self-host and smoke missions are excluded from adoption proof.
-Every proposal flows to `void-learn` as HITL input; no graph or audit command edits, fuses or removes
-a component. Missing `requested -> started` and `started -> completed|failed` transitions become
-repair proposals only after the same mission has a canonical `mission.closed` event, so active work
-is never diagnosed as a dead agent.
+Hooks enforce concrete rules; skills conduct workflows and agents supply bounded
+independent judgment. Requested evaluation uses `void-learn` and actual evidence.
+No usage aggregation or automatic retirement proposal engine remains.
 
 ### Modes, budgets, and recovery
 
@@ -1240,112 +1067,20 @@ bounded, into quarantine; they are never silently repaired. Runtime journals and
 archives are local artifacts ignored by Git. There is no automatic retention or
 network upload.
 
-## Node frontmatter: `activation` (graph liveness)
+## Skill manifest and factual status
 
-A skill's SKILL.md frontmatter may declare `activation: always` or `activation: on-demand`
-(absent = `on-demand`, the default). It tells the graph cost/behavior kernels how the node
-earns its place:
+The installer reads `harness.yaml` metadata. The existing strict manifest validator
+owns required owner/runtime fields, enforcement tiers and supported metadata;
+it remains independent of graph derivation and frozen certification artifacts.
 
-- `always` — doctrine followed **passively**: its rule applies via `@.void/installed/PHILOSOPHY.md`
-  and enforcing hooks, never invoked through the Skill tool, so `invocations: 0` is expected,
-  not a death signal. Exempt from `dead` / `underused` / `low-yield`, marked with the positive
-  `always` flag (still eligible for `expensive`). Granted only on **auditable backing**: the
-  skill is the target of an `enforces` edge, or its principle is stated in `PHILOSOPHY.md`.
-  16 skills qualify.
-- `on-demand` — a workflow triggered **actively** (brainstorm, plan, ticket-*,
-  autopilot, ...), or a conditional skill with no structural backing (async-safety,
-  api-and-interface-design, ...). If never invoked, a low count is a real signal — historical
-  behavior.
-
-The predicate is "is `invocations: 0` a death signal for this node?" — answered by structural
-proof, not taste. See DECISIONS.md (2026-07-04) for the 16/15 partition, the two accepted proofs
-of backing, and why the mode is declared explicitly rather than inferred.
-
-## Node frontmatter: `owner` (governance)
-
-The capability contract (spec `2026-07-21-void-harness-public-multiruntime-os`, Phase A) is authored
-as **SKILL.md frontmatter fields** — the same channel `activation`/`triggers` already use, so no new
-file discovery is introduced. The first field is `owner:` — the accountable maintainer of the
-capability. It is read in `read-frontmatter.ts` (`parseOwner`) and threaded onto `GraphNode.owner`.
-
-Governance is **fail-closed**: the `missing-owner` detector (`analyze/missing-owner.ts`, wired into
-`DETECTORS`) emits a blocking `error` for any **skill** node with no `owner`, so `graph check` (and
-the CI "Graph integrity" gate) fails. No capacity ships without a proof of ownership. The rule is
-scoped to skills — hooks, commands, packs, and agents are not capabilities.
-
-Two more contract fields land through the same seam (`read-frontmatter.ts` → `GraphNode`):
-
-- `runtimes:` — the runtimes a capability declares it supports (`[claude, codex]`). A second
-  fail-closed detector, `missing-runtimes`, blocks any skill that declares none (the runtime matrix
-  cannot place an undeclared capability).
-- `enforcement:` — the **two-tier** enforcement contract (spec Fork 1). `floor: ci` is the
-  runtime-agnostic CI floor (the void-enforce Action) every runtime inherits; `inline` is the
-  per-runtime in-session tier (`pretooluse` where the runtime supports a blocking hook, `active`
-  otherwise, `ci-only` for Hermes). The `inline.{claude,codex}` tier is **derived, not
-  hand-classified**: a skill that is the target of an `enforces` edge gets `pretooluse`, else
-  `active` — so the map cannot drift from the actual hook wiring. Enforcement is declared per runtime
-  and never masked; Hermes' `ci-only` is a structural limit, scored on its own ceiling, not a failure.
-
-Two more fields complete the authored contract (A3):
-
-- `eval_targets:` — the `(runtime, provider, tier)` cells a capability is authored/certified for,
-  **slug-encoded** `runtime/provider/tier` in a normal YAML list (`[claude/anthropic/opus]`). The slug
-  form is parsed by the shared `parseList` helper (reused with `runtimes:`), not a fragile
-  hand-rolled list-of-maps parser. It drives which cells the certification manifest (A4) may mark
-  `effective`.
-- `success_signal:` — an optional human-readable "what good looks like" sentence. Not
-  mass-backfilled (a uniform placeholder would be dishonest, unlike `owner: folpe` which is
-  uniformly true); authored per skill over time.
-
-Two shared frontmatter helpers back these fields so the scalar and list parsers cannot diverge:
-`parseScalar(block, key)` (quote-stripping, YAML-nil-aware — used by `owner` and `success_signal`)
-and `parseList(block, key)` (flow or block YAML list — used by `runtimes` and `eval_targets`).
-
-### The certification manifest (`certification.json`)
-
-The capability contract is frozen, per release, into `packages/core/data/certification.json` (A4).
-It is the input `ProjectState` (Phase B) reads for the repo-authored half of the five-state model —
-never recomputed on a consumer machine. `buildCertification(model, reports, harnessVersion)`
-(`src/certification/build.ts`, pure) joins the graph model's capability fields with historical
-JSON reports:
-
-- `proof.verified` is **structural** — the capability declares an owner and at least one runtime.
-- `proof.effective` obeys an **honesty invariant**: it exists only when a real eval report for the
-  skill exists, its verdict is `skill-helps`, and the capability declares an eval target cell to place
-  the delta on. Never inferred, never faked. Today there are no eval JSON reports, so the manifest
-  ships no effective proof. The evaluation engine has been retired; the reader remains
-  compatible with historical `apps/eval-harness/reports/<skill>.json` artifacts.
-
-`certification.json` is a committed artifact regenerated by `pnpm certification:build`; `pnpm
-certification:check` gates drift in CI (alongside `graph:check`). The certification
-reader and status/graph consumers remain until their coherent retirement in DEV-1402.
-No new evaluation production or campaign is implied. See DECISIONS.md (2026-07-21)
-for the historical contract.
-
-## ProjectState and `void status` (Phase B)
-
-`ProjectState` is the project's legible state: a **deterministic, offline, LLM-free** join of the
-frozen `certification.json` (repo-authored proof) with **local signals** (which capabilities are
-materially installed, which passed executable runtime postconditions, which fired in canonical
-mission events, and the tri-state runtime evidence). The pure core
-lives in `packages/harness-graph/src/state/` — `computeProjectState` derives each capability's
-five-state (`available → installed → verified → used → effective`). Local `verified` now requires a
-compatible runtime with `installed=yes`, `wired=yes` and `fired=yes`; the frozen structural proof is
-reported separately as `certified`. `effective` requires both that local chain and certified
-behavioral proof plus real local use. Each runtime carries independent `installed`, `wired`,
-`fired`, `observed` and `certified` fields; `null` means `unknown`, never success.
-`scoreProjectState` scores the eight dimensions (blocker/gauge,
-cap-69 on a red failure-predicate, pending dimensions excluded, confidence band, impact-ranked next
-actions — see DECISIONS.md 2026-07-21). Both are pure: no I/O, no clock, no model call.
-
-`void-machine status` (`packages/cli/src/commands/status.ts`) is the imperative shell: it reads the
-certification + model + telemetry, executes each detected adapter's bounded local postconditions,
-calls the pure core, renders the terminal surface, and persists
-`.void/machine/status.json` plus a `.void/machine/history/<ts>.json` snapshot (both git-ignored, per-project runtime
-state). `generatedAt` is stamped by the shell so the core stays deterministic. Missing runtime,
-cost, smoke or observation data stays `unknown`/pending and is excluded from scores instead of being
-invented. Consumer-side bundled-certificate resolution and pack-aware filtering remain local and
-offline.
+`void-machine status` inspects the detected runtime adapters and installation
+receipt at the resolved installation root, including when invoked from a linked
+worktree. It reports installed version and runtime installed/wired/fired/observed
+facts, preserving `unknown` observations. Freshness remains advisory. The current
+snapshot at `.void/machine/status.json` uses schema version 2 with `generatedAt`,
+`installedVersion` and `runtimes`; a failed write is reported as render-only.
+No score, capability lifecycle or score history is produced. Existing history is
+never pruned by status. Doctor retains its concrete installation diagnostics.
 
 ## `.void/` ownership: declared, derived, observed
 
@@ -1626,9 +1361,6 @@ Implemented today in `.github/workflows/ci.yml` (all block the PR on failure):
 | Lint | `pnpm lint` (Biome) over first-party TypeScript |
 | Build | `pnpm build` (packs must build before typecheck resolves their exports) |
 | Self-host release gate | compiles current sources in isolation; rejects source/receipt/hook/replay drift |
-| Graph integrity | `pnpm graph:check` — CatalogGraph v3 + model.json projection drift, broken routes, capability governance |
-| Certification freshness | `pnpm certification:check` — committed `certification.json` matches the model + eval reports |
-| Consumer bundle freshness | `pnpm graph:check-bundle` — the shipped `void-graph.mjs` embeds the current `model.json` |
 | Skill tests | `pnpm vitest run` |
 | Live skill references | `pnpm skills:check-references`, including plugin descriptions |
 | Typecheck | `pnpm -r typecheck` |
@@ -1684,12 +1416,6 @@ check, never a silent green. Escape hatch: `.github/void-enforce-allow` lists
 path globs the driver skips (each skip logged) — the committed, reviewable
 equivalent of the local `VOID_MACHINE_ALLOW_SECRET_EDIT` override, for files
 legitimately named like a secret store.
-An exact generated artifact may also be exempt only when its authored sources
-remain scanned and a deterministic freshness gate verifies the artifact in the
-same CI. This repository applies that rule to the single-file consumer graph
-bundle, whose size exceeds the bounded hook protocol; `graph:check-bundle`
-proves its source/model correspondence. Broad generated-directory globs remain
-forbidden.
 `void-machine doctor` reports (advisory, never blocking) whether a project has
 adopted the workflow. It replays sensitive-path and secret-content checks.
 Undeclared package imports belong to the project's configured linter, with

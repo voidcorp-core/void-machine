@@ -15,9 +15,7 @@ import type { RuleName } from './runner.js';
  * frontmatter field, only ever *narrows* automatic activation and cannot make one
  * happen.
  *
- * The pairs are declared in `packages/harness-graph/relations.graph.yaml` as
- * `enforces` edges with their evidence. This table is the copy that ships inside
- * the compiled hook, and a test holds the two together so they cannot drift.
+ * The rule owner names its governing skill here; tests prove it resolves.
  */
 const GOVERNING_SKILL = {
   // The remedy the refusal teaches -- build the byte rather than type it -- is a

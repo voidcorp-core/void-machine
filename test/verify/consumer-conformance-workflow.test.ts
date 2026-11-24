@@ -32,14 +32,6 @@ describe('packed consumer CI topology', () => {
     expect(consumers).not.toContain('pnpm pack');
   });
 
-  it('prepares ProjectGraph workspace types before isolated test and typecheck steps', () => {
-    const graph = job('project-graph-conformance');
-
-    expect(graph).toContain('pnpm --filter "@voidcorp/harness-graph^..." build');
-    expect(graph).toContain('name: ProjectGraph tests');
-    expect(graph).toContain('name: ProjectGraph typecheck');
-    expect(graph).not.toContain('name: ProjectGraph tests and typecheck');
-  });
 
 });
 

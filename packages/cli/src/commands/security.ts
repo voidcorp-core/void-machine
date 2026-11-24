@@ -229,7 +229,7 @@ interface AdapterRun {
   readonly command: string;
   readonly exitCode: number | 'timed-out' | 'failed-to-start';
   readonly outcome: RunOutcome;
-  /** True when the tool reported findings we could not read back. */
+  /** True when a required scanner report could not be read back. */
   readonly unreadableOutput?: boolean;
 }
 
@@ -250,9 +250,8 @@ export function outcomeOf(adapter: SecurityAdapter, exitCode: number): RunOutcom
 /**
  * Where a tool put what it found: its report file, or its stdout.
  *
- * Only read when the tool says it found something. A clean run may legitimately
- * write nothing at all, and treating that silence as unreadable output would
- * turn every green scan into an errored one.
+ * Semgrep always emits JSON, even on exit 0; successful execution does not
+ * prove an empty result. Other adapters retain their declared exit-code contract.
  */
 async function collectFindings(
   entry: Extract<ScanPlan, { kind: 'planned' }>['run'][number],
@@ -263,7 +262,7 @@ async function collectFindings(
   return normalizeScannerOutput(entry.adapter.id, raw);
 }
 
-async function runAdapters(
+export async function runAdapters(
   plan: Extract<ScanPlan, { kind: 'planned' }>,
 ): Promise<{ readonly runs: readonly AdapterRun[]; readonly findings: readonly NormalizedFinding[] }> {
   const results: AdapterRun[] = [];
@@ -275,19 +274,19 @@ async function runAdapters(
       stdout: string,
     ): Promise<void> => {
       const outcome = outcomeOf(adapter, exitCode);
-      if (outcome !== 'findings') {
+      if (outcome === 'errored' || (outcome === 'clean' && adapter.id !== 'semgrep')) {
         results.push({ id: adapter.id, command: adapter.command, exitCode, outcome });
         return;
       }
       const read = await collectFindings(entry, stdout);
       collected.push(...read.findings);
-      // The tool says it found something and we cannot read what. That is worse
-      // than a crash: it is a known non-empty result nobody can act on.
+      // An unreadable required report cannot prove a clean scan. Findings in a
+      // successful Semgrep report still require classification and enforcement.
       results.push({
         id: adapter.id,
         command: adapter.command,
         exitCode,
-        outcome: read.unreadable ? 'errored' : 'findings',
+        outcome: read.unreadable ? 'errored' : read.findings.length > 0 ? 'findings' : outcome,
         ...(read.unreadable ? { unreadableOutput: true } : {}),
       });
     };

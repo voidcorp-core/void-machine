@@ -20,13 +20,15 @@ adapters:
     kind: sast
     description: Pattern-based static analysis of the working tree against the project's own ruleset.
     command: semgrep
-    args: [scan, --config, .semgrep.yml, --json, --metrics=off, --quiet]
+    args: [scan, --config, .semgrep.yml, --error, --json, --metrics=off, --quiet]
     versionArgs: [--version]
     reach: none
     provides: [static-analysis]
     limits:
       timeoutSeconds: 900
       maxOutputBytes: 16777216
+    # --error is required: scan otherwise exits 0 even with findings.
+    # https://semgrep.dev/docs/cli-reference
     # 0 clean, 1 findings. Everything else (7 is a missing ruleset) is a failure
     # to run, and a scan that did not run proves nothing.
     exitCodes:

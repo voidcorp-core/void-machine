@@ -702,6 +702,15 @@ A pack **may not carry a bundled runtime `dependencies` edge on another pack** â
 
 One exception is allowed: an **explicit, documented `peerDependency` of composition** â€” a stack pack that deliberately presupposes another (e.g. `pack-nextjs` peer-depends on `pack-monorepo` for the `Result`/`ok`/`err` primitives, and `init` co-installs them). This is not a hidden edge: it is declared in `package.json` `peerDependencies`, documented in the pack README, and the consumer installs both. Extracting three functional primitives into their own package to avoid it would be premature (see `void-package-extraction`). Prefer this over a new shared package when the shared surface is small and the composition is intentional.
 
+### Security scanner results
+
+The Semgrep adapter uses local rules and `scan --error --json`: `--error` makes
+findings return exit 1 (see the [Semgrep CLI reference](https://semgrep.dev/docs/cli-reference)).
+The runner also reads Semgrep JSON on exit 0 so successful execution cannot hide
+findings. Missing, malformed or error-bearing reports leave the scan errored;
+valid findings still reach the mission engine's classification and blocking policy.
+Other scanners retain their declared exit-code contracts.
+
 ### CLI scope
 
 The published CLI installs and maintains the development harness in project-local

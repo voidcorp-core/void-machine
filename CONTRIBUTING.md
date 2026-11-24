@@ -21,7 +21,6 @@ These are not style preferences. A PR violating them fails `validate`:
 | `CLAUDE.md` and `AGENTS.md` stay in section parity | `pnpm sync:docs` |
 | Every version-carrying manifest at the same version | `pnpm version:check` |
 | `packages/cli/core-assets` mirrors `packages/core` | rebuild with `pnpm --filter ./packages/cli build:assets` |
-| `model.json` and the embedded consumer bundle current | `pnpm graph:check`, `pnpm graph:check-bundle` |
 
 If you edit anything under `packages/core/`, run:
 
@@ -29,7 +28,7 @@ If you edit anything under `packages/core/`, run:
 pnpm --filter ./packages/cli build:assets
 ```
 
-and commit the result. Editing a hook also changes its line count, which the graph model records — rebuild it too.
+and commit the result.
 
 ## Conventions that bite
 

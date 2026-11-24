@@ -157,7 +157,7 @@ Before this, the floor ran in every consumer project and in none of ours — whi
 The harness improves from real project usage, never auto-applied.
 
 - **Inbound**: while coding in a consumer project, a perceived "the harness should have X" is filed directly as a GitHub issue here (with source-project context), once it clears the agnostic + harness-worthy bar. The tracker is the triage zone; there is no per-project `proposed/` queue and no `feedback push` step.
-- **Outbound**: the maintainer CLI `void-machine audit` reports skills not invoked recently, upstream deprecations, repeated matrix conflicts. Proposes deprecations as PRs.
+- **Requested evaluation**: inspect concrete evidence and propose a bounded change through `void-learn`; no automatic usage audit or absence-of-use inference.
 - **HITL is absolute**: no automatic write into doctrine, ever. Every change is a deliberate commit.
 
 ## Autonomous mode (opt-in)

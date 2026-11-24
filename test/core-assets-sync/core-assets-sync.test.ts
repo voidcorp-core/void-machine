@@ -11,9 +11,7 @@
  *   - a NEW core file not mirrored (the gap `git diff --quiet` misses — an
  *     untracked mirror file is invisible to it),
  *   - a deleted core file left orphaned in the mirror.
- * The exclusions mirror copy-core-assets.mjs exactly (*.test.ts and graph/), plus the mirror's
- * data/ dir, which is copied from packages/harness-graph (certification.json + model.json), NOT from
- * core — its drift is gated separately by the CI core-assets check.
+ * Test files are excluded; the pack mirror is checked against its own source.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -23,16 +21,11 @@ import { join, relative, resolve } from 'node:path';
 const CORE = resolve(process.cwd(), 'packages/core');
 const MIRROR = resolve(process.cwd(), 'packages/cli/core-assets');
 const PACKS_SRC = resolve(process.cwd(), 'packages/packs');
-const GRAPH = join(CORE, 'graph');
-const MIRROR_DATA = join(MIRROR, 'data'); // shipped from harness-graph, not a core mirror
 const MIRROR_PACKS = join(MIRROR, 'packs'); // bundled from packages/packs/*/skills, not core
 
-/** Same exclusion rule as copy-core-assets.mjs (plus the harness-graph-sourced data/ dir and the
- *  packages/packs-sourced packs/ dir, which have their own source and are checked separately). */
+/** Same test-file exclusion as copy-core-assets; packs have their own source. */
 function excluded(absPath: string): boolean {
   if (absPath.endsWith('.test.ts')) return true;
-  if (absPath === GRAPH || absPath.startsWith(`${GRAPH}/`)) return true;
-  if (absPath === MIRROR_DATA || absPath.startsWith(`${MIRROR_DATA}/`)) return true;
   if (absPath === MIRROR_PACKS || absPath.startsWith(`${MIRROR_PACKS}/`)) return true;
   return false;
 }

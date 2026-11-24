@@ -64,9 +64,7 @@ workflow never retries an attempt. A separately triggered GitHub run has a new r
 does not erase the earlier red evidence.
 
 - `pnpm verify --artifacts` — only the generated-artefact gates, in seconds.
-  Adding a skill moves the graph, `certification.json`, the consumer bundle AND
-  the `core-assets` mirror; this is the class of failure that otherwise gets
-  discovered from CI, one round trip at a time.
+  Adding a skill changes the `core-assets` mirror; verify it alongside hook bundle freshness.
 - `pnpm verify --fix` — regenerate those artefacts instead of being told they
   are stale, then verify them. Never implicit: regenerating a committed file is
   a change, and a change happens because someone asked for it.
@@ -87,7 +85,6 @@ does not erase the earlier red evidence.
   not a retry-until-green run.
 - `pnpm lint` and `pnpm typecheck` — zero errors.
 - `pnpm anti-bloat:check` — discovery contracts (description target ≤250 chars and hard cap 500, technical skill names, `.source` provenance), agent tool isolation and hook syntax. Skills and hooks stay concise without editorial line caps.
-- `pnpm graph:check` / `pnpm graph:check-bundle` — regenerate `catalog.v3.json`, its `model.json` compatibility projection, and the bundle when graph inputs change.
 - `pnpm conformance:consumer` — pack the local CLI once, then prove account-free install,
   installed-hook execution and the Autopilot public surface for Claude, Codex, and both. The
   narrower `conformance:install`, `conformance:hooks` and `conformance:autopilot` commands select

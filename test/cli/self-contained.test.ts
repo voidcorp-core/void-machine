@@ -30,7 +30,7 @@ describe('the published CLI is self-contained', () => {
     const declared = [...bundled.matchAll(/'([^']+)'/g)].map((match) => match[1]);
 
     // Each of these is imported at runtime and must be inlined, not resolved.
-    for (const pkg of ['@voidcorp/harness-graph', 'picomatch', 'yaml', 'zod']) {
+    for (const pkg of ['@voidcorp/hook-runner', '@voidcorp/mission-engine', '@voidcorp/void-machine', 'picomatch', 'yaml', 'zod']) {
       expect(declared).toContain(pkg);
     }
   });

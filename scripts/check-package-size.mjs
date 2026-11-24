@@ -76,7 +76,6 @@ export const PACKAGE_LIMITS = Object.freeze({
   // Mini removed 104.4 kB from the initial 2232.4 kB implementation; retain all
   // payloads/licenses and the existing approximately 45 kB bounded headroom.
   [PRODUCT_IDENTITY.packageName]: 2_173_000,
-  '@voidcorp/harness-graph': 120_000,
   '@voidcorp/pack-monorepo': 20_000,
   '@voidcorp/pack-nextjs': 20_000,
 });
@@ -152,7 +151,6 @@ export function measure(packages) {
 // Mirrors PACKAGES in check-publish-safety.mjs; the test asserts they agree.
 const PACKAGES = [
   { directory: 'packages/cli', name: PRODUCT_IDENTITY.packageName },
-  { directory: 'packages/harness-graph', name: '@voidcorp/harness-graph' },
   { directory: 'packages/packs/pack-monorepo', name: '@voidcorp/pack-monorepo' },
   { directory: 'packages/packs/pack-nextjs', name: '@voidcorp/pack-nextjs' },
 ];

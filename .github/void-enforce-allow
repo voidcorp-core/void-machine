@@ -14,11 +14,3 @@ packages/cli/core-assets/hooks/secret-in-content.sh
 packages/hook-runner/src/rules/secret-content.ts
 packages/hook-runner/src/rules/secret-content.test.ts
 
-# This deterministic single-file consumer bundle exceeds the hook input bound.
-# Its authored sources remain scanned and graph:check-bundle proves freshness.
-packages/core/graph/void-graph.mjs
-
-# This generated ProjectGraph projection is validated by graph project-check;
-# its complete snapshot can exceed the hook input bound. The graph sources and
-# the freshness gate remain scanned and reviewable.
-.void/knowledge.json

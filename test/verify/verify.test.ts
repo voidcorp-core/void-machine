@@ -69,7 +69,7 @@ describe('gate catalogue', () => {
 
   it('keeps build before every gate that consumes built package exports', () => {
     const ids = gates.map((gate) => gate.id);
-    for (const dependent of ['self-host-sync', 'self-host-doctor', 'graph-integrity', 'typecheck']) {
+    for (const dependent of ['self-host-sync', 'self-host-doctor', 'typecheck']) {
       expect(ids.indexOf('build')).toBeLessThan(ids.indexOf(dependent));
     }
   });

@@ -46,7 +46,7 @@ describe('judge', () => {
   it('judges every package, not just the first that breaches', () => {
     const verdict = judge([
       { package: PRODUCT_IDENTITY.packageName, bytes: PACKAGE_LIMITS[PRODUCT_IDENTITY.packageName] + 1 },
-      { package: '@voidcorp/harness-graph', bytes: PACKAGE_LIMITS['@voidcorp/harness-graph'] + 1 },
+      { package: '@voidcorp/pack-monorepo', bytes: PACKAGE_LIMITS['@voidcorp/pack-monorepo'] + 1 },
     ]);
 
     expect(verdict.failures).toHaveLength(2);

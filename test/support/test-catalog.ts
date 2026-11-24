@@ -7,7 +7,6 @@ export const PROOF_TIERS = [
   'contract',
   'consumer',
   'system',
-  'certification',
 ] as const;
 export type ProofTier = (typeof PROOF_TIERS)[number];
 
@@ -43,7 +42,6 @@ const SKIPPED_DIRECTORIES = new Set([
 
 const SYSTEM_PREFIXES = ['test/autopilot/', 'test/cli/'];
 const CONSUMER_PREFIX = 'packages/cli/scripts/conformance-';
-const CERTIFICATION_PREFIX = 'packages/harness-graph/src/certification/';
 const RESOURCE_OVERRIDES: Readonly<Record<string, ResourceClass>> = {
   // These tests call an injected adapter whose implementation owns the import,
   // so source scanning cannot see the subprocess at the test boundary.
@@ -94,13 +92,9 @@ function isConsumer(path: string): boolean {
   return path.startsWith(CONSUMER_PREFIX);
 }
 
-function isCertification(path: string): boolean {
-  return path.startsWith(CERTIFICATION_PREFIX);
-}
 
 function tierRules(resource: ResourceClass): readonly ClassificationRule<ProofTier>[] {
   return [
-    { value: 'certification', matches: isCertification },
     { value: 'consumer', matches: isConsumer },
     { value: 'system', matches: isSystem },
     {
@@ -109,7 +103,6 @@ function tierRules(resource: ResourceClass): readonly ClassificationRule<ProofTi
         (path.startsWith('test/') && !isSystem(path))
         || ((path.startsWith('packages/') || path.startsWith('apps/'))
           && resource !== 'cpu'
-          && !isCertification(path)
           && !isConsumer(path)),
     },
     {
@@ -117,7 +110,6 @@ function tierRules(resource: ResourceClass): readonly ClassificationRule<ProofTi
       matches: (path) =>
         (path.startsWith('packages/') || path.startsWith('apps/'))
         && resource === 'cpu'
-        && !isCertification(path)
         && !isConsumer(path),
     },
   ];

@@ -24,15 +24,10 @@ describe('CLI clean-checkout build order', () => {
     const commands = commandsOf(rootManifest.scripts['build:cli']);
 
     expect(commands).toContain('pnpm --filter @voidcorp/mission-engine build');
-    expect(commands).toContain('pnpm --filter @voidcorp/harness-graph build');
     expect(commands).toContain('pnpm --filter @voidcorp/hook-runner build');
     expect(commands).toContain('pnpm --filter ./packages/cli build');
     expect(commands.indexOf('pnpm --filter @voidcorp/mission-engine build'))
-      .toBeLessThan(commands.indexOf('pnpm --filter @voidcorp/harness-graph build'));
-    expect(commands.indexOf('pnpm --filter @voidcorp/mission-engine build'))
       .toBeLessThan(commands.indexOf('pnpm --filter @voidcorp/hook-runner build'));
-    expect(commands.indexOf('pnpm --filter @voidcorp/harness-graph build'))
-      .toBeLessThan(commands.indexOf('pnpm --filter ./packages/cli build'));
     expect(commands.indexOf('pnpm --filter @voidcorp/hook-runner build'))
       .toBeLessThan(commands.indexOf('pnpm --filter ./packages/cli build'));
   });

@@ -10,21 +10,41 @@
 // resident process adds a lifecycle, a supervision story, and a stale cache to
 // explain at every anomaly.
 //
-// Posture reused from the live graph server rather than re-decided: loopback
-// only, CORS limited to localhost, one-shot launch token exchanged for a
+// Existing local-server posture: loopback only, CORS limited to localhost,
+// a process-local launch token exchanged for a
 // session cookie, and the shared security headers. It serves project paths and
 // decision titles, which is not something to leave open on a shared network.
 
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
-import { createLiveAuth, sessionCookie, type LiveAuth } from '../graph-live-auth.js';
-import { corsFor, securityHeaders } from '../graph-live-server.js';
+import { createLiveAuth, sessionCookie, type LiveAuth } from './auth.js';
+
+const LOCALHOST_ORIGIN =
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+export function corsFor(origin: string | undefined): Record<string, string> {
+  if (origin !== undefined && LOCALHOST_ORIGIN.test(origin)) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Credentials': 'true',
+      Vary: 'Origin',
+    };
+  }
+  return {};
+}
+
+export function securityHeaders(): Record<string, string> {
+  return {
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+  };
+}
 
 const LOOPBACK = '127.0.0.1';
 const PORT_RETRIES = 20;
 /**
- * Its own cookie name: cookies ignore the port, so sharing the live graph
- * server's name would mean opening one surface silently logs you out of the
- * other.
+ * Cookies ignore the port, so the Projects UI keeps its own cookie name.
  */
 const COOKIE = 'void_projects_session';
 

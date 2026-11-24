@@ -193,7 +193,7 @@ Concrete invariants enforced by `void-frontend-design` + `void-accessibility` sk
 
 Source: Folpe operating principle. Translated into mechanical checks via `void-accessibility`, `void-frontend-design`, and the `pack-react` / `pack-pwa` design-review hooks.
 
-## Harness self-evolution — feedback loop and obsolescence audit (HITL strict)
+## Harness self-evolution — feedback and requested evaluation (HITL strict)
 
 The harness must evolve from real usage in real projects, like citypaul's dotfiles evolves from his daily work. Two complementary mechanisms, both **strict Human-In-The-Loop** (no automatic write into doctrine, ever):
 
@@ -205,13 +205,13 @@ While coding in any project consuming the harness, when the model (or the user) 
 2. The filing bar is load-bearing: open an issue only when the gap is both *agnostic* (helps any consumer, not just this project) and *harness-worthy* (changes a skill, hook, pack, CLI, or doctrine line). A project-specific rule goes to `.void/PROJECT-DOCTRINE.md` via `void-learn`'s project-rule branch instead. When in doubt, do not file.
 3. The issue tracker is the triage zone: taking the issue promotes it, closing it declines it — no `proposed/` queue, no `feedback push` step. A promoted issue becomes a void-machine PR carrying the source-project context as motivation. Nothing is merged without human review.
 
-### Outbound — `void-learn` skill, audit branch
+### Requested evaluation — `void-learn`
 
-A recurring auto-evaluation that questions the harness's current surface:
-
-1. Each invocation and outcome writes a redacted canonical event to `.void/machine/runs/<mission-id>/events.jsonl` (local, never shipped); legacy usage logs remain read-only history.
-2. `void-machine audit` joins declared relations, human activations, outcomes, and cost across hooks, skills, and agents. It repairs telemetry before judging behavior, excludes self-host/smoke missions, and requires twenty human sessions before a retirement review. Upstream-source deprecation and decision-matrix-conflict detection are planned extensions.
-3. The report **proposes** telemetry repair, failure repair, wiring, tuning/fusion, or retirement review. Nothing is auto-applied. `void-learn` owns the human decision and any resulting PR.
+Evaluate the harness when requested, using concrete failures, current sources and
+retained execution/review evidence. Propose bounded changes through `void-learn`.
+There is no automatic usage audit, score, retirement threshold or replacement
+telemetry engine. Historical journals remain available; absence of an observation
+does not prove non-use. Doctrine changes still require the human decision.
 
 ### Why HITL is absolute here
 

@@ -71,7 +71,7 @@ No replacement CLI, schema gate or generated index is required.
 Keep existing records, IDs, metadata and links. Ordinary wording and link corrections
 use normal Git commits; a material change creates a new record linking its
 predecessor. Established directories remain valid; new projects may use
-`docs/decisions/`. The projects view, declared graph/why readers and separate
+`docs/decisions/`. The projects view and separate
 conformance capability remain available with their existing parsing limits.
 
 ### `install --global`
@@ -105,3 +105,33 @@ The `@voidcorp/hook-runner` invocation-health exports are removed:
 usage-based health calls; no replacement absence-of-use heuristic is provided.
 Doctor retains installation and runtime wiring diagnostics. Existing journals and
 caches remain untouched; startup no longer reads or refreshes invocation alerts.
+
+## Graph, audit and score retirement
+
+Breaking removal: the CLI no longer accepts `graph` (including project,
+knowledge, impact, owners, tests-for, path, live, build and check variants), `why`
+or `audit`. The `void-graph` and `void-audit` skills, graph studio, bundled graph,
+frozen certification and local `backlog:index` generator are retired.
+
+The public `@voidcorp/harness-graph/project` API and root package exports are
+removed from the workspace and release inputs. Consumers must remove those
+imports or stay on an earlier release that supplies them. There is no compatible
+replacement API; this change does not unpublish historical releases.
+
+Use Git and repository search for navigation, and the compiler, linter and
+applicable tests for verification. These do not reproduce graph topology,
+automatic impact analysis or test selection. Do not narrow verification by
+claiming the removed graph has established the affected scope.
+
+`status` now reports installation receipt/version and detected runtime facts
+(`installed`, `wired`, `fired`, `observed`), with unavailable evidence shown as
+`unknown`. Its current `.void/machine/status.json` snapshot is schema version 2;
+readers must stop expecting `score` or `capabilities`. `doctor`, Projects UI,
+project discovery, checkpoint/resume and canonical mission/review/worker proofs
+remain available.
+
+No command removes historical graph caches, custom knowledge files, score
+history, usage logs, reports or local backlog exports as part of this retirement.
+Old files are historical inputs owned by the user, not a reason to recreate the
+removed engine. Installation/update retains the existing ownership/conflict
+rules for shipped assets; customized assets are not silently overwritten.

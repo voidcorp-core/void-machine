@@ -30,7 +30,6 @@ const PLUGIN_MANIFESTS = [
 ];
 const NPM_PACKAGES = [
   'packages/cli/package.json',
-  'packages/harness-graph/package.json',
   'packages/packs/pack-monorepo/package.json',
   'packages/packs/pack-nextjs/package.json',
 ];

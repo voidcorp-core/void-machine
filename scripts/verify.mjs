@@ -92,18 +92,6 @@ export const GATES = Object.freeze([
     ['source'],
   ),
   gate(
-    'graph-integrity',
-    'Graph integrity',
-    ['pnpm', 'graph:check'],
-    'contract',
-    'subprocess',
-    ['source'],
-    {
-      artifact: true,
-      fix: ['node', 'packages/cli/bin/void-machine.mjs', 'graph', 'build'],
-    },
-  ),
-  gate(
     'generated-artifacts',
     'Generated artifacts',
     ['pnpm', 'derive:check'],
@@ -111,18 +99,6 @@ export const GATES = Object.freeze([
     'subprocess',
     ['source'],
     { artifact: true, fix: ['pnpm', 'derive'] },
-  ),
-  gate(
-    'consumer-bundle',
-    'Consumer bundle freshness',
-    ['pnpm', 'graph:check-bundle'],
-    'consumer',
-    'subprocess',
-    ['source'],
-    {
-      artifact: true,
-      fix: ['pnpm', '--filter', './packages/cli', 'build:void-graph'],
-    },
   ),
   gate(
     'skill-references',
@@ -158,24 +134,6 @@ export const GATES = Object.freeze([
     ['source', 'tests'],
   ),
   gate('typecheck', 'Typecheck', ['pnpm', 'typecheck'], 'contract', 'subprocess', ['source', 'tests']),
-  gate(
-    'benchmark-project',
-    'ProjectGraph performance observation',
-    ['pnpm', 'benchmark:project'],
-    'certification',
-    'subprocess',
-    ['source'],
-    { required: false },
-  ),
-  gate(
-    'benchmark-query',
-    'ProjectGraph query performance observation',
-    ['pnpm', 'benchmark:query'],
-    'certification',
-    'subprocess',
-    ['source'],
-    { required: false },
-  ),
 ]);
 
 /** @returns {Gate} */

@@ -2,9 +2,7 @@
 // Regenerate everything this repository derives from its own assets.
 //
 // Repository projections are generated from skills, agents, hooks, commands,
-// packs and the verification catalogue. They include the graph catalogue and
-// compatibility model, certification manifest, consumer bundle,
-// npm mirror and CI gate block. Each once had its own
+// packs and the verification catalogue. They include the npm mirror and CI gate block. Each once had its own
 // build command or hand-maintained copy, and nothing declared the complete set.
 //
 // The cost of that showed up the day thirteen skills were renamed: the gates
@@ -25,31 +23,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * In dependency order, and the order is load-bearing: the catalogue feeds the
- * certification and the bundle; the mirror copies their generated assets.
+ * Build the CLI before copying the assets it distributes.
  */
 const STEPS = [
   { label: 'CI gates', argv: ['node', 'scripts/render-ci-gates.mjs'] },
-  { label: 'graph kernel', argv: ['pnpm', '--filter', '@voidcorp/harness-graph', 'build'] },
   { label: 'cli', argv: ['pnpm', 'build:cli'] },
-  { label: 'catalogue', argv: ['node', 'packages/cli/bin/void-machine.mjs', 'graph'] },
-  { label: 'certification', argv: ['pnpm', '-F', './packages/cli', 'build:certification'] },
-  { label: 'consumer bundle', argv: ['pnpm', '-F', './packages/cli', 'build:void-graph'] },
   { label: 'npm mirror', argv: ['pnpm', '--filter', './packages/cli', 'build:assets'] },
 ];
-
-/**
- * The one artefact whose bytes are not compared. `void-graph.mjs` is a vite and
- * esbuild bundle, and its byte-determinism across environments is not
- * guaranteed, so comparing it here would fail on a CI runner whose toolchain
- * differs by a patch release. It is not left unguarded: `graph:check-bundle`
- * asserts that the model it bakes matches the committed one, which is the fact
- * that actually matters and does not depend on the bundler.
- *
- * This is an exception, not a list of what to check. Everything else is covered
- * by being generated, with nothing to add when another artefact appears.
- */
-const NOT_BYTE_COMPARED = new Set(['packages/core/graph/void-graph.mjs']);
 
 /** Paths git reports as changed, staged or not, as a set for cheap comparison. */
 export function dirtyPaths(porcelain) {
@@ -63,7 +43,7 @@ export function dirtyPaths(porcelain) {
 }
 
 /** What derivation produced: dirty now, and not dirty before it ran. */
-export function producedBy(before, after, excluded = NOT_BYTE_COMPARED) {
+export function producedBy(before, after, excluded = new Set()) {
   return [...after].filter((path) => !before.has(path) && !excluded.has(path)).sort();
 }
 

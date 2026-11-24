@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createLiveAuth, sessionCookie } from './graph-live-auth.js';
+import { createLiveAuth, sessionCookie } from './auth.js';
 
-describe('Mission Control live auth', () => {
+describe('local UI auth', () => {
   it('exchanges the launch token once and authorizes only its session cookie', () => {
     const auth = createLiveAuth('launch-secret');
     expect(auth.exchange('wrong')).toBeUndefined();

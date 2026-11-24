@@ -207,21 +207,11 @@ describe('ci-enforce — clean diff is green', () => {
     expect(stdout).toMatch(/skipped|allowlist/i);
   });
 
-  it('skips only certified generated artifacts and self-referential detector sources', () => {
+  it('skips only self-referential detector sources', () => {
     write(
       repo,
       '.github/void-enforce-allow',
       readFileSync(repositoryAllowlist, 'utf8'),
-    );
-    write(
-      repo,
-      'packages/core/graph/void-graph.mjs',
-      `export const bundled = '${'x'.repeat(1_100_000)}';\n`,
-    );
-    write(
-      repo,
-      '.void/knowledge.json',
-      `{"kind":"project-knowledge","snapshot":"${'x'.repeat(1_100_000)}"}\n`,
     );
     write(
       repo,
@@ -234,11 +224,11 @@ describe('ci-enforce — clean diff is green', () => {
       'test("detector", () => {});\n',
     );
     git(repo, 'add', '-A');
-    git(repo, 'commit', '-q', '-m', 'regenerate certified floor assets');
+    git(repo, 'commit', '-q', '-m', 'update detector sources');
 
     const { code, stdout } = run(repo, base);
     expect(code).toBe(0);
-    expect(stdout.match(/skipped/g)).toHaveLength(4);
+    expect(stdout.match(/skipped/g)).toHaveLength(2);
   });
 });
 

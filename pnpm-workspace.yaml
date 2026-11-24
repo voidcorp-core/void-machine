@@ -6,7 +6,6 @@
 packages:
   - 'packages/cli'
   - 'packages/packs/*'
-  - 'packages/harness-graph'
   - 'packages/mission-engine'
   - 'packages/hook-runner'
   - 'apps/*'

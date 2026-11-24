@@ -19,7 +19,6 @@ function capture(): string {
 }
 
 describe('printHelp', () => {
-  it('exposes declared project knowledge', () => { expect(capture()).toContain('why <file>'); });
   it('names the core plugin harness, never the stale `void`', () => {
     const out = capture();
     expect(out).toContain(CORE_PLUGIN_NAME);

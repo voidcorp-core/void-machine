@@ -378,13 +378,14 @@ the next release.
 The OIDC-capable `publish` job deliberately cannot run that repository code; its
 defense in depth is artifact service identity plus independent byte verification.
 
-The CI validation lane also runs `self-host sync --mode release-gate` followed
-by the strict self-host doctor. It builds the hook runner directly from current
+The CI validation lane also runs `self-host sync` followed
+by `self-host doctor`. Sync builds the hook runner directly from current
 TypeScript with the source checkout's esbuild, compiles and executes a
 current-source runtime-adapter worker under the isolated staging boundary,
 revalidates the source hash before publication, verifies the deterministic
 receipt, executes both hooks, and replays their canonical events. No generated
-self-host file is published or committed. Missing Claude/Codex executables are
+self-host file is published or committed. Doctor never builds, and missing, stale or
+drifted artifacts fail independently of legacy receipt rollout modes. Missing Claude/Codex executables are
 reported as degraded rather than certified. When present, a bounded `--version`
 process smoke receives no ambient credentials. Installation steps emit bounded,
 structured start/finish events with their runtime, operation and duration, so an

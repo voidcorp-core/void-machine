@@ -4,7 +4,7 @@
  * doctor renders to process.stdout and calls process.exit(1) when any check
  * fails. We run it against a temp cwd with stdout captured and process.exit
  * stubbed to throw, so we can assert on the rendered report without the test
- * runner exiting. `--no-remote` keeps the run offline (no marketplace fetch).
+ * runner exiting. The ordinary command is local and never fetches versions.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,11 @@ import { appendFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync, writeFile
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as remote from '../../packages/cli/src/lib/remote.js';
+import * as freshness from '../../packages/hook-runner/src/index.js';
+import * as prerequisites from '../../packages/cli/src/lib/prerequisites.js';
 import { doctor } from '../../packages/cli/src/commands/doctor.js';
+import { buildInstallReceipt, encodeReceipt, INSTALL_RECEIPT_PATH } from '../../packages/cli/src/lib/receipts.js';
 import { init } from '../../packages/cli/src/commands/init.js';
 import { update } from '../../packages/cli/src/commands/update.js';
 
@@ -44,7 +48,7 @@ afterEach(() => {
 /** Run doctor, swallowing the stubbed process.exit throw; return rendered output. */
 async function runDoctor(): Promise<string> {
   try {
-    await doctor(['--no-remote']);
+    await doctor([]);
   } catch (err) {
     if (!(err instanceof Error) || !err.message.startsWith('process.exit(')) throw err;
   }
@@ -58,7 +62,7 @@ describe('doctor', () => {
     expect(out).toContain('failed');
   });
 
-  it('requires neither jq nor gh under --no-remote (fully offline)', async () => {
+  it('requires neither jq nor gh by default', async () => {
     const out = await runDoctor();
     expect(out).not.toContain('jq');
     expect(out).not.toContain('gh CLI');
@@ -213,18 +217,55 @@ describe('doctor', () => {
     expect(out).toContain('no config.autopilot declaration');
   });
 
-  it('reports the source repository as self-host not-installed instead of skipping green', async () => {
+  function markSourceRepo(): void {
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'void-harness' }));
     mkdirSync(join(dir, 'packages', 'cli'), { recursive: true });
     mkdirSync(join(dir, 'packages', 'core'), { recursive: true });
+  }
 
+  it('reports an absent published install in the source repository', async () => {
+    markSourceRepo();
     const out = await runDoctor();
-
-    expect(out).toContain('self-host');
-    expect(out).toContain('not-installed');
-    expect(out).not.toContain('skipped');
-    expect(out).not.toContain('nothing to fix');
+    expect(out).toContain('.void/config.json missing');
+    expect(out).toContain('failed');
+    expect(out).not.toContain('self-host');
   });
+
+  it('judges the published install in a source repo independently of generated artifacts', async () => {
+    await init(['--runtime', 'claude', '--no-interactive']);
+    markSourceRepo();
+    output = '';
+    const healthy = await runDoctor();
+    expect(healthy).toContain('assets match manifest');
+    expect(healthy).not.toContain('self-host');
+    mkdirSync(join(dir, '.void/machine/generated/current/.void'), { recursive: true });
+    writeFileSync(join(dir, '.void/machine/generated/current/.void/self-host-receipt-v1.json'), '{}');
+    output = '';
+    expect(await runDoctor()).toBe(healthy);
+    appendFileSync(join(dir, '.claude/skills/void-tdd/SKILL.md'), '\ncorrupt\n');
+    output = '';
+    expect(await runDoctor()).toContain('1 file(s) differ from manifest');
+  });
+
+  it.each(['local', 'marketplace'] as const)(
+    'never invokes remote/auth providers for %s installs', async (source) => {
+    mkdirSync(join(dir, '.void/machine/receipts'), { recursive: true });
+    writeFileSync(join(dir, INSTALL_RECEIPT_PATH), encodeReceipt(buildInstallReceipt({
+      version: '7.0.2', source, runtimes: ['claude'], files: [],
+    })));
+    writeFileSync(join(dir, 'CLAUDE.md'), '# Claude\n');
+    const npm = vi.spyOn(freshness, 'resolveFreshness').mockRejectedValue(new Error('unexpected npm lookup'));
+    const marketplace = vi.spyOn(remote, 'fetchRemoteMarketplace');
+    const pinned = vi.spyOn(remote, 'fetchPinnedPluginVersion');
+    const gh = vi.spyOn(prerequisites, 'checkGh');
+    await runDoctor();
+    expect(npm).not.toHaveBeenCalled();
+    expect(marketplace).not.toHaveBeenCalled();
+    expect(pinned).not.toHaveBeenCalled();
+    expect(gh).not.toHaveBeenCalled();
+    },
+  );
+
 });
 
 

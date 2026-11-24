@@ -20,7 +20,6 @@ import {
   encodeSelfHostReceipt,
   readSelfHostReceipt,
   SELF_HOST_RECEIPT_PATH,
-  type SelfHostMode,
   type SelfHostReceiptFileInput,
   selfHostReceiptDrift,
 } from './receipt.js';
@@ -61,7 +60,6 @@ export interface SyncSelfHostOptions {
   readonly buildHookBundle?: BuildHookBundle;
   readonly wireRuntimeSurfaces?: WireSelfHostRuntimeSurfaces;
   readonly computeSourceHash?: (root: string) => Promise<string>;
-  readonly mode: SelfHostMode;
   /** Test-only fault injection after the previous artifact is backed up. */
   readonly failAfterBackup?: boolean;
 }
@@ -69,7 +67,6 @@ export interface SyncSelfHostOptions {
 export interface SelfHostSyncResult {
   readonly changed: boolean;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly files: number;
   readonly artifactRoot: string;
 }
@@ -229,7 +226,6 @@ async function compileArtifact(input: {
   readonly overlayRoot: string;
   readonly finalRoot: string;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly buildHookBundle: BuildHookBundle;
   readonly wireRuntimeSurfaces: WireSelfHostRuntimeSurfaces;
 }): Promise<number> {
@@ -245,7 +241,7 @@ async function compileArtifact(input: {
   await writeFile(
     join(input.artifactRoot, '.void', 'config.json'),
     `${JSON.stringify({
-      selfHost: { mode: input.mode, sourceHash: input.sourceHash },
+      selfHost: { sourceHash: input.sourceHash },
       commands: {
         test: ['pnpm', 'test'],
         typecheck: ['pnpm', 'typecheck'],
@@ -268,7 +264,6 @@ async function compileArtifact(input: {
   const files = await collectArtifactFiles(input.artifactRoot);
   const receipt = buildSelfHostReceipt({
     sourceHash: input.sourceHash,
-    mode: input.mode,
     files,
   });
   const receiptPath = join(
@@ -332,7 +327,7 @@ async function publishArtifact(
 
 export async function syncSelfHost(
   root: string,
-  options: SyncSelfHostOptions,
+  options: SyncSelfHostOptions = {},
 ): Promise<SelfHostSyncResult> {
   const canonicalRoot = resolve(root);
   if (!isHarnessSourceRepo(canonicalRoot)) {
@@ -351,13 +346,11 @@ export async function syncSelfHost(
   const currentReceipt = await readSelfHostReceipt(artifactRoot);
   if (
     currentReceipt?.sourceHash === sourceHash
-    && currentReceipt.mode === options.mode
     && (await selfHostReceiptDrift(artifactRoot, currentReceipt)).length === 0
   ) {
     return {
       changed: false,
       sourceHash,
-      mode: options.mode,
       files: currentReceipt.files.length,
       artifactRoot,
     };
@@ -374,7 +367,6 @@ export async function syncSelfHost(
       overlayRoot,
       finalRoot: artifactRoot,
       sourceHash,
-      mode: options.mode,
       buildHookBundle: options.buildHookBundle ?? defaultBuildHookBundle,
       wireRuntimeSurfaces: options.wireRuntimeSurfaces
         ?? ((input) => defaultWireRuntimeSurfaces({
@@ -393,7 +385,6 @@ export async function syncSelfHost(
     return {
       changed: true,
       sourceHash,
-      mode: options.mode,
       files,
       artifactRoot,
     };

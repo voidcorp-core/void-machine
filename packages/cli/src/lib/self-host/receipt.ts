@@ -4,15 +4,6 @@ import { join, relative } from 'node:path';
 import { isSafeRelativePath } from '../transaction.js';
 
 export const SELF_HOST_RECEIPT_PATH = '.void/self-host-receipt-v1.json';
-export const SELF_HOST_MODES = [
-  'shadow',
-  'warn',
-  'enforce',
-  'release-gate',
-] as const;
-
-export type SelfHostMode = typeof SELF_HOST_MODES[number];
-
 export interface SelfHostOwnedFile {
   readonly path: string;
   readonly sha256: string;
@@ -22,7 +13,6 @@ export interface SelfHostOwnedFile {
 export interface SelfHostReceipt {
   readonly schemaVersion: 1;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly runtimes: readonly ['claude', 'codex'];
   readonly files: readonly SelfHostOwnedFile[];
 }
@@ -41,14 +31,8 @@ function lexical(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function isSelfHostMode(value: unknown): value is SelfHostMode {
-  return typeof value === 'string'
-    && SELF_HOST_MODES.some((mode) => mode === value);
-}
-
 export function buildSelfHostReceipt(input: {
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly files: readonly SelfHostReceiptFileInput[];
 }): SelfHostReceipt {
   if (!/^[a-f0-9]{64}$/.test(input.sourceHash)) {
@@ -70,7 +54,6 @@ export function buildSelfHostReceipt(input: {
   return {
     schemaVersion: 1,
     sourceHash: input.sourceHash,
-    mode: input.mode,
     runtimes: ['claude', 'codex'],
     files,
   };
@@ -104,6 +87,7 @@ export function parseSelfHostReceipt(body: string): SelfHostReceipt | undefined 
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return undefined;
   }
+  // Legacy rollout metadata is readable, but has no authority in the returned contract.
   const receipt = value as Record<string, unknown>;
   const runtimes = receipt.runtimes;
   const files = receipt.files;
@@ -111,7 +95,9 @@ export function parseSelfHostReceipt(body: string): SelfHostReceipt | undefined 
     receipt.schemaVersion !== 1
     || typeof receipt.sourceHash !== 'string'
     || !/^[a-f0-9]{64}$/.test(receipt.sourceHash)
-    || !isSelfHostMode(receipt.mode)
+    || (receipt.mode !== undefined
+      && (typeof receipt.mode !== 'string'
+        || !['shadow', 'warn', 'enforce', 'release-gate'].includes(receipt.mode)))
     || !Array.isArray(runtimes)
     || runtimes.length !== 2
     || runtimes[0] !== 'claude'
@@ -127,7 +113,6 @@ export function parseSelfHostReceipt(body: string): SelfHostReceipt | undefined 
   return {
     schemaVersion: 1,
     sourceHash: receipt.sourceHash,
-    mode: receipt.mode,
     runtimes: ['claude', 'codex'],
     files,
   };

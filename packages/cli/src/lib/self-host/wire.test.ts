@@ -28,7 +28,6 @@ describe('wireSelfHostRuntimeSurfaces', () => {
       overlayRoot: CORE_ROOT,
       finalRoot,
       sourceHash: 'deadbeef',
-      mode: 'shadow',
     });
 
     const manifest = readFileSync(join(artifactRoot, '.codex', 'hooks.json'), 'utf8');

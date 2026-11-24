@@ -76,7 +76,7 @@ export const GATES = Object.freeze([
   gate(
     'self-host-sync',
     'Self-host compile',
-    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'sync', '--mode', 'release-gate'],
+    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'sync'],
     'consumer',
     'subprocess',
     ['source'],
@@ -84,7 +84,7 @@ export const GATES = Object.freeze([
   gate(
     'self-host-doctor',
     'Self-host doctor',
-    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'doctor', '--mode', 'release-gate'],
+    ['node', 'packages/cli/dist/bin/void-machine.mjs', 'self-host', 'doctor'],
     'consumer',
     'subprocess',
     ['source'],

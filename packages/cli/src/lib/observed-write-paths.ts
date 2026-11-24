@@ -23,18 +23,8 @@
 //   - a path the project is SUPPOSED to commit is never reported, because
 //     ignoring `.void/hooks/` or `.codex/hooks.json` breaks every fresh clone.
 //
-// Deliberately NOT a conformance rule with a repair, though `doctor --fix` was
-// the obvious home for it. The admission test in `conformance/rule.ts` asks
-// whether two competent people would agree on the exact repair without
-// discussing it, and here they would not: the right move is either to migrate a
-// legacy directory under `machine/` (a move, which the mutation model cannot
-// express, since it writes file contents) or to add an ignore line where it is,
-// and choosing between them arbitrates. Worse, appending a line cannot be
-// trusted to work: the leak may come from a negation in a nested `.gitignore`,
-// in which case a root-level append leaves the leak in place while the repair
-// reports success. A repair whose effect cannot be read from its own mutation
-// has no business being applied to someone else's project.
-//
+// Observed writes are diagnostic evidence, never an automatic repair: moving
+// project state requires ownership and a deliberate migration.
 // Pure. The caller asks git and stats the disk; this decides what that means.
 
 import {

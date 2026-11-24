@@ -62,8 +62,8 @@ export const COMMAND_CATALOG = {
     "aliases": [],
     "help": [
       {
-        "signature": "doctor [--no-remote] [--fix]",
-        "description": "Health-check the install (config, doctrine, per-runtime wiring), and report structural drift from the conventions the harness declares. --fix repairs the mechanical ones, refused on a dirty tree, never committed. --dry-run shows the mutations."
+        "signature": "doctor [--no-remote]",
+        "description": "Check the published installation locally (config, doctrine, integrity, runtime wiring). --no-remote is a compatible no-op; use check for remote versions."
       }
     ]
   },

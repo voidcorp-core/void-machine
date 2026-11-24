@@ -35,7 +35,7 @@ afterEach(async () => {
 /**
  * One real compilation for the whole file, copied per test.
  *
- * Every test below needs the same thing: a freshly published shadow artifact of
+ * Every test below needs the same thing: a freshly published artifact of
  * the real repository -- the real one, because the doctor checks its agents
  * against the canonical specialist catalog of the running CLI, which a smaller
  * fixture could not satisfy. Compiling it once per test cost about 900 ms each
@@ -56,7 +56,6 @@ beforeAll(async () => {
     generatedRoot: greenArtifact,
     buildHookBundle,
     wireRuntimeSurfaces: wireSelfHostRuntimeSurfaces,
-    mode: 'shadow',
   });
 }, 60_000);
 
@@ -200,17 +199,21 @@ describe('diagnoseSelfHost', () => {
     expect(diagnosis.sourceHash).toBe(template.sourceHash);
   });
 
-  it('does not let a shadow receipt impersonate the release gate', async () => {
-    const generatedRoot = await generatedFixture();
-    const diagnosis = await diagnoseSelfHost(REPO, {
-      generatedRoot,
-      mode: 'release-gate',
-      runtimeAvailable: () => false,
-      probeEventReplay: async () => ({ ok: true, detail: 'ok' }),
-    });
-    expect(diagnosis.state).toBe('stale');
-    expect(diagnosis.blocking).toBe(true);
-  });
+  it.each(['shadow', 'warn', 'enforce', 'release-gate'])(
+    'never weakens structural failures from legacy mode %s', async (mode) => {
+      const generatedRoot = await generatedFixture();
+      const receiptPath = join(generatedRoot, 'current', SELF_HOST_RECEIPT_PATH);
+      const receipt: unknown = JSON.parse(await readFile(receiptPath, 'utf8'));
+      await writeFile(receiptPath, JSON.stringify({ ...(receipt as object), mode }));
+      const diagnosis = await diagnoseSelfHost(REPO, {
+        generatedRoot,
+        computeSourceHash: async () => 'f'.repeat(64),
+      });
+      expect(diagnosis.state).toBe('stale');
+      expect(diagnosis.blocking).toBe(true);
+      expect(diagnosis).not.toHaveProperty('mode');
+    },
+  );
 
   it('fails closed on an unexpected file inside the owned artifact', async () => {
     const generatedRoot = await generatedFixture();

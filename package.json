@@ -26,8 +26,6 @@
     "version:check": "node scripts/check-version-lockstep.mjs",
     "check:publish": "node scripts/check-publish-safety.mjs",
     "check:size": "node scripts/check-package-size.mjs",
-    "bump": "node scripts/bump-version.mjs",
-    "release": "node scripts/check-publish-safety.mjs && pnpm --filter ./packages/cli publish",
     "hooks:build": "pnpm --filter @voidcorp/mission-engine build && pnpm --filter @voidcorp/hook-runner build",
     "conformance:pack": "node packages/cli/scripts/conformance-artifact.mjs",
     "conformance:consumer": "node packages/cli/scripts/conformance-consumer.mjs",

@@ -211,12 +211,23 @@ describe('native CI failure and applicability', () => {
   it.each(['failure', 'skipped', 'cancelled', ''])('refuses %s for an applicable cheap check despite continue-on-error', outcome => {
     const steps = Object.fromEntries(['references', 'version', 'structure', 'lint'].map(id => [id, { outcome: 'success' }]));
     steps.lint = { outcome };
-    const passed = evaluate(guard?.env?.CHECKS_PASSED, {}, { steps: { ...steps, impact: { outputs: { docs: 'false' } } } });
+    const passed = evaluate(guard?.env?.CHECKS_PASSED, {}, { steps: { ...steps, impact: { outputs: { docs: 'false', version: 'true' } } } });
     const result = spawnSync('bash', ['-e', '-c', guard?.run ?? 'exit 99'], { env: { CHECKS_PASSED: String(passed) } });
     expect(result.status).not.toBe(0);
   });
+  it.each(['false', 'true', '', undefined])('requires version evidence unless explicitly inapplicable (%j)', version => {
+    const versionStep = producerSteps.find(step => step.id === 'version') as { if?: string } | undefined;
+    for (const outcome of ['success', 'failure', 'skipped', 'cancelled', '']) {
+      const steps = {
+        ...Object.fromEntries(['references', 'structure', 'lint'].map(id => [id, { outcome: 'success' }])),
+        version: { outcome }, impact: { outputs: { docs: 'false', version } },
+      };
+      expect(evaluate(versionStep?.if, {}, { steps })).toBe(String(version !== 'false'));
+      expect(evaluate(guard?.env?.CHECKS_PASSED, {}, { steps })).toBe(String(version === 'false' || outcome === 'success'));
+    }
+  });
   it('separates docs non-applicability from missing required test evidence', () => {
-    const steps = { references: { outcome: 'success' }, impact: { outputs: { docs: 'true' } } };
+    const steps = { references: { outcome: 'success' }, impact: { outputs: { docs: 'true', version: 'false' } } };
     expect(evaluate(guard?.env?.CHECKS_PASSED, {}, { steps })).toBe('true');
     const buildIndex = producerSteps.findIndex(step => step.run?.includes('conformance:pack'));
     expect(producerSteps.indexOf(guard ?? {})).toBeLessThan(buildIndex);

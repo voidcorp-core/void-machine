@@ -234,9 +234,11 @@ async function docBlockCheck(root: string, runtime: Runtime): Promise<CheckResul
     return { name: file, ok: false, message: 'missing', fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
   }
   const text = await readFile(path, 'utf8');
-  return hasHarnessBlock(text)
+  const common = runtime === 'claude' && /^@AGENTS\.md\s*$/m.test(text)
+    ? await docBlockCheck(root, 'codex') : undefined;
+  return hasHarnessBlock(text) && common?.ok !== false
     ? { name: file, ok: true, message: `${PRODUCT_COMMAND} block present` }
-    : { name: file, ok: false, message: `${PRODUCT_COMMAND} block missing`, fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
+    : { name: file, ok: false, message: common?.ok === false ? 'AGENTS.md import target missing or unmanaged' : `${PRODUCT_COMMAND} block missing`, fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
 }
 
 async function claudeSpecialistsCheck(agentsRoot: string | undefined): Promise<CheckResult> {
@@ -474,7 +476,7 @@ const claudeAdapter: RuntimeAdapter = {
 const codexAdapter: RuntimeAdapter = {
   id: 'codex',
   label: 'Codex',
-  detect: (root) => existsSync(join(root, '.codex')) || existsSync(join(root, 'AGENTS.md')),
+  detect: (root) => detectRuntimes(root).has('codex'),
   prerequisites: () => [],
   async wire(ctx) {
     const staged = await wireCodexFloor(ctx.stageRoot, ctx.sourceRoot);

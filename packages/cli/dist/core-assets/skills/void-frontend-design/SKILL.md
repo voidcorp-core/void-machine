@@ -15,7 +15,7 @@ Brand identity (palette, typography stack, motion language) lives in the consume
 
 ## Mobile-first dual-quality
 
-Every UI is designed mobile-first AND must reach first-class quality on both viewports simultaneously. (Folpe rule, `.void/installed/PHILOSOPHY.md`.)
+Every UI is designed mobile-first AND must reach first-class quality on both viewports simultaneously. (Folpe rule, `.void/PHILOSOPHY.md`.)
 
 - **Layout starts at 360–390px** (iPhone 12 mini → 15 Pro range), progressively enhanced wider.
 - **Never the reverse.** No "desktop-first then squeeze for mobile."

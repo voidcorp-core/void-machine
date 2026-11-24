@@ -31,8 +31,8 @@ remaining read-only document/discovery gates; it neither generates nor stages.
 Builds use versioned inputs and explicit built dependencies. Source self-host
 compilation stays isolated. Source-repository init/update preservation reads only
 the active installed published doctrine, never the working source philosophy.
-The installed `.void/installed/PHILOSOPHY.md` and native documents do not migrate
-in this source-layout change.
+The installed `.void/PHILOSOPHY.md` migrates transactionally, with common native
+instructions in `AGENTS.md` and a thin `CLAUDE.md` import.
 
 ## Topology
 
@@ -64,40 +64,32 @@ void-machine/
     └── decisions-log/             # one Markdown file per ADR
 ```
 
-## The `.void/` layout — three levels, named for what deletion costs
+## The `.void/` layout and ownership
 
-Everything the harness owns or produces lives in `.void/`, so uninstalling or
-migrating it is one directory. What the PROJECT owns and what outlives the
-harness — decisions, specs, plans — stays in `docs/`.
+The top of `.void/` has mixed ownership. Location alone never grants deletion or
+tracking authority. `.void/PHILOSOPHY.md` is delivered and manifest-owned;
+`.void/PROJECT-DOCTRINE.md` belongs to the project under its existing untouched-template
+refresh policy. Hooks remain load-bearing, and machine history remains under `machine/`.
 
-Inside `.void/`, the question anyone actually asks is *can I delete this*, and it
-has three answers:
+| path | owner | tracking |
+| --- | --- | --- |
+| `PHILOSOPHY.md` | delivered harness doctrine | ignored only when attested by the install |
+| `PROJECT-DOCTRINE.md`, `config.json`, `program.md` | project declarations | tracked |
+| `hooks/` | delivered enforcement referenced by native settings | tracked |
+| `machine/` | local execution and recovery state | ignored |
 
-| level | delete it and | committed |
-|---|---|---|
-| the top of `.void/` | the project loses a decision | yes |
-| `installed/` | `void-machine install` restores it byte for byte | no |
-| `machine/` | local execution state, receipts and recovery evidence may be lost | no |
+The former `installed/PHILOSOPHY.md` is retired through the existing installation
+transaction. Only receipt-attested unchanged bytes and permissions authorize removal.
+Modified, unknown, or symbolic-link old copies survive; a differing unclaimed new
+destination or symbolic link refuses installation. Empty parents disappear with successful
+publication; nonempty `installed/` directories and other user content survive. A failure
+restores transaction-owned bytes and modes. Legacy observed-state migration remains a
+separate pretransaction operation, and never deletes the new philosophy destination.
 
-**Everything at the top of `.void/` is committed; the two subdirectories are
-not.** That sentence is the whole rule, and it is checkable at a glance rather
-than by looking anything up. It was false before: `PHILOSOPHY.md` and `hooks/`
-sat at the top while being ignored.
-
-`VOID_OWNERSHIP` in `packages/hook-runner/src/void-layout.ts` is the single
-source of truth the ignore block, the migration and `doctor` all read. A second
-copy would let `update` move a path the ignore rule does not cover, and the next
-commit would ship telemetry.
-
-Two properties are load-bearing and easy to break:
-
-- **A retired entry stays classified.** Removing it from the table does not
-  remove the file from anyone's disk; it makes it fall through to the `project`
-  default, at which point `doctor` starts telling projects to commit their own
-  telemetry. Retiring a READER is not retiring the data.
-- **Readers fall back through every previous layout.** A project migrates on
-  `update`, and until it does, a reader that only knew the current path would
-  report months of history as none.
+`VOID_OWNERSHIP` and materialized ownership in `packages/hook-runner/src/void-layout.ts`
+classify paths; manifests and receipts prove ownership. Legacy history remains readable
+through the existing fallbacks. No blanket `.void/` deletion or directory-wide ownership
+is implied.
 
 ### Naming what the harness owns in a shared directory
 
@@ -147,7 +139,7 @@ cleanup remain explicit project decisions.
 ### Two roots: the work tree and the installation
 
 A command reads and writes code in the **work tree**, the directory it ran in. It also reads what
-`init` installed: `.claude/agents`, `.claude/skills`, `.void/installed`, the hook bundle, the
+`init` installed: `.claude/agents`, `.claude/skills`, `.void/PHILOSOPHY.md`, the hook bundle, the
 manifest. That install is a property of the **repository**, exactly like the `.git/info/exclude`
 file that hides it from git, and it lives in the main checkout. In the main checkout the two roots
 are one directory. In a linked worktree they are not, because `git worktree add` restores tracked
@@ -301,10 +293,9 @@ The seam is the load-bearing rule: **core commands never branch on a runtime nam
 
 Rules:
 
-- Doctrine in `CLAUDE.md` and `AGENTS.md` is identical. Only terminology adapts ("Claude Code" / "Skill tool" vs "Codex" / "tools / shell").
-- `scripts/sync-agent-docs.sh` enforces parity on the harness repo itself: `--staged` (a commit touching one sister doc must touch the other) via `.githooks/pre-commit` (`git config core.hooksPath .githooks`), and section-heading parity in CI (`pnpm sync:docs`). This is a **harness-repo** rule; a consumer project only carries the doc(s) of the runtime(s) it wired.
-- No file is auto-generated from the other. Auto-generation risks losing intentional adaptations. Manual authoring + mechanical gate is the safer trade-off.
-- **Doc ownership is per-runtime.** Each adapter's `wire` writes only its own doctrine doc — a Claude-only project has just `CLAUDE.md`, a Codex-only project just `AGENTS.md`. `doctor` checks only the docs of *detected* runtimes, so a Codex-only project is never dinged for a missing `CLAUDE.md`. (`add` / `remove` still patch whichever docs exist, keeping active docs current.)
+- **One common instruction owner.** `AGENTS.md` carries shared doctrine references and explicit native invocation syntax. Claude receives a thin `CLAUDE.md` import using `@AGENTS.md`, including on Claude-only installs. Codex discovers `AGENTS.md` directly and follows its instruction to read doctrine; it does not expand `@` imports.
+- **Preserve user content.** The installer patches only managed blocks in both files. Adding Codex later keeps the common instructions idempotent. An AGENTS imported by Claude alone is not proof that Codex is wired.
+- **Behavior replaces mechanical parity.** Real fresh native contexts prove Claude import loading and Codex discovery without duplicate common instructions. Section-heading parity, sister-document staging, and the exclusive parity test/script are retired; runtime installation and preservation tests remain.
 - **`init` wires each selected runtime's layer via its adapter**, gated by `--runtime <claude|codex|both>` (default: auto-detected footprint, else both). Claude receives native project-local skills, agents, commands and hooks; Codex receives `.agents/skills`, native `.codex/agents` and `.codex/hooks.json`. The package is bundled with all CLI runtime dependencies, so a tarball installs offline. `--source marketplace` is opt-in and is the only path that checks `gh`/marketplace access.
 - **Publication is transactional.** `init` seeds only shared merge targets into an isolated stage, compiles and executes each selected adapter's doctor smoke there, then atomically publishes a finite mutation set. Every target is snapshotted before the first write; a failure restores bytes and modes and removes only transaction-created paths. `.void/machine/receipts/install-v1.json` hashes files the install created, already owned, or found already identical byte-for-byte to what it compiled — a managed asset matching our own output is ours, and letting it fall out of the receipt is what made a later version meet an asset it could not recognise. Unowned native conflicts fail unless `--force` (all of them named in one message, not the first alone), and even force never grants deletion ownership over a pre-existing file.
 - **Layout repair survives install failure.** `update` migrates legacy layout before invoking
@@ -1103,8 +1094,8 @@ never pruned by status. Doctor retains its concrete installation diagnostics.
 
 ## `.void/` ownership: declared, derived, observed
 
-The three levels above answer what deleting a path costs. Ownership answers the
-adjacent question, who wrote it and therefore what git does with it, and it
+The path-specific ownership above answers what deleting a path costs and what
+git does with it. It
 covers all four materialized directories rather than `.void/` alone.
 `VOID_OWNERSHIP` stays the single source, as above.
 
@@ -1115,14 +1106,14 @@ moves off the top of `.void/` into a subdirectory of its own; it classified
 manifest and `hydrate`, which supplied the guarantee the next one needed), then
 `derived-content-is-not-committed` (which took the alternative the first had
 deferred). That subdirectory was later renamed `machine/`, and the derived half
-was given its own `installed/`, so each level is named for whose the content is
-instead of for where it happens to sit. **This page carries the current state;
+was temporarily given its own `installed/`. Philosophy now lives beside project
+doctrine with its distinct manifest ownership explicit. **This page carries the current state;
 the records carry the reasoning at each step.**
 
 | class | what it means | examples | git |
 | --- | --- | --- | --- |
 | `project` | the project authors it; the harness never overwrites what the project wrote | `.void/config.json`, `.void/PROJECT-DOCTRINE.md`, `.void/program.md`, `.claude/settings.json` | tracked |
-| `derived` | `void-machine init` re-materializes it from the harness assets | `.claude/skills/`, `.claude/agents/`, `.agents/skills/`, `.codex/agents/`, `.void/installed/PHILOSOPHY.md` | ignored, per receipt |
+| `derived` | `void-machine init` re-materializes it from the harness assets | `.claude/skills/`, `.claude/agents/`, `.agents/skills/`, `.codex/agents/`, `.void/PHILOSOPHY.md` | ignored, per receipt |
 | `observed` | this machine's history; meaningless in another checkout | `machine/runs/`, `machine/cache/`, `machine/receipts/`, `machine/status.json`, `machine/retired/*.jsonl` | never |
 
 `.void/PROJECT-DOCTRINE.md` is the one `project` file `init` may rewrite, and only
@@ -1176,7 +1167,7 @@ when the file is absent from a fresh clone*:
   therefore committed. Ignoring the runner while keeping the reference gives a
   clone a settings file pointing at a missing file, and every tool call fails.
   That is also why it stays at the top of `.void/` rather than moving into
-  `installed/` with the rest of the derived half.
+  a blanket ignored directory. Ownership and tracking are decided per path.
 - `.codex/hooks.json` **is** the Codex safety floor. Absent, the floor is simply
   not there — a silently weaker clone, the worst of the three states.
 

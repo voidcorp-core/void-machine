@@ -24,11 +24,9 @@ import {
   isOwnedDerived,
   legacyVoidPath,
   migratedName,
-  ownershipOf,
   stripManagedBlock,
   pendingMigrations,
   previousMachinePath,
-  voidInstalledDir,
   voidMachineDir,
   voidMachinePath,
 } from '@voidcorp/hook-runner';
@@ -251,7 +249,6 @@ export async function migrateVoidLayout(root: string, dryRun = false): Promise<V
 
   if (pending.length > 0) {
     await mkdir(voidMachineDir(root), { recursive: true });
-    await mkdir(voidInstalledDir(root), { recursive: true });
   }
   const moved: string[] = [];
   const parked: string[] = [];
@@ -261,19 +258,6 @@ export async function migrateVoidLayout(root: string, dryRun = false): Promise<V
       // to `local/` and not since.
       const sources = [legacyVoidPath(root, entry), previousMachinePath(root, entry)]
         .filter((source) => existsSync(source));
-
-      if (ownershipOf(entry) === 'derived') {
-        // Restorable content is DROPPED, not moved. `installed/` is filled by
-        // the install that runs immediately after, and only by it — moving a
-        // file there by hand hands the install a managed path it cannot prove
-        // it wrote, which it then refuses to overwrite. Measured on a real
-        // project: the layout pass succeeded, the install rolled the whole
-        // update back, and the receipt turned out never to have owned the file
-        // at its old path in the first place.
-        for (const source of sources) await rm(source, { recursive: true, force: true });
-        if (sources.length > 0) moved.push(entry);
-        continue;
-      }
 
       let touched = false;
       for (const source of sources) {

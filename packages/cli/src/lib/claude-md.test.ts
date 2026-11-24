@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -8,78 +8,23 @@ import { harnessBlock, hasHarnessBlock, patchClaudeMd, patchAgentsMd, patchExist
 const input = { enabledPlugins: ['harness'], enabledPacks: [] as never[] };
 
 describe('harnessBlock', () => {
-  it.each(['claude', 'codex'] as const)(
-    'includes bounded local follow-through in merge consent for %s',
-    (runtime) => {
-      const block = harnessBlock(input, runtime);
-      expect(block).toContain('An authorized merge includes routine local synchronization');
-      expect(block).toContain('without asking for confirmation again');
-      expect(block).toContain('clean local target branch');
-      expect(block).toContain('verified merged commit');
-      expect(block).toContain('git merge --ff-only');
-      expect(block).toContain('local changes, divergence, or an unexpected remote tip');
-      expect(block).toContain('Runtime sandbox and approval controls still apply');
-    },
-  );
-
-  it('routes native short agents and durable workers without interception', () => {
-    for (const runtime of ['claude', 'codex'] as const) {
-      const block = harnessBlock(input, runtime);
-      expect(block).toContain('void-orchestrate');
-      expect(block).toContain('native');
-      expect(block).toContain('independent research and substantial implementation');
-      expect(block).toContain('Publish observed worker lifecycle events for external presentation tools.');
-      expect(block).not.toContain('Herdr');
-      expect(block).toContain('when native capabilities permit');
-      expect(block).toContain('already delegated writer');
-      expect(block).toContain('independent review');
-      expect(block).not.toContain('refuses the native call');
-      expect(block).not.toContain('agents dispatch');
-    }
+  it('keeps Claude as a native import of the common instruction owner', () => {
+    expect(harnessBlock(input, 'claude')).toBe('<!-- void-machine:begin -->\n\n@AGENTS.md\n\n<!-- void-machine:end -->');
   });
 
-  it('uses @imports for the Claude runtime', () => {
-    const block = harnessBlock(input, 'claude');
-    expect(block).toContain('@.void/installed/PHILOSOPHY.md');
-    expect(block).toContain('Claude Code doctrine active');
-  });
-
-  it('uses read-at-start file pointers (no @import) for the Codex runtime', () => {
-    const block = harnessBlock(input, 'codex');
-    expect(block).not.toContain('@.void/installed/PHILOSOPHY.md');
-    expect(block).toContain('`.void/installed/PHILOSOPHY.md`');
-    expect(block).toContain('Codex doctrine active');
-    expect(block).toContain('read at the start');
-  });
-
-  /**
-   * A skill name is only prefixed under a marketplace plugin install. Getting
-   * this from the runtime rather than from the channel is what put `harness:tdd`
-   * into every locally installed skill, where it resolves to nothing.
-   */
-  it.each(['claude', 'codex'] as const)('names skills bare on a local install (%s)', (runtime) => {
-    const block = harnessBlock({ ...input, channel: 'local' }, runtime);
-    expect(block).toContain('`void-implement`');
-    expect(block).not.toMatch(/(?<!void-)\bharness:[a-z]/);
-  });
-
-  it('keeps the plugin prefix on a marketplace install of Claude Code', () => {
-    const block = harnessBlock({ ...input, channel: 'marketplace' }, 'claude');
-    expect(block).toContain('`harness:void-implement`');
-  });
-
-  it('never prefixes for Codex, which has no marketplace at all', () => {
-    const block = harnessBlock({ ...input, channel: 'marketplace' }, 'codex');
-    expect(block).toContain('`void-implement`');
-    expect(block).not.toMatch(/(?<!void-)\bharness:[a-z]/);
-  });
-
-  it.each(['claude', 'codex'] as const)('states how a named skill is invoked (%s)', (runtime) => {
-    // Skills name each other by their own name; the invocation syntax differs
-    // per runtime, so the doc that knows the runtime is the one that says it.
-    const block = harnessBlock(input, runtime);
-    expect(block).toMatch(/invoke|invocation/i);
-    expect(block).toContain('by its name');
+  it('keeps doctrine, authorization and native invocation instructions in the common owner', () => {
+    const common = harnessBlock(input, 'codex');
+    expect(common).toContain('@.void/PHILOSOPHY.md');
+    expect(common).toContain('@.void/PROJECT-DOCTRINE.md');
+    expect(common).toContain('read at the start');
+    expect(common).toContain('$void-implement');
+    expect(common).toContain('/void-implement');
+    expect(common).toContain('/harness:void-implement');
+    expect(common).toContain('An authorized merge includes routine local synchronization');
+    expect(common).toContain('git merge --ff-only');
+    expect(common).toContain('Runtime sandbox and approval controls still apply');
+    expect(common).toContain('Publish observed worker lifecycle events');
+    expect(common).toContain('already delegated writer');
   });
 });
 
@@ -92,9 +37,29 @@ describe('patchClaudeMd / patchAgentsMd', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('refuses a linked common instruction file before a Claude patch can alter its target', async () => {
+    writeFileSync(join(dir, 'user.md'), 'KEEP');
+    symlinkSync(join(dir, 'user.md'), join(dir, 'AGENTS.md'));
+    await expect(patchClaudeMd(dir, input)).rejects.toThrow('symbolic link');
+    expect(readFileSync(join(dir, 'user.md'), 'utf8')).toBe('KEEP');
+    expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('creates common instructions for Claude alone and keeps one doctrine after adding Codex', async () => {
+    await patchClaudeMd(dir, input);
+    const common = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+    const claude = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
+    expect(claude).toContain('@AGENTS.md');
+    expect(claude).not.toContain('### Doctrine');
+    expect(common).toContain('.void/PHILOSOPHY.md');
+    await patchAgentsMd(dir, input);
+    expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toBe(common);
+    expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toBe(claude);
+  });
+
   it('creates CLAUDE.md and AGENTS.md when absent', async () => {
     expect(await patchClaudeMd(dir, input)).toBe('created');
-    expect(await patchAgentsMd(dir, input)).toBe('created');
+    expect(await patchAgentsMd(dir, input)).toBe('unchanged');
     expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toContain('# CLAUDE.md');
     expect(readFileSync(join(dir, 'AGENTS.md'), 'utf8')).toContain('# AGENTS.md');
   });
@@ -180,18 +145,17 @@ describe('the provenance line', () => {
   const inputs = { enabledPlugins: ['harness'], enabledPacks: [] } as const;
 
   it('names the marketplace only when the install came from it', () => {
-    const block = harnessBlock({ ...inputs, channel: 'marketplace' }, 'claude');
+    const block = harnessBlock({ ...inputs, channel: 'marketplace' }, 'codex');
     expect(block).toContain('Marketplace:');
   });
 
   it('says nothing about a marketplace on the default local install', () => {
-    const block = harnessBlock({ ...inputs, channel: 'local' }, 'claude');
+    const block = harnessBlock({ ...inputs, channel: 'local' }, 'codex');
     expect(block).not.toContain('Marketplace:');
-    expect(block).not.toContain('marketplace');
   });
 
   it('still announces the doctrine on the local install, which is the load-bearing half', () => {
-    const block = harnessBlock({ ...inputs, channel: 'local' }, 'claude');
+    const block = harnessBlock({ ...inputs, channel: 'local' }, 'codex');
     expect(block).toContain('doctrine active in this project');
   });
 

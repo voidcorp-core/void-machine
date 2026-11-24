@@ -72,16 +72,26 @@ function claimedAgentPaths(): readonly string[] {
 
 /** A second install that cannot commit: a directory occupies an owned file. */
 async function failingSecondInstall(): Promise<void> {
-  const target = join(dir, '.void', 'installed', 'PHILOSOPHY.md');
+  const target = join(dir, '.void', 'PHILOSOPHY.md');
   rmSync(target);
   mkdirSync(target);
   await expect(init(['--runtime', 'claude', '--no-interactive'])).rejects.toThrow(/process\.exit\(1\)/);
 }
 
 describe('the ignore block never outlives a transaction that failed', () => {
+  it('retires only an empty legacy installed directory after successful publication', async () => {
+    mkdirSync(join(dir, '.void/installed'), { recursive: true });
+    await init(['--runtime', 'claude', '--no-interactive']);
+    expect(existsSync(join(dir, '.void/installed'))).toBe(false);
+    mkdirSync(join(dir, '.void/installed'), { recursive: true });
+    writeFileSync(join(dir, '.void/installed/user.md'), 'KEEP');
+    await init(['--runtime', 'claude', '--no-interactive']);
+    expect(readFileSync(join(dir, '.void/installed/user.md'), 'utf8')).toBe('KEEP');
+  });
+
   it('restores edited delivered files and names every restored path', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
-    const paths = ['.claude/skills/void-tdd/SKILL.md', '.void/installed/PHILOSOPHY.md'];
+    const paths = ['.claude/skills/void-tdd/SKILL.md', '.void/PHILOSOPHY.md'];
     const originals = paths.map((path) => readFileSync(join(dir, path), 'utf8'));
     for (const path of paths) writeFileSync(join(dir, path), '# locally changed\n');
     const printed: string[] = [];
@@ -128,7 +138,7 @@ describe('the ignore block never outlives a transaction that failed', () => {
     const migrated = join(dir, '.void/machine/status.json');
     const bytes = Buffer.from('{"score":1}\n');
     writeFileSync(legacy, bytes);
-    const philosophy = join(dir, '.void/installed/PHILOSOPHY.md');
+    const philosophy = join(dir, '.void/PHILOSOPHY.md');
     rmSync(philosophy);
     mkdirSync(philosophy);
     const printed: string[] = [];

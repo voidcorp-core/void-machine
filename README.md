@@ -59,6 +59,11 @@ npx voidmachine init --pack nextjs --pack monorepo
 
 Available: `nextjs`, `monorepo`, `react`, `server`, `pwa`, `mobile`.
 
+The delivered doctrine is `.void/PHILOSOPHY.md`, owned by the installation manifest.
+The adjacent `.void/PROJECT-DOCTRINE.md` holds your rules and keeps its project ownership.
+Every runtime receives common `AGENTS.md` instructions; Claude loads them through
+`CLAUDE.md`'s native `@AGENTS.md` import. Existing text outside managed blocks survives updates.
+
 ## Most of it never needs a command
 
 This is the part that surprises people, so it goes first: you do not drive the

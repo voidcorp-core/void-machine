@@ -50,6 +50,7 @@ const MANAGED_PREFIXES = [
 
 const MANAGED_FILES = new Set([
   INSTALL_MANIFEST_PATH,
+  '.void/PHILOSOPHY.md',
   '.void/installed/PHILOSOPHY.md',
   '.codex/hooks.json',
 ]);
@@ -130,6 +131,9 @@ export async function withholdProjectOwned(
       // Identical bytes are not a collision: it is the same content, so installing
       // it changes nothing and claiming it is correct.
       if (current.equals(Buffer.from(file.content))) continue;
+    }
+    if (file.path === '.void/PHILOSOPHY.md') {
+      throw new Error(`unowned asset conflict at ${file.path}; preserve or relocate the project file before installing`);
     }
     withheld.push(file.path);
     await rm(join(stageRoot, ...file.path.split('/')), { force: true });
@@ -273,11 +277,14 @@ export async function prepareInstallCommit(input: PrepareInstallInput): Promise<
       && isManaged(file.path)
       && !stillOwned
       && !claimedManaged
-      && !input.force
+      && (!input.force || file.path === '.void/PHILOSOPHY.md')
     ) {
       // Collected rather than thrown on. Rendered one at a time, the operator
       // fixes a file, re-runs, and meets the next one: a project carrying
       // dozens of them pays the round trip once per file.
+      if (file.path === '.void/PHILOSOPHY.md') {
+        throw new Error(`unowned asset conflict at ${file.path}; preserve or relocate the project file before installing`);
+      }
       conflicts.push(file.path);
       continue;
     }

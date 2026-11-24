@@ -119,13 +119,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # verify-gates:begin
-      - name: "[sister-docs] Sister-doc parity"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate sister-docs
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/sister-docs.json"
-
       - name: "[version-lockstep] Version lockstep"
         continue-on-error: true
         run: >-

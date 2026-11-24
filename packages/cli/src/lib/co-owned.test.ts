@@ -20,6 +20,7 @@ describe('isCoOwned', () => {
   // version it claims, which is the drift the manifest exists to catch.
   it('says nothing about a managed asset, which the harness owns alone', () => {
     expect(isCoOwned('.claude/skills/void-tdd/SKILL.md')).toBe(false);
+    expect(isCoOwned('.void/PHILOSOPHY.md')).toBe(false);
     expect(isCoOwned('.void/installed/PHILOSOPHY.md')).toBe(false);
     expect(isCoOwned('.void/hooks/_void-hook.mjs')).toBe(false);
   });

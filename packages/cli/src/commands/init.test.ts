@@ -168,7 +168,7 @@ describe('installDoctrineFiles', () => {
   it('writes the packaged philosophy into a project that has none', async () => {
     const stage = project();
     await installDoctrineFiles(stage, source());
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
   });
 
   it('preserves the published floor while source doctrine changes', async () => {
@@ -181,7 +181,7 @@ describe('installDoctrineFiles', () => {
     writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'PUBLISHED PHILOSOPHY\n');
     writeFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'CANONICAL SOURCE PHILOSOPHY\n');
     await installDoctrineFiles(stage, source(), { preserveFrom: installed });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('PUBLISHED PHILOSOPHY\n');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toBe('PUBLISHED PHILOSOPHY\n');
     expect(readFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'utf8')).toBe('CANONICAL SOURCE PHILOSOPHY\n');
   });
 
@@ -191,14 +191,14 @@ describe('installDoctrineFiles', () => {
     mkdirSync(join(installed, '.void/installed'), { recursive: true });
     writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'LEGACY PHILOSOPHY\n');
     await installDoctrineFiles(stage, source(), { preserveFrom: installed });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('LEGACY PHILOSOPHY\n');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toBe('LEGACY PHILOSOPHY\n');
   });
 
   it('refuses to activate working doctrine when the published source-repository floor is missing', async () => {
     const stage = project();
     await expect(installDoctrineFiles(stage, source(), { preserveFrom: project() }))
       .rejects.toThrow('published doctrine');
-    expect(existsSync(join(stage, '.void/installed/PHILOSOPHY.md'))).toBe(false);
+    expect(existsSync(join(stage, '.void/PHILOSOPHY.md'))).toBe(false);
   });
 
   /**
@@ -256,7 +256,7 @@ describe('installDoctrineFiles', () => {
     await installDoctrineFiles(stage, core, { installRoot: installed });
 
     expect(doctrineIn(stage)).toBe(custom);
-    const philosophy = readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8');
+    const philosophy = readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8');
     expect(philosophy).toBe(readFileSync(join(core, 'PHILOSOPHY.md'), 'utf8'));
     expect(philosophy).toContain(`\${VOID_WORKTREES:-\${XDG_DATA_HOME:-$HOME/.local/share}/git-worktrees}`);
     expect(philosophy).toContain('git worktree move');

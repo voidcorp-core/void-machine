@@ -1,15 +1,7 @@
-// Idempotent patch of the project's agent-doc(s) with a delimited harness block.
-// The block points the agent at .void/installed/PHILOSOPHY.md and .void/PROJECT-DOCTRINE.md
-// plus a short reminder of how rules are captured.
-//
-// Two runtimes share one doctrine:
-//   - Claude Code reads CLAUDE.md and supports `@path` imports.
-//   - Codex reads AGENTS.md; it has no `@import`, so the block lists the files
-//     with a "read at session start" instruction instead.
-// Keeping both files in sync is the "sister doc" rule (scripts/sync-agent-docs.sh).
+// Shared AGENTS instructions; CLAUDE imports that owner through its native loader.
 
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { lstat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hasManagedBlock, PRODUCT_IDENTITY, replaceManagedBlock } from '@voidcorp/hook-runner';
 import { MARKETPLACE_NAME, MARKETPLACE_REPO, type PackDescriptor } from './packs.js';
@@ -48,23 +40,12 @@ export interface ClaudeMdBlockInputs {
 
 export function harnessBlock(input: ClaudeMdBlockInputs, runtime: Runtime = 'claude'): string {
   const packLines = input.enabledPacks.map((p) => `- \`${p.name}\` — ${p.description}`);
-  const isClaude = runtime === 'claude';
-  const runtimeName = isClaude ? 'Claude Code' : 'Codex';
-  const doctrineLead = isClaude
-    ? `### Doctrine — loaded into every session`
-    : `### Doctrine — read at the start of every session`;
-  const imports = isClaude
-    ? [`@.void/installed/PHILOSOPHY.md`, `@.void/PROJECT-DOCTRINE.md`]
-    : [`- \`.void/installed/PHILOSOPHY.md\``, `- \`.void/PROJECT-DOCTRINE.md\``];
-  const captureLine = isClaude
-    ? `To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The \`void-learn\` skill auto-invokes, classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.`
-    : `To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The \`void-learn\` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.`;
-  // The namespace belongs to the channel, never to the runtime.
-  const prefixed = isClaude && input.channel === 'marketplace';
-  const ticketRunner = prefixed ? '`harness:void-implement`' : '`void-implement`';
-  const invocationLine = isClaude
-    ? `Every skill is invoked by its name: \`${prefixed ? '/harness:void-implement' : '/void-implement'}\`, \`${prefixed ? '/harness:void-tdd' : '/void-tdd'}\`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.`
-    : `Every skill is invoked by its name: \`$void-implement\`, \`$void-tdd\`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.`;
+  if (runtime === 'claude') return [MARKERS.current.begin, '', '@AGENTS.md', '', MARKERS.current.end].join('\n');
+  const doctrineLead = '### Doctrine — read at the start of every session';
+  const imports = ['@.void/PHILOSOPHY.md', '@.void/PROJECT-DOCTRINE.md'];
+  const captureLine = 'To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.';
+  const ticketRunner = '`void-implement`';
+  const invocationLine = 'Every skill is invoked by its name. Codex uses `$void-implement`, `$void-tdd`. Claude Code uses `/void-implement`, `/void-tdd` for local installs; marketplace plugins use `/harness:void-implement`, `/harness:void-tdd`. A skill that composes another names it the same way; use the syntax of the active runtime and installation channel.';
   const delegationLine = 'Use `void-orchestrate` to delegate independent research and substantial implementation when native capabilities permit. Keep intent and decisions with the coordinator; an already delegated writer executes its unit once. Publish observed worker lifecycle events for external presentation tools. Preserve existing permissions, independent review and real invocation evidence.';
   return [
     MARKERS.current.begin,
@@ -76,8 +57,8 @@ export function harnessBlock(input: ClaudeMdBlockInputs, runtime: Runtime = 'cla
     // model a channel that does not exist in this project -- the same class of
     // untruth that had skills invoked under a namespace nothing could resolve.
     input.channel === 'marketplace'
-      ? `Marketplace: \`${MARKETPLACE_NAME}\` (https://github.com/${MARKETPLACE_REPO}). ${runtimeName} doctrine active in this project:`
-      : `${runtimeName} doctrine active in this project:`,
+      ? `Marketplace: \`${MARKETPLACE_NAME}\` (https://github.com/${MARKETPLACE_REPO}). Shared doctrine active in this project:`
+      : `Shared doctrine active in this project:`,
     '',
     `- \`void\` — universal craftsman skills (TDD, TypeScript strict, hexagonal, DDD, ...)`,
     ...packLines,
@@ -130,7 +111,12 @@ async function patchDoc(
   title: string,
   block: string,
 ): Promise<PatchResult> {
-  if (!existsSync(target)) {
+  const info = await lstat(target).catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+    throw error;
+  });
+  if (info?.isSymbolicLink()) throw new Error(`instruction document is a symbolic link: ${target}`);
+  if (info === undefined) {
     const fresh = [
       `# ${title}`,
       '',
@@ -149,19 +135,21 @@ async function patchDoc(
   return hasHarnessBlock(original) ? 'updated' : 'patched';
 }
 
-/** Patch the doctrine doc a runtime owns (CLAUDE.md with @imports, AGENTS.md with pointers). */
+/** Patch common instructions and, for Claude, the native import of that owner. */
 export async function patchRuntimeDoc(
   projectRoot: string,
   runtime: Runtime,
   input: ClaudeMdBlockInputs,
 ): Promise<PatchResult> {
   const file = docFileFor(runtime);
-  return patchDoc(join(projectRoot, file), file, harnessBlock(input, runtime));
+  const common = await patchDoc(join(projectRoot, 'AGENTS.md'), 'AGENTS.md', harnessBlock(input, 'codex'));
+  if (runtime === 'codex') return common;
+  return patchDoc(join(projectRoot, file), file, harnessBlock(input, 'claude'));
 }
 
 /**
- * Refresh only the doctrine docs that already exist, never creating the absent
- * runtime's doc. Used by `add` / `remove`, which update the current plugin list
+ * Refresh existing runtime documents and their common AGENTS owner. Never create
+ * CLAUDE.md in a Codex-only project. Used by `add` / `remove`, which update the current plugin list
  * without changing which runtimes a project targets (that is `runtime add`'s
  * job). Returns the runtimes whose doc was patched.
  */

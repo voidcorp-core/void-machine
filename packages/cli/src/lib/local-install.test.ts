@@ -370,3 +370,95 @@ describe('a first install onto a project that already has skills', () => {
     expect(prepared.receipt.files.map((file) => file.path)).toContain(path);
   });
 });
+
+
+describe('doctrine destination ownership', () => {
+  it('rejects a symlink at the new destination without touching its target', async () => {
+    const root = scratch('void-doctrine-link-');
+    const stage = scratch('void-stage-');
+    for (const base of [root, stage]) mkdirSync(join(base, '.void'), { recursive: true });
+    writeFileSync(join(root, 'user.md'), 'KEEP');
+    symlinkSync(join(root, 'user.md'), join(root, '.void/PHILOSOPHY.md'));
+    writeFileSync(join(stage, '.void/PHILOSOPHY.md'), 'SHIPPED');
+    await expect(withholdProjectOwned(root, stage)).rejects.toThrow('non-regular');
+    await expect(prepareInstallCommit({ projectRoot: root, stageRoot: stage,
+      version: '7.0.2', source: 'local', runtimes: ['claude'], force: true })).rejects.toThrow('symbolic link');
+    expect(readFileSync(join(root, 'user.md'), 'utf8')).toBe('KEEP');
+  });
+
+  it.each([false, true])('refuses a differing unclaimed philosophy even with force=%s', async (force) => {
+    const root = scratch('void-doctrine-');
+    const stage = scratch('void-stage-');
+    for (const base of [root, stage]) mkdirSync(join(base, '.void'), { recursive: true });
+    writeFileSync(join(root, '.void/PHILOSOPHY.md'), 'PROJECT');
+    writeFileSync(join(stage, '.void/PHILOSOPHY.md'), 'SHIPPED');
+    await expect(withholdProjectOwned(root, stage)).rejects.toThrow('.void/PHILOSOPHY.md');
+    await expect(prepareInstallCommit({ projectRoot: root, stageRoot: stage,
+      version: '7.0.2', source: 'local', runtimes: ['claude'], force })).rejects.toThrow('.void/PHILOSOPHY.md');
+    expect(readFileSync(join(root, '.void/PHILOSOPHY.md'), 'utf8')).toBe('PROJECT');
+  });
+});
+
+
+describe('transactional philosophy relocation', () => {
+  const oldPath = '.void/installed/PHILOSOPHY.md';
+  const newPath = '.void/PHILOSOPHY.md';
+  it.each(['intact', 'modified', 'unknown', 'nonempty', 'mode-change', 'symlink'] as const)(
+    'preserves ownership and surrounding data for %s old doctrine', async (state) => {
+      const root = scratch('void-doctrine-migration-');
+      const stage = scratch('void-stage-');
+      mkdirSync(join(root, '.void/installed'), { recursive: true });
+      mkdirSync(join(stage, '.void'), { recursive: true });
+      writeFileSync(join(root, oldPath), 'OLD');
+      writeFileSync(join(stage, newPath), 'NEW');
+      if (state !== 'unknown') {
+        const receipt = buildInstallReceipt({ version: '7.0.1', source: 'local',
+          runtimes: ['claude'], files: [{ path: oldPath, content: Buffer.from('OLD'), mode: 0o644 }] });
+        mkdirSync(join(root, '.void/machine/receipts'), { recursive: true });
+        writeFileSync(join(root, INSTALL_RECEIPT_PATH), encodeReceipt(receipt));
+      }
+      if (state === 'modified') writeFileSync(join(root, oldPath), 'USER');
+      if (state === 'mode-change') chmodSync(join(root, oldPath), 0o600);
+      if (state === 'nonempty') writeFileSync(join(root, '.void/installed/user.md'), 'KEEP');
+      if (state === 'symlink') {
+        const { unlinkSync } = await import('node:fs');
+        unlinkSync(join(root, oldPath));
+        writeFileSync(join(root, 'outside.md'), 'KEEP');
+        symlinkSync(join(root, 'outside.md'), join(root, oldPath));
+      }
+      const input = { projectRoot: root, stageRoot: stage, version: '7.0.2',
+        source: 'local' as const, runtimes: ['claude'] as const, force: false };
+      const prepared = await prepareInstallCommit(input);
+      expect(existsSync(join(root, newPath))).toBe(false);
+      await commitFileTransaction(root, prepared.mutations);
+      expect(readFileSync(join(root, newPath), 'utf8')).toBe('NEW');
+      expect(existsSync(join(root, oldPath))).toBe(!['intact', 'nonempty'].includes(state));
+      expect(existsSync(join(root, '.void/installed'))).toBe(state !== 'intact');
+      if (state === 'nonempty') expect(readFileSync(join(root, '.void/installed/user.md'), 'utf8')).toBe('KEEP');
+      const second = await prepareInstallCommit(input);
+      await commitFileTransaction(root, second.mutations);
+      expect(second.mutations.filter((mutation) => mutation.path === newPath)).toEqual([]);
+    },
+  );
+
+  it('restores old doctrine and permissions when publication fails after preparation', async () => {
+    const root = scratch('void-doctrine-rollback-');
+    const stage = scratch('void-stage-');
+    mkdirSync(join(root, '.void/installed'), { recursive: true });
+    mkdirSync(join(root, '.void/machine/receipts'), { recursive: true });
+    mkdirSync(join(stage, '.void'), { recursive: true });
+    writeFileSync(join(root, oldPath), 'OLD', { mode: 0o600 });
+    const receipt = encodeReceipt(buildInstallReceipt({ version: '7.0.1', source: 'local',
+      runtimes: ['claude'], files: [{ path: oldPath, content: Buffer.from('OLD'), mode: 0o600 }] }));
+    writeFileSync(join(root, INSTALL_RECEIPT_PATH), receipt);
+    writeFileSync(join(stage, newPath), 'NEW');
+    const prepared = await prepareInstallCommit({ projectRoot: root, stageRoot: stage,
+      version: '7.0.2', source: 'local', runtimes: ['claude'], force: false });
+    await expect(commitFileTransaction(root, prepared.mutations, { failAfterMutation: 1 })).rejects.toThrow('injected');
+    expect(readFileSync(join(root, oldPath), 'utf8')).toBe('OLD');
+    const { statSync } = await import('node:fs');
+    expect(statSync(join(root, oldPath)).mode & 0o777).toBe(0o600);
+    expect(existsSync(join(root, newPath))).toBe(false);
+    expect(readFileSync(join(root, INSTALL_RECEIPT_PATH), 'utf8')).toBe(receipt);
+  });
+});

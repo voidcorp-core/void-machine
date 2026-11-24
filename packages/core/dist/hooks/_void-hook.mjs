@@ -8676,8 +8676,7 @@ var VOID_MACHINE_DIR = "machine";
 var VOID_PREVIOUS_MACHINE_DIR = "local";
 var VOID_OWNERSHIP = Object.freeze({
   // Declared: authored or hand-edited, never regenerable from a pin. These are
-  // the ONLY things at the top of `.void/`, which is what makes "everything at
-  // the top is committed" a rule you can see rather than one you must look up.
+  // Their ownership differs from the delivered philosophy beside them.
   "config.json": "project",
   "PROJECT-DOCTRINE.md": "project",
   "program.md": "project",
@@ -8694,8 +8693,7 @@ var VOID_OWNERSHIP = Object.freeze({
   // pin. Not committed — 1.2 MB of vendored prose rewritten on every bump — but
   // their absence degrades the agent rather than breaking the project.
   "PHILOSOPHY.md": "derived",
-  // Derived AND committed, which is why it stays at the top rather than moving
-  // into `installed/`. `.claude/settings.json` names this path and is itself
+  // Derived AND committed: `.claude/settings.json` names this path and is itself
   // committed, so ignoring the runner would give a fresh clone a settings file
   // pointing at a missing file and every tool call would fail on it. See
   // `DERIVED_LOAD_BEARING`: its absence is an error, not a degradation.
@@ -8750,7 +8748,9 @@ var MATERIALIZED_OWNERSHIP = Object.freeze({
   ".agents/skills/": "derived",
   ".codex/agents/": "derived",
   ".void/hooks/": "derived",
+  ".void/PHILOSOPHY.md": "derived",
   ".void/installed/PHILOSOPHY.md": "derived",
+  // Legacy ownership remains readable.
   ".codex/hooks.json": "derived"
 });
 var DERIVED_LOAD_BEARING = Object.freeze([
@@ -8775,9 +8775,6 @@ var LISTED_UNIT_ROOTS = Object.freeze([
 ]);
 var MACHINE_ENTRIES = Object.freeze(
   Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "observed").sort()
-);
-var INSTALLED_ENTRIES = Object.freeze(
-  Object.keys(VOID_OWNERSHIP).filter((entry) => VOID_OWNERSHIP[entry] === "derived").filter((entry) => !DERIVED_LOAD_BEARING.includes(`${VOID_DIR}/${entry}/`)).sort()
 );
 var IGNORE_MARKERS = PRODUCT_IDENTITY.markers.gitignore;
 function voidDir(root) {

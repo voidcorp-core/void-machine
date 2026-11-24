@@ -187,7 +187,7 @@ Colorblind users get parity. The aria-hidden on the icon prevents it from being 
 
 ## Mobile-first dual-quality
 
-Every UI is designed mobile-first AND must reach first-class quality on both viewports simultaneously. (Folpe rule, documented in `.void/installed/PHILOSOPHY.md`.)
+Every UI is designed mobile-first AND must reach first-class quality on both viewports simultaneously. (Folpe rule, documented in `.void/PHILOSOPHY.md`.)
 
 ### Concrete invariants
 

@@ -3,7 +3,7 @@
 //
 // What this command does (idempotent):
 //   1. Create .void/config.json (paths, commands, modes)
-//   2. Copy PHILOSOPHY.md into .void/installed/ (managed, restorable)
+//   2. Copy PHILOSOPHY.md into .void/ (managed, restorable)
 //   3. Seed .void/PROJECT-DOCTRINE.md from the template, or refresh it while
 //      the project has still never written into it
 //   4. Merge `.claude/settings.json` with `extraKnownMarketplaces.void-machine`
@@ -16,7 +16,7 @@
 // /harness:void-tdd, /harness-nextjs:..., etc.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_PROJECT_PATHS, PRODUCT_COMMAND, stripManagedBlock } from '@voidcorp/hook-runner';
@@ -400,6 +400,15 @@ export async function init(args: readonly string[]): Promise<void> {
       force: opts.force,
     });
     await commitFileTransaction(projectRoot, prepared.mutations);
+    // Retire only an empty legacy directory, after publication succeeded.
+    try {
+      await rmdir(join(projectRoot, '.void', 'installed'));
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error
+        && (error.code === 'ENOENT' || error.code === 'ENOTEMPTY'))) {
+        line(`${c.yellow(glyph.dot)}  legacy installed directory preserved: ${errorMessage(error)}`);
+      }
+    }
     for (const path of prepared.restored) {
       line(`${c.yellow('!')}  restored ${path} from the delivered harness`);
     }
@@ -661,7 +670,7 @@ async function ensureIgnoreRules(
     ? c.dim('not a git repository, nothing to hide from it')
     : outcome === 'unchanged'
       ? c.dim('rules already current')
-      : 'rules written (.void/machine/ and .void/installed/ ignored, the rest of .void/ tracked)';
+      : 'rules written (machine history and owned doctrine ignored; project declarations tracked)';
   const mark = outcome === 'written' ? c.green(glyph.check) : c.dim(glyph.dot);
   line(`${mark}  ${c.dim('git exclude'.padEnd(18))}${label}`);
 
@@ -762,16 +771,15 @@ export async function installDoctrineFiles(
   const voidDir = join(stageRoot, '.void');
   await mkdir(voidDir, { recursive: true });
   const philosophySrc = join(sourceRoot, 'PHILOSOPHY.md');
-  // Under `installed/`: it is regenerated from a pin and not committed, and the
-  // top of `.void/` is what git keeps. A file that is ignored has no business
-  // sitting where "everything here is committed" is supposed to be readable at
-  // a glance.
-  const philosophyDst = join(voidDir, 'installed', 'PHILOSOPHY.md');
-  await mkdir(join(voidDir, 'installed'), { recursive: true });
-  // Working sources must never activate unpublished doctrine in the source repository.
-  const previous = preserveFrom === undefined
-    ? undefined
-    : join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md');
+  const philosophyDst = join(voidDir, 'PHILOSOPHY.md');
+  // Preserve the published floor, including its previous location. Never read working sources.
+  const previous = preserveFrom === undefined ? undefined : [
+    join(preserveFrom, '.void', 'PHILOSOPHY.md'),
+    join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md'),
+  ].find((path) => existsSync(path));
+  if (preserveFrom !== undefined && previous === undefined) {
+    throw new Error('Cannot preserve published doctrine: active installed philosophy is missing or unreadable.');
+  }
   if (previous !== undefined) {
     if (!existsSync(previous)) {
       throw new Error('Cannot preserve published doctrine: active installed philosophy is missing or unreadable.');

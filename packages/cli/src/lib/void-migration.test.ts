@@ -131,7 +131,7 @@ describe('migrateVoidLayout', () => {
    * would file the hook runner beside telemetry and make "can I delete this"
    * unanswerable again.
    */
-  it('routes derived state to installed/ and observed state to machine/', async () => {
+  it('preserves doctrine and hooks while moving observed state to machine/', async () => {
     const root = project({
       '.void/PHILOSOPHY.md': 'doctrine\n',
       '.void/hooks/_void-hook.mjs': 'runner\n',
@@ -142,11 +142,8 @@ describe('migrateVoidLayout', () => {
 
     expect(readFileSync(join(root, '.void/machine/runs/a/events.jsonl'), 'utf8')).toBe('e\n');
 
-    // Restorable content is DROPPED from the old location, not moved: the
-    // install that runs immediately after fills `installed/`, and it is the only
-    // thing that may write there. Moving a file in by hand hands the install a
-    // managed path it cannot prove it wrote, which it then refuses to overwrite.
-    expect(existsSync(join(root, '.void/PHILOSOPHY.md'))).toBe(false);
+    // Doctrine ownership is reconciled by the install transaction, never deleted here.
+    expect(readFileSync(join(root, '.void/PHILOSOPHY.md'), 'utf8')).toBe('doctrine\n');
     expect(existsSync(join(root, '.void/installed/PHILOSOPHY.md'))).toBe(false);
 
     // `hooks/` is derived AND committed, so it stays at the top: the top is what
@@ -180,21 +177,12 @@ describe('migrateVoidLayout', () => {
     expect(existsSync(join(root, '.void/local'))).toBe(false);
   });
 
-  /**
-   * Measured on a clone of a real project: the receipt held 168 owned files and
-   * NONE of them was `PHILOSOPHY.md`. The install never owned it at the old
-   * path, so relocating it created a managed file nobody could claim — and the
-   * install refused it, rolling back an update whose layout pass had succeeded.
-   *
-   * Hence the rule above: restorable content is dropped, never relocated. The
-   * receipt therefore never needs rewriting, which is why no code does it.
-   */
-  it('never leaves restorable content where the install cannot claim it', async () => {
+  it('never deletes the philosophy before the install transaction', async () => {
     const root = project({ '.void/PHILOSOPHY.md': 'doctrine\n' });
 
     await migrateVoidLayout(root);
 
-    expect(existsSync(join(root, '.void/PHILOSOPHY.md'))).toBe(false);
+    expect(readFileSync(join(root, '.void/PHILOSOPHY.md'), 'utf8')).toBe('doctrine\n');
     expect(existsSync(join(root, '.void/installed/PHILOSOPHY.md'))).toBe(false);
   });
 

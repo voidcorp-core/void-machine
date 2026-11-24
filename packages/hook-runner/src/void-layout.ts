@@ -41,8 +41,6 @@ import { removeManagedBlocks, replaceManagedBlock } from './managed-block.js';
 export const VOID_DIR = '.void';
 /** The observed half. Named for WHOSE it is, because that decides deletability. */
 export const VOID_MACHINE_DIR = 'machine';
-/** The restorable half. `void-machine install` rebuilds every byte of it. */
-export const VOID_INSTALLED_DIR = 'installed';
 /** The name the observed half carried before, still read as a fallback. */
 export const VOID_PREVIOUS_MACHINE_DIR = 'local';
 
@@ -57,8 +55,7 @@ export type Ownership = 'project' | 'derived' | 'observed';
  */
 export const VOID_OWNERSHIP: Readonly<Record<string, Ownership>> = Object.freeze({
   // Declared: authored or hand-edited, never regenerable from a pin. These are
-  // the ONLY things at the top of `.void/`, which is what makes "everything at
-  // the top is committed" a rule you can see rather than one you must look up.
+  // Their ownership differs from the delivered philosophy beside them.
   'config.json': 'project',
   'PROJECT-DOCTRINE.md': 'project',
   'program.md': 'project',
@@ -76,8 +73,7 @@ export const VOID_OWNERSHIP: Readonly<Record<string, Ownership>> = Object.freeze
   // pin. Not committed — 1.2 MB of vendored prose rewritten on every bump — but
   // their absence degrades the agent rather than breaking the project.
   'PHILOSOPHY.md': 'derived',
-  // Derived AND committed, which is why it stays at the top rather than moving
-  // into `installed/`. `.claude/settings.json` names this path and is itself
+  // Derived AND committed: `.claude/settings.json` names this path and is itself
   // committed, so ignoring the runner would give a fresh clone a settings file
   // pointing at a missing file and every tool call would fail on it. See
   // `DERIVED_LOAD_BEARING`: its absence is an error, not a degradation.
@@ -162,7 +158,8 @@ export const MATERIALIZED_OWNERSHIP: Readonly<Record<string, Ownership>> = Objec
   '.agents/skills/': 'derived',
   '.codex/agents/': 'derived',
   '.void/hooks/': 'derived',
-  '.void/installed/PHILOSOPHY.md': 'derived',
+  '.void/PHILOSOPHY.md': 'derived',
+  '.void/installed/PHILOSOPHY.md': 'derived', // Legacy ownership remains readable.
   '.codex/hooks.json': 'derived',
 });
 
@@ -297,20 +294,6 @@ export const MACHINE_ENTRIES: readonly string[] = Object.freeze(
     .sort(),
 );
 
-/**
- * What `installed/` holds: derived entries MINUS the load-bearing ones.
- *
- * A derived path that must survive a fresh clone stays at the top of `.void/`,
- * because the top is what git keeps. Moving it under an ignored directory would
- * un-track the very file `.claude/settings.json` resolves by name.
- */
-export const INSTALLED_ENTRIES: readonly string[] = Object.freeze(
-  Object.keys(VOID_OWNERSHIP)
-    .filter((entry) => VOID_OWNERSHIP[entry] === 'derived')
-    .filter((entry) => !DERIVED_LOAD_BEARING.includes(`${VOID_DIR}/${entry}/`))
-    .sort(),
-);
-
 const IGNORE_MARKERS = PRODUCT_IDENTITY.markers.gitignore;
 
 /**
@@ -343,15 +326,6 @@ export function voidMachineDir(root: string): string {
   return join(root, VOID_DIR, VOID_MACHINE_DIR);
 }
 
-/** `<root>/.void/installed` — what `install` restores, covered by one ignore rule. */
-export function voidInstalledDir(root: string): string {
-  return join(root, VOID_DIR, VOID_INSTALLED_DIR);
-}
-
-/** Path to a restorable artifact. Writers of derived content use this. */
-export function voidInstalledPath(root: string, ...segments: readonly string[]): string {
-  return join(voidInstalledDir(root), ...segments);
-}
 
 /** `<root>/.void/local` — where the observed half lived before. Readers only. */
 export function previousMachinePath(root: string, ...segments: readonly string[]): string {
@@ -403,9 +377,6 @@ export function pendingMigrations(root: string): string[] {
     if (existsSync(legacyVoidPath(root, entry))) found.add(entry);
     if (existsSync(previousMachinePath(root, entry))) found.add(entry);
   }
-  for (const entry of INSTALLED_ENTRIES) {
-    if (existsSync(legacyVoidPath(root, entry))) found.add(entry);
-  }
   return [...found].sort();
 }
 
@@ -448,15 +419,11 @@ function listedOwnedEntries(ownedPaths: readonly string[]): string[] {
 export function gitignoreBlock(ownedPaths: readonly string[] = []): string {
   return [
     IGNORE_MARKERS.current.begin,
-    '# .void/ has three levels, named by what deleting them costs. Everything the',
-    '# harness OBSERVES (telemetry, run journals, caches, install receipts) lives',
-    '# under machine/ and is disposable. Everything it DERIVES (the doctrine) lives',
-    '# under installed/ and is restored byte-for-byte by install. Everything the',
-    '# project DECLARES stays tracked at the top of .void/: config.json in',
-    '# particular carries the pack pins and paths.business, which the enforcement',
-    '# runner needs on a fresh clone.',
+    '# Machine history is disposable; project declarations stay tracked.',
+    '# Delivered philosophy is ignored only where the install proves ownership.',
+    '# Hooks stay tracked because native settings require them on a fresh clone.',
     `${VOID_DIR}/${VOID_MACHINE_DIR}/`,
-    `${VOID_DIR}/${VOID_INSTALLED_DIR}/`,
+    ...derivedIgnoreEntries(ownedPaths).filter((path) => path.startsWith(`${VOID_DIR}/`)),
     // The previous name stays covered on purpose. A migration that cannot finish
     // leaves `local/` on disk, and an ignore block that had already forgotten it
     // would make the next `git add .` commit the telemetry it was written to

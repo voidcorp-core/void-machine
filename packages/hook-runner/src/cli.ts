@@ -11,23 +11,13 @@ import {
 import { readFreshnessCache } from './freshness/cache.js';
 import { compareFreshness } from './freshness/compare.js';
 import { freshnessRelay, resolveFreshness } from './freshness/notice.js';
-import { PRODUCT_COMMAND } from './identity.js';
-import { cachedInvocationAlert, refreshInvocationVerdict } from './invocation.js';
-import { auditCheckpoint } from './lifecycle/checkpoint-audit.js';
 import { sessionStartOutput } from './lifecycle/context.js';
-import { executeContextContinuity } from './lifecycle/context-continuity-executor.js';
 import { resolveInstall } from './lifecycle/context-executor.js';
 import { executeDelegationResult } from './lifecycle/delegation-result.js';
 import { type LifecycleExecution, record } from './lifecycle/executor-shared.js';
-import { executeFormat } from './lifecycle/format-executor.js';
 import { executeHerdrMetadata } from './lifecycle/herdr-metadata-executor.js';
 import { executeHerdrSession } from './lifecycle/herdr-session-executor.js';
-import { executeLargeChange } from './lifecycle/large-change-executor.js';
-import { executeReadLoop } from './lifecycle/read-loop-executor.js';
 import { observeResume } from './lifecycle/resume-observer.js';
-import { checkpointReminderOutput } from './lifecycle/session-close-intent.js';
-import { executeTrim } from './lifecycle/trim-executor.js';
-import { executeTypecheck } from './lifecycle/typecheck-executor.js';
 import { resolveTelemetryRoot, type TelemetryRoot } from './project-roots.js';
 import {
   recordHookEvent,
@@ -162,6 +152,7 @@ async function observeHook(
   agentRuntime: AgentRuntime,
   root: string,
 ): Promise<void> {
+  if (execution.status === 'ok' || execution.status === 'skipped') return;
   try {
     const explicitRoot = process.env['VOID_PROJECT_ROOT'] ?? process.env['CLAUDE_PROJECT_DIR'];
     telemetryDestination ??= explicitRoot === undefined
@@ -197,17 +188,7 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
   }
   const root = projectRoot();
   const rawInput = optionalPayload(input);
-  if (hook === 'context' || hook === 'context-continuity') {
-    const inputRecord = record(rawInput);
-    const event = inputRecord?.['hook_event_name'];
-    if (hook === 'context-continuity' && event !== 'SessionStart') {
-      const execution = executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now());
-      if (execution.output !== undefined) {
-        process.stdout.write(`${JSON.stringify(execution.output)}\n`);
-      }
-      await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
-      return;
-    }
+  if (hook === 'context') {
     const install = resolveInstall(root, process.env);
     // Read the cache only: session start must never wait on a network round-trip.
     // The refresh below happens after stdout is written, so a slow or dead registry
@@ -219,30 +200,11 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
       cached === undefined
         ? undefined
         : freshnessRelay(compareFreshness(install.version, cached.latest), install.source);
-    // The harness cannot see an invocation the runtime refused, so what it reads
-    // here is the trace one leaves: a name it recorded that no longer resolves.
-    // Read, never compute: judging the journals costs 49 ms here, and a session
-    // start must not wait on an answer that can be one session old without
-    // anyone being worse off. The recompute happens below, after stdout.
-    const alert = cachedInvocationAlert(root);
-    if (event === 'SessionStart' || hook === 'context') {
-      const source = inputRecord?.['source'];
-      const resume = observeResume(root, Date.now(), {
-        ...(source === 'startup' || source === 'resume' || source === 'clear'
-          || source === 'compact' || source === 'fork'
-          ? { source }
-          : {}),
-      });
-      process.stdout.write(
-        `${JSON.stringify(sessionStartOutput(install.version, notice, alert, resume.context))}\n`,
-      );
-    }
-    const execution = hook === 'context-continuity'
-      ? executeContextContinuity(rawInput ?? {}, root, agentRuntime, Date.now())
-      : { status: 'ok', details: {} } satisfies LifecycleExecution;
+    const resume = observeResume(root, Date.now());
+    process.stdout.write(
+      `${JSON.stringify(sessionStartOutput(install.version, notice, resume.context))}\n`,
+    );
     await refreshFreshnessInBackground(install.version);
-    refreshInvocationVerdict(root);
-    await observeHook(hook, execution, rawInput ?? {}, agentRuntime, root);
     return;
   }
   if (rawInput === undefined) {
@@ -255,54 +217,11 @@ async function runLifecycle(input: Uint8Array): Promise<void> {
     );
     return;
   }
-  if (hook === 'checkpoint-reminder') {
-    const prompt = record(rawInput)?.['prompt'];
-    const output = typeof prompt === 'string' ? checkpointReminderOutput(prompt) : undefined;
-    const execution: LifecycleExecution = {
-      status: output === undefined ? 'skipped' : 'ok',
-      details: { reminded: output !== undefined },
-    };
-    if (output !== undefined) process.stdout.write(`${JSON.stringify(output)}\n`);
-    await observeHook(hook, execution, rawInput, agentRuntime, root);
-    return;
-  }
-  if (hook === 'checkpoint-audit') {
-    const now = Date.now();
-    const observed = observeResume(root, now);
-    const audit = auditCheckpoint({
-      now,
-      checkpoint: observed.bundle.checkpoint,
-      ...(observed.checkpointWrittenAt === undefined
-        ? {}
-        : { checkpointWrittenAt: observed.checkpointWrittenAt }),
-      git: observed.bundle.git,
-    });
-    const execution: LifecycleExecution = {
-      status: audit.status,
-      details: { reasons: [...audit.reasons] },
-      ...(audit.reasons.length === 0
-        ? {}
-        : {
-            diagnostic: `${PRODUCT_COMMAND} SessionEnd audit: ${audit.reasons.join(', ')}\n`,
-          }),
-    };
-    if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);
-    await observeHook(hook, execution, rawInput, agentRuntime, root);
-    return;
-  }
-  const execution = hook === 'format'
-    ? executeFormat(rawInput, root, process.env)
-    : hook === 'trim'
-      ? executeTrim(rawInput, root, process.env)
-      : hook === 'typecheck'
-        ? executeTypecheck(root, process.env)
-        : hook === 'large-change'
-          ? executeLargeChange(root, process.env)
-        : hook === 'delegation-result'
-          ? executeDelegationResult(rawInput, Date.now())
-        : hook === 'herdr-metadata'
-          ? executeHerdrMetadata(rawInput, root, process.env, agentRuntime)
-        : undefined;
+  const execution = hook === 'delegation-result'
+    ? executeDelegationResult(rawInput, Date.now())
+    : hook === 'herdr-metadata'
+      ? executeHerdrMetadata(rawInput, root, process.env, agentRuntime)
+      : undefined;
   if (execution === undefined) return;
   if (execution.diagnostic !== undefined) process.stderr.write(execution.diagnostic);
   if ('output' in execution && execution.output !== undefined) {
@@ -321,17 +240,8 @@ async function main(): Promise<void> {
     try {
       const rawInput = parseHookPayload(input);
       const event = record(rawInput)?.['hook_event_name'];
-      if (process.argv[2] === 'outcome'
-        && (event === 'PostToolUse' || event === 'PostToolUseFailure')) {
-        const agentRuntime = runtime(process.argv[3] ?? process.env['VOID_AGENT_RUNTIME']);
-        const root = projectRoot();
-        const advice = executeReadLoop(rawInput, root, agentRuntime);
-        if (advice.diagnostic !== undefined) process.stderr.write(advice.diagnostic);
-        if (advice.output !== undefined) process.stdout.write(`${JSON.stringify(advice.output)}\n`);
-        await observeHook('outcome-meter', advice, rawInput, agentRuntime, root);
-        // Failure is a reset observation, not a successful completion receipt.
-        if (event === 'PostToolUseFailure') return;
-      }
+      // Failed tool calls must never become successful completion receipts.
+      if (process.argv[2] === 'outcome' && event === 'PostToolUseFailure') return;
       await recordRuntimeEventFromCli(rawInput, process.argv, process.env);
     } catch (error) {
       reportTelemetryFailure(error);

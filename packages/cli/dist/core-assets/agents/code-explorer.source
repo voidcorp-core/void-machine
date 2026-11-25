@@ -1,0 +1,7 @@
+Sources for the `code-explorer` agent (see `docs/plans/skill-audits/code-explorer.md` for the full audit):
+
+- HumanLayer, "Advanced Context Engineering" — the research sub-agent that explores and returns a compacted structured summary (never raw bytes) to protect the main context window. https://www.humanlayer.dev/blog/advanced-context-engineering
+- anthropics/claude-agent-sdk-demos (research-agent) — lead/sub decomposition, file-system-as-memory, summary-returning workers. https://github.com/anthropics/claude-agent-sdk-demos
+- void-machine `void-context` skill — the anti-context-rot discipline this agent operationalizes (delegate heavy investigation to a fresh-context sub-agent).
+
+Strategy: original (compose). Read-only mapper: entrypoints, main flows, dependencies, where things live. Returns a compact map; does not judge or fix. model: sonnet (breadth/recognition).

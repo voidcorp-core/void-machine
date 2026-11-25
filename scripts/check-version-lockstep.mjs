@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// Lockstep version guard. Pre-1.0, ONE version governs everything (see
-// docs/RELEASING.md). This fails CI if ANY version-carrying file diverges from
-// the canonical version (marketplace.json plugins[0].version) — catching a miss
-// by the release automation, the manual bumper, or a hand-edit, before it ships
-// a skewed install. The mirror (core-assets) is included on purpose.
+// Lockstep version guard: one version governs the retained release manifests
+// (see docs/RELEASING.md). Fail on divergence from the core plugin version,
+// including its generated mirror, before a skewed install ships.
 //
 // Usage: node scripts/check-version-lockstep.mjs   (exit 0 aligned, 1 drift)
 // Exported: findDrift(canonical, entries) — pure, unit-tested.
@@ -19,18 +17,19 @@ export function findDrift(canonical, entries) {
 }
 
 const PLUGIN_MANIFESTS = [
-  'packages/core/.claude-plugin/plugin.json',
-  'packages/packs/pack-monorepo/.claude-plugin/plugin.json',
-  'packages/packs/pack-react/.claude-plugin/plugin.json',
-  'packages/packs/pack-nextjs/.claude-plugin/plugin.json',
-  'packages/packs/pack-server/.claude-plugin/plugin.json',
-  'packages/packs/pack-pwa/.claude-plugin/plugin.json',
-  'packages/packs/pack-mobile/.claude-plugin/plugin.json',
-  'packages/cli/core-assets/.claude-plugin/plugin.json', // generated mirror — must match
+  'packages/core/dist/.claude-plugin/plugin.json',
+  'packages/core/src/.claude-plugin/plugin.json',
+  ...['monorepo', 'react', 'nextjs', 'server', 'pwa', 'mobile'].map((name) => `packages/packs/pack-${name}/dist/.claude-plugin/plugin.json`),
+  'packages/packs/pack-monorepo/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-react/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-nextjs/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-server/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-pwa/src/.claude-plugin/plugin.json',
+  'packages/packs/pack-mobile/src/.claude-plugin/plugin.json',
+  'packages/cli/dist/core-assets/.claude-plugin/plugin.json', // generated mirror — must match
 ];
 const NPM_PACKAGES = [
   'packages/cli/package.json',
-  'packages/harness-graph/package.json',
   'packages/packs/pack-monorepo/package.json',
   'packages/packs/pack-nextjs/package.json',
 ];

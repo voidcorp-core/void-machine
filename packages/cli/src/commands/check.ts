@@ -207,10 +207,10 @@ async function reportDoctrineDrift(
   remote: CheckRemote,
 ): Promise<void> {
   // New home first, previous one until the project runs `update`.
-  const migrated = join(installRoot, '.void', 'installed', 'PHILOSOPHY.md');
+  const migrated = join(installRoot, '.void', 'PHILOSOPHY.md');
   const localPath = existsSync(migrated)
     ? migrated
-    : join(installRoot, '.void', 'PHILOSOPHY.md');
+    : join(installRoot, '.void', 'installed', 'PHILOSOPHY.md');
   if (!existsSync(localPath)) {
     status(`PHILOSOPHY.md missing locally — run ${where}\`${PRODUCT_COMMAND} init\` to install.`, 'warn');
     return;

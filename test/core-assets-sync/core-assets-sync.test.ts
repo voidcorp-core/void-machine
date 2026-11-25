@@ -1,7 +1,7 @@
 /**
- * Invariant: packages/cli/core-assets is a faithful mirror of packages/core.
+ * Invariant: packages/cli/dist/core-assets is a faithful mirror of packages/core.
  *
- * The CLI ships packages/core as a committed mirror (packages/cli/core-assets)
+ * The CLI ships packages/core as a committed mirror (packages/cli/dist/core-assets)
  * built by copy-core-assets.mjs. Version lockstep covers the manifests but NOT
  * the file contents, so editing a core hook/skill without rerunning
  * build:assets drifts the two copies silently (audit 2026-07-09, issue #66).
@@ -11,28 +11,24 @@
  *   - a NEW core file not mirrored (the gap `git diff --quiet` misses — an
  *     untracked mirror file is invisible to it),
  *   - a deleted core file left orphaned in the mirror.
- * The exclusions mirror copy-core-assets.mjs exactly (*.test.ts and graph/), plus the mirror's
- * data/ dir, which is copied from packages/harness-graph (certification.json + model.json), NOT from
- * core — its drift is gated separately by the CI core-assets check.
+ * Test files are excluded; the pack mirror is checked against its own source.
  */
 
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-const CORE = resolve(process.cwd(), 'packages/core');
-const MIRROR = resolve(process.cwd(), 'packages/cli/core-assets');
+const CORE = resolve(process.cwd(), 'packages/core/dist');
+const MIRROR = resolve(process.cwd(), 'packages/cli/dist/core-assets');
 const PACKS_SRC = resolve(process.cwd(), 'packages/packs');
-const GRAPH = join(CORE, 'graph');
-const MIRROR_DATA = join(MIRROR, 'data'); // shipped from harness-graph, not a core mirror
 const MIRROR_PACKS = join(MIRROR, 'packs'); // bundled from packages/packs/*/skills, not core
 
-/** Same exclusion rule as copy-core-assets.mjs (plus the harness-graph-sourced data/ dir and the
- *  packages/packs-sourced packs/ dir, which have their own source and are checked separately). */
+/** Same test-file exclusion as copy-core-assets; packs have their own source. */
 function excluded(absPath: string): boolean {
   if (absPath.endsWith('.test.ts')) return true;
-  if (absPath === GRAPH || absPath.startsWith(`${GRAPH}/`)) return true;
-  if (absPath === MIRROR_DATA || absPath.startsWith(`${MIRROR_DATA}/`)) return true;
   if (absPath === MIRROR_PACKS || absPath.startsWith(`${MIRROR_PACKS}/`)) return true;
   return false;
 }
@@ -87,7 +83,7 @@ describe('core-assets mirror', () => {
     const drifted: string[] = [];
     for (const rel of walk(MIRROR_PACKS, notTest)) {
       // rel is `<pack>/skills/...`; the source lives under packages/packs/<pack>/skills/...
-      const src = join(PACKS_SRC, rel);
+      const src = join(PACKS_SRC, rel.split('/')[0]!, 'src', ...rel.split('/').slice(1));
       try {
         if (readFileSync(join(MIRROR_PACKS, rel)).equals(readFileSync(src))) continue;
         drifted.push(`content differs: ${rel}`);
@@ -97,4 +93,21 @@ describe('core-assets mirror', () => {
     }
     expect(drifted, `run: pnpm --filter ./packages/cli build:assets`).toEqual([]);
   });
+});
+
+// A stale already-dirty artifact must fail before any repair takes place.
+it('checks assembly freshness without mutating the stale delivery', () => {
+  const destination = mkdtempSync(join(tmpdir(), 'void delivery '));
+  const copier = resolve('packages/cli/scripts/copy-core-assets.mjs');
+  try {
+    const built = spawnSync(process.execPath, [copier, destination], { encoding: 'utf8' });
+    expect(built.status, built.stderr).toBe(0);
+    const doctrine = join(destination, 'PHILOSOPHY.md');
+    writeFileSync(doctrine, 'stale artifact\n');
+    const checked = spawnSync(process.execPath, [copier, destination, '--check'], { encoding: 'utf8' });
+    expect(checked.status).toBe(1);
+    expect(readFileSync(doctrine, 'utf8')).toBe('stale artifact\n');
+  } finally {
+    rmSync(destination, { recursive: true, force: true });
+  }
 });

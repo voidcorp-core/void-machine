@@ -6,8 +6,16 @@
 packages:
   - 'packages/cli'
   - 'packages/packs/*'
-  - 'packages/harness-graph'
   - 'packages/mission-engine'
   - 'packages/hook-runner'
   - 'apps/*'
   - 'packages/void-machine'
+
+# Dependency resolution settings are read here by pnpm 12.
+overrides:
+  esbuild: '>=0.28.1'
+  postcss: '>=8.5.18'
+
+# esbuild installs and verifies its platform-specific binary.
+allowBuilds:
+  esbuild: true

@@ -12,7 +12,7 @@ import { cliVersion } from '../lib/paths.js';
 // told a healthy 2.7.0 project that its doctrine was missing, its hooks never
 // fired and five packs were unwired. Four failures, none real, each with a
 // remedy that would have damaged a correct install.
-const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'void-machine.mjs');
+const CLI = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'dist', 'bin', 'void-machine.mjs');
 
 function projectRecording(version: string): string {
   const root = mkdtempSync(join(tmpdir(), 'doctor-cmd-'));
@@ -26,12 +26,17 @@ function projectRecording(version: string): string {
 }
 
 function runDoctor(root: string, ...args: readonly string[]): { code: number; out: string } {
-  const result = spawnSync(process.execPath, [CLI, 'doctor', '--no-remote', ...args], {
+  const result = spawnSync(process.execPath, [CLI, 'doctor', ...args], {
     cwd: root,
     encoding: 'utf8',
   });
   return { code: result.status ?? 0, out: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
+
+it('keeps --no-remote as a compatible no-op', () => {
+  const root = projectRecording(cliVersion());
+  expect(runDoctor(root, '--no-remote')).toEqual(runDoctor(root));
+});
 
 describe('doctor and a runner older than the project', () => {
   it('reports the version gap and judges nothing else', () => {
@@ -92,6 +97,13 @@ describe('doctor from a linked worktree', () => {
     const linked = join(mkdtempSync(join(tmpdir(), 'doctor-linked-')), 'DEV-000');
     git(main, 'worktree', 'add', '--quiet', linked, '-b', 'worker/DEV-000');
 
+    // Source checkouts obey the same installation-root rule as consumers.
+    for (const root of [main, linked]) {
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'void-harness' }));
+      mkdirSync(join(root, 'packages/cli'), { recursive: true });
+      mkdirSync(join(root, 'packages/core'), { recursive: true });
+    }
+
     const fromMain = runDoctor(main);
     const fromWorktree = runDoctor(linked);
 
@@ -116,63 +128,32 @@ describe('doctor from a linked worktree', () => {
     for (const remedy of remedies) expect(remedy).toContain(`in ${realpathSync(main)}: `);
   });
 
-  // `--fix` is a reader of the installation like any other line above it, and
-  // it escaped the sweep that taught the others to name that root. From a
-  // clean worktree it told the reader their working tree had uncommitted
-  // changes -- about a tree they are not in -- and printed the files it would
-  // write as project-relative paths, read against the worktree they are not
-  // in either. One rule now covers every such line, with no exception for a
-  // command that would resolve the root by itself (the record of 2026-09-02
-  // that supersedes the roots ADR).
-  describe('--fix', () => {
-    function repo(): { main: string; linked: string } {
-      const main = projectRecording(cliVersion());
-      mkdirSync(join(main, 'docs'), { recursive: true });
-      // A live monolith is the one conformance rule that carries a repair, so
-      // it is what gives `--fix` something to say.
-      writeFileSync(
-        join(main, 'docs', 'DECISIONS.md'),
-        '# Decisions\n\n## ADR-001 - Vendoring rejected (2026-06-01)\n\nUpstream bugs freeze.\n',
-      );
-      git(main, 'init', '--quiet');
-      git(main, 'add', '.void/config.json', '.void/install-manifest.json', 'docs/DECISIONS.md');
-      git(
-        main,
-        '-c', 'user.name=Void Test',
-        '-c', 'user.email=void@example.test',
-        'commit', '--quiet', '-m', 'test: seed',
-      );
-      const linked = join(mkdtempSync(join(tmpdir(), 'doctor-fix-')), 'DEV-000');
-      git(main, 'worktree', 'add', '--quiet', linked, '-b', 'worker/DEV-000');
-      return { main, linked };
-    }
+  it.each(['--fix', '--dry-run'])('explicitly rejects retired repair flag %s', (flag) => {
+    const { code, out } = runDoctor(projectRecording(cliVersion()), flag);
+    expect(code).toBe(2);
+    expect(out).toContain(`${flag} was removed`);
+    expect(out).not.toContain('would write');
+  });
 
-    it('names the installation in the files it would write', () => {
-      const { main, linked } = repo();
+});
 
-      const { out } = runDoctor(linked, '--fix', '--dry-run');
 
-      expect(out).toMatch(/would write/);
-      // The record it would create, not the advisory line naming the directory.
-      const written = out
-        .split('\n')
-        .filter((line) => /docs\/decisions-log\/\S+\.md/.test(line));
-      expect(written.length).toBeGreaterThan(0);
-      for (const path of written) expect(path).toContain(`${realpathSync(main)}/docs/decisions-log/`);
-    });
-
-    it('names the installation in the notice that no repair is offered', () => {
-      const { main, linked } = repo();
-      // Dirty the installation, not the tree the reader is standing in.
-      writeFileSync(join(main, 'untracked.md'), 'work in progress\n');
-
-      const { out } = runDoctor(linked, '--fix');
-
-      // Twice: once as the remedy of the check line, once as the reason `--fix`
-      // repaired nothing. Both speak of the installation, so both name it.
-      const notices = out.split('\n').filter((line) => /uncommitted changes/.test(line));
-      expect(notices.length).toBeGreaterThan(1);
-      for (const notice of notices) expect(notice).toContain(`in ${realpathSync(main)}: `);
-    });
+describe('doctor shares Autopilot authority admission', () => {
+  it('reports config-only authority and its actual source without requiring a programme', () => {
+    const root = projectRecording(cliVersion());
+    writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: {
+      schemaVersion: 3, enabled: true, base: 'develop', deployBranch: 'main',
+      progress: { provider: 'linear', scope: 'team/project',
+        states: { ready: ['Todo'], started: ['Doing'], review: ['Review'], done: ['Done'] } },
+    } }));
+    const { out } = runDoctor(root);
+    expect(out).toContain('executing, autopilot declared in .void/config.json');
+    expect(out).not.toContain('no .void/program.md');
+  });
+  it('does not invent a permission for absent or malformed config', () => {
+    const root = projectRecording(cliVersion());
+    expect(runDoctor(root).out).not.toContain('autopilot program');
+    writeFileSync(join(root, '.void/config.json'), '{ broken');
+    expect(runDoctor(root).out).toContain('Autopilot authority could not be parsed');
   });
 });

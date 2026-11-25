@@ -1,150 +1,156 @@
 name: ci
-
 on:
-  # `develop` is where autonomous merging happens, so it needs the checks at
-  # least as much as `main` does: a "all checks green" predicate is satisfied
-  # by an ABSENCE of checks just as happily as by passing ones. Identical job
-  # set on both branches — no reduced coverage on the autonomous side.
   pull_request:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
-  # The merge queue on `develop` replays the required checks on the combined
-  # result before merging, and waits for them on this event only. GITHUB_SHA is
-  # then the merge group commit, so every GATE_SHA below proves that commit.
-  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   merge_group:
     types: [checks_requested]
     branches: [develop]
-  # develop is proved before entry by merge_group; promotion still follows its push.
   push:
     branches: [main]
-  # Release Please uses GITHUB_TOKEN, so its PR events do not run unattended.
-  # release.yml dispatches this workflow explicitly on the release PR branch.
   workflow_dispatch: {}
-
-# Never coalesce queue groups or release/manual runs. Only a newer PR state
-# invalidates that PR's earlier work (including conversion back to draft).
+permissions:
+  contents: read
+# Only obsolete revisions of the same PR cancel; queue groups and publication do not.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
+env:
+  # Promotion proves the current combined candidate. Queue groups use their combined SHA.
+  GATE_SHA: ${{ github.event.pull_request.base.ref == 'main' && github.sha || github.event.pull_request.head.sha || github.sha }}
 jobs:
   consumer-artifact:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: packed consumer artifact
-    outputs:
-      playwright-version: ${{ steps.browser-version.outputs.version }}
+    name: prepare validation
     runs-on: ubuntu-latest
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    outputs:
+      docs: ${{ steps.impact.outputs.docs }}
+      engine: ${{ steps.impact.outputs.engine }}
+      local: ${{ steps.impact.outputs.local }}
+      network: ${{ steps.impact.outputs.network }}
+      consumer: ${{ steps.impact.outputs.consumer }}
+      crossPlatform: ${{ steps.impact.outputs.crossPlatform }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.GATE_SHA }}
+          fetch-depth: 0
+      - name: Admit integration validation
+        run: node packages/core/src/skills/void-verify/references/ci-admission.mjs
+      - name: Select the checked-out candidate impact
+        id: impact
+        run: node scripts/verify.mjs --ci-impact --sha "$GATE_SHA"
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .node-version
           cache: pnpm
-      - name: Resolve the matching browser image version
-        id: browser-version
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, appendFileSync } from 'node:fs';
-          const manifest = JSON.parse(readFileSync('test/browser/package.json', 'utf8'));
-          const version = manifest.dependencies['@playwright/test'];
-          if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version) ||
-              manifest.overrides['playwright-core'] !== version) {
-            throw new Error('Playwright must have an exact version and matching core override');
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
-          NODE
-      - run: pnpm install --frozen-lockfile
-      - name: Pack the exact checked-out consumer artifact once
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      # Collect the small independent group, then refuse expensive dependent work.
+      - name: Skill references
+        id: references
+        continue-on-error: true
+        run: pnpm skills:check-references
+      - name: Version lockstep
+        id: version
+        if: ${{ steps.impact.outputs.version != 'false' }}
+        continue-on-error: true
+        run: pnpm version:check
+      - name: Anti-bloat
+        id: structure
+        if: ${{ steps.impact.outputs.docs != 'true' }}
+        continue-on-error: true
+        run: pnpm anti-bloat:check
+      - name: Lint
+        id: lint
+        if: ${{ steps.impact.outputs.docs != 'true' }}
+        continue-on-error: true
+        run: pnpm lint
+      - name: Require every applicable cheap check
+        if: ${{ !cancelled() }}
         env:
-          VOID_CONFORMANCE_ARTIFACT_DIR: ${{ runner.temp }}/void-consumer-artifact
+          CHECKS_PASSED: ${{ steps.references.outcome == 'success' && (steps.impact.outputs.version == 'false' || steps.version.outcome == 'success') && (steps.impact.outputs.docs == 'true' || (steps.structure.outcome == 'success' && steps.lint.outcome == 'success')) }}
+        run: test "$CHECKS_PASSED" = true
+      # conformance:pack checks original committed deliveries before lifecycle generation.
+      - name: Pack the exact candidate once
+        if: ${{ steps.impact.outputs.docs != 'true' }}
+        env:
+          VOID_CONFORMANCE_ARTIFACT_DIR: ${{ runner.temp }}/consumer-artifact
         run: pnpm conformance:pack
-      - name: Upload the immutable tarball and its source manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Inspect publication content
+        if: ${{ steps.impact.outputs.docs != 'true' }}
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/consumer-artifact/consumer.tgz
+        run: pnpm check:publish
+      - name: Check archive size
+        if: ${{ steps.impact.outputs.docs != 'true' }}
+        env:
+          VOID_CONFORMANCE_TARBALL: ${{ runner.temp }}/consumer-artifact/consumer.tgz
+        run: pnpm check:size
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: ${{ steps.impact.outputs.consumer == 'true' }}
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ runner.temp }}/void-consumer-artifact/consumer.tgz
-            ${{ runner.temp }}/void-consumer-artifact/consumer.tgz.json
+            ${{ runner.temp }}/consumer-artifact/consumer.tgz
+            ${{ runner.temp }}/consumer-artifact/consumer.tgz.json
           if-no-files-found: error
           include-hidden-files: true
           compression-level: 0
           retention-days: 1
 
-  browser-conformance:
-    name: browser conformance
+  validate:
+    if: ${{ !cancelled() }}
     needs: consumer-artifact
-    runs-on: ubuntu-24.04
-    container:
-      image: mcr.microsoft.com/playwright:v${{ needs.consumer-artifact.outputs.playwright-version }}-noble
-      options: --ipc=host
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    runs-on: ubuntu-latest
     steps:
+      # A failed/skipped/missing preparation is never a passing required validation.
+      - name: Require successful preparation
+        env:
+          PREPARATION_RESULT: ${{ needs.consumer-artifact.result }}
+        run: test "$PREPARATION_RESULT" = success
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.GATE_SHA }}
-          persist-credentials: false
+      - name: Admit integration validation
+        run: node packages/core/src/skills/void-verify/references/ci-admission.mjs
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: test/browser/package-lock.json
-      - name: Resolve paths inside the browser container
-        id: browser-paths
-        run: echo "temp=$RUNNER_TEMP" >> "$GITHUB_OUTPUT"
-      - name: Download the exact packed consumer artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact
-      - name: Generate synthetic documents from the verified offline installation
-        env:
-          VOID_CONFORMANCE_TARBALL: ${{ steps.browser-paths.outputs.temp }}/void-consumer-artifact/consumer.tgz
-        run: node test/browser/prepare.mjs
-      - name: Install source-only browser QA tooling in runner temporary storage
-        # Sources: test/browser/README.md; no dependency or lockfile in the consumer package.
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
+      - name: Build before dependent checks
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
+        run: pnpm build
+      - name: Compile and inspect the isolated self-host
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
         run: |
-          mkdir "$RUNNER_TEMP/browser-qa"
-          cp test/browser/package.json test/browser/package-lock.json test/browser/*.mjs "$RUNNER_TEMP/browser-qa/"
-          cd "$RUNNER_TEMP/browser-qa"
-          npm ci --ignore-scripts --no-audit --no-fund --omit=optional
-          npm ls --all --json > tooling-tree.json
-      - name: Exercise the regenerated offline documents
-        working-directory: ${{ steps.browser-paths.outputs.temp }}/browser-qa
-        run: node node_modules/@playwright/test/cli.js test
-      - name: Preserve browser evidence for the tested source SHA
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: browser-evidence-${{ env.GATE_SHA }}
-          path: |
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/playwright-report/
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/test-results/
-            ${{ steps.browser-paths.outputs.temp }}/browser-qa/tooling-tree.json
-            ${{ steps.browser-paths.outputs.temp }}/cheatsheet-fixture/evidence.json
-          if-no-files-found: error
-          retention-days: 14
+          node packages/cli/dist/bin/void-machine.mjs self-host sync
+          node packages/cli/dist/bin/void-machine.mjs self-host doctor
+      - name: Typecheck
+        if: ${{ needs.consumer-artifact.outputs.docs != 'true' }}
+        run: pnpm typecheck
+      - name: Engine tests
+        if: ${{ needs.consumer-artifact.outputs.engine == 'true' }}
+        run: pnpm test:engine
+      - name: Local tests
+        if: ${{ needs.consumer-artifact.outputs.local == 'true' }}
+        run: pnpm test:local
+      - name: Network tests
+        if: ${{ needs.consumer-artifact.outputs.network == 'true' }}
+        run: pnpm test:network
 
-  install-conformance:
-    name: install conformance (${{ matrix.os }})
+  # Explicit names keep required contexts conclusive when an OS is not applicable.
+  # Native skipped jobs are NOT executed consumer proofs. YAML anchors share steps only.
+  install-linux:
+    name: install conformance (ubuntu-latest)
     needs: consumer-artifact
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
+    if: ${{ needs.consumer-artifact.outputs.consumer == 'true' }}
+    runs-on: ubuntu-latest
+    steps: &consumer-steps
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.GATE_SHA }}
@@ -152,256 +158,21 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .node-version
-      - name: Download the exact packed consumer artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: consumer-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/void-consumer-artifact
-      - name: Exercise install, hooks and Autopilot from the same tarball
-        run: pnpm conformance:consumer --tarball "${{ runner.temp }}/void-consumer-artifact/consumer.tgz"
-
-  project-graph-conformance:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: project graph conformance (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ env.GATE_SHA }}
-      - name: Which areas the diff touches
-        id: areas
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: bash .github/scripts/changed-areas.sh
-      - if: steps.areas.outputs.graph == 'true'
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-      - if: steps.areas.outputs.graph == 'true'
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - if: steps.areas.outputs.graph == 'true'
-        run: pnpm install --frozen-lockfile
-      - name: Build ProjectGraph workspace dependencies
-        if: steps.areas.outputs.graph == 'true'
-        run: pnpm --filter "@voidcorp/harness-graph^..." build
-      - name: ProjectGraph tests
-        if: steps.areas.outputs.graph == 'true'
-        run: pnpm --filter @voidcorp/harness-graph test
-      - name: ProjectGraph typecheck
-        if: steps.areas.outputs.graph == 'true'
-        run: pnpm --filter @voidcorp/harness-graph typecheck
-      - name: Deterministic packed ProjectGraph subpath conformance
-        if: steps.areas.outputs.graph == 'true'
-        run: pnpm conformance:project-graph
-
-  validate:
-    runs-on: ubuntu-latest
-    env:
-      # On pull requests, prove the reviewed branch commit rather than GitHub's
-      # synthetic merge ref. Pushes and manual runs prove their triggering SHA.
-      GATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          # decisions:check compares accepted records with the PR base SHA.
-          # checkout fetches one commit by default, so retain the base history.
-          fetch-depth: 0
-          ref: ${{ env.GATE_SHA }}
-
-      # Keep validate red on a draft: skipped required jobs report success.
-      - name: Admit integration validation
-        id: admission
-        run: node packages/core/skills/void-verify/references/ci-admission.mjs
-
-      - name: Setup pnpm
-        # No `version:` here: action-setup reads it from packageManager in
-        # package.json (single source of truth). Specifying both errors with
-        # ERR_PNPM_BAD_PM_VERSION on action-setup.
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      # verify-gates:begin
-      - name: "[sister-docs] Sister-doc parity"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate sister-docs
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/sister-docs.json"
-
-      - name: "[philosophy] Doctrine parity"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate philosophy
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/philosophy.json"
-
-      - name: "[version-lockstep] Version lockstep"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate version-lockstep
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/version-lockstep.json"
-
-      - name: "[anti-bloat] Anti-bloat"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate anti-bloat
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/anti-bloat.json"
-
-      - name: "[decisions] Decision records"
-        continue-on-error: true
-        env:
-          DECISIONS_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        run: >-
-          node scripts/verify.mjs --gate decisions
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/decisions.json"
-
-      - name: "[hook-runner-current] Generated hook runner"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate hook-runner-current
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/hook-runner-current.json"
-
-      - name: "[core-assets] Core assets mirror"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate core-assets
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/core-assets.json"
-
-      - name: "[lint] Lint"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate lint
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/lint.json"
-
-      - name: "[publish-safety] Publish safety"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate publish-safety
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/publish-safety.json"
-
-      - name: "[package-size] Package size report"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate package-size
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/package-size.json"
-
-      - name: "[build] Build packages"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate build
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/build.json"
-
-      - name: "[self-host-sync] Self-host compile"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate self-host-sync
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/self-host-sync.json"
-
-      - name: "[self-host-doctor] Self-host doctor"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate self-host-doctor
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/self-host-doctor.json"
-
-      - name: "[graph-integrity] Graph integrity"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate graph-integrity
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/graph-integrity.json"
-
-      - name: "[generated-artifacts] Generated artifacts"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate generated-artifacts
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/generated-artifacts.json"
-
-      - name: "[consumer-bundle] Consumer bundle freshness"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate consumer-bundle
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/consumer-bundle.json"
-
-      - name: "[asset-paths] Asset paths"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate asset-paths
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/asset-paths.json"
-
-      - name: "[skill-references] Skill references"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate skill-references
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/skill-references.json"
-
-      - name: "[test-cpu] CPU tests"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate test-cpu
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-cpu.json"
-
-      - name: "[test-filesystem] Filesystem tests"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate test-filesystem
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-filesystem.json"
-
-      - name: "[test-subprocess] Subprocess tests"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate test-subprocess
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-subprocess.json"
-
-      - name: "[test-network] Network and browser tests"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate test-network
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/test-network.json"
-
-      - name: "[typecheck] Typecheck"
-        continue-on-error: true
-        run: >-
-          node scripts/verify.mjs --gate typecheck
-          --sha "$GATE_SHA"
-          --report ".void/machine/gate-reports/typecheck.json"
-
-      - name: Aggregate exact-SHA gate reports
-        if: ${{ !cancelled() && steps.admission.outcome == 'success' }}
-        run: >-
-          node scripts/verify.mjs --aggregate --sha "$GATE_SHA"
-          --reports ".void/machine/gate-reports"
-      # verify-gates:end
+          path: ${{ runner.temp }}/consumer-artifact
+      - name: Exercise installed package, hooks and Autopilot
+        run: pnpm conformance:consumer --tarball "${{ runner.temp }}/consumer-artifact/consumer.tgz"
+  install-macos:
+    name: install conformance (macos-latest)
+    needs: consumer-artifact
+    if: ${{ needs.consumer-artifact.outputs.consumer == 'true' && needs.consumer-artifact.outputs.crossPlatform == 'true' }}
+    runs-on: macos-latest
+    steps: *consumer-steps
+  install-windows:
+    name: install conformance (windows-latest)
+    needs: consumer-artifact
+    if: ${{ needs.consumer-artifact.outputs.consumer == 'true' && needs.consumer-artifact.outputs.crossPlatform == 'true' }}
+    runs-on: windows-latest
+    steps: *consumer-steps

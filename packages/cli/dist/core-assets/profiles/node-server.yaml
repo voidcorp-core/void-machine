@@ -1,0 +1,31 @@
+schemaVersion: 1
+id: core:node-server
+version: 2
+name: node-server
+technologies:
+  - id: node
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [node]
+  files:
+    extensions: [.ts, .mts, .cts, .js, .mjs, .cjs]
+    names: [server.ts, server.js]
+    pathSegments: [api, server, routes, webhooks]
+sources:
+  - title: Node.js documentation
+    url: https://nodejs.org/docs/latest/api/
+reviewedAt: 2026-07-27
+expiresAfterDays: 180
+invariants:
+  - Validate inputs before domain logic and authorize every protected operation server-side.
+  - Bound concurrency, timeouts, retries, request sizes, and resource lifetimes.
+patterns:
+  - id: request-boundary
+    appliesWhen:
+      technologies: [node]
+      files:
+        extensions: [.ts, .mts, .cts, .js, .mjs, .cjs]
+        names: [server.ts, server.js]
+        pathSegments: [api, server, routes, webhooks]
+    guidance: Keep transport parsing, authentication, authorization, domain logic, and response mapping separate.

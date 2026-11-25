@@ -7,56 +7,29 @@ import {
   type SelfHostDiagnosis,
   type SelfHostState,
 } from '../lib/self-host/doctor.js';
-import {
-  isSelfHostMode,
-  type SelfHostMode,
-} from '../lib/self-host/receipt.js';
 import { banner, blank, c, footer, glyph, line, meta } from '../lib/render.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
-type SelfHostArgs =
-  | { readonly action: 'sync'; readonly mode: SelfHostMode }
-  | { readonly action: 'doctor'; readonly mode?: SelfHostMode };
-
-function modeAfter(args: readonly string[]): SelfHostMode | undefined {
-  const index = args.indexOf('--mode');
-  if (index < 0) return undefined;
-  const value = args[index + 1];
-  if (!isSelfHostMode(value)) {
-    throw new Error('invalid --mode; use shadow, warn, enforce, or release-gate');
-  }
-  return value;
-}
+type SelfHostArgs = { readonly action: 'sync' | 'doctor' };
 
 export function parseSelfHostArgs(args: readonly string[]): SelfHostArgs {
   const action = args[0];
   if (action !== 'sync' && action !== 'doctor') {
     throw new Error('self-host expects sync or doctor');
   }
-  if (
-    args.length !== 1
-    && !(args.length === 3 && args[1] === '--mode')
-  ) {
-    throw new Error('self-host accepts only --mode <rollout-mode>');
+  if (args.some((arg) => arg === '--mode' || arg.startsWith('--mode='))) {
+    throw new Error('self-host --mode was removed; structural validation is always enforced');
   }
-  const mode = modeAfter(args);
-  if (action === 'sync') return { action, mode: mode ?? 'shadow' };
-  return mode === undefined ? { action } : { action, mode };
+  if (args.length !== 1) throw new Error('self-host accepts no options');
+  return { action };
 }
 
-export function selfHostExitCode(
-  state: SelfHostState,
-  mode: SelfHostMode,
-): number {
-  if (mode !== 'enforce' && mode !== 'release-gate') return 0;
-  return state === 'not-installed' || state === 'stale' || state === 'drifted'
-    ? 2
-    : 0;
+export function selfHostExitCode(state: SelfHostState): number {
+  return state === 'not-installed' || state === 'stale' || state === 'drifted' ? 2 : 0;
 }
 
 function renderDiagnosis(diagnosis: SelfHostDiagnosis): void {
   banner('self-host doctor');
-  meta('mode', diagnosis.mode);
   meta('artifact', diagnosis.artifactRoot);
   blank();
   for (const check of diagnosis.checks) {
@@ -75,16 +48,10 @@ function renderDiagnosis(diagnosis: SelfHostDiagnosis): void {
   footer(`self-host ${renderedState}`);
 }
 
-export async function runSelfHostDoctor(
-  root: string,
-  args: readonly string[] = [],
-): Promise<SelfHostDiagnosis> {
-  const mode = modeAfter(args);
-  const diagnosis = await diagnoseSelfHost(root, {
-    ...(mode === undefined ? {} : { mode }),
-  });
+export async function runSelfHostDoctor(root: string): Promise<SelfHostDiagnosis> {
+  const diagnosis = await diagnoseSelfHost(root);
   renderDiagnosis(diagnosis);
-  process.exitCode = selfHostExitCode(diagnosis.state, diagnosis.mode);
+  process.exitCode = selfHostExitCode(diagnosis.state);
   return diagnosis;
 }
 
@@ -105,15 +72,11 @@ export async function selfHost(args: readonly string[]): Promise<void> {
     return;
   }
   if (parsed.action === 'doctor') {
-    await runSelfHostDoctor(
-      root,
-      parsed.mode === undefined ? [] : ['--mode', parsed.mode],
-    );
+    await runSelfHostDoctor(root);
     return;
   }
   banner('self-host sync');
-  meta('mode', parsed.mode);
-  const result = await syncSelfHost(root, { mode: parsed.mode });
+  const result = await syncSelfHost(root);
   meta('source', result.sourceHash.slice(0, 12));
   meta('artifact', result.artifactRoot);
   line(

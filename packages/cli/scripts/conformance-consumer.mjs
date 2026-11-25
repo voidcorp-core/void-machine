@@ -14,7 +14,8 @@ import {
   runConformanceProcess,
   runConformanceSuites,
 } from './conformance-process.mjs';
-import { loadLegacyOracle } from './conformance-legacy-oracle.mjs';
+
+import { installPackage, execByPackageName } from './conformance-install.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..', '..');
@@ -22,7 +23,6 @@ const SUITES = Object.freeze({
   install: join(HERE, 'conformance-install.mjs'),
   hooks: join(HERE, 'conformance-hooks.mjs'),
   autopilot: join(HERE, 'conformance-autopilot.mjs'),
-  latency: join(HERE, 'conformance-latency.mjs'),
 });
 
 function fail(message) {
@@ -45,7 +45,7 @@ function parseArguments(args) {
   return { suite, tarball };
 }
 
-async function runSuite(name, script, tarball, temporary, execute) {
+async function runSuite(name, script, tarball, temporary, execute, bin) {
   const processRoot = join(temporary, `suite-${name}`);
   await mkdir(join(processRoot, 'tmp'), { recursive: true });
   const result = await execute({
@@ -54,6 +54,7 @@ async function runSuite(name, script, tarball, temporary, execute) {
     cwd: REPO_ROOT,
     env: conformanceFixtureEnvironment(processRoot, {
       VOID_CONFORMANCE_TARBALL: tarball,
+      VOID_CONFORMANCE_BIN: bin,
     }),
   });
   if (result.outcome.kind === 'exited' && result.outcome.code === 0) {
@@ -69,24 +70,24 @@ async function runSuite(name, script, tarball, temporary, execute) {
   ].filter(Boolean).join('\n');
 }
 
-export async function exerciseConsumerSuites(suite, tarball, temporary, execute = runConformanceProcess) {
+export async function exerciseConsumerSuites(suite, tarball, temporary, execute = runConformanceProcess, bin) {
   if (suite !== undefined && !(suite in SUITES)) fail(`unknown suite: ${suite}`);
   const selected = suite === undefined ? Object.entries(SUITES) : [[suite, SUITES[suite]]];
   await runConformanceSuites(selected, ([name, script]) =>
-    runSuite(name, script, tarball, temporary, execute));
+    runSuite(name, script, tarball, temporary, execute, bin));
   return selected.map(([name]) => name);
 }
 
 async function main() {
-  const oracle = loadLegacyOracle();
-  if (!oracle.ok) fail(`legacy oracle: ${oracle.reason}`);
   const options = parseArguments(process.argv.slice(2));
   const temporary = await mkdtemp(join(tmpdir(), 'harness-consumer-conformance-'));
   try {
     const artifact = options.tarball === undefined
       ? await packConformanceArtifact(join(temporary, 'artifact'))
       : await verifyConformanceArtifactForCheckout(options.tarball);
-    const selected = await exerciseConsumerSuites(options.suite, artifact.tarball, temporary);
+    const bin = await installPackage(temporary, artifact.tarball);
+    await execByPackageName(temporary, artifact.tarball);
+    const selected = await exerciseConsumerSuites(options.suite, artifact.tarball, temporary, runConformanceProcess, bin);
     process.stdout.write(
       `consumer conformance passed for ${artifact.manifest.sourceSha}: ${selected.join(', ')}\n`,
     );

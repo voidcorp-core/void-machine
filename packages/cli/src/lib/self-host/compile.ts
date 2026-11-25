@@ -20,7 +20,6 @@ import {
   encodeSelfHostReceipt,
   readSelfHostReceipt,
   SELF_HOST_RECEIPT_PATH,
-  type SelfHostMode,
   type SelfHostReceiptFileInput,
   selfHostReceiptDrift,
 } from './receipt.js';
@@ -34,7 +33,7 @@ const MAX_SOURCE_BYTES = 128 * 1024 * 1024;
 const MAX_ARTIFACT_FILES = 5_000;
 const MAX_ARTIFACT_BYTES = 128 * 1024 * 1024;
 const SOURCE_INPUTS = [
-  'packages/core',
+  'packages/core/src',
   'packages/cli/src',
   'packages/hook-runner/src',
   'packages/hook-runner/scripts',
@@ -42,12 +41,6 @@ const SOURCE_INPUTS = [
   'package.json',
   'pnpm-lock.yaml',
 ] as const;
-const HASH_EXCLUSIONS = new Set([
-  'packages/core/graph/void-graph.mjs',
-  'packages/core/hooks/_void-hook.mjs',
-  'packages/core/hooks/_syntax-worker.cjs',
-  'packages/hook-runner/src/enforcement/syntax-worker-identity.generated.ts',
-]);
 
 function lexical(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -67,7 +60,6 @@ export interface SyncSelfHostOptions {
   readonly buildHookBundle?: BuildHookBundle;
   readonly wireRuntimeSurfaces?: WireSelfHostRuntimeSurfaces;
   readonly computeSourceHash?: (root: string) => Promise<string>;
-  readonly mode: SelfHostMode;
   /** Test-only fault injection after the previous artifact is backed up. */
   readonly failAfterBackup?: boolean;
 }
@@ -75,7 +67,6 @@ export interface SyncSelfHostOptions {
 export interface SelfHostSyncResult {
   readonly changed: boolean;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly files: number;
   readonly artifactRoot: string;
 }
@@ -96,8 +87,7 @@ async function sourceFiles(root: string): Promise<string[]> {
       throw new Error(`self-host source contains a symbolic link: ${relative(root, path)}`);
     }
     if (info.isFile()) {
-      const rel = relative(root, path).replaceAll('\\', '/');
-      if (!HASH_EXCLUSIONS.has(rel)) files.push(path);
+      files.push(path);
       return;
     }
     if (!info.isDirectory()) {
@@ -180,7 +170,7 @@ const defaultWireRuntimeSurfaces = async (
 };
 
 async function copyCompilerCore(root: string, destination: string): Promise<void> {
-  const source = join(root, 'packages', 'core');
+  const source = join(root, 'packages', 'core', 'src');
   const inputs = [
     '.claude-plugin',
     'agents',
@@ -236,7 +226,6 @@ async function compileArtifact(input: {
   readonly overlayRoot: string;
   readonly finalRoot: string;
   readonly sourceHash: string;
-  readonly mode: SelfHostMode;
   readonly buildHookBundle: BuildHookBundle;
   readonly wireRuntimeSurfaces: WireSelfHostRuntimeSurfaces;
 }): Promise<number> {
@@ -248,11 +237,11 @@ async function compileArtifact(input: {
   await mkdir(join(input.artifactRoot, '.void'), { recursive: true });
   // The doctrine is derived content, so the artifact must reproduce the level it
   // lives at; copying into a directory that does not exist yet fails outright.
-  await mkdir(join(input.artifactRoot, '.void', 'installed'), { recursive: true });
+  await mkdir(join(input.artifactRoot, '.void'), { recursive: true });
   await writeFile(
     join(input.artifactRoot, '.void', 'config.json'),
     `${JSON.stringify({
-      selfHost: { mode: input.mode, sourceHash: input.sourceHash },
+      selfHost: { sourceHash: input.sourceHash },
       commands: {
         test: ['pnpm', 'test'],
         typecheck: ['pnpm', 'typecheck'],
@@ -264,7 +253,7 @@ async function compileArtifact(input: {
   await Promise.all([
     cp(
       join(input.overlayRoot, 'PHILOSOPHY.md'),
-      join(input.artifactRoot, '.void', 'installed', 'PHILOSOPHY.md'),
+      join(input.artifactRoot, '.void', 'PHILOSOPHY.md'),
     ),
     cp(
       join(input.overlayRoot, 'PROJECT-DOCTRINE.template.md'),
@@ -275,7 +264,6 @@ async function compileArtifact(input: {
   const files = await collectArtifactFiles(input.artifactRoot);
   const receipt = buildSelfHostReceipt({
     sourceHash: input.sourceHash,
-    mode: input.mode,
     files,
   });
   const receiptPath = join(
@@ -339,7 +327,7 @@ async function publishArtifact(
 
 export async function syncSelfHost(
   root: string,
-  options: SyncSelfHostOptions,
+  options: SyncSelfHostOptions = {},
 ): Promise<SelfHostSyncResult> {
   const canonicalRoot = resolve(root);
   if (!isHarnessSourceRepo(canonicalRoot)) {
@@ -358,13 +346,11 @@ export async function syncSelfHost(
   const currentReceipt = await readSelfHostReceipt(artifactRoot);
   if (
     currentReceipt?.sourceHash === sourceHash
-    && currentReceipt.mode === options.mode
     && (await selfHostReceiptDrift(artifactRoot, currentReceipt)).length === 0
   ) {
     return {
       changed: false,
       sourceHash,
-      mode: options.mode,
       files: currentReceipt.files.length,
       artifactRoot,
     };
@@ -381,7 +367,6 @@ export async function syncSelfHost(
       overlayRoot,
       finalRoot: artifactRoot,
       sourceHash,
-      mode: options.mode,
       buildHookBundle: options.buildHookBundle ?? defaultBuildHookBundle,
       wireRuntimeSurfaces: options.wireRuntimeSurfaces
         ?? ((input) => defaultWireRuntimeSurfaces({
@@ -400,7 +385,6 @@ export async function syncSelfHost(
     return {
       changed: true,
       sourceHash,
-      mode: options.mode,
       files,
       artifactRoot,
     };

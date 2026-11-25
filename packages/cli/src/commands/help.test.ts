@@ -19,7 +19,6 @@ function capture(): string {
 }
 
 describe('printHelp', () => {
-  it('exposes declared project knowledge', () => { expect(capture()).toContain('why <file>'); });
   it('names the core plugin harness, never the stale `void`', () => {
     const out = capture();
     expect(out).toContain(CORE_PLUGIN_NAME);
@@ -43,8 +42,9 @@ describe('printHelp', () => {
     expect(capture()).toContain(PRODUCT_IDENTITY.repositorySlug);
   });
 
-  it('exposes conflict-free decision authoring', () => {
-    expect(capture()).toContain('decisions <sub>');
+  it('omits the retired decisions command from public help', () => {
+    expect(capture()).not.toContain('decisions <sub>');
+    expect(capture()).not.toContain('decisions new');
   });
 
   it('exposes the local mission evidence lifecycle', () => {
@@ -64,6 +64,6 @@ describe('printHelp', () => {
   });
 
   it('says autopilot resumes on its own, because that is what makes it usable', () => {
-    expect(capture()).toContain('.void/program.md');
+    expect(capture()).toContain('config.autopilot');
   });
 });

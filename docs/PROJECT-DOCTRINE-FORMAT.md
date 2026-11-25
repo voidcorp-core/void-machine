@@ -5,7 +5,7 @@ project. `void-machine init` seeds that file with a stub of a dozen lines, becau
 into every session with `@` and a form nobody has filled in is context that says nothing while
 costing what a filled one would. This page is the long form, kept here where nothing loads it.
 
-Universal rules — the ones that hold in any project — live in `.void/installed/PHILOSOPHY.md` and
+Universal rules — the ones that hold in any project — live in `.void/PHILOSOPHY.md` and
 are managed by the harness; to change one, open an issue on `voidcorp-core/void-machine` through
 `void-learn`. Everything below is yours.
 
@@ -13,7 +13,7 @@ are managed by the harness; to change one, open an issue on `voidcorp-core/void-
 the heading when you have something to put under it, and delete one that stops being true.
 
 The list of section kinds has one owner: the section routing table of `void-learn`
-(`packages/core/skills/void-learn/SKILL.md`). This page shows the shape of each kind under the
+(`packages/core/src/skills/void-learn/SKILL.md`). This page shows the shape of each kind under the
 same name, and adds none. `void-learn` places a rule by meaning: it appends under the heading
 your file already has for that kind, whatever its wording, creates the table's name only when no
 heading names the kind, and asks you when two headings could hold the rule.
@@ -54,7 +54,7 @@ vocabulary to enforce.)
 
 ## Quality bar
 
-What "done" means on this project, beyond the universal floor in `.void/installed/PHILOSOPHY.md`.
+What "done" means on this project, beyond the universal floor in `.void/PHILOSOPHY.md`.
 Write only what raises or specializes that floor here.
 
 - **<rule name>** : <what must hold before a change counts as shipped>.
@@ -82,7 +82,7 @@ the choice without paging the original team.
 
 Rules that apply HERE only — usually because of a specific dependency,
 incident, regulation, or domain constraint. If a rule is universal,
-it belongs in `.void/installed/PHILOSOPHY.md`, not here.
+it belongs in `.void/PHILOSOPHY.md`, not here.
 
 Format per rule:
 
@@ -136,7 +136,7 @@ is required.)
 
 Things THIS project has paid for and will never reintroduce. Universal
 anti-patterns (DI containers, CQRS default, raw `process.env`, etc.) are
-already in `.void/installed/PHILOSOPHY.md` — list here only what is project-local.
+already in `.void/PHILOSOPHY.md` — list here only what is project-local.
 
 - **<pattern>** : do not <action> in `<path>`.
   - **Why** : <incident / ADR>.

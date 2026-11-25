@@ -81,18 +81,12 @@ describe('validateConfig', () => {
   });
 });
 
-describe('context continuity config', () => {
-  it('keeps old configs valid and defaults the threshold only inside context config', () => {
+describe('Herdr context window config', () => {
+  it('keeps old configs valid without adding reminder settings', () => {
     expect(configSchema.parse({})).not.toHaveProperty('context');
     expect(configSchema.parse({ context: { windowTokens: 200_000 } })).toMatchObject({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: 50 },
+      context: { windowTokens: 200_000 },
     });
-  });
-
-  it.each([40, 50, 60])('accepts the bounded %i percent threshold', (threshold) => {
-    expect(validateConfig({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
-    }).ok).toBe(true);
   });
 
   it.each([0, -1, 1.5])('rejects the invalid window size %s without clamping', (windowTokens) => {
@@ -101,13 +95,13 @@ describe('context continuity config', () => {
     expect(result.issues.join(' ')).toContain('context.windowTokens');
   });
 
-  it.each([39, 61, 49.5])('rejects the out-of-bounds threshold %s without clamping', (threshold) => {
-    const result = validateConfig({
-      context: { windowTokens: 200_000, checkpointThresholdPercent: threshold },
-    });
-    expect(result.ok).toBe(false);
-    expect(result.issues.join(' ')).toContain('context.checkpointThresholdPercent');
+  it('ignores retired threshold fields in old configurations', () => {
+    expect(configSchema.parse({ context: { windowTokens: 200_000, checkpointThresholdPercent: 70 } }))
+      .toMatchObject({ context: { windowTokens: 200_000 } });
+    expect(configSchema.parse({ context: { checkpointThresholdPercent: 70 } }).context)
+      .not.toHaveProperty('checkpointThresholdPercent');
   });
+
 });
 
 describe('packsCoherenceIssues', () => {
@@ -157,3 +151,23 @@ describe('paths accepts a list of globs', () => {
     expect(result.ok === false && result.issues.join(' ')).toContain('paths.business');
   });
 })
+
+
+describe('declared Autopilot authority', () => {
+  const authority = {
+    schemaVersion: 2, enabled: true, base: 'develop', deployBranch: 'main',
+    progress: { provider: 'linear', scope: 'team/project',
+      states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] } },
+  };
+  it('retains explicit authority while a default config grants nothing', () => {
+    expect(configSchema.parse({ autopilot: authority })).toHaveProperty('autopilot.enabled', true);
+    expect(configSchema.parse({})).not.toHaveProperty('autopilot');
+  });
+  it.each([
+    { ...authority, enabled: undefined }, { ...authority, enabled: 'true' },
+    { ...authority, schemaVersion: 1 }, { ...authority, extraPermission: true },
+    { ...authority, progress: { ...authority.progress, order: ['DEV-1'] } },
+  ])('refuses malformed or undeclared authority %j', autopilot => {
+    expect(validateConfig({ autopilot }).ok).toBe(false);
+  });
+});

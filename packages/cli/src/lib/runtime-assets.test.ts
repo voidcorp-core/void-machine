@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import {
   wireClaudeLocalAssets,
 } from './runtime-assets.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 const CLAUDE_PLUGIN_ROOT = '$' + '{CLAUDE_PLUGIN_ROOT}';
 
 function scratch(): string {
@@ -67,9 +67,13 @@ describe('wireClaudeLocalAssets', () => {
     // the command format is Claude-only, and this harness targets three runtimes.
     expect(existsSync(join(root, '.claude/skills/void-doctor/SKILL.md'))).toBe(true);
     expect(existsSync(join(root, '.claude/commands'))).toBe(false);
-    expect(existsSync(join(root, '.void/hooks/_void-hook.mjs'))).toBe(true);
-    expect(existsSync(join(root, '.void/hooks/_hooklib.sh'))).toBe(false);
-    expect(result.hooks).toBe(2);
+    const installedHooks = readdirSync(join(root, '.void/hooks'));
+    // The self-contained runner is the only delivered hook asset; no retired
+    // syntax worker or shell support library should be staged implicitly.
+    expect(installedHooks).toEqual(['_void-hook.mjs']);
+    expect(result.hooks).toBe(installedHooks.length);
+    expect(readFileSync(join(root, '.void/hooks/_void-hook.mjs'))
+      .equals(readFileSync(join(CORE_ROOT, 'hooks/_void-hook.mjs')))).toBe(true);
     // The installed skill carries only the spec's fields; `runtimes` is harness
     // metadata and stays in the source tree with `.source`.
     const installed = readFileSync(join(root, '.claude/skills/void-tdd/SKILL.md'), 'utf8');
@@ -80,7 +84,7 @@ describe('wireClaudeLocalAssets', () => {
 
   it('treats Windows CRLF in a generated agent as the same canonical doctrine', async () => {
     const fixture = scratch();
-    const source = join(fixture, 'core');
+    const source = join(fixture, 'core', 'dist');
     cpSync(CORE_ROOT, source, { recursive: true });
     const generated = join(source, 'agents', 'security-engineer.md');
     writeFileSync(generated, readFileSync(generated, 'utf8').replaceAll('\n', '\r\n'));

@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8').toLowerCase();
 
-const testing = read('packages/core/skills/void-testing/SKILL.md');
-const next = read('packages/packs/pack-nextjs/claude/modules/01-nextjs.md');
-const server = read('packages/packs/pack-server/claude/modules/01-server.md');
+const testing = read('packages/core/src/skills/void-testing/SKILL.md');
+const next = read('packages/packs/pack-nextjs/src/claude/modules/01-nextjs.md');
+const server = read('packages/packs/pack-server/src/claude/modules/01-server.md');
 
 describe('release E2E guidance', () => {
   it('keeps immutable artifact proof separate from local development feedback', () => {

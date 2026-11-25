@@ -1,273 +1,63 @@
-// `void-machine status` — the deterministic, offline, LLM-free project health surface.
-// Gathers local signals, joins them with the frozen certification into a ProjectState + score,
-// renders the terminal view, and persists .void/machine/status.json (+ a history snapshot).
-
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { voidMachineDir } from '@voidcorp/hook-runner';
-import { fileURLToPath } from 'node:url';
-import {
-  adaptCatalogV1,
-  type Certification,
-  computeProjectState,
-  type GraphModel,
-  installedCapabilityIds,
-  type LocalSignals,
-  parseActivations,
-  projectCatalogV3ToV1,
-  type ProjectState,
-  type RuntimeEvidence,
-  type Score,
-  scoreProjectState,
-} from '@voidcorp/harness-graph';
-import { loadTelemetryStream } from '../lib/graph-io.js';
-import { configPackDirs } from '../lib/packs.js';
+// Factual installation status. Historical score snapshots are left untouched.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { freshnessNotice, resolveFreshness, voidMachineDir } from '@voidcorp/hook-runner';
 import { installedPath, remedyPrefix, resolveProjectRoots } from '../lib/project-roots.js';
-import { detectedAdapters } from '../lib/runtime-adapters.js';
+import { detectedAdapters, type RuntimeInspection } from '../lib/runtime-adapters.js';
 import { banner, blank, c, footer, line } from '../lib/render.js';
-import { freshnessNotice, resolveFreshness } from '@voidcorp/hook-runner';
 import { readInstallReceipt } from '../lib/receipts.js';
 
-// dist/main.js -> the package root (packages/cli in the monorepo, node_modules/<package> once published).
-const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-/** Candidate paths for a shipped data artifact, in priority order: the monorepo source
- * (`packages/core/data/<name>`) first for dev, then the package-local copy
- * (`core-assets/data/<name>`) that ships in the published tarball. Pure — the caller picks the first
- * that exists, so a published CLI runs `status` with no monorepo. */
-export function dataCandidates(pkgRoot: string, name: string): string[] {
-  return [resolve(pkgRoot, '..', 'core', 'data', name), join(pkgRoot, 'core-assets', 'data', name)];
-}
-const findData = (name: string): string | undefined => dataCandidates(PKG_ROOT, name).find((p) => existsSync(p));
-
-const DIMENSION_ORDER = ['installation', 'portability', 'activation', 'efficacy', 'enforcement', 'dx', 'performance', 'governance'];
-const HISTORY_KEEP = 30; // retain the most recent N state snapshots; older ones are pruned each run
-
-/** Keep only the most recent HISTORY_KEEP snapshots (ISO-timestamp filenames sort chronologically). */
-function pruneHistory(dir: string): void {
-  const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
-  for (const f of files.slice(0, Math.max(0, files.length - HISTORY_KEEP))) {
-    try {
-      rmSync(join(dir, f));
-    } catch {
-      // best-effort pruning; a locked snapshot must not fail the run
-    }
+/** Render only observations supplied by the existing installation adapters. */
+export function statusLines(
+  runtimes: readonly Pick<RuntimeInspection, 'runtime' | 'evidence'>[],
+  installedVersion: string | undefined,
+): string[] {
+  const out = [`installed version: ${installedVersion ?? 'unknown'}`, '', 'RUNTIMES'];
+  const show = (value: boolean | null): string => value === null ? 'unknown' : value ? 'yes' : 'no';
+  if (runtimes.length === 0) out.push('  no runtime detected');
+  for (const { runtime, evidence } of runtimes) {
+    out.push(`  ${runtime} installed=${show(evidence.installed)} wired=${show(evidence.wired)} `
+      + `fired=${show(evidence.fired)} observed=${show(evidence.observed)}`);
   }
-}
-
-/** Count skill activations and key them by capability id (activations carry the bare skill name). */
-export function usedCountsById(
-  events: readonly { kind: string; name: string }[],
-  cert: Certification,
-): Map<string, number> {
-  const nameToId = new Map<string, string>();
-  const ambiguous = new Set<string>();
-  for (const cap of cert.capabilities) {
-    const bare = cap.id.replace(/^skill:/, '').split('/').pop() ?? cap.id;
-    if (nameToId.has(bare)) ambiguous.add(bare);
-    else nameToId.set(bare, cap.id);
-  }
-  const counts = new Map<string, number>();
-  for (const ev of events) {
-    if (ev.kind !== 'skill' || ambiguous.has(ev.name)) continue; // a bare name shared by 2+ caps is unattributable
-    const id = nameToId.get(ev.name);
-    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-  return counts;
-}
-
-/**
- * The pack directories a project has activated, derived from `.void/config.json`
- * `packs` keys (`@voidcorp/harness-<x>` -> `pack-<x>`). Thin Set wrapper over the
- * shared `configPackDirs` so status, init, and update never diverge on the mapping.
- */
-export function activatedPackDirs(config: { packs?: Record<string, string> }): Set<string> {
-  return new Set(configPackDirs(config));
-}
-
-const pad = (s: string, n: number): string => (s.length >= n ? s : s + ' '.repeat(n - s.length));
-
-/** Render the ProjectState + score as plain terminal lines (pure — the command adds color + writes). */
-export function statusLines(state: ProjectState, score: Score): string[] {
-  const out: string[] = [];
-  const cap = score.capped ? ` (capped: ${score.blockers.join(', ')})` : '';
-  // Honest headline: without behavioral evidence (low confidence) this is a
-  // STRUCTURE score (owners/runtimes/enforcement declared), not proven "health".
-  // It graduates to PROJECT HEALTH only once real usage/eval evidence exists.
-  const headline = score.confidence === 'low' ? 'VOID STRUCTURE SCORE' : 'VOID PROJECT HEALTH ';
-  out.push(`${headline}  ${score.global}/100   confidence: ${score.confidence}${cap}`);
-  out.push('');
-  const byKey = new Map(score.dimensions.map((d) => [d.key, d]));
-  for (const key of DIMENSION_ORDER) {
-    const d = byKey.get(key);
-    if (!d) continue;
-    const value = d.score === null || d.score === undefined ? 'pending' : `${d.score}%`;
-    const flag = d.kind === 'blocker' ? (d.red ? ' [RED]' : '') : '';
-    out.push(`  ${pad(key, 14)} ${pad(value, 8)} ${d.detail ?? ''}${flag}`);
-  }
-  out.push('');
-  const counts = new Map<string, number>();
-  for (const s of state.capabilities) counts.set(s.state, (counts.get(s.state) ?? 0) + 1);
-  const order = ['effective', 'used', 'verified', 'installed', 'available'];
-  out.push(`CAPABILITIES (${state.capabilities.length})`);
-  out.push(`  ${order.map((s) => `${counts.get(s) ?? 0} ${s}`).join(' · ')}`);
-  out.push('');
-  out.push('RUNTIMES');
-  const show = (value: boolean | null): string =>
-    value === null ? 'unknown' : value ? 'yes' : 'no';
-  for (const runtime of state.runtimes) {
-    const ev = runtime.evidence;
-    out.push(
-      `  ${runtime.runtime} installed=${show(ev.installed)} wired=${show(ev.wired)} `
-      + `fired=${show(ev.fired)} observed=${show(ev.observed)} certified=${show(ev.certified)}`,
-    );
-  }
-  // Honesty: skill usage is only observable on Claude (its Skill tool fires the
-  // meter). When Codex is the only runtime, usage is unmeasurable — activation is
-  // pending, and this note explains why a project can look "0 used" yet be active.
-  const codexDetected = state.runtimes.some((r) => r.runtime === 'codex' && r.detected);
-  const claudeDetected = state.runtimes.some((r) => r.runtime === 'claude' && r.detected);
-  if (codexDetected && !claudeDetected) {
-    out.push('  note: skill usage is not observable on Codex (no hook event) — activation shows pending, not 0');
-  }
-  out.push('');
-  out.push('NEXT BEST ACTIONS');
-  if (score.nextActions.length === 0) out.push('  (none — nothing measurable to improve yet)');
-  for (const a of score.nextActions) out.push(`  ${a.rank}. ${pad(a.title, 46)} +${a.impact}`);
   return out;
 }
 
-function readJson<T>(path: string): T {
-  const parsed: T = JSON.parse(readFileSync(path, 'utf8'));
-  return parsed;
-}
-
 export async function status(_args: readonly string[]): Promise<void> {
-  // What `status` measures is the installation, and `.void/machine/` is
-  // per-repository state: from a linked worktree both live in the main
-  // checkout (decision of 2026-09-02, runtime state from a worktree). What is
-  // printed about that root, a remedy or a path, then names it (see
-  // `remedyPrefix` and `installedPath`): both are read where the command was typed.
+  // A linked worktree observes the installation in the main checkout. Remedies
+  // and the persisted snapshot name that same root.
   const roots = resolveProjectRoots();
   const cwd = roots.installRoot;
-  const certPath = findData('certification.json');
-  if (!certPath) {
-    footer(c.red('no certification.json found — reinstall the harness, or run `pnpm certification:build` in the monorepo.'));
-    process.exit(1);
-  }
-  const cert = readJson<Certification>(certPath);
-  if (cert.capabilities.length === 0) {
-    // A real certification always ships the full capability catalog; an empty one is corrupt, not a
-    // legitimately-empty project (the project can be empty; the shipped catalog never is).
-    footer(c.red('certification.json has no capabilities — likely corrupt; run `pnpm certification:build`.'));
-    process.exit(1);
-  }
-  const modelPath = findData('model.json');
-  const legacyModel: GraphModel = modelPath
-    ? readJson<GraphModel>(modelPath)
-    : { version: 1, nodes: [], edges: [] };
-  const model = projectCatalogV3ToV1(adaptCatalogV1(legacyModel));
-  const staticTokensById = new Map<string, number>();
-  for (const n of model.nodes) if (typeof n.staticTokens === 'number') staticTokensById.set(n.id, n.staticTokens);
-
-  const events = parseActivations(loadTelemetryStream(cwd, 'activations.jsonl'));
-  // Installed = core capabilities + only the packs this project activated (read
-  // from .void/config.json). Absent config ⇒ no packs ⇒ core only — never the
-  // whole catalog, which overstated the surface.
-  const configPath = join(cwd, '.void', 'config.json');
-  const config = existsSync(configPath) ? readJson<{ packs?: Record<string, string> }>(configPath) : {};
-  const declaredIds = installedCapabilityIds(
-    cert.capabilities.map((cp) => cp.id),
-    activatedPackDirs(config),
-  );
-  const inspections = await Promise.all(
-    detectedAdapters(cwd).map((adapter) => adapter.inspect(cwd)),
-  );
-  const operational = new Map<string, (typeof inspections)[number]['evidence']>(
-    inspections.map((inspection) => [
-    inspection.runtime,
-    inspection.evidence,
-    ]),
-  );
-  const installedIds = new Set<string>();
-  const verifiedIds = new Set<string>();
-  for (const cap of cert.capabilities) {
-    if (!declaredIds.has(cap.id)) continue;
-    const evidence = cap.runtimes
-      .map((runtime) => operational.get(runtime))
-      .filter((value) => value !== undefined);
-    if (evidence.some((value) => value.installed === true)) installedIds.add(cap.id);
-    if (evidence.some((value) => value.wired === true && value.fired === true)) {
-      verifiedIds.add(cap.id);
-    }
-  }
-  const runtimeEvidence = new Map<string, RuntimeEvidence>();
-  for (const inspection of inspections) {
-    const relevant = cert.capabilities.filter((cap) =>
-      declaredIds.has(cap.id)
-      && cap.runtimes.includes(inspection.runtime),
-    );
-    const certified = relevant.length === 0
-      ? null
-      : relevant.every((cap) => cap.proof.verified);
-    runtimeEvidence.set(inspection.runtime, {
-      ...inspection.evidence,
-      certified,
-    });
-  }
-  const signals: LocalSignals = {
-    installedIds,
-    verifiedIds,
-    usedCounts: usedCountsById(events, cert),
-    runtimeEvidence,
-  };
-
-  const state = computeProjectState(cert, signals, cert.harnessVersion);
-  const score = scoreProjectState(state, cert, staticTokensById);
+  const receipt = await readInstallReceipt(cwd);
+  const inspections = await Promise.all(detectedAdapters(cwd).map((adapter) => adapter.inspect(cwd)));
+  const runtimes = inspections.map(({ runtime, evidence }) => ({ runtime, evidence }));
 
   banner('status');
   blank();
-  for (const l of statusLines(state, score)) line(l);
+  for (const text of statusLines(runtimes, receipt?.version)) line(text);
 
-  // Persist first (best-effort), then report the TRUE outcome — never claim a write that failed.
   let persisted = false;
   try {
-    const generatedAt = new Date().toISOString();
-    const body = `${JSON.stringify({ ...state, generatedAt, score }, null, 2)}\n`;
-    // Observed state: a snapshot of what this machine measured, plus its history.
     const localDir = voidMachineDir(cwd);
-    const historyDir = join(localDir, 'history');
-    mkdirSync(historyDir, { recursive: true });
-    // `status.json`, not `state.json`: the old name also belonged to an autopilot
-    // run's cursor, and one name for two things is one name too few.
-    writeFileSync(join(localDir, 'status.json'), body);
-    writeFileSync(join(historyDir, `${generatedAt.replace(/[:.]/g, '-')}.json`), body);
-    pruneHistory(historyDir);
+    mkdirSync(localDir, { recursive: true });
+    writeFileSync(join(localDir, 'status.json'), `${JSON.stringify({
+      schemaVersion: 2,
+      generatedAt: new Date().toISOString(),
+      installedVersion: receipt?.version ?? 'unknown',
+      runtimes,
+    }, null, 2)}\n`);
     persisted = true;
   } catch {
-    // a read-only .void must not fail the render — but we must not claim a write that did not happen
+    // Rendering remains useful on a read-only install; the footer reports it.
   }
   blank();
-  if (score.capped) line(c.red(`  score capped by ${score.blockers.join(', ')}`));
 
-  // Advisory, and last: an outdated install still works, so this never touches the
-  // score. Answered from cache when one is fresh, so `status` normally stays offline.
-  // The remedy it carries, `update`, acts on the directory it is typed in.
-  const receipt = await readInstallReceipt(cwd);
   const notice = freshnessNotice(
-    await resolveFreshness({
-      installed: receipt?.version ?? 'unknown',
-      env: process.env,
-      now: Date.now(),
-    }),
+    await resolveFreshness({ installed: receipt?.version ?? 'unknown', env: process.env, now: Date.now() }),
     receipt?.source,
     remedyPrefix(roots),
   );
   if (notice !== undefined) line(c.yellow(`  ${notice}`));
-
-  footer(
-    persisted
-      ? c.green(`state written to ${installedPath(roots, '.void/machine/status.json')}`)
-      : c.dim('.void not writable — render only'),
-  );
+  footer(persisted
+    ? c.green(`state written to ${installedPath(roots, '.void/machine/status.json')}`)
+    : c.dim('.void not writable — render only'));
 }

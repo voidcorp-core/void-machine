@@ -1,4 +1,3 @@
-import { cheatsheet } from './commands/cheatsheet.js';
 import { commandName, type CommandName } from './lib/command-catalog.js';
 // CLI entry — dispatches to init / add / remove / list / doctor / help.
 
@@ -13,15 +12,11 @@ import { hydrate } from './commands/hydrate.js';
 import { check } from './commands/check.js';
 import { update } from './commands/update.js';
 import { autopilot } from './commands/autopilot.js';
-import { why } from './commands/why.js';
-import { graph } from './commands/graph.js';
-import { audit } from './commands/audit.js';
 import { status } from './commands/status.js';
 import { projects } from './commands/projects.js';
 import { ui } from './commands/ui.js';
 import { resume } from './commands/resume.js';
 import { adoption } from './commands/adoption.js';
-import { decisions } from './commands/decisions.js';
 import { mission } from './commands/mission.js';
 import { agents } from './commands/agents.js';
 import { security } from './commands/security.js';
@@ -37,7 +32,7 @@ import { PRODUCT_IDENTITY } from '@voidcorp/hook-runner';
  * failure it prevents is silent: a command missing from it does not lose its
  * help, it MUTATES the project when asked to explain itself.
  */
-const SELF_DOCUMENTING = new Set(['autopilot', 'decisions', 'mission', 'security']);
+const SELF_DOCUMENTING = new Set(['autopilot', 'mission', 'security']);
 
 /** Did the caller ask for help rather than for the command to run? */
 export function asksForHelp(cmd: string | undefined, rest: readonly string[]): boolean {
@@ -97,21 +92,16 @@ const HANDLERS = {
   'update': update,
   'hydrate': hydrate,
   'check': check,
-  'graph': graph,
-  'why': why,
   'autopilot': autopilot,
-  'audit': audit,
   'projects': projects,
   'resume': resume,
   'ui': ui,
   'adoption': adoption,
-  'decisions': decisions,
   'mission': mission,
   'agents': agents,
   'security': security,
   'self-host': selfHost,
   'install': install,
-  'cheatsheet': cheatsheet,
   'version': () => { process.stdout.write(`${version}\n`); },
   'help': () => printHelp(),
 } satisfies Record<CommandName, (args: readonly string[]) => void | Promise<void>>;

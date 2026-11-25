@@ -21,7 +21,7 @@ import {
   type StopSignal,
 } from './loop.js';
 import type { MergeHold } from './merge-hold.js';
-import { parseProgramDescriptor } from './program.js';
+import { autopilotAuthoritySchema } from './config.js';
 import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from './shared-state.js';
 
 // The kernel decides what each slot does from what Linear and GitHub say, and
@@ -31,46 +31,24 @@ import { fingerprintOf, type SharedFingerprint, type SharedStateReading } from '
 
 interface ProgramSpec {
   readonly clusterSize?: number;
+  readonly base?: string;
+  readonly humanWaitLabel?: string;
   /** The branch that ships, when the programme names it; the repository default otherwise. */
   readonly deployBranch?: string;
   readonly protectedPaths?: readonly string[];
 }
 
-function programText(options: ProgramSpec = {}): string {
-  const declared =
-    options.protectedPaths === undefined
-      ? ''
-      : `  protectedPaths:\n${options.protectedPaths.map((path) => `    - ${path}\n`).join('')}`;
-  const deploy = options.deployBranch === undefined ? '' : `\n  deployBranch: ${options.deployBranch}`;
-  return `---
-schemaVersion: 1
-status: executing
-program: loop
-plan: docs/plans/p.md
-spec: docs/specs/s.md
-progress:
-  provider: linear
-  scope: voidcorp/DEV
-  order: [DEV-1]
-  states:
-    ready: [Todo]
-    started: [In Progress]
-    review: [In Review]
-    done: [Done, Canceled]
-autopilot:
-  schemaVersion: 2
-  clusterSize: ${options.clusterSize ?? 4}
-  base: develop${deploy}
-  ownership:
-    sequential:
-      - pnpm-lock.yaml
-      - packages/cli/core-assets/**
-${declared}---
-`;
+function authority(options: ProgramSpec = {}, enabled = true, schemaVersion: 2 | 3 = 3) {
+  const { enabled: consent, progress, humanGates, ...autopilot } = autopilotAuthoritySchema.parse({
+    schemaVersion, enabled, base: 'develop', ...options,
+    ownership: { sequential: ['pnpm-lock.yaml', 'packages/cli/dist/core-assets/**'] },
+    progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
+      states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done', 'Canceled'] } },
+  });
+  return { status: 'executing' as const, ...(consent ? { autopilot } : {}),
+    autopilotConsentWithheld: !consent, progress, humanGates };
 }
-
-const program = (options?: ProgramSpec) =>
-  loopProgramOf(parseProgramDescriptor(programText(options)));
+const program = (options?: ProgramSpec) => loopProgramOf(authority(options));
 
 interface TicketSpec {
   readonly id: string;
@@ -448,8 +426,8 @@ describe('slot assignment', () => {
 
   it('admits one ticket at a time on a path the program declares sequential', () => {
     const tickets = [
-      queued('DEV-1', ['packages/cli/core-assets/a']),
-      queued('DEV-2', ['packages/cli/core-assets/b']),
+      queued('DEV-1', ['packages/cli/dist/core-assets/a']),
+      queued('DEV-2', ['packages/cli/dist/core-assets/b']),
       queued('DEV-3', ['packages/core']),
     ];
     expect(assigned(decide({ tickets }))).toEqual(['DEV-1', 'DEV-3']);
@@ -635,7 +613,7 @@ describe('a held ticket and its pull request', () => {
 
   it('compares the pull request with the base as resolved, not as declared', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     const spec = { tickets };
     const decision = decideLoop({
       program: auto,
@@ -653,7 +631,7 @@ describe('a held ticket and its pull request', () => {
 
   it('never arms a merge into the branch that deploys, once `auto` resolves to it', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     const spec = { tickets };
     const onMain: GithubObservation = {
       ...github([pull({ ...reviewed('DEV-1', 11), base: 'main' })]),
@@ -691,8 +669,15 @@ describe('a held ticket and its pull request', () => {
     expect(actionFor(actions, 'DEV-1')).toMatchObject({ kind: 'wait', reason: 'worker-active' });
   });
 
+  it('waits for a reviewed draft to become ready without another writer or reviewer', () => {
+    expect(one({}, { draft: true, ...reviewed('DEV-1', 11) })).toMatchObject({
+      kind: 'wait', reason: 'draft',
+    });
+  });
+
   it('resumes a draft nobody is working on', () => {
-    expect(one({}, { draft: true })).toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
+    expect(one({}, { draft: true }, { reviews: { 'DEV-1': [] } }))
+      .toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
   });
 
   it('hands failing checks back to the worker', () => {
@@ -944,7 +929,7 @@ describe('a held ticket and its pull request', () => {
 
     it('keeps a draft, a conflict, a failing check and a protected path ahead of the hold', () => {
       const hold = { hold: true };
-      expect(one({}, { draft: true }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'resume' });
+      expect(one({}, { draft: true }, hold)).toMatchObject({ kind: 'wait', reason: 'draft' });
       expect(one({}, { mergeState: 'DIRTY' }, hold)).toMatchObject({ kind: 'hand-back-to-worker', reason: 'conflict' });
       expect(one({}, { failingCheck: true }, hold)).toMatchObject({
         kind: 'hand-back-to-worker',
@@ -1018,10 +1003,7 @@ describe('a held ticket and its pull request', () => {
         options.defaultBranch === null ? undefined : (options.defaultBranch ?? 'main'),
       );
       const decision = decideLoop({
-        program: loopProgramOf(parseProgramDescriptor(
-          programText(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch })
-            .replace('base: develop', 'base: main'),
-        )),
+        program: program({ base: 'main', ...(options.deployBranch === undefined ? {} : { deployBranch: options.deployBranch }) }),
         tracker: tracker(spec),
         github: { ...observed, base: 'main' },
         signal: 'none',
@@ -1074,7 +1056,10 @@ describe('protected paths', () => {
       '.github/workflows/ci.yml',
       '.github/actions/void-enforce/action.yml',
       '.void/program.md',
-      'packages/core/hooks/_void-hook.mjs',
+      'packages/core/dist/hooks/_void-hook.mjs',
+      'packages/core/src/hooks/secret-in-content.sh',
+      'packages/core/dist/agents/independent-code-reviewer.md',
+      'packages/core/src/specialists/independent-code-reviewer.yaml',
       // What actually runs here: the installed runner, and the files that wire
       // it into each runtime or scope what it enforces.
       '.void/hooks/_void-hook.mjs',
@@ -1104,7 +1089,7 @@ describe('protected paths', () => {
     for (const file of [
       'scripts/auto-merge-contract.mjs',
       'scripts/verify.mjs',
-      'packages/core/enforce/ci-enforce.sh',
+      'packages/core/src/enforce/ci-enforce.sh',
     ]) {
       const action = actionFor(decide({ tickets }, { pulls: [touching(['docs/a.md', file])] }), 'DEV-1');
       expect(action, file).toMatchObject({ kind: 'mark-human-wait', reason: 'protected-path' });
@@ -1152,8 +1137,8 @@ describe('protected paths', () => {
       'packages/cli/src/commands/autopilot.ts',
       'packages/cli/src/lib/autopilot/footprint-area.ts',
       'packages/mission-engine/src/specialist/completion.ts',
-      'packages/core/agents/independent-code-reviewer.md',
-      'packages/cli/core-assets/specialists/independent-code-reviewer.yaml',
+      'packages/core/src/agents/independent-code-reviewer.md',
+      'packages/cli/dist/core-assets/specialists/independent-code-reviewer.yaml',
       '.claude/agents/independent-code-reviewer.md',
       '.claude/settings.local.json',
       '.mcp.json',
@@ -1245,8 +1230,8 @@ describe('promotion', () => {
 describe('the human-wait label', () => {
   const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' })];
   const pulls = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
-  const input = (text: string): LoopInput => ({
-    program: loopProgramOf(parseProgramDescriptor(text)),
+  const input = (options: ProgramSpec = {}): LoopInput => ({
+    program: program(options),
     tracker: tracker({ tickets }),
     github: github(pulls),
     signal: 'none',
@@ -1259,8 +1244,8 @@ describe('the human-wait label', () => {
 
   it('names one label for every ticket handed to a person, the declared one first', () => {
     expect(HUMAN_WAIT_LABEL).toBe('void:human-wait');
-    expect(decideLoop(input(programText())).humanWaitLabel).toBe(HUMAN_WAIT_LABEL);
-    const declared = programText().replace('base: develop', 'base: develop\n  humanWaitLabel: needs-human');
+    expect(decideLoop(input()).humanWaitLabel).toBe(HUMAN_WAIT_LABEL);
+    const declared = { humanWaitLabel: 'needs-human' };
     expect(decideLoop(input(declared)).humanWaitLabel).toBe('needs-human');
   });
 });
@@ -1353,7 +1338,7 @@ describe('shared repository state', () => {
 
   it('protects the local refs of every branch the loop may merge into or ship from', () => {
     expect(protectedBranches(program({ deployBranch: 'main' }).autopilot)).toEqual(['develop', 'main']);
-    const auto = loopProgramOf(parseProgramDescriptor(programText().replace('base: develop', 'base: auto')));
+    const auto = program({ base: 'auto' });
     expect(protectedBranches(auto.autopilot)).toEqual(['develop', 'main']);
     expect(protectedBranches(program().autopilot)).toEqual(['develop']);
   });
@@ -1482,7 +1467,7 @@ describe('stopping', () => {
     expect(actions).toContainEqual({ kind: 'drain', reason: 'quota-low' });
   });
 
-  it('drains after three consecutive tickets sent to a human', () => {
+  it('admits independent work after three tickets sent to a human', () => {
     const recent = [
       { ticketId: 'DEV-7', outcome: 'merged' as const },
       { ticketId: 'DEV-8', outcome: 'human-wait' as const, reason: 'semantic-conflict' },
@@ -1491,14 +1476,14 @@ describe('stopping', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
     const actions = decide({ tickets, recent }, { pulls });
-    expect(actions).toContainEqual({ kind: 'drain', reason: 'human-wait-streak' });
-    expect(assigned(actions)).toEqual([]);
+    expect(actions.some(action => action.kind === 'drain')).toBe(false);
+    expect(assigned(actions)).toEqual(['DEV-2']);
     // Two in a row is not three: a merge in between resets the count.
     const broken = [...recent.slice(1), { ticketId: 'DEV-6', outcome: 'merged' as const }];
     expect(assigned(decide({ tickets, recent: broken }, { pulls }))).toEqual(['DEV-2']);
   });
 
-  it('does not count a pull request that only waits for a human merge in the streak', () => {
+  it('keeps admitting work across human merge holds and unrelated waits', () => {
     // Under a human hold every reviewed pull request waits for a person by
     // design; counting those would stop the loop after three good tickets.
     const gate = (ticketId: string) => ({ ticketId, outcome: 'human-wait' as const, reason: 'human-merge-hold' });
@@ -1506,19 +1491,16 @@ describe('stopping', () => {
     const tickets = [started('DEV-1', { pullRequest: 11, branch: 'work/DEV-1' }), queued('DEV-2')];
     const pulls = [pull(reviewed('DEV-1', 11))];
     const actions = decide({ tickets, recent }, { pulls, hold: true });
-    expect(actions).not.toContainEqual({ kind: 'drain', reason: 'human-wait-streak' });
+    expect(actions.some(action => action.kind === 'drain')).toBe(false);
     expect(assigned(actions)).toEqual(['DEV-2']);
-    // A wait for any other reason still counts, around the merge gates.
+    // Other waits also retain their scope instead of stopping independent work.
     const mixed = [
       { ticketId: 'DEV-6', outcome: 'human-wait' as const, reason: 'semantic-conflict' },
       gate('DEV-7'),
       { ticketId: 'DEV-8', outcome: 'human-wait' as const, reason: 'github-unreadable' },
     ];
     const closed = [pull({ ...reviewed('DEV-1', 11), state: 'CLOSED' })];
-    expect(decide({ tickets, recent: mixed }, { pulls: closed })).toContainEqual({
-      kind: 'drain',
-      reason: 'human-wait-streak',
-    });
+    expect(assigned(decide({ tickets, recent: mixed }, { pulls: closed }))).toEqual(['DEV-2']);
   });
 
   it('drains when no queued ticket is ready or can be made ready', () => {
@@ -1649,8 +1631,8 @@ describe('boundaries', () => {
   });
 
   it('refuses a program that did not consent to autopilot', () => {
-    const withheld = programText().replace('  schemaVersion: 2\n  clusterSize', '  enabled: false\n  schemaVersion: 2\n  clusterSize');
-    expect(() => loopProgramOf(parseProgramDescriptor(withheld))).toThrow(/autopilot/);
+    expect(() => loopProgramOf(authority({}, false))).toThrow(/autopilot/);
+    expect(() => loopProgramOf(authority({}, true, 2))).toThrow(/migration/);
   });
 
   it('reads the stop signal and refuses one it does not know', () => {

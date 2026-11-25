@@ -23,7 +23,8 @@
 import type { CheckResult } from '../prerequisites.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
-export interface ParsedProgram {
+export interface ParsedAuthority {
+  readonly source?: string;
   readonly status?: string;
   /**
    * True when a block was written and then took its consent back. Carried
@@ -32,9 +33,8 @@ export interface ParsedProgram {
    */
   readonly autopilotConsentWithheld?: boolean;
   readonly autopilot?: {
+    readonly schemaVersion?: 2 | 3;
     readonly clusterSize?: number;
-    /** The `mergeGate` of a 4.0 programme, which the loop refuses until migrated. */
-    readonly legacyMergeGate?: string;
     /**
      * The branch that deploys, or absent for the repository default branch.
      * Carried so the merge check can say where the loop never merges.
@@ -45,34 +45,34 @@ export interface ParsedProgram {
   };
 }
 
-/** A program descriptor that exists and did not parse, with its own verdict. */
-export interface MalformedProgram {
+/** A config declaration that exists and did not parse, with its own verdict. */
+export interface MalformedAuthority {
   readonly malformed: {
     readonly problem: string;
     readonly fix: string;
   };
 }
 
-function malformedProgram(observation: AutopilotObservation): MalformedProgram['malformed'] | undefined {
-  const program = observation.program;
+function malformedAuthority(observation: AutopilotObservation): MalformedAuthority['malformed'] | undefined {
+  const program = observation.authority;
   return program !== undefined && 'malformed' in program ? program.malformed : undefined;
 }
 
-/** The frontmatter, or undefined when there is none to read (absent or malformed). */
-function parsedProgram(observation: AutopilotObservation): ParsedProgram | undefined {
-  const program = observation.program;
+/** The declaration, or undefined when there is none to read (absent or malformed). */
+function parsedAuthority(observation: AutopilotObservation): ParsedAuthority | undefined {
+  const program = observation.authority;
   return program === undefined || 'malformed' in program ? undefined : program;
 }
 
 export interface AutopilotObservation {
   /**
-   * Parsed `.void/program.md` frontmatter; undefined when the file is absent, and a
+   * Parsed `.void/config.json` Autopilot declaration; undefined when the file is absent, and a
    * `malformed` record when it exists but could not be parsed — two different
-   * things to tell a reader, and only one of them means "author a program".
+   * things to tell a reader, and only one of them means "declare authority".
    * The parser already produces a problem and a fix; carrying them here is what
    * saves the reader from re-deriving the parse error by hand.
    */
-  readonly program: ParsedProgram | MalformedProgram | undefined;
+  readonly authority: ParsedAuthority | MalformedAuthority | undefined;
   /** Runtime adapters detected in the project, e.g. `['claude']`. */
   readonly adapters: readonly string[];
   /**
@@ -113,18 +113,18 @@ function unprobed(name: string, message: string): CheckResult {
   return { name, ok: false, status: 'unprobed', message };
 }
 
-function programCheck(observation: AutopilotObservation): CheckResult {
-  const name = 'autopilot program';
-  const broken = malformedProgram(observation);
+function authorityCheck(observation: AutopilotObservation): CheckResult {
+  const name = 'autopilot authority';
+  const broken = malformedAuthority(observation);
   if (broken !== undefined) {
-    return fail(name, `.void/program.md could not be parsed: ${broken.problem}`, broken.fix);
+    return fail(name, `Autopilot authority could not be parsed: ${broken.problem}`, broken.fix);
   }
-  const program = parsedProgram(observation);
+  const program = parsedAuthority(observation);
   if (program === undefined) {
     return unknown(
       name,
-      'no .void/program.md, so there is no program to drain',
-      'author one with void-ticket, or ignore autopilot in this project',
+      'no Autopilot authority declared',
+      'declare authority only after user approval, or ignore autopilot in this project',
     );
   }
   if (program.status !== 'executing') {
@@ -140,8 +140,8 @@ function programCheck(observation: AutopilotObservation): CheckResult {
   if (program.autopilotConsentWithheld === true) {
     return fail(
       name,
-      'the program declares `enabled: false`, so it has taken back its consent to run unattended',
-      'set `autopilot.enabled: true`, or leave the field out; the block itself stays as it is',
+      `${program.source ?? 'the authority'} declares \`enabled: false\`, so it has taken back its consent to run unattended`,
+      'change consent only on an explicit user decision; config declarations require an explicit enabled boolean',
     );
   }
   // Declaring the block is the consent. A program without one has not withheld a
@@ -149,40 +149,28 @@ function programCheck(observation: AutopilotObservation): CheckResult {
   if (program.autopilot === undefined) {
     return fail(
       name,
-      'the program declares no autopilot block, so nothing resumes automatically',
-      'add an autopilot block to the program frontmatter; declaring it is the consent',
+      'the config declares no autopilot block, so nothing resumes automatically',
+      'declare config.autopilot with explicit enabled only after user approval',
     );
   }
-  return pass(name, 'executing, autopilot declared');
+  return pass(name, `executing, autopilot declared${program.source === undefined ? '' : ` in ${program.source}`}`);
 }
 
 // A file that did not parse has no fields to judge. Reporting a merge mode
 // and failing "no verifyCommands" off an unparsed file states two things the
 // file never said — the same misattribution this preflight exists to avoid.
-const UNPARSED = 'not judged: .void/program.md could not be parsed';
-const UNPARSED_FIX = 'fix the frontmatter reported by the program check above, then run doctor again';
+const UNPARSED = 'not judged: Autopilot authority could not be parsed';
+const UNPARSED_FIX = 'fix the declaration reported by the authority check above, then run doctor again';
 
 /**
  * Who merges, as the loop will read it. There is one mode: the loop merges on
  * its own into the integration branch, never into the branch that deploys, and
- * a person takes the merges with `autopilot merges --by-human`. A 4.0 programme
- * still declaring `mergeGate` is refused by the loop, so it fails here with the
- * migration rather than surfacing on the first tick.
+ * a person takes the merges with `autopilot merges --by-human`. Older declarations are refused by the authority reader before this observation.
  */
 function mergeModeCheck(observation: AutopilotObservation): CheckResult {
   const name = 'autopilot merge';
-  if (malformedProgram(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
-  const block = parsedProgram(observation)?.autopilot;
-  const gate = block?.legacyMergeGate;
-  if (gate !== undefined) {
-    return fail(
-      name,
-      `the programme still declares \`mergeGate: ${gate}\`, which the loop refuses since the single merge mode`,
-      gate === 'union-reviewed'
-        ? 'remove `mergeGate` and set `autopilot.schemaVersion: 2`; the loop merges on its own by default'
-        : `run \`${PRODUCT_COMMAND} autopilot merges --by-human\` first to keep every merge yours, then remove \`mergeGate\` and set \`autopilot.schemaVersion: 2\``,
-    );
-  }
+  if (malformedAuthority(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
+  const block = parsedAuthority(observation)?.autopilot;
   const base = block?.base ?? 'auto';
   const deploying = block?.deployBranch ?? 'the repository default branch';
   return pass(
@@ -194,8 +182,8 @@ function mergeModeCheck(observation: AutopilotObservation): CheckResult {
 
 function verifyCommandsCheck(observation: AutopilotObservation): CheckResult {
   const name = 'autopilot verify';
-  if (malformedProgram(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
-  const commands = parsedProgram(observation)?.autopilot?.verifyCommands ?? [];
+  if (malformedAuthority(observation) !== undefined) return unknown(name, UNPARSED, UNPARSED_FIX);
+  const commands = parsedAuthority(observation)?.autopilot?.verifyCommands ?? [];
   if (commands.length === 0) {
     return fail(
       name,
@@ -307,7 +295,7 @@ function protectionCheck(observation: AutopilotObservation): CheckResult {
  */
 export function autopilotPreflight(observation: AutopilotObservation): readonly CheckResult[] {
   return Object.freeze([
-    programCheck(observation),
+    authorityCheck(observation),
     mergeModeCheck(observation),
     verifyCommandsCheck(observation),
     adapterCheck(observation),

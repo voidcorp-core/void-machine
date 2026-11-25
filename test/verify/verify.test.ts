@@ -1,190 +1,70 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain ESM script, intentionally dependency-free
-import {
-  aggregateGateReports,
-  GATES,
-  parseArgs,
-  parseNameStatus,
-  selectGates,
-} from '../../scripts/verify.mjs';
+// @ts-expect-error plain ESM script
+import { GATES, parseArgs, parseNameStatus, selectGates, selectImpact, ciImpact } from '../../scripts/verify.mjs';
+const ids = (changes: object[]) => selectGates(changes).map((gate: { id: string }) => gate.id);
+const all = GATES.map((gate: { id: string }) => gate.id);
 
-const SHA = '2b0e24dc054cf4b7bde36d2e346db341f31501a5';
-
-interface Gate {
-  readonly id: string;
-  readonly label: string;
-  readonly run: readonly string[];
-  readonly tier: string;
-  readonly resource: string;
-  readonly required: boolean;
-  readonly artifact?: boolean;
-  readonly fix?: readonly string[];
-}
-
-interface GateReport {
-  readonly schemaVersion: 1;
-  readonly gateId: string;
-  readonly sha: string;
-  readonly argv: readonly string[];
-  readonly status: 'passed' | 'failed';
-  readonly exitCode: number;
-  readonly startedAt: string;
-  readonly durationMs: number;
-}
-
-const gates = GATES as readonly Gate[];
-const requiredIds = gates.filter((gate) => gate.required).map((gate) => gate.id);
-
-function report(gateId: string, over: Partial<GateReport> = {}): GateReport {
-  const gate = gates.find((candidate) => candidate.id === gateId);
-  if (gate === undefined) throw new Error(`unknown fixture gate ${gateId}`);
-  return {
-    schemaVersion: 1,
-    gateId,
-    sha: SHA,
-    argv: gate.run,
-    status: 'passed',
-    exitCode: 0,
-    startedAt: '2026-09-04T18:00:00.000Z',
-    durationMs: 12,
-    ...over,
-  };
-}
-
-describe('gate catalogue', () => {
-  it('defines one stable, shell-free authority for required and observational proof', () => {
-    expect(gates.length).toBeGreaterThan(0);
-    expect(new Set(gates.map((gate) => gate.id)).size).toBe(gates.length);
-    for (const gate of gates) {
-      expect(gate.id).toMatch(/^[a-z][a-z0-9-]*$/);
-      expect(gate.label).not.toBe('');
-      expect(gate.run.length).toBeGreaterThan(0);
-      expect(gate.run.join(' ')).not.toMatch(/[;&|><$`]/);
-      expect(['pure', 'contract', 'consumer', 'system', 'certification']).toContain(gate.tier);
-      expect(['cpu', 'filesystem', 'subprocess', 'network-browser', 'external-state']).toContain(
-        gate.resource,
-      );
+describe('bounded native impact selection', () => {
+  it('keeps explanatory Markdown narrow and product Markdown broad', () => {
+    expect(ids([{ path: 'docs/guides/consumer.md' }])).toEqual(['skill-references']);
+    for (const path of ['packages/core/src/skills/void-tdd/SKILL.md', 'docs/example.ts']) expect(ids([{ path }])).toEqual(all);
+  });
+  it.each(['pnpm-lock.yaml', 'package.json', '.github/workflows/ci.yml', 'test/support/setup.ts',
+    'packages/cli/src/commands/init.ts', 'packages/core/src/data/identity.json', 'unknown/file.ts', 'packages/unknown/value.test.ts'])('broadens %s', path => {
+    expect(selectImpact([{ path }])).toMatchObject({ engine: true, local: true, network: true, consumer: true, crossPlatform: true });
+  });
+  it('targets version coherence without weakening uncertain or release inputs', () => {
+    for (const path of ['docs/guide.md', 'test/verify/verify.test.ts', 'packages/mission-engine/src/risk/value.ts']) {
+      expect(selectImpact([{ path }]).version).toBe(false);
+      expect(ids([{ path }])).not.toContain('version-lockstep');
     }
-  });
-
-  it('keeps build before every gate that consumes built package exports', () => {
-    const ids = gates.map((gate) => gate.id);
-    for (const dependent of ['self-host-sync', 'self-host-doctor', 'graph-integrity', 'typecheck']) {
-      expect(ids.indexOf('build')).toBeLessThan(ids.indexOf(dependent));
+    for (const path of ['packages/cli/package.json', 'packages/core/src/.claude-plugin/plugin.json',
+      'packages/core/dist/.claude-plugin/plugin.json', 'packages/cli/dist/core-assets/.claude-plugin/plugin.json',
+      'release-please-config.json', '.release-please-manifest.json', '.github/workflows/release.yml',
+      'scripts/check-version-lockstep.mjs', 'packages/cli/scripts/copy-core-assets.mjs', 'unknown/file.ts']) {
+      expect(selectImpact([{ path }]).version).toBe(true);
+      expect(ids([{ path }])).toContain('version-lockstep');
     }
+    expect(selectImpact([{ path: 'docs/guide.md' }, { path: 'package.json' }]).version).toBe(true);
+    expect(selectImpact([{ path: 'docs/deleted.md', status: 'deleted' }]).version).toBe(true);
+    const changes = [{ path: 'test/verify/verify.test.ts' }];
+    expect(ciImpact('pull_request', { pull_request: { base: { ref: 'main', sha: 'a'.repeat(40) } } }, changes).version).toBe(true);
+    expect(ciImpact('merge_group', { merge_group: { base_sha: 'a'.repeat(40) } }, changes).version).toBe(false);
+    expect(ciImpact('push', {}, changes).version).toBe(true);
   });
-
-  it('gives every generated-artifact gate one explicit repair command', () => {
-    for (const gate of gates.filter((candidate) => candidate.artifact === true)) {
-      expect(gate.fix, gate.id).toBeDefined();
-      expect(gate.fix?.length, gate.id).toBeGreaterThan(0);
-    }
+  it('selects an existing test project without dropping source dependents', () => {
+    expect(selectImpact([{ path: 'packages/mission-engine/src/risk/value.test.ts' }])).toMatchObject({ engine: true, local: false, network: false, crossPlatform: false });
+    expect(selectImpact([{ path: 'packages/mission-engine/src/risk/value.ts' }])).toMatchObject({ engine: true, local: true, network: true, consumer: true, crossPlatform: false });
+    expect(selectImpact([{ path: 'test/verify/verify.test.ts' }])).toMatchObject({ engine: false, local: true, network: false });
+    expect(selectImpact([{ path: 'packages/cli/src/lib/ui/server.test.ts' }])).toMatchObject({ engine: false, local: false, network: true });
   });
-
-  it('keeps shared, dependency, workflow and classifier changes conservative', () => {
-    for (const path of [
-      'packages/core/hooks/secret-in-content.sh',
-      'pnpm-lock.yaml',
-      '.github/workflows/ci.yml',
-      'test/support/test-catalog.ts',
-    ]) {
-      expect(selectGates([{ path, status: 'modified' }]).map((gate: Gate) => gate.id), path)
-        .toEqual(requiredIds);
-    }
-  });
-
-  it('narrows a known leaf while retaining its semantic documentation gates', () => {
-    expect(
-      selectGates([{ path: 'docs/guides/consumer.md', status: 'modified' }]).map(
-        (gate: Gate) => gate.id,
-      ),
-    ).toEqual(['asset-paths', 'skill-references']);
-  });
-
   it.each([
-    [[{ path: 'docs/old.md', previousPath: 'docs/new.md', status: 'renamed' }], 'rename'],
-    [[{ path: 'packages/cli/src/removed.ts', status: 'deleted' }], 'deletion'],
-    [[{ path: 'unknown-zone/file.xyz', status: 'modified' }], 'unknown path'],
-    [[], 'missing diff'],
-  ])('expands %s (%s) to every required gate', (changes) => {
-    expect(selectGates(changes).map((gate: Gate) => gate.id)).toEqual(requiredIds);
-  });
-});
-
-describe('gate evidence aggregation', () => {
-  const scoped = requiredIds.slice(0, 2);
-  const complete = scoped.map((id) => report(id));
-
-  it('accepts exactly one green report per required gate on the exact SHA and argv', () => {
-    expect(aggregateGateReports(scoped, complete, SHA)).toEqual({
-      ok: true,
-      gateIds: scoped,
-      sha: SHA,
-      errors: [],
-    });
-  });
-
-  it.each([
-    ['missing', complete.slice(0, 1), /missing/i],
-    ['duplicate', [...complete, complete[0]], /duplicate/i],
-    ['stale SHA', [complete[0], report(scoped[1] ?? '', { sha: 'a'.repeat(40) })], /stale/i],
-    ['red result', [complete[0], report(scoped[1] ?? '', { status: 'failed', exitCode: 1 })], /failed/i],
-    ['wrong argv', [complete[0], report(scoped[1] ?? '', { argv: ['pnpm', 'nonesuch'] })], /argv/i],
-  ])('fails closed on a %s report set', (_case, reports, message) => {
-    const result = aggregateGateReports(scoped, reports, SHA);
-
-    expect(result.ok).toBe(false);
-    expect(result.errors.join('\n')).toMatch(message);
-  });
-});
-
-describe('verify arguments', () => {
-  it('defaults to every required gate', () => {
-    expect(parseArgs([])).toMatchObject({
-      artifactsOnly: false,
-      fix: false,
-      list: false,
-      observations: false,
-      gateId: null,
-      aggregate: false,
-      unknown: [],
-    });
-  });
-
-  it('reads local, single-gate and aggregation modes without accepting unknown flags', () => {
-    expect(parseArgs(['--artifacts']).artifactsOnly).toBe(true);
-    expect(parseArgs(['--fix']).fix).toBe(true);
-    expect(parseArgs(['--list']).list).toBe(true);
-    expect(parseArgs(['--observations']).observations).toBe(true);
-    expect(parseArgs(['--gate', 'lint']).gateId).toBe('lint');
-    expect(parseArgs(['--aggregate']).aggregate).toBe(true);
-    expect(parseArgs(['--artifact']).unknown).toEqual(['--artifact']);
-  });
-});
-
-describe('changed-path input', () => {
-  it('parses Git name-status records without losing rename or deletion semantics', () => {
-    expect(
-      parseNameStatus(
-        [
-          'M',
-          'docs/guide.md',
-          'D',
-          'packages/cli/src/old.ts',
-          'R100',
-          'docs/old.md',
-          'docs/new.md',
-          '',
-        ].join('\0'),
-      ),
-    ).toEqual([
-      { path: 'docs/guide.md', status: 'modified' },
-      { path: 'packages/cli/src/old.ts', status: 'deleted' },
-      { path: 'docs/new.md', previousPath: 'docs/old.md', status: 'renamed' },
+    [], [{}], [{ path: '', status: 'modified' }], [{ path: 'docs/new.md', previousPath: 'packages/core/src/old.md', status: 'renamed' }],
+    [{ path: 'docs/deleted.md', status: 'deleted' }],
+  ].map(changes => [changes]))('fails conservative for incomplete or structurally changed input %j', changes => expect(ids(changes)).toEqual(all));
+  it('parses both rename paths and deletion, rejecting incomplete records', () => {
+    expect(parseNameStatus('R100\0old\0new\0D\0removed\0')).toEqual([
+      { path: 'new', previousPath: 'old', status: 'renamed' }, { path: 'removed', status: 'deleted' },
     ]);
+    expect(parseNameStatus('R100\0old')).toEqual([]);
+    expect(parseNameStatus('M\0')).toEqual([]);
+    expect(parseNameStatus('unexpected\0file\0')).toEqual([]);
   });
+  it('forces complete promotion and fails broad on unavailable event input', () => {
+    const changes = [{ path: 'docs/guide.md' }];
+    expect(ciImpact('pull_request', { pull_request: { base: { ref: 'develop', sha: 'a'.repeat(40) } } }, changes).consumer).toBe(false);
+    expect(ciImpact('merge_group', { merge_group: { base_sha: 'a'.repeat(40) } }, changes).consumer).toBe(false);
+    for (const event of ['push', 'workflow_dispatch']) expect(ciImpact(event, {}, changes).crossPlatform).toBe(true);
+    expect(ciImpact('pull_request', { pull_request: { base: { ref: 'main' } } }, changes).crossPlatform).toBe(true);
+    expect(ciImpact('pull_request', {}, changes).crossPlatform).toBe(true);
+  });
+});
 
-  it('fails closed to the conservative set when Git output is incomplete', () => {
-    expect(parseNameStatus(['R100', 'docs/old.md'].join('\0'))).toEqual([]);
+describe('local verification arguments', () => {
+  it('retains useful local selection and refuses removed CI report options', () => {
+    expect(parseArgs(['--changed-from', 'HEAD~1', '--list'])).toMatchObject({ changedFrom: 'HEAD~1', list: true, unknown: [] });
+    expect(parseArgs(['--aggregate']).unknown).toEqual(['--aggregate']);
+    expect(parseArgs(['--report', 'file']).unknown).toContain('--report');
+    expect(parseArgs(['--gate', 'lint']).gateId).toBe('lint');
   });
 });

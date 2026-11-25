@@ -1,0 +1,6 @@
+Sources for `void-drizzle-migration-safe` skill (see `docs/plans/skill-audits/void-drizzle-migration-safe.md` for the full audit):
+
+- No external source audited — native Drizzle concretization of the `void-migrations` doctrine.
+- Tooling referenced (not vendored): Drizzle Kit (drizzle-kit generate/push), Postgres CONCURRENTLY / NOT VALID semantics.
+
+Strategy: native. Same principles as migrations, rewritten as concrete Drizzle SQL and code samples; no upstream skill was copied.

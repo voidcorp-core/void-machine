@@ -2,14 +2,13 @@ import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { MechanicalContextState } from '@voidcorp/mission-engine/session';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mergeMechanicalContextBlock } from './checkpoint-codec.js';
 import { observeResume } from './resume-observer.js';
 
 const roots: string[] = [];
@@ -83,48 +82,53 @@ describe('observeResume', () => {
     const observed = observeResume(root, Date.parse('2026-08-26T12:00:00Z'));
 
     expect(observed.context).toContain('[void-machine resume]');
-    expect(observed.context).toContain('Program: portable-resume');
-    expect(observed.context).toContain('Progress: github at voidcorp/repo');
+    expect(observed.context).not.toContain('Program:');
+    expect(observed.bundle).not.toHaveProperty('program');
     expect(observed.context).toContain('Objective: Wire portable resume hooks.');
     expect(observed.context).toContain(`HEAD: ${head}`);
     expect(observed.context.length).toBeLessThanOrEqual(4_000);
   });
 
-  it('surfaces degraded continuity when neither a program nor a checkpoint exists', () => {
-    const observed = observeResume(project(), Date.now());
-
-    expect(observed.context).toContain('Context continuity: degraded');
-    expect(observed.context).toContain('Reconstruct context before any mutation.');
-  });
-
-  it('exposes a complete mechanical continuity status after compaction', () => {
+  it.each([
+    ['malformed', 'absent'], ['malformed', 'empty'],
+    ['competing', 'absent'], ['competing', 'empty'],
+  ])('surfaces a %s programme with an %s checkpoint without imposing recovery', (kind, checkpoint) => {
     const root = project();
-    const state: MechanicalContextState = {
-      schemaVersion: 1,
-      objectiveHash: `sha256:${'a'.repeat(64)}`,
-      workRevision: 1,
-      semanticRevision: 1,
-      sealedWorkRevision: 1,
-      nudgeEmitted: false,
-      unwatchableNotified: false,
-      transcriptFingerprint: `sha256:${'b'.repeat(64)}`,
-      transcriptCursorBytes: 0,
-      lastMeasurementAtMs: 0,
-      lastUsedTokens: 0,
-      readFiles: [],
-      modifiedFiles: [],
-      readFilesOverflow: 0,
-      modifiedFilesOverflow: 0,
-      clearPending: false,
-      lastResumeSource: 'none',
-    };
-    const merged = mergeMechanicalContextBlock('## Objective\n\nResume me.\n', state);
-    if (!merged.ok) throw new Error(merged.error);
-    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), merged.value);
+    if (kind === 'malformed') {
+      writeFileSync(join(root, '.void', 'program.md'), 'not a programme descriptor\n');
+    } else {
+      writeProgram(root);
+      writeFileSync(join(root, '.void', 'active.md'), '# competing descriptor\n');
+    }
+    if (checkpoint === 'empty') writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '');
 
-    const observed = observeResume(root, Date.now(), { source: 'compact' });
-
-    expect(observed.bundle.continuity.status).toBe('complete');
-    expect(observed.context).toContain('Context continuity: complete');
+    const observed = observeResume(root, Date.now());
+    expect(observed.bundle.gaps.map(gap => gap.reason)).toEqual([checkpoint === 'empty' ? 'checkpoint-empty' : 'checkpoint-absent']);
+    expect(observed.context).toBe('');
+    expect(observed.context.length).toBeLessThanOrEqual(4_000);
+    expect(observed.context).not.toMatch(/Reconstruct context|mechanical|void-checkpoint|before any mutation/i);
   });
+
+  it('reports missing observations without imposing a checkpoint repair', () => {
+    const observed = observeResume(project(), Date.now());
+    expect(observed.context).toBe('');
+    expect(observed.bundle.gaps.map(gap => gap.reason)).toContain('checkpoint-absent');
+  });
+});
+
+
+it('reads full handoff from a legacy path while bounding injected context without rewriting', () => {
+  const root = project();
+  mkdirSync(join(root, '.void', 'session'));
+  const path = join(root, '.void', 'session', 'current.md');
+  const raw = `## Engaged work\n\n${'worker uncertain; '.repeat(300)}\n\n## Planned work\n\nA-3\nA-2\n`;
+  writeFileSync(path, raw);
+  const observed = observeResume(root, Date.now());
+  expect(observed.bundle).toHaveProperty('checkpointPath', '.void/session/current.md');
+  expect(observed.bundle.checkpoint).toHaveProperty('plannedWork', 'A-3\nA-2');
+  expect(observed.context).toContain('Full checkpoint: .void/session/current.md');
+  expect(observed.context).toContain('Observations and intentions to verify; no authorization.');
+  expect(observed.context).toContain('Summary truncated; read the full checkpoint before resuming work.');
+  expect(observed.context.length).toBeLessThanOrEqual(4_000);
+  expect(readFileSync(path, 'utf8')).toBe(raw);
 });

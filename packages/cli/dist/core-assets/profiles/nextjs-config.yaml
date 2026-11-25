@@ -1,0 +1,31 @@
+schemaVersion: 1
+id: core:nextjs-config
+version: 1
+name: nextjs-config
+technologies:
+  - id: nextjs
+    minimumVersion: 15.0.0
+    maximumVersionExclusive: 18.0.0
+detectors:
+  always: false
+  technologies: [nextjs]
+  files:
+    extensions: []
+    names: [next.config.js, next.config.mjs, next.config.ts]
+    pathSegments: []
+sources:
+  - title: Next.js documentation
+    url: https://nextjs.org/docs
+reviewedAt: 2026-07-27
+expiresAfterDays: 120
+invariants:
+  - Validate version-specific configuration against the installed tool's official documentation.
+patterns:
+  - id: framework-config
+    appliesWhen:
+      technologies: [nextjs]
+      files:
+        extensions: []
+        names: [next.config.js, next.config.mjs, next.config.ts]
+        pathSegments: []
+    guidance: Validate configuration against the covered official Next.js documentation.

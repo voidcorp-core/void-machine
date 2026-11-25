@@ -3,7 +3,7 @@
 //
 // What this command does (idempotent):
 //   1. Create .void/config.json (paths, commands, modes)
-//   2. Copy PHILOSOPHY.md into .void/installed/ (managed, restorable)
+//   2. Copy PHILOSOPHY.md into .void/ (managed, restorable)
 //   3. Seed .void/PROJECT-DOCTRINE.md from the template, or refresh it while
 //      the project has still never written into it
 //   4. Merge `.claude/settings.json` with `extraKnownMarketplaces.void-machine`
@@ -16,7 +16,7 @@
 // /harness:void-tdd, /harness-nextjs:..., etc.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_PROJECT_PATHS, PRODUCT_COMMAND, stripManagedBlock } from '@voidcorp/hook-runner';
@@ -212,10 +212,10 @@ export function sourceRepoVerdict(input: {
  * monorepo its whole enforcement floor: `paths.business` fell back to the
  * single-app default, the config stayed valid, and nothing went red.
  *
- * It keeps exactly one job here, the case where merging is not possible at all:
- * a config too broken to parse.
+ * An unreadable config may contain consent or restrictions. Even --force cannot
+ * discard unknown co-owned authority and restrictions.
  */
-export type ConfigWriteVerdict = 'scaffold' | 'merge' | 'overwrite-unreadable' | 'keep-unreadable';
+export type ConfigWriteVerdict = 'scaffold' | 'merge' | 'keep-unreadable';
 
 export function configWriteVerdict(input: {
   readonly exists: boolean;
@@ -224,7 +224,7 @@ export function configWriteVerdict(input: {
 }): ConfigWriteVerdict {
   if (!input.exists) return 'scaffold';
   if (input.readable) return 'merge';
-  return input.force ? 'overwrite-unreadable' : 'keep-unreadable';
+  return 'keep-unreadable';
 }
 
 export async function init(args: readonly string[]): Promise<void> {
@@ -400,6 +400,15 @@ export async function init(args: readonly string[]): Promise<void> {
       force: opts.force,
     });
     await commitFileTransaction(projectRoot, prepared.mutations);
+    // Retire only an empty legacy directory, after publication succeeded.
+    try {
+      await rmdir(join(projectRoot, '.void', 'installed'));
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error
+        && (error.code === 'ENOENT' || error.code === 'ENOTEMPTY'))) {
+        line(`${c.yellow(glyph.dot)}  legacy installed directory preserved: ${errorMessage(error)}`);
+      }
+    }
     for (const path of prepared.restored) {
       line(`${c.yellow('!')}  restored ${path} from the delivered harness`);
     }
@@ -496,7 +505,7 @@ async function effectivePacks(
   });
   if (verdict === 'keep-unreadable') {
     throw new Error('Cannot reconcile .void/config.json: unreadable configuration, left untouched. '
-      + 'Restore a JSON object or use --force to overwrite it.');
+      + 'Restore the JSON object explicitly; --force cannot discard unknown Autopilot permissions.');
   }
   const retained = opts.replacePacks ? [] : Object.keys(config?.packs ?? {}).map(key => {
     const pack = findPack(key.replace(/^@voidcorp\//, ''));
@@ -586,17 +595,11 @@ async function writeConfig(
   const verdict = configWriteVerdict({ exists, readable: parsed !== undefined, force: opts.force });
 
   if (verdict === 'keep-unreadable') {
-    line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}unreadable, leaving untouched (use --force to overwrite)`);
+    line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}unreadable, leaving untouched (restore the JSON object explicitly)`);
     return;
   }
 
-  if (verdict === 'scaffold' || verdict === 'overwrite-unreadable') {
-    // Named before the write, never after. This is the one path where --force
-    // replaces a file the project co-owns, and whatever paths or modes it had
-    // tuned are not recoverable from a config nothing could parse.
-    if (verdict === 'overwrite-unreadable') {
-      line(`${c.yellow(glyph.up)}  ${c.dim('.void/config.json'.padEnd(18))}overwriting unparseable config (--force); hand-tuned keys are lost`);
-    }
+  if (verdict === 'scaffold') {
     const config = buildDefaultConfig(seed);
     for (const pack of packs) config.packs[`@voidcorp/${pack.name}`] = packPin;
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -667,7 +670,7 @@ async function ensureIgnoreRules(
     ? c.dim('not a git repository, nothing to hide from it')
     : outcome === 'unchanged'
       ? c.dim('rules already current')
-      : 'rules written (.void/machine/ and .void/installed/ ignored, the rest of .void/ tracked)';
+      : 'rules written (machine history and owned doctrine ignored; project declarations tracked)';
   const mark = outcome === 'written' ? c.green(glyph.check) : c.dim(glyph.dot);
   line(`${mark}  ${c.dim('git exclude'.padEnd(18))}${label}`);
 
@@ -723,9 +726,8 @@ export interface DoctrineInstallRoots {
    */
   readonly installRoot?: string | undefined;
   /**
-   * An installation whose philosophy is canonical rather than derived — the
-   * source repo, where `docs/PHILOSOPHY.md` is the original and the packaged
-   * copy is necessarily behind it.
+   * Preserve the source repository’s active published doctrine. Working source
+   * and delivery copies must never repair or activate that installation.
    */
   readonly preserveFrom?: string | undefined;
 }
@@ -769,26 +771,21 @@ export async function installDoctrineFiles(
   const voidDir = join(stageRoot, '.void');
   await mkdir(voidDir, { recursive: true });
   const philosophySrc = join(sourceRoot, 'PHILOSOPHY.md');
-  // Under `installed/`: it is regenerated from a pin and not committed, and the
-  // top of `.void/` is what git keeps. A file that is ignored has no business
-  // sitting where "everything here is committed" is supposed to be readable at
-  // a glance.
-  const philosophyDst = join(voidDir, 'installed', 'PHILOSOPHY.md');
-  await mkdir(join(voidDir, 'installed'), { recursive: true });
-  // Source repositories own docs/PHILOSOPHY.md. The installed copy is derived,
-  // not an authority that may freeze a stale doctrine across updates.
-  const canonical = preserveFrom === undefined
-    ? undefined
-    : join(preserveFrom, 'docs', 'PHILOSOPHY.md');
-  const previous = preserveFrom === undefined
-    ? undefined
-    : join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md');
-  if (canonical !== undefined && existsSync(canonical)) {
-    await cp(canonical, philosophyDst);
-    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical here)')}`);
-  } else if (previous !== undefined && existsSync(previous)) {
+  const philosophyDst = join(voidDir, 'PHILOSOPHY.md');
+  // Preserve the published floor, including its previous location. Never read working sources.
+  const previous = preserveFrom === undefined ? undefined : [
+    join(preserveFrom, '.void', 'PHILOSOPHY.md'),
+    join(preserveFrom, '.void', 'installed', 'PHILOSOPHY.md'),
+  ].find((path) => existsSync(path));
+  if (preserveFrom !== undefined && previous === undefined) {
+    throw new Error('Cannot preserve published doctrine: active installed philosophy is missing or unreadable.');
+  }
+  if (previous !== undefined) {
+    if (!existsSync(previous)) {
+      throw new Error('Cannot preserve published doctrine: active installed philosophy is missing or unreadable.');
+    }
     await cp(previous, philosophyDst);
-    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (canonical source unavailable)')}`);
+    line(`${c.dim(glyph.dot)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}${c.dim('preserved (published floor)')}`);
   } else if (existsSync(philosophySrc)) {
     await cp(philosophySrc, philosophyDst);
     line(`${c.green(glyph.check)}  ${c.dim('PHILOSOPHY.md'.padEnd(18))}written (managed)`);

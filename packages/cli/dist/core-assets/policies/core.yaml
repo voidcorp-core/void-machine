@@ -1,0 +1,95 @@
+schemaVersion: 1
+id: core:quality-floor
+version: 2
+layer: core
+rules:
+  - id: core:product
+    pass: product
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [product]
+  - id: core:architecture
+    pass: architecture
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [architecture]
+  - id: core:fortress-threat-model
+    pass: architecture
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [auth, pii, tenancy, destructive-migration, upload, code-execution, llm-tools, supply-chain]
+  - id: core:tdd
+    pass: tdd
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [tdd]
+  - id: core:qa
+    pass: qa
+    strength: required
+    baseline: true
+    appliesWhen:
+      any: [qa]
+  - id: core:fortress-critical-verification
+    pass: qa
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [auth, pii, tenancy, destructive-migration, upload, code-execution, llm-tools, supply-chain]
+  - id: core:security
+    pass: security
+    strength: blocking
+    baseline: true
+    appliesWhen:
+      any: [security]
+  - id: core:fortress-adversarial-security
+    pass: security
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [auth, pii, tenancy, destructive-migration, upload, code-execution, llm-tools, supply-chain]
+  - id: core:observability
+    pass: observability
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [observability]
+  - id: core:migration
+    pass: migration
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [migration]
+  - id: core:fortress-destructive-recovery
+    pass: migration
+    strength: blocking
+    baseline: false
+    appliesWhen:
+      any: [destructive-migration]
+  - id: core:performance
+    pass: performance
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [performance]
+  - id: core:stack-patterns
+    pass: stack-patterns
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [stack-patterns]
+  - id: core:pdf
+    pass: pdf
+    strength: required
+    baseline: false
+    appliesWhen:
+      any: [pdf]
+  - id: core:retrospective
+    pass: retrospective
+    strength: advisory
+    baseline: false
+    appliesWhen:
+      any: [retrospective]

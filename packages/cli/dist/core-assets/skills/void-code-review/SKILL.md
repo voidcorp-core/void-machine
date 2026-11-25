@@ -1,0 +1,234 @@
+---
+name: void-code-review
+description: Pre-PR critical pass. Six dimensions (correctness, tests, security, structure, readability, perf). Two modes (strict/souple). Composes the native /void-code-review and codex CLI. Use on a diff.
+---
+
+# code-review — voidcorp craftsman edition
+
+A review first checks conformity to the accepted scope, then the quality and consequences of the change. This skill provides the framework: six dimensions in order, blocker vs nit, actual review results and useful proofs, two modes, explicit composition with Claude Code's native `/void-code-review` and specialized agents. The skill orchestrates; it does not duplicate the deep-pass agents.
+
+**Attribution**: see `.source` in this directory.
+
+---
+
+## Accepted scope first
+
+Within the same independent review, compare the committed result and its evidence with every
+accepted criterion: fulfilled, missing (including incomplete or unproven), or exceeded. Identify
+implemented behavior outside the accepted scope. Missing requirements and unauthorized additions
+are equally blocking acceptance defects: cite the criterion or scope boundary, evidence and
+resolution condition. Necessary implementation details are not scope expansion; suggestions to
+broaden the mandate remain advisory.
+
+Do not begin the six quality dimensions while the candidate is nonconformant. Keep this result in
+the existing review receipt, with the same reviewer and unchanged correction budget. After a
+correction, verify conformity and continue only the dimensions not yet examined; do not restart
+the general review or repeat completed checks. This is an ordering within the existing review,
+not a second pass or a new executable gate.
+
+## Six dimensions, in order
+
+The order matters. A correctness issue blocks regardless of beautiful structure. A perf issue does not block if the first four dimensions are clean.
+
+1. **Correctness** — does it do what it claims? edge cases? error paths? composes with `void-tdd` (cycle evidence) and `void-debug` (root cause for fixes).
+2. **Tests** — failing test before the code? real code over mocks? names describe behavior? composes with `void-testing`.
+3. **Security** — input validated at trust boundaries? secrets handled? SQL safe? LLM input untrusted? composes with `void-security-guidance` (which routes deep audits to `void-security-audit`).
+4. **Structure** — boundaries respected (no domain importing infrastructure)? service/repository split? function lengths? composes with `void-hexagonal-architecture`, `void-domain-driven-design`, `void-refactor`, and the `doctrine-critic` agent.
+5. **Readability** — names? exhaustive switches? `any` slips? `as` casts? composes with `void-typescript-strict`.
+6. **Performance** — obvious O(n²) inside loops? leaky reactive subscriptions? unbounded queries? measured claims come from the project's perf tooling (Lighthouse CI, bundlesize), not guesses.
+
+A11y, observability, LLM cost discipline ride inside dimensions 1-6 (e.g. missing a11y is a Correctness issue at the UI boundary; missing structured log is a Structure issue at the service layer).
+
+### Leverage hierarchy in review
+
+Spend attention where defects cost the most. An upstream design or contract flaw (Correctness, Structure) cascades through everything downstream; a code-detail nit (Readability) stays local. Surface the high-leverage defects first, and weight scrutiny toward them.
+
+Do not over-engineer the review itself: report only what touches correctness or the stated requirements, not every possible finding. A reviewer who flags every theoretical improvement buries the one BLOCKER that matters. When in doubt, the bar is "would shipping this without the fix be wrong?" — if not, it is at most a `NIT:`.
+
+---
+
+## Blocker vs nit
+
+Every comment is explicitly prefixed:
+
+- **`BLOCKER:`** — must be fixed before merge. Block the PR.
+- **`NIT:`** — suggestion. Author decides. Does NOT block.
+- **`QUESTION:`** — clarification request. May escalate to BLOCKER if answer reveals a defect.
+- **`PRAISE:`** — explicit acknowledgement of good code (rare, but valued).
+
+Style, naming and optional refactoring are advisory. Correctness, security or a broken boundary blocks only with a concrete consequence. A missing test blocks when a demonstrated behavior or regression risk lacks an adequate proof, not because a checklist asks for another test.
+
+Use these prefixes to make decisions legible; formatting alone never creates a blocking defect. The companion hook `blocker-prefix-grep` produces the BLOCKER/NIT count for the evidence block.
+
+---
+
+## Share the review result
+
+Summarize the actual review result, unresolved blockers, limitations and useful proof references.
+No heading or checklist template is mandatory. Preserve the authoritative independent reviewer,
+exact subject and evidenced resolutions required by the mission contract; prose never substitutes
+for those receipts.
+
+## CL Size discipline
+
+Keep changes focused enough to review. Split independent concerns when that improves review;
+explain genuinely atomic changes in the PR. Size alone is not a correctness signal, and no hook
+requires a line-count justification marker.
+
+---
+
+## Modes
+
+| Mode | Trigger | Posture |
+|---|---|---|
+| **strict** | PR targeting `main` / `develop` / release branches. Pre-PR final pass. | All six dimensions checked. Blockers fail. Actual results and useful proofs retained. Default effort: native `/void-code-review medium`, escalate to `ultra` for high-stakes diffs. Select one independent reviewer runtime. |
+| **souple** | In-progress feedback on a feature branch during work. WIP commits. | Dimensions checked at user discretion. Record useful findings proportionately. Default effort: native `/void-code-review low` or `medium`. |
+
+---
+
+## Composition with specialized agents and tools
+
+| Dimension | Composed with |
+|---|---|
+| Correctness, Tests | `void-tdd` skill (verify cycle), `void-testing` skill (verify quality), `doctrine-critic` agent (doctrine conformance) |
+| Security | `void-security-guidance` skill, `doctrine-critic` agent (flags boundaries), `void-security-audit` (only at user request for full audit) |
+| Structure | `void-hexagonal-architecture` skill, `void-domain-driven-design` skill, `doctrine-critic` agent (boundary spirit) |
+| Readability | `void-typescript-strict` skill, Biome (formatter) |
+| Performance | the project's perf tooling (Lighthouse CI, bundlesize) for measured claims; this skill flags only obvious smells |
+| Independent reviewer alternative | `codex review` (choose this or the native independent reviewer for the general pass) |
+| Diff analysis at high effort | native `/void-code-review medium` / `high` / `ultra` |
+
+The skill is the orchestration. Specialized agents and the native `/void-code-review` do the heavy work.
+
+---
+
+## Operating procedure
+
+### Pre-condition (strict mode)
+
+- The PR's HEAD has been built and tested locally / in CI. No build errors or failing required tests. Lint findings block only for a demonstrated consequence.
+- Inspect output for leaked data and actionable errors; advisory diagnostics do not reopen review.
+- Recover the accepted behavior and rationale from the task, request or PR; ask only if a missing decision changes correctness or scope.
+
+A failing required proof or invalid subject prevents acceptance. Missing prose or advisory output does not prevent the reviewer from inspecting the candidate.
+
+### Reviewer runtime
+
+Prefer an available supported runtime different from the writer for the one independent general
+review. Verify its real invocation and read-only permissions; never relabel a same-runtime session.
+A canonical mission's authenticated envelope remains authoritative: current canonical dispatch
+binds its runtime to the coordinator. This preference does not add cross-runtime routing or allow
+foreign receipts into that journal. Use the supported independent path and state the limitation;
+no repeated probe or extra general review is required merely to obtain a different brand.
+Retain the actual reviewer for targeted corrections. Runtime diversity complements independence
+and consequence-based findings; it is not proof of correctness by itself.
+
+### Pass
+
+1. Bind the task, acceptance criteria, exact commit and base before reading. Prefer a dedicated
+   worktree pinned to the commit, with native read-only permissions. The reviewer never edits.
+2. Check accepted scope first as described above, then review the six quality dimensions. Report only demonstrated
+   consequences in scope. Every blocker names its violated criterion, concrete consequence,
+   evidence and resolution condition. Style and optional refactoring remain advisory.
+3. Preserve the minimal review receipt and original result: reviewer, subject, conclusions,
+   proofs and defect resolutions. Record missing or refused native identity as an exact
+   provenance limitation; it alone cannot reject a traceable independent review. Do not invent
+   independence or accept self-review as a substitute.
+4. The author corrects blockers or records a reasoned disagreement. After each correction batch,
+   verify only the corrections and affected behavior. Reuse unaffected conclusions and proofs;
+   never restart the general review. Newly raised blockers must demonstrate a correction
+   regression or a concrete defect within the original scope.
+5. Follow `void-implement`'s maximum two correction batches. Under `void-autopilot`, its tighter two-total-review-round budget applies (initial plus one corrected head); see `docs/BOUNDED-REVIEWS.md`. Incomplete review, resumption and
+   transport repair do not consume or reset that budget. Advisory findings never request a
+   correction cycle. At the limit, report unresolved defects with cause and next action.
+Advisory findings never start a correction cycle; stop after acceptance, required proofs and independent review hold.
+
+6. The orchestrator may request one independent opinion on a disputed point and retain it
+   as evidence for targeted verification, without reopening general review or resetting the
+   budget. No separate automatic arbitration command is provided. Escalate beyond-mandate
+   decisions to the human. Retain historical
+   findings and their resolutions; never call an unresolved blocking defect conformant.
+
+
+### Author response (Google practices)
+
+- Address every BLOCKER (fix or reasoned pushback).
+- Read NITs as optional advice. Once acceptance and proofs hold, leave them out; they never reopen the completed work or trigger another cycle.
+- Treat QUESTION as a thinking prompt — answer or escalate.
+- Push back when you disagree. Reviewer may hold ground with a clear "why."
+
+---
+
+## Banned
+
+### "LGTM" reviews
+
+A bare verdict with no examined subject or evidence is insufficient. State the dimensions actually checked and concrete findings briefly; repeated checklist prose adds no proof.
+
+### File-by-file linear walk
+
+Default to dimension-by-dimension across the whole diff. Linear walk misses cross-file issues (service change without its repository update, schema change without its consumer update).
+
+### Style / naming bikeshedding marked as BLOCKER
+
+Style is solved by Biome + `void-typescript-strict`, not by reviewer preference. Anything stylistic is `NIT:` at most.
+
+### Architectural-rewrite suggestions inside the PR
+
+If the diff reveals a structural problem larger than the diff, add a `QUESTION:` comment + suggest a follow-up issue. Do not block on "rewrite this PR." Scope creep at review time tanks velocity.
+
+### Silent disagreement between Claude and Codex
+
+Disagreements are surfaced. Not averaged. The user decides.
+
+---
+
+## Composition summary
+
+- **Upstream**: `void-verify` (the author claims the code is ready before review starts).
+- **Downstream**: `void-commit-discipline` (the merge commit follows conventional commit + always-say-why), then the ship step (`void-implement` pass 11 + `gh` lands the PR; release-please owns versions).
+- **Side-by-side**: the `doctrine-critic` agent (doctrine conformance, read-only).
+
+---
+
+## Companion hooks
+
+- **`blocker-prefix-grep`** (post-review) — informational: count BLOCKER vs NIT comments for the evidence block
+
+See `../../hooks/`.
+
+---
+
+## Anti-rules
+
+- MUST NOT decide whether to ship — user owns the merge decision.
+- MUST NOT block on style / naming (Biome + `void-typescript-strict` jobs).
+- MUST NOT suggest scope expansion inside the PR — escalate to follow-up.
+- MUST NOT duplicate `doctrine-critic` or `void-security-audit` work — delegate.
+- MUST NOT silently arbitrate Claude-vs-Codex disagreements — surface them.
+- MUST NOT mark style nit as BLOCKER.
+- MUST NOT pass a review when the test suite has not been observed passing on the PR's HEAD.
+
+---
+
+## When you are stuck
+
+| Problem | Solution |
+|---|---|
+| Review feels shallow | You skipped a dimension. Walk all six in order. |
+| Cannot tell BLOCKER from NIT | A demonstrated defect or missing proof of a concrete risk blocks; optional improvement is advisory. |
+| Diff is too large to review | Split independent concerns, or explain why the change is atomic. |
+| Found a structural rot beyond the diff | `QUESTION:` + suggest follow-up issue. Do not block this PR on it. |
+| Claude and Codex disagree | Surface the delta. Let the author/user decide. |
+| Diagnostics remain | Resolve actionable defects; name unrelated warnings without restarting review. |
+
+---
+
+## Final rule
+
+```
+A review → six dimensions in order, blockers explicit, evidence in PR body (strict), delegated where deep.
+Otherwise → it is not a voidcorp code-review.
+```
+
+The independent reviewer examines the committed result. The author owns all code changes.

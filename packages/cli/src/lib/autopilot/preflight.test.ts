@@ -5,7 +5,7 @@ import { type AutopilotObservation, autopilotPreflight } from './preflight.js';
 
 function observation(over: Partial<AutopilotObservation> = {}): AutopilotObservation {
   return {
-    program: {
+    authority: {
       status: 'executing',
       autopilot: { verifyCommands: [['pnpm', 'test']] },
     },
@@ -29,7 +29,7 @@ describe('autopilotPreflight', () => {
   it('every failing check says what to do about it', () => {
     const broken = autopilotPreflight(
       observation({
-        program: undefined,
+        authority: undefined,
         adapters: [],
         trackerConnector: false,
         worktreesUsable: false,
@@ -46,27 +46,27 @@ describe('autopilotPreflight', () => {
 describe('the program', () => {
   it('reports an absent ACTIVE as unknown, not as a failure', () => {
     // Most projects have no program to drain. That is not a broken harness.
-    expect(named(autopilotPreflight(observation({ program: undefined })), 'autopilot program')?.status).toBe(
+    expect(named(autopilotPreflight(observation({ authority: undefined })), 'autopilot authority')?.status).toBe(
       'unknown',
     );
   });
 
   it('fails a program that is not executing', () => {
     const results = autopilotPreflight(
-      observation({ program: { status: 'completed', autopilot: {} } }),
+      observation({ authority: { status: 'completed', autopilot: {} } }),
     );
 
-    expect(named(results, 'autopilot program')?.status).toBe('fail');
+    expect(named(results, 'autopilot authority')?.status).toBe('fail');
   });
 
   it('fails when the program declares no autopilot block, because that is the opt-out', () => {
     // Declaring the block is the consent. A program without one has not withheld
     // a flag, it has not asked for the feature at all.
     const results = autopilotPreflight(
-      observation({ program: { status: 'executing' } }),
+      observation({ authority: { status: 'executing' } }),
     );
 
-    expect(named(results, 'autopilot program')?.message).toMatch(/autopilot/);
+    expect(named(results, 'autopilot authority')?.message).toMatch(/autopilot/);
   });
 
   // Two different things to say to a reader. A program that never asked for the
@@ -75,9 +75,9 @@ describe('the program', () => {
   // looking for a block that is missing.
   it('names the withheld consent rather than reporting the block as absent', () => {
     const results = autopilotPreflight(
-      observation({ program: { status: 'executing', autopilotConsentWithheld: true } }),
+      observation({ authority: { status: 'executing', autopilotConsentWithheld: true } }),
     );
-    const check = named(results, 'autopilot program');
+    const check = named(results, 'autopilot authority');
 
     expect(check?.status).toBe('fail');
     expect(check?.message).toContain('enabled: false');
@@ -87,9 +87,9 @@ describe('the program', () => {
 
 describe('the provider-agnostic program boundary', () => {
   it('names the program contract without prescribing a tracker product', () => {
-    const check = named(autopilotPreflight(observation({ program: undefined })), 'autopilot program');
+    const check = named(autopilotPreflight(observation({ authority: undefined })), 'autopilot authority');
 
-    expect(check?.message).toMatch(/\.void\/program\.md/);
+    expect(check?.message).toMatch(/Autopilot authority/);
     expect(check?.message).not.toMatch(/Linear|ACTIVE/);
   });
 });
@@ -100,7 +100,7 @@ describe('the merge mode', () => {
   it('says where the loop merges, where it never does, and how a person takes the merges', () => {
     const results = autopilotPreflight(
       observation({
-        program: { status: 'executing', autopilot: { deployBranch: 'main', base: 'develop' } },
+        authority: { status: 'executing', autopilot: { deployBranch: 'main', base: 'develop' } },
       }),
     );
 
@@ -110,35 +110,19 @@ describe('the merge mode', () => {
   });
 
   it('names the repository default branch when the programme names no deploying branch', () => {
-    const results = autopilotPreflight(observation({ program: { status: 'executing', autopilot: {} } }));
+    const results = autopilotPreflight(observation({ authority: { status: 'executing', autopilot: {} } }));
 
     expect(named(results, 'autopilot merge')?.message).toMatch(/never into the repository default branch/);
   });
 
-  it('fails a 4.0 human gate with the migration that keeps the merges a person\'s', () => {
-    const results = autopilotPreflight(
-      observation({ program: { status: 'executing', autopilot: { legacyMergeGate: 'human' } } }),
-    );
 
-    const check = named(results, 'autopilot merge');
-    expect(check?.status).toBe('fail');
-    expect(check?.fix).toMatch(/autopilot merges --by-human` first[\s\S]*schemaVersion: 2/);
-  });
-
-  it('fails a 4.0 granted gate with the migration to the automatic default', () => {
-    const results = autopilotPreflight(
-      observation({ program: { status: 'executing', autopilot: { legacyMergeGate: 'union-reviewed' } } }),
-    );
-
-    expect(named(results, 'autopilot merge')?.fix).toMatch(/remove `mergeGate`[\s\S]*merges on its own/);
-  });
 });
 
 describe('the verify commands', () => {
   it('fails when there are none, because nothing would prove the branch', () => {
     const results = autopilotPreflight(
       observation({
-        program: { status: 'executing', autopilot: { verifyCommands: [] } },
+        authority: { status: 'executing', autopilot: { verifyCommands: [] } },
       }),
     );
 
@@ -149,7 +133,7 @@ describe('the verify commands', () => {
     for (const command of [[], ['pnpm', ''], 'pnpm test' as unknown as string[]]) {
       const results = autopilotPreflight(
         observation({
-          program: { status: 'executing', autopilot: { verifyCommands: [command] } },
+          authority: { status: 'executing', autopilot: { verifyCommands: [command] } },
         }),
       );
 
@@ -160,7 +144,7 @@ describe('the verify commands', () => {
   it('says why argv rather than a string, in the fix', () => {
     const results = autopilotPreflight(
       observation({
-        program: { status: 'executing', autopilot: { verifyCommands: [[]] } },
+        authority: { status: 'executing', autopilot: { verifyCommands: [[]] } },
       }),
     );
 
@@ -235,10 +219,10 @@ describe('what nobody probed is not what could not be read', () => {
     // reader to author a program they already wrote (#193, same class).
     const results = autopilotPreflight(
       observation({
-        program: { malformed: { problem: 'clusterSize is 9, above the maximum of 4', fix: 'set clusterSize to 4 or less' } },
+        authority: { malformed: { problem: 'clusterSize is 9, above the maximum of 4', fix: 'set clusterSize to 4 or less' } },
       }),
     );
-    const check = named(results, 'autopilot program');
+    const check = named(results, 'autopilot authority');
 
     expect(check?.status).toBe('fail');
     expect(check?.message).not.toMatch(/no plans/);
@@ -251,7 +235,7 @@ describe('what nobody probed is not what could not be read', () => {
     // "human merge gate" ✓ and "no verifyCommands" ✗ off an unparsed file state
     // two things the file never said.
     const results = autopilotPreflight(
-      observation({ program: { malformed: { problem: 'no frontmatter', fix: 'add a --- block' } } }),
+      observation({ authority: { malformed: { problem: 'no frontmatter', fix: 'add a --- block' } } }),
     );
 
     expect(named(results, 'autopilot merge')?.status).toBe('unknown');
@@ -287,11 +271,6 @@ describe('the runtime adapter', () => {
 describe('the doctor wiring', () => {
   const DOCTOR = readFileSync(new URL('../../commands/doctor.ts', import.meta.url), 'utf8');
 
-  it('runs the preflight only for a project that declares a program', () => {
-    // Seven extra checks on every project would be noise about a feature they
-    // do not use, and would make `doctor` look broken where nothing is wrong.
-    expect(DOCTOR).toMatch(/programPath\(root\).*checks\.push\(\.\.\.autopilotPreflight/s);
-  });
 
   it('probes nothing remote, because --no-remote promises an offline run', () => {
     // Unprobed, not null: the offline contract is the same, but the reader is

@@ -1,4 +1,3 @@
-import { syntaxWorkerHealth } from './syntax-worker-health.js';
 // The runtime seam. The harness authors ONE doctrine and compiles it to each
 // agent runtime through an adapter. Core commands (init / runtime add / doctor)
 // iterate the adapters for detect / prerequisites / wire / doctorChecks rather
@@ -28,7 +27,7 @@ import { existsSync } from 'node:fs';
 import { lstat, readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { PRODUCT_COMMAND, PRODUCT_IDENTITY, voidReadPath } from '@voidcorp/hook-runner';
+import { PRODUCT_COMMAND, PRODUCT_IDENTITY, readMissionJournals, voidReadPath } from '@voidcorp/hook-runner';
 import type { SpecialistRuntimeCapability } from '@voidcorp/mission-engine';
 import { parseEventLine } from '@voidcorp/mission-engine/events';
 import { docFileFor, hasHarnessBlock, patchRuntimeDoc } from './claude-md.js';
@@ -48,7 +47,6 @@ import {
   wireCodexFloor,
 } from './codex-floor.js';
 import { CODEX_SKILLS_DIR, codexSkillsHealth, wireCodexSkills } from './codex-skills.js';
-import { loadCanonicalEventBody } from './graph-io.js';
 import { smokeInstalledHook } from './hook-smoke.js';
 import {
   CORE_PLUGIN_NAME,
@@ -204,7 +202,7 @@ function effectiveSpecialistCapability(
 }
 
 function observedRuntime(root: string, runtime: Runtime): boolean | null {
-  const body = loadCanonicalEventBody(root);
+  const body = readMissionJournals(root);
   if (body === '') return existsSync(voidReadPath(root, 'runs')) ? null : false;
   let malformed = false;
   for (const line of body.split(/\r?\n/)) {
@@ -236,9 +234,11 @@ async function docBlockCheck(root: string, runtime: Runtime): Promise<CheckResul
     return { name: file, ok: false, message: 'missing', fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
   }
   const text = await readFile(path, 'utf8');
-  return hasHarnessBlock(text)
+  const common = runtime === 'claude' && /^@AGENTS\.md\s*$/m.test(text)
+    ? await docBlockCheck(root, 'codex') : undefined;
+  return hasHarnessBlock(text) && common?.ok !== false
     ? { name: file, ok: true, message: `${PRODUCT_COMMAND} block present` }
-    : { name: file, ok: false, message: `${PRODUCT_COMMAND} block missing`, fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
+    : { name: file, ok: false, message: common?.ok === false ? 'AGENTS.md import target missing or unmanaged' : `${PRODUCT_COMMAND} block missing`, fix: `${PRODUCT_COMMAND} runtime add ${runtime}` };
 }
 
 async function claudeSpecialistsCheck(agentsRoot: string | undefined): Promise<CheckResult> {
@@ -391,16 +391,12 @@ const claudeAdapter: RuntimeAdapter = {
     const localAgent = join(root, '.claude', 'agents', 'doctrine-critic.md');
     if (localSettings) {
       installed = await safeRegularFile(localRunner)
-        && await safeRegularFile(join(root, '.void', 'hooks', '_syntax-worker.cjs'))
         && await anyStagedSkill(join(root, '.claude', 'skills'))
         && await safeRegularFile(localAgent);
       if (installed) {
         activationHook = localRunner;
         agentsRoot = join(root, '.claude', 'agents');
       }
-      const syntaxIssue = syntaxWorkerHealth(join(root, '.void', 'hooks'));
-      checks.push({ name: 'syntax worker', ok: syntaxIssue === undefined,
-        message: syntaxIssue ?? 'worker matches the installed hook', fix: `${PRODUCT_COMMAND} update` });
       checks.push({
         name: 'local assets',
         ok: installed,
@@ -451,10 +447,9 @@ const claudeAdapter: RuntimeAdapter = {
       check.name === 'settings.json'
       || check.name === 'CLAUDE.md'
       || check.name === 'claude agents'
-      || (localSettings && check.name === 'syntax worker')
       || check.name === (localSettings ? 'local assets' : 'plugin cache'),
     );
-    const wired = installed && wiringChecks.length === (localSettings ? 5 : 4)
+    const wired = installed && wiringChecks.length === 4
       && wiringChecks.every((check) => check.ok);
     const smoke = wired && activationHook !== undefined
       ? await smokeInstalledHook(activationHook, 'claude')
@@ -481,7 +476,7 @@ const claudeAdapter: RuntimeAdapter = {
 const codexAdapter: RuntimeAdapter = {
   id: 'codex',
   label: 'Codex',
-  detect: (root) => existsSync(join(root, '.codex')) || existsSync(join(root, 'AGENTS.md')),
+  detect: (root) => detectRuntimes(root).has('codex'),
   prerequisites: () => [],
   async wire(ctx) {
     const staged = await wireCodexFloor(ctx.stageRoot, ctx.sourceRoot);

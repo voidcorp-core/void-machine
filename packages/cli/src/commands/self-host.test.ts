@@ -1,32 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseSelfHostArgs,
-  selfHostExitCode,
-} from './self-host.js';
+import { parseSelfHostArgs, selfHostExitCode } from './self-host.js';
 
 describe('self-host CLI contract', () => {
-  it('defaults sync to shadow and accepts every rollout mode', () => {
-    expect(parseSelfHostArgs(['sync'])).toEqual({
-      action: 'sync',
-      mode: 'shadow',
-    });
-    expect(parseSelfHostArgs(['doctor', '--mode', 'release-gate'])).toEqual({
-      action: 'doctor',
-      mode: 'release-gate',
-    });
+  it('has one explicit validation without rollout modes', () => {
+    expect(parseSelfHostArgs(['sync'])).toEqual({ action: 'sync' });
+    expect(parseSelfHostArgs(['doctor'])).toEqual({ action: 'doctor' });
   });
 
-  it('fails only blocking states in enforce and release-gate modes', () => {
-    expect(selfHostExitCode('stale', 'shadow')).toBe(0);
-    expect(selfHostExitCode('stale', 'warn')).toBe(0);
-    expect(selfHostExitCode('stale', 'enforce')).toBe(2);
-    expect(selfHostExitCode('drifted', 'release-gate')).toBe(2);
-    expect(selfHostExitCode('degraded', 'release-gate')).toBe(0);
+  it.each(['not-installed', 'stale', 'drifted'] as const)(
+    'fails structural state %s', (state) => {
+      expect(selfHostExitCode(state)).toBe(2);
+    },
+  );
+
+  it.each(['healthy', 'degraded'] as const)('accepts state %s', (state) => {
+    expect(selfHostExitCode(state)).toBe(0);
   });
 
-  it('rejects unknown flags instead of silently weakening the requested mode', () => {
-    expect(() => parseSelfHostArgs(['sync', '--unknown'])).toThrow(
-      'self-host accepts only --mode',
-    );
+  it.each(['shadow', 'warn', 'enforce', 'release-gate'])(
+    'explains the removed mode %s', (mode) => {
+      expect(() => parseSelfHostArgs(['doctor', '--mode', mode])).toThrow('--mode was removed');
+    },
+  );
+
+  it('rejects unknown flags', () => {
+    expect(() => parseSelfHostArgs(['sync', '--unknown'])).toThrow('accepts no options');
   });
 });

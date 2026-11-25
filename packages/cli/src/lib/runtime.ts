@@ -3,9 +3,9 @@
 // via AGENTS.md + a .codex/ hooks floor). `init` detects what is already wired,
 // lets a flag override, and gates each runtime's active wiring on the result so
 // a Codex-only project is never nagged about the Claude marketplace, and vice
-// versa. Pure + side-effect-free except the fs existence probe in detect.
+// versa. Detection reads native footprints and the Claude import.
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export type Runtime = 'claude' | 'codex';
@@ -18,13 +18,16 @@ function isRuntime(value: string): value is Runtime {
 
 /**
  * Which runtimes already show a footprint in the project. `.claude/` or
- * `CLAUDE.md` ⇒ Claude Code; `.codex/` or `AGENTS.md` ⇒ Codex. A greenfield
+ * `CLAUDE.md` ⇒ Claude Code; `.codex/` or an independent `AGENTS.md` ⇒ Codex. A greenfield
  * project matches neither — the caller decides the default (both).
  */
 export function detectRuntimes(projectRoot: string): Set<Runtime> {
   const found = new Set<Runtime>();
   if (existsSync(join(projectRoot, '.claude')) || existsSync(join(projectRoot, 'CLAUDE.md'))) found.add('claude');
-  if (existsSync(join(projectRoot, '.codex')) || existsSync(join(projectRoot, 'AGENTS.md'))) found.add('codex');
+  const claudeDoc = join(projectRoot, 'CLAUDE.md');
+  const importsCommon = existsSync(claudeDoc) && /^@AGENTS\.md\s*$/m.test(readFileSync(claudeDoc, 'utf8'));
+  if (existsSync(join(projectRoot, '.codex'))
+    || (existsSync(join(projectRoot, 'AGENTS.md')) && !importsCommon)) found.add('codex');
   return found;
 }
 

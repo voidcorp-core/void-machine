@@ -1,0 +1,7 @@
+Sources for `void-expo-config-plugins` skill (see `docs/plans/skill-audits/void-expo-config-plugins.md` for the full audit):
+
+- Expo config plugins / Expo Modules official documentation — no URL recorded in the audit — distilled the "Expo way" (config plugin OR Expo Module covers ~95% of native needs) into a decision tree (Expo module → community plugin → custom config plugin → Expo Module → eject) plus the common-modules table and a concrete custom-plugin example.
+
+No external skill ships this verbatim; authored by distilling the official Expo docs into the void-machine "never eject by default" doctrine.
+
+Strategy: distill. Frame ejecting as a one-way door and keep projects on Expo tooling via plugins, rather than restating the docs option-by-option.

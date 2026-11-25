@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { syntaxWorkerHealth } from '../syntax-worker-health.js';
 import { randomUUID } from 'node:crypto';
 import {
   accessSync,
@@ -16,7 +15,6 @@ import { adaptersFor } from '../runtime-adapters.js';
 import { hashSelfHostSource } from './compile.js';
 import {
   readSelfHostReceipt,
-  type SelfHostMode,
   selfHostReceiptDrift,
 } from './receipt.js';
 
@@ -36,7 +34,6 @@ export interface SelfHostCheck {
 export interface SelfHostDiagnosis {
   readonly state: SelfHostState;
   readonly blocking: boolean;
-  readonly mode: SelfHostMode;
   readonly sourceHash?: string;
   readonly artifactRoot: string;
   readonly checks: readonly SelfHostCheck[];
@@ -55,7 +52,6 @@ export interface DiagnoseSelfHostOptions {
     root: string,
     artifactRoot: string,
   ) => Promise<EventReplayProbe>;
-  readonly mode?: SelfHostMode;
 }
 
 const SAFE_CHILD_ENVIRONMENT = [
@@ -132,14 +128,11 @@ function discoveryCheck(artifactRoot: string): SelfHostCheck {
     '.codex/agents/experience-designer.toml',
     '.codex/agents/visual-craft-director.toml',
     '.void/hooks/_void-hook.mjs',
-    '.void/hooks/_syntax-worker.cjs',
   ];
   const missing = required.filter((path) =>
     !existsSync(join(artifactRoot, ...path.split('/'))),
   );
-  const syntaxIssue = missing.length === 0
-    ? syntaxWorkerHealth(join(artifactRoot, '.void', 'hooks')) : undefined;
-  return missing.length === 0 && syntaxIssue === undefined
+  return missing.length === 0
     ? {
         id: 'discovery',
         status: 'ok',
@@ -148,7 +141,7 @@ function discoveryCheck(artifactRoot: string): SelfHostCheck {
     : {
         id: 'discovery',
         status: 'failed',
-        detail: syntaxIssue ?? `missing compiled surfaces: ${missing.join(', ')}`,
+        detail: `missing compiled surfaces: ${missing.join(', ')}`,
       };
 }
 
@@ -230,7 +223,6 @@ async function defaultEventProbe(
 
 function blockingDiagnosis(
   state: Extract<SelfHostState, 'not-installed' | 'stale' | 'drifted'>,
-  mode: SelfHostMode,
   artifactRoot: string,
   checks: readonly SelfHostCheck[],
   sourceHash?: string,
@@ -238,7 +230,6 @@ function blockingDiagnosis(
   return {
     state,
     blocking: true,
-    mode,
     artifactRoot,
     checks,
     ...(sourceHash === undefined ? {} : { sourceHash }),
@@ -255,19 +246,11 @@ export async function diagnoseSelfHost(
     'current',
   );
   const receipt = await readSelfHostReceipt(artifactRoot);
-  const mode = options.mode ?? receipt?.mode ?? 'shadow';
   if (receipt === undefined) {
-    return blockingDiagnosis('not-installed', mode, artifactRoot, [{
+    return blockingDiagnosis('not-installed', artifactRoot, [{
       id: 'receipt',
       status: 'failed',
       detail: 'self-host receipt is missing or invalid',
-    }]);
-  }
-  if (options.mode !== undefined && receipt.mode !== options.mode) {
-    return blockingDiagnosis('stale', mode, artifactRoot, [{
-      id: 'rollout-mode',
-      status: 'failed',
-      detail: `receipt mode is ${receipt.mode}, requested ${options.mode}`,
     }]);
   }
   const computeSourceHash = options.computeSourceHash ?? hashSelfHostSource;
@@ -276,14 +259,14 @@ export async function diagnoseSelfHost(
     sourceHash = await computeSourceHash(canonicalRoot);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown source hash error';
-    return blockingDiagnosis('stale', mode, artifactRoot, [{
+    return blockingDiagnosis('stale', artifactRoot, [{
       id: 'source-hash',
       status: 'failed',
       detail: message,
     }]);
   }
   if (sourceHash !== receipt.sourceHash) {
-    return blockingDiagnosis('stale', mode, artifactRoot, [{
+    return blockingDiagnosis('stale', artifactRoot, [{
       id: 'source-hash',
       status: 'failed',
       detail: 'current sources differ from the compiled self-host receipt',
@@ -291,7 +274,7 @@ export async function diagnoseSelfHost(
   }
   const drift = await selfHostReceiptDrift(artifactRoot, receipt);
   if (drift.length > 0) {
-    return blockingDiagnosis('drifted', mode, artifactRoot, [{
+    return blockingDiagnosis('drifted', artifactRoot, [{
       id: 'receipt',
       status: 'failed',
       detail: `owned artifact drift: ${drift.slice(0, 10).join(', ')}`,
@@ -342,13 +325,12 @@ export async function diagnoseSelfHost(
   }
 
   if (checks.some((check) => check.status === 'failed')) {
-    return blockingDiagnosis('drifted', mode, artifactRoot, checks, sourceHash);
+    return blockingDiagnosis('drifted', artifactRoot, checks, sourceHash);
   }
   const degraded = checks.some((check) => check.status === 'degraded');
   return {
     state: degraded ? 'degraded' : 'healthy',
     blocking: false,
-    mode,
     sourceHash,
     artifactRoot,
     checks,

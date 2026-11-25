@@ -26,9 +26,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 function shippedSkillDirectories(): string[] {
-  const roots = [join(ROOT, 'packages/core/skills')];
+  const roots = [join(ROOT, 'packages/core/src/skills')];
   for (const pack of readdirSync(join(ROOT, 'packages/packs'), { withFileTypes: true })) {
-    if (pack.isDirectory()) roots.push(join(ROOT, 'packages/packs', pack.name, 'skills'));
+    if (pack.isDirectory()) roots.push(join(ROOT, 'packages/packs', pack.name, 'src', 'skills'));
   }
   return roots.flatMap((root) => {
     try {
@@ -60,7 +60,7 @@ describe('anti-bloat-check refuses a shipped skill without the prefix', () => {
   function fixtureWithSkill(name: string): string {
     const root = mkdtempSync(join(tmpdir(), 'void-prefix-gate-'));
     roots.push(root);
-    const skill = join(root, 'packages', 'core', 'skills', name);
+    const skill = join(root, 'packages', 'core', 'src', 'skills', name);
     mkdirSync(skill, { recursive: true });
     writeFileSync(join(skill, 'SKILL.md'), `---\nname: ${name}\ndescription: probe.\n---\n\n# ${name}\n`);
     writeFileSync(join(skill, 'harness.yaml'), 'kind: standard\n');

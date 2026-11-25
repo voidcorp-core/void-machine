@@ -10,6 +10,31 @@ The topology below describes implementation, not a claim that a general Cortex
 integration is delivered. `packages/core/` is the development harness's discipline;
 `packages/void-machine/src/core/` holds the bounded generic mission primitives.
 
+## Authored sources and assembled delivery
+
+Product assets live under each package's `src`: core doctrine, skills, authored
+agents such as `doctrine-critic`, specialist YAML, modules, hooks, policies and templates; pack skills,
+plugin manifests, hooks, modules and shipped configs; CLI entrypoints in `src/bin`.
+`packages/core/src/PHILOSOPHY.md` is the only authored universal doctrine.
+
+Existing builders assemble `packages/core/dist` and `packages/packs/*/dist` as
+complete marketplace plugin roots. Those static deliveries are tracked because a
+marketplace clone runs no build. The CLI ships `dist/bin`, `dist/main.js` and
+`dist/core-assets`; pack TypeScript exports remain under `dist`. Specialist agent
+Markdown is compiled from canonical YAML into delivery, never authored twice.
+
+Run `pnpm derive` explicitly after changing sources. `pnpm derive:check` compares
+temporary expected assemblies before changing any tracked delivery, including
+already-dirty artifacts, missing files and orphans. Run focused checks during work;
+CI retains the structural floor. There is no repository pre-commit or auto-install
+of Git hook configuration; personal Git hooks remain project-owner configuration.
+
+Builds use versioned inputs and explicit built dependencies. Source self-host
+compilation stays isolated. Source-repository init/update preservation reads only
+the active installed published doctrine, never the working source philosophy.
+The installed `.void/PHILOSOPHY.md` migrates transactionally, with common native
+instructions in `AGENTS.md` and a thin `CLAUDE.md` import.
+
 ## Topology
 
 ```
@@ -19,16 +44,10 @@ void-machine/
 │   │   ├── src/commands/          # install, add, update, doctor, init
 │   │   └── package.json
 │   ├── core/                      # harness plugin (static assets, not an npm package)
-│   │   ├── .claude-plugin/        # plugin.json — wires hooks, declares the plugin
-│   │   ├── modules/               # 01-philosophy.md, 02-tdd.md, 03-tigerstyle.md...
-│   │   ├── skills/                # craftsman skills (TDD, refactor, hexagonal, ...)
-│   │   ├── agents/                # doctrine-critic and peers + generated specialist agents
-│   │   ├── specialists/           # canonical, runtime-neutral specialist YAML
-│   │   ├── profiles/              # versioned stack expertise and applicability selectors
-│   │   └── hooks/                 # tdd-guard.sh, no-any-grep.sh, no-console-log-grep.sh
+│   │   ├── src/                   # authored assets: doctrine, skills, agents, YAML, hooks
+│   │   └── dist/                  # complete tracked marketplace delivery
 │   ├── mission-engine/            # pure event/evidence contracts and verdict reducers
 │   ├── hook-runner/               # Node adapter compiled into the portable hook asset
-│   ├── harness-graph/             # graph kernel + telemetry projections
 │   └── packs/                     # one workspace + plugin per capability
 │       ├── pack-monorepo/         # @voidcorp/pack-monorepo  (plugin harness-monorepo)
 │       ├── pack-react/            # @voidcorp/pack-react      (plugin harness-react)
@@ -37,50 +56,41 @@ void-machine/
 │       ├── pack-pwa/              # @voidcorp/pack-pwa        (plugin harness-pwa)
 │       └── pack-mobile/           # @voidcorp/pack-mobile     (plugin harness-mobile)
 ├── apps/                          # private, unpublished tooling
-│   ├── graph-studio/              # the graph visualiser (Vite)
-│   └── eval-harness/              # @voidcorp/eval-harness — behavioral skill evals
+│   └── eval-harness/              # retained scenarios and historical reports; no package
 ├── test/                          # automated skill tests (citypaul-style)
 └── docs/                          # doctrine, architecture, release and decisions
     ├── specs/                     # approved designs
     ├── plans/                     # implementation plans
-    │   └── skill-audits/          # one audit note per vendored skill
-    └── decisions-log/             # one immutable, collision-free file per ADR
+    │   └── skill-audits/          # historical adaptation notes
+    └── decisions-log/             # one Markdown file per ADR
 ```
 
-## The `.void/` layout — three levels, named for what deletion costs
+## The `.void/` layout and ownership
 
-Everything the harness owns or produces lives in `.void/`, so uninstalling or
-migrating it is one directory. What the PROJECT owns and what outlives the
-harness — decisions, specs, plans — stays in `docs/`.
+The top of `.void/` has mixed ownership. Location alone never grants deletion or
+tracking authority. `.void/PHILOSOPHY.md` is delivered and manifest-owned;
+`.void/PROJECT-DOCTRINE.md` belongs to the project under its existing untouched-template
+refresh policy. Hooks remain load-bearing, and machine history remains under `machine/`.
 
-Inside `.void/`, the question anyone actually asks is *can I delete this*, and it
-has three answers:
+| path | owner | tracking |
+| --- | --- | --- |
+| `PHILOSOPHY.md` | delivered harness doctrine | ignored only when attested by the install |
+| `PROJECT-DOCTRINE.md`, `config.json`, `program.md` | project declarations | tracked |
+| `hooks/` | delivered enforcement referenced by native settings | tracked |
+| `machine/` | local execution and recovery state | ignored |
 
-| level | delete it and | committed |
-|---|---|---|
-| the top of `.void/` | the project loses a decision | yes |
-| `installed/` | `void-machine install` restores it byte for byte | no |
-| `machine/` | local execution state, receipts and recovery evidence may be lost | no |
+The former `installed/PHILOSOPHY.md` is retired through the existing installation
+transaction. Only receipt-attested unchanged bytes and permissions authorize removal.
+Modified, unknown, or symbolic-link old copies survive; a differing unclaimed new
+destination or symbolic link refuses installation. Empty parents disappear with successful
+publication; nonempty `installed/` directories and other user content survive. A failure
+restores transaction-owned bytes and modes. Legacy observed-state migration remains a
+separate pretransaction operation, and never deletes the new philosophy destination.
 
-**Everything at the top of `.void/` is committed; the two subdirectories are
-not.** That sentence is the whole rule, and it is checkable at a glance rather
-than by looking anything up. It was false before: `PHILOSOPHY.md` and `hooks/`
-sat at the top while being ignored.
-
-`VOID_OWNERSHIP` in `packages/hook-runner/src/void-layout.ts` is the single
-source of truth the ignore block, the migration and `doctor` all read. A second
-copy would let `update` move a path the ignore rule does not cover, and the next
-commit would ship telemetry.
-
-Two properties are load-bearing and easy to break:
-
-- **A retired entry stays classified.** Removing it from the table does not
-  remove the file from anyone's disk; it makes it fall through to the `project`
-  default, at which point `doctor` starts telling projects to commit their own
-  telemetry. Retiring a READER is not retiring the data.
-- **Readers fall back through every previous layout.** A project migrates on
-  `update`, and until it does, a reader that only knew the current path would
-  report months of history as none.
+`VOID_OWNERSHIP` and materialized ownership in `packages/hook-runner/src/void-layout.ts`
+classify paths; manifests and receipts prove ownership. Legacy history remains readable
+through the existing fallbacks. No blanket `.void/` deletion or directory-wide ownership
+is implied.
 
 ### Naming what the harness owns in a shared directory
 
@@ -130,7 +140,7 @@ cleanup remain explicit project decisions.
 ### Two roots: the work tree and the installation
 
 A command reads and writes code in the **work tree**, the directory it ran in. It also reads what
-`init` installed: `.claude/agents`, `.claude/skills`, `.void/installed`, the hook bundle, the
+`init` installed: `.claude/agents`, `.claude/skills`, `.void/PHILOSOPHY.md`, the hook bundle, the
 manifest. That install is a property of the **repository**, exactly like the `.git/info/exclude`
 file that hides it from git, and it lives in the main checkout. In the main checkout the two roots
 are one directory. In a linked worktree they are not, because `git worktree add` restores tracked
@@ -174,32 +184,28 @@ runtime state or installation-root resolution above.
 
 ## Decision records
 
-ADRs are an append-only data model, not a generated document:
+Decisions are short Markdown files with light YAML frontmatter, written directly
+through `void-decide`. Stable IDs, titles, dates, status and optional `supersedes`
+links keep them readable without an authoring engine, generated index or format gate.
+Use a unique filename rather than a shared sequential counter. Keep established
+directories; new projects may use `docs/decisions/`.
 
-- `void-machine decisions new` creates one exclusively-owned file with a UUID
-  identity; concurrent workers never allocate a shared counter or index.
-- `void-machine decisions check` validates the schema, unique identities,
-  supersession links and cycles. In CI, `DECISIONS_BASE` also rejects edits,
-  renames or deletions of accepted records. Its only edit exception is a
-  repository-local path substitution with unchanged frontmatter, headings,
-  structure and surrounding prose, and an existing root-confined target.
-- Decision loading is root-confined, rejects symlinks and bounds each record to
-  256 KiB before parsing.
-- `void-machine decisions render --format markdown|json` produces a read-only
-  projection on stdout. It computes effective supersession from inbound
-  `supersedes` links, preserves the declared status, and names every replacing
-  record. It never commits or rewrites a shared artifact.
-- `docs/DECISIONS.md` is only the frozen pre-v3 landing page. Existing repos keep
-  their detected ADR directory; new consumer projects default to
-  `docs/decisions/`.
+The historical files, IDs, metadata and links remain intact. Ordinary typo, link
+and wording corrections use normal Git commits. A reversal or material change is
+a new short record linking the previous decision, which stays readable.
+`docs/DECISIONS.md` remains the historical landing page. Git records committed
+revisions, not uncommitted intermediate edits, and is not an absolute retention
+promise against history rewriting. Doctrine updates retain `void-learn` approval.
 
-The public contract is plain Markdown plus YAML frontmatter, so it works without
-an agent runtime. The CLI is deterministic validation and ergonomics, not a
-storage dependency.
+The public `decisions new`, `decisions check` and `decisions render` commands and
+their dedicated authoring, schema, immutability and projection engine are removed.
+Existing project readers retain their bounded parsing and historical
+compatibility. Project conformance remains a separate capability; it no longer
+recommends the removed commands. See the declared-intent reader contract below.
 
 ## Stack baseline
 
-The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `docs/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
+The shipped development harness assumes **TypeScript + web**. This is its current specialty baseline, not the final scope of Machine. See `packages/core/src/PHILOSOPHY.md` § "Stack assumption" and [Machine vocation](MACHINE-VOCATION.md).
 
 The Void Machine has no native track. Its Rust workspace was removed without a port, for lack of
 a caller ([decision](decisions-log/2026-09-21-void-machine-rust-removal-without-port--ec77d2de-4719-4fe6-8d21-c0dbe403d6ac.md)).
@@ -268,7 +274,7 @@ their provenance, and `status` says why a run has no view.
 
 ## Stack profile compilation
 
-`packages/core/profiles/*.yaml` is the certified stack-knowledge catalog. Consumer extensions use
+`packages/core/src/profiles/*.yaml` is the certified stack-knowledge catalog. Consumer extensions use
 `.void/profiles/*.profile.yaml`; the explicit suffix lets policy overlays coexist in the same
 directory. The CLI loads both through a bounded, alias-free, root-confined YAML adapter and the
 mission engine validates and routes the resulting declarative contracts without filesystem I/O.
@@ -288,10 +294,9 @@ The seam is the load-bearing rule: **core commands never branch on a runtime nam
 
 Rules:
 
-- Doctrine in `CLAUDE.md` and `AGENTS.md` is identical. Only terminology adapts ("Claude Code" / "Skill tool" vs "Codex" / "tools / shell").
-- `scripts/sync-agent-docs.sh` enforces parity on the harness repo itself: `--staged` (a commit touching one sister doc must touch the other) via `.githooks/pre-commit` (`git config core.hooksPath .githooks`), and section-heading parity in CI (`pnpm sync:docs`). This is a **harness-repo** rule; a consumer project only carries the doc(s) of the runtime(s) it wired.
-- No file is auto-generated from the other. Auto-generation risks losing intentional adaptations. Manual authoring + mechanical gate is the safer trade-off.
-- **Doc ownership is per-runtime.** Each adapter's `wire` writes only its own doctrine doc — a Claude-only project has just `CLAUDE.md`, a Codex-only project just `AGENTS.md`. `doctor` checks only the docs of *detected* runtimes, so a Codex-only project is never dinged for a missing `CLAUDE.md`. (`add` / `remove` still patch whichever docs exist, keeping active docs current.)
+- **One common instruction owner.** `AGENTS.md` carries shared doctrine references and explicit native invocation syntax. Claude receives a thin `CLAUDE.md` import using `@AGENTS.md`, including on Claude-only installs. Codex discovers `AGENTS.md` directly and follows its instruction to read doctrine; it does not expand `@` imports.
+- **Preserve user content.** The installer patches only managed blocks in both files. Adding Codex later keeps the common instructions idempotent. An AGENTS imported by Claude alone is not proof that Codex is wired.
+- **Behavior replaces mechanical parity.** Real fresh native contexts prove Claude import loading and Codex discovery without duplicate common instructions. Section-heading parity, sister-document staging, and the exclusive parity test/script are retired; runtime installation and preservation tests remain.
 - **`init` wires each selected runtime's layer via its adapter**, gated by `--runtime <claude|codex|both>` (default: auto-detected footprint, else both). Claude receives native project-local skills, agents, commands and hooks; Codex receives `.agents/skills`, native `.codex/agents` and `.codex/hooks.json`. The package is bundled with all CLI runtime dependencies, so a tarball installs offline. `--source marketplace` is opt-in and is the only path that checks `gh`/marketplace access.
 - **Publication is transactional.** `init` seeds only shared merge targets into an isolated stage, compiles and executes each selected adapter's doctor smoke there, then atomically publishes a finite mutation set. Every target is snapshotted before the first write; a failure restores bytes and modes and removes only transaction-created paths. `.void/machine/receipts/install-v1.json` hashes files the install created, already owned, or found already identical byte-for-byte to what it compiled — a managed asset matching our own output is ours, and letting it fall out of the receipt is what made a later version meet an asset it could not recognise. Unowned native conflicts fail unless `--force` (all of them named in one message, not the first alone), and even force never grants deletion ownership over a pre-existing file.
 - **Layout repair survives install failure.** `update` migrates legacy layout before invoking
@@ -307,9 +312,9 @@ Rules:
   a minimal environment and fixture-local state. CI fans the immutable pair out to Linux, macOS and
   Windows; elapsed time is an observation, never a correctness threshold. ProjectGraph stays in a
   separate path-filtered matrix because it is a distinct published package and portability
-  boundary. Repeated seeded stress runs in the scheduled test-certification workflow on an
-  ephemeral Linux runner and emits exact-SHA reports; it is deliberately outside the laptop edit
-  loop and ordinary pull-request critical path.
+  boundary. Test execution uses native Vitest projects for the pure mission engine, local
+  integration fixtures and loopback-dependent UI/daemon/note/signal families. Ordering investigations use
+  explicit native shuffle/seed arguments; there is no recurring certification campaign.
 - **Runtimes are added a posteriori without friction**: `void-machine runtime add <runtime>` wires exactly that runtime's layer on an already-`init`-ed project, touching nothing the other runtime owns (verified byte-for-byte in tests). `runtime list` shows which are wired. This is the `void runtime add` command from the multi-runtime spec.
 - **Pack and update lifecycle uses the same transaction.** Local `add`/`remove` compile the exact
   config pack set and prune only unchanged receipt-owned stale assets. Local `update` recompiles
@@ -347,7 +352,7 @@ Rules:
   path both name, since only its hashes tell a hand-edited file from an untouched one. An absent
   receipt (every fresh clone) is the degenerate case of the same mechanism, not a separate route.
   See the ownership-is-union-of-receipt-and-manifest decision.
-- `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; Claude marketplace checks (`gh`, plugin cache, remote versions) apply only to an explicit marketplace install. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In the source repository, `doctor` delegates to the self-host receipt and current-source checks instead of applying consumer assumptions. See `docs/CODEX.md`.
+- `doctor` iterates the *detected* adapters for each runtime's wiring + doc health; local marketplace configuration checks apply only to an explicit marketplace install; remote comparisons belong to `check`. Adapter inspection distinguishes `installed`, `wired`, `fired`, and `observed`. The `fired` postcondition executes the installed Node runner against an isolated fixture and reads back its canonical event; a zero exit without that event stays red. In every repository, including the source checkout, `doctor` checks the published installation at `installRoot`. It never consults npm, marketplace remotes or GitHub authentication, and never substitutes self-host for an absent install. See `docs/CODEX.md`.
 
 Current source and published-floor maintenance follows the coordinator procedure in
 [WORKTREES.md](WORKTREES.md#current-source-and-published-installation).
@@ -476,50 +481,24 @@ Three rules keep the degradation honest:
 The declaration lives in the mission plan, so no core command learns a runtime
 name — the same seam that already holds for `init`, `doctor` and `status`.
 
-### Consumer programme and session handoff
+### Consumer authority and session handoff
 
-Every generated `CLAUDE.md` or `AGENTS.md` carries the same conditional bootstrap: if
-`.void/program.md` exists with `status: executing`, the runtime reads its plan and spec before
-choosing implementation work. `ResumeBundle` composes that versioned global context with the local
-checkpoint and Git. A plain continue/start/resume request uses the declared progress adapter to
-recover exactly one started scoped unit, or selects the first ready unit from the stable order and
-native blocker relations. More than one started unit is a competing-claim error.
+Generated runtime docs load checkpoint and Git observations. Explicit config `autopilot`
+`schemaVersion: 3` with boolean `enabled` is the sole autonomous authority. The native milestone
+located through `progress.provider/scope/states` links the approved plan and owns membership.
+The orchestrator verifies actual tickets, blockers, holds and workers before selection; the
+kernel consumes observations without claiming independent provider verification.
 
-`.void/program.md` is the only location, and `LEGACY_PROGRAM_PATHS` is the only place the names it
-carried before (`.void/active.md`, `plans/ACTIVE.md`) still appear — read on the way in, never
-written, so a project that has not run `update` is not reported as having no programme at all.
-Two things hold that to one path. A test greps the living surface, everything the harness ships or
-tells an agent to read, for a legacy name; `docs/` is out of scope, since the specs that decided
-this are the record of why. And `doctor` **names the paths it looked at** when it finds nothing,
-because the same programme at one name printed eight autopilot lines and at another printed none,
-and a silent report is indistinguishable from not having looked.
+The single reader `autopilot/authority.ts` serves admission, review, fingerprints, publication
+and doctor. V2 remains readable by general configuration for preservation but never admitted;
+no historical fallback or automatic promotion exists. Historical programme files remain
+project-owned and untouched by init/update/packs. See [migration and public API changes](AUTOPILOT-AUTHORITY.md).
 
-The programme is opt-in and project-owned. `init`, `update`, and runtime adapters never create or
-mutate it. A declaration never migrates into a directory the harness ignores: one project's
-programme was moved from `plans/ACTIVE.md` to `.void/machine/ACTIVE.md` by an `update`, taking its
-running order, its human gates and the `autopilot` block that IS the consent to autonomous
-execution out of the repository with it, where nobody could audit or revise them in a PR. `void-ticket` creates it only after a human-approved multi-unit plan has been fully
-materialized in a capable progress provider. It stores durable context and routing only: programme,
-plan/spec links, provider scope, ordered unit identifiers, lifecycle-state roles, human gates, and
-the required `autopilot` consent block. Mutable status, assignee, blockers, comments, and review
-evidence live only in the provider.
-
-`packages/cli/src/lib/autopilot/program.ts` is the only parser of that contract. It
-validates every field on read and refuses a file that is present but wrong, rather than falling
-back to a default: a typo in `base` or `deployBranch` must never be what puts a merge in the wrong
-place, and a 4.0 programme still declaring `mergeGate` (autopilot schema 1) is read but refused by
-the loop with its migration, so a former human gate never becomes consent to merge. Paths
-declared in the file stay repo-relative and non-escaping, so a program cannot point at `/etc` with
-a YAML syntax.
-
-Automatic continuity is capability-gated rather than Linear-specific: the declared provider
-must support reading and updating status, relations, assignee, comments, and review evidence. If
-that surface is unavailable, the runtime stops the remote action instead of inferring progress
-from local files. The semantic sections of `.void/machine/checkpoint.md` are replaced at a
-deliberate session close and stay readable offline; neither the checkpoint nor the programme stores
-a current or next unit.
-Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch. A standalone ticket or sequential plan keeps using its normal
-ticket or resume-point flow and does not need a programme descriptor.
+A bounded planned selection is refreshed where evidence changed, preserving human priorities
+and assignments. Multiple engaged tickets are reconciled, uncertain workers are not duplicated,
+and ambiguous arrivals do not stop independent authorized work. Missing required provider,
+scope or plan blocks dependent selection only; offline checkpoint and Git remain available.
+Human holds, protected-path changes and deployment promotion remain human.
 
 ### Session update proposal
 
@@ -533,70 +512,45 @@ that session. This is agent guidance, not a technical authorization barrier. Cur
 ahead, unknown, marketplace and unknown-source cases remain silent; the terminal notice,
 cached detection and background refresh keep their existing behavior and startup budget.
 
-### Mechanical context continuity
+### Manual checkpoint and semantic resume
 
-The checkpoint is also the single local continuity file. A uniquely delimited mechanical block
-coexists with the semantic sections: `void-checkpoint` owns objective, position, proven state, open
-loops, dead ends, assumptions, and the exact next action; the lifecycle handler owns only observed
-usage, bounded read/modified paths, overflow, and revision/cycle facts. Every semantic rewrite must
-preserve that block byte-for-byte. There is no sidecar or reconciliation daemon.
+`void-checkpoint` owns semantic residue. `mission-engine` parses it and composes checkpoint,
+Git and freshness diagnostics; `hook-runner` observes and injects the bounded result
+at `SessionStart` in both runtimes. No mechanical revision or seal is required. Legacy mechanical
+blocks are ignored, and hooks never rewrite checkpoint files or acquire checkpoint locks.
+There is no continuous tracker, threshold reminder or end-of-session audit.
 
-The dependency direction remains the normal one. `mission-engine` makes pure revision, recency,
-threshold, merge, and complete/degraded decisions. `hook-runner` normalizes Claude Code and Codex
-payloads, reads at most 1,048,576 transcript bytes, confines project paths, and replaces the block
-under a no-wait lock through a same-directory temporary file and rename. Runtime manifests only
-map `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and `SessionStart` to that handler.
-The lock covers the complete read-modify-write decision. Stale takeover is serialized by a
-no-wait claim chain whose generations are created exclusively and never ranked by timestamps.
-After acquiring the recovery claim, takeover checks the current lock's age again as well as its
-identity: Linux can reuse an unlinked inode immediately for a fresh owner's lock, so matching
-device and inode numbers alone do not authorize removal. Checkpoint mutation stays anchored to
-an opened, verified machine directory while relative
-no-follow files are read and renamed. Transcript reads use no-follow bounded descriptors. Codex
-transcripts remain project-local; Claude may also use its
-project-scoped transcript directory when the file name exactly matches a bounded session ID.
-Configuration reads are regular-file-only and capped at 65,536 bytes. Direct runtime read/write
-payloads contribute paths, while shell-mediated reads remain unobserved.
+Optional `Engaged work` and `Planned work` sections use the shared multiline prose codec, preserving
+exact references and intended order without the older list fields' 200-character item limit.
+They count as useful checkpoint content even alone. Objective/Position identify the project and
+milestone, State carries evidence and dirty files, and date/branch/head bind observations to Git.
+CLI human/JSON output preserves the work; the injected resume summary stays within 4,000 characters,
+reserving the observed full checkpoint's project-relative path and a no-authorization notice before
+optional content. Truncation is explicit and never changes the source file; legacy paths remain read-only.
 
-The latest complete `message.usage` record is an occupation observation, not accumulated session
-cost. A nudge is possible only when `.void/config.json` supplies a positive `context.windowTokens`;
-the 40–60% integer threshold defaults to 50. Unknown windows produce no percentage. The handler
-never invokes `/clear`, `/compact`, or `void-checkpoint`, and never authors semantic residue.
-`SessionStart:clear` is consequently degraded until a later semantic checkpoint reconciles the
-revisions. A semantic rewrite invalidates the previous `sealed_work_revision`; only a successful
-`PreCompact` can seal the current work revision, so a failed seal cannot be rendered complete on
-the next compact resume. See the decision
-[PreCompact may preserve mechanical checkpoint state](decisions-log/2026-08-27-precompact-preserves-mechanical-checkpoint-state--da9bb0a9-9c5a-46df-9459-27a583e92af2.md).
+The orchestrator reads the full handoff needed, verifies tickets/PRs/Git and reconciles workers before
+resuming or delegating. Saved intentions may be reordered; actual dependencies still apply. Completed
+work is removed only after observation. Removing planned work neither closes a remote ticket nor
+deletes a worktree. Offline checkpoints name unavailable evidence; only dependent provider actions wait.
+No decisions after the last checkpoint are recoverable from it. Programme context remains until fresh
+native resume proof on Claude and Codex; installed-hook subprocess tests prove wiring, not that proof.
 
-The continuity benchmark executes the exact delivered hook bundle in 25 fresh processes and keeps
-bare Node, same-bundle no-op, and representative-event measurements separate. DEV-651 gates only
-the hot wall path and incremental feature-versus-no-op CPU cost. It still publishes raw wall
-latencies, but external scheduler contention cannot make the causal feature gate flaky. The
-existing global cold-start and no-op-versus-Node wall budgets remain owned by
-[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+Herdr's read-only context measurement is isolated in `herdr-context.ts`. It reads at most
+1,048,576 bytes from the tail of a regular transcript using no-follow descriptors, canonical
+containment and identity checks before and after opening. Claude's external project transcript
+also requires an exact bounded session ID. Configuration reads are capped at 65,536 bytes.
+Only Claude's latest complete `message.usage` record and a configured positive
+`context.windowTokens` produce an occupation percentage; Codex, unknown windows and unavailable
+transcripts produce none. No cursor, checkpoint, lock, revision or threshold state is written.
+This does not change Herdr's optional discovery or verified-target command boundary.
 
-### Installed capability discovery
+### Workflow and command discovery
 
-`void-machine cheatsheet` owns the consumer discovery projection in the CLI's
-`lib/cheatsheet/` boundary. The shipped graph and specialist contracts provide
-canonical identities; `lib/command-catalog.ts` supplies the same metadata to
-dispatch, help and discovery. The handler map is exhaustive over its keys.
-The source-only Markdown generator and Linear index are not imported.
-
-Pure catalogue/availability projection feeds JSON schema version 1, Markdown
-and self-contained HTML. The I/O adapter resolves linked installation roots,
-validates local receipts/configuration and performs bounded, contained reads.
-It never calls status, runtime smoke probes, registries or journals. Local
-assets are checked against receipt hashes; configuration is not execution proof.
-Hook events/matchers come from shipped manifests, associated through their
-owner wrapper's declared runner invocation. Unknown wrapper shapes remain
-undeclared. No handwritten hook-name mapping is introduced.
-
-Project Claude skill overrides can establish explicit disabled evidence.
-Home settings and marketplace caches are outside this bounded read, so effective
-runtime visibility stays unverified. The HTML embeds fixed enhancement code;
-metadata is escaped as text and never interpolated into executable JavaScript.
-See [the discovery projection decision](decisions-log/2026-09-13-installed-discovery-projection--00d39aef-2cb8-4809-9545-128295b1c012.md).
+The [essential workflow guide](CHEATSHEET.md) is maintained by hand. Native
+runtime discovery owns skill availability; `void-machine --help` owns CLI
+reference and `doctor` diagnoses installation wiring. The generated cheatsheet
+and export command have been retired. `lib/command-catalog.ts` still supplies
+metadata to dispatch and help, with an exhaustive typed handler map.
 
 ### Source self-host boundary
 
@@ -608,7 +562,7 @@ source set is hashed again before publication; concurrent drift aborts.
 Publication swaps the complete directory to `.void/machine/generated/current`; a
 failed swap restores the last green artifact.
 
-The deterministic receipt records the source hash, rollout mode and every owned
+The deterministic receipt records the source hash and every owned
 file's bytes + mode. An identical sync is a no-op. `self-host doctor` separately
 reports source staleness, artifact drift, discovery, adapter hook smoke,
 canonical event replay and native runtime availability. Missing runtime CLIs are
@@ -620,8 +574,13 @@ ambient configuration never cross that process boundary.
 
 This boundary never writes `packages/core/`, root `CLAUDE.md`/`AGENTS.md`, or
 root `.claude`/`.codex`/`.agents` surfaces. All generated files and runtime probe
-metadata are gitignored. Modes `shadow` and `warn` are advisory; `enforce` and
-`release-gate` fail on structural blockers.
+metadata are gitignored. Explicit `self-host doctor` always fails on missing, stale or drifted
+artifacts and never builds them. Optional runtime absence remains degraded and untested.
+Legacy receipts with rollout modes remain readable, but cannot weaken a structural failure or
+force a rebuild solely for their mode; new receipts contain only Unix file permission modes.
+The former `--mode` flag is rejected explicitly. Ordinary doctor remains a separate local
+published-install check; `--no-remote` is a compatible no-op. Documentary conformance repair
+and its `--fix`/`--dry-run` flags have been removed; documents and decision history remain.
 
 ## Agent model tiers
 
@@ -646,7 +605,7 @@ separate concern. See the [native model choice decision](decisions-log/2026-10-2
 ## Native specialist contracts
 
 The 16 canonical product, architecture, engineering, review, and conditional PDF roles live under
-`packages/core/specialists/*.yaml`. The strict loader
+`packages/core/src/specialists/*.yaml`. The strict loader
 bounds files, disables YAML aliases, rejects unknown keys and duplicate identities, then each
 runtime compiler embeds the same instructions and structured result schema. Claude receives
 `.claude/agents/*.md`; Codex receives `.codex/agents/*.toml`. The five older Markdown critics also
@@ -698,58 +657,24 @@ receipts and health checks do not depend on them. `_hooklib.sh` and `_checks.sh`
 remain characterization inputs only and are not part of the active runtime.
 The local runtime therefore requires Node only, not `jq` or a POSIX shell.
 
-`outcome-meter` composes warning-only repeated-read advice in its existing
-`PostToolUse` process, with Claude's documented
-`PostToolUseFailure` used only to reset the stream. It compares exact `Read`, `Grep`
-and `Glob` calls within a runtime/session and project, using canonical object key
-order but preserving strings, paths, flags and array order. The fourth consecutive
-successful call with identical arguments and result emits one fixed `additionalContext`
-message; the counter saturates until new information, arguments or another observed
-activity resets it. Immediate duplicate tool-call IDs do not increment. It does not judge
-semantic progress, block tools, rewrite results, call an LLM or inspect shell commands.
-Interleaved loops are intentionally outside this last-call heuristic.
+`outcome-meter` records successful runtime tool outcomes through the existing event boundary.
+`PostToolUseFailure` returns without manufacturing a `runtime.tool.completed` event. It does not
+track repeated reads, persist a read-loop cache, rewrite results or add context advice.
 
-The disposable `.void/machine/read-loop/state.json` cache retains only SHA-256
-digests, counts and timestamps: at most 32 sessions, 32 KiB and 24 hours. Digests are
-comparison keys, not encryption or authentication. JSON normalization is bounded
-at 32 levels, 4,096 nodes and 256 KiB per argument/result value, inside the runner's
-1 MiB input limit. Missing results, explicit error/interruption markers and
-uninspectable values reset rather than count. Missing session identity or unsafe
-cache access reports `READ_LOOP_UNAVAILABLE` without changing tool permission.
-The private cache refuses symlinks/nonregular or oversized state, uses atomic
-replacement and an exclusive no-wait lock. Contention skips advice. A crashed
-writer can leave the lock; with no hook process using it, remove this disposable
-`read-loop` cache directory to recover. There is no stale-lock takeover or retry loop.
-No raw arguments, results or session identifiers are written by this advice path.
+Test focusing, explicit `any`, console usage and undeclared package imports are
+validated through the project's existing syntax-aware linter. TDD evidence comes
+from relevant observed tests, not from a sibling-file or declaration write gate.
+The former TypeScript syntax worker and its paired-asset health requirement are
+removed. Both runtimes still execute the same portable hook runner for targeted
+security checks. See [test evidence and validation](HOOK-TEST-EVIDENCE.md).
 
-The existing `outcome-meter` wrapper remains the catalogue and cheat-sheet owner.
-There is no additional process on normal tool completions. One `hook.completed`
-receipt records the advice outcome, alongside the existing tool outcome event; a
-failure reset never manufactures a `runtime.tool.completed` receipt. Source: the
-[Claude hooks contract](https://code.claude.com/docs/en/hooks#posttooluse) and
-[Codex hooks contract](https://learn.chatgpt.com/docs/hooks#posttooluse).
-Slim's [tool-loop guard](https://github.com/alvinunreal/oh-my-opencode-slim/blob/master/src/hooks/tool-loop-guard/hook.ts)
-informed the identical-result check; its blocking and task/wait heuristics are not adopted.
-
-Context-sensitive focused-test checks reconstruct the complete proposed file
-before inspecting syntax. They use the official harness-owned TypeScript 6 API in a
-bounded child process. The hook invokes a companion `_syntax-worker.cjs` whose
-size and SHA-256 identity it verifies before execution. Only the worker loads
-TypeScript. No consumer compiler, configuration, plugin
-or import is resolved or executed, and no compiler is downloaded. Ordinary tests
-without suspicious tokens and an unambiguous prohibited call at the start of a
-file retain their inexpensive paths. Missing context or parser failure is
-`TEST_SYNTAX_UNVERIFIED`, a refusal rather than an assertion that code was
-checked. See [hook test evidence](HOOK-TEST-EVIDENCE.md) for
-limits, supported edits and the structural E2E declaration contract.
-
-The boundary has five responsibilities: the rule reconstructs proposed source;
-the process adapter enforces isolation and validates the versioned protocol;
-the worker validates requests; the TypeScript adapter returns syntax facts;
-the pure policy maps those facts to existing verdicts. Both runtime installers
-and source self-host use the same paired-asset builder. Installation health
-refuses missing or incompatible workers. No extraction cache, dynamic evaluation
-or persistent compiler process is involved.
+An update uses the existing receipt-backed transaction to retire an unchanged
+owned worker file. Locally modified or unowned files are preserved; adding one
+runtime may retain an older inert asset owned by the other installation. Health
+checks must not require that obsolete worker for the new runner. Installation
+proofs still cover runner execution, owned-file integrity, preservation of user
+files and rollback. Existing released installations retain their behavior until
+updated; rebuilding sources does not activate them in the repository root.
 
 Every active hook records a bounded, redacted `hook.completed` event. Lifecycle
 states distinguish `ok`, `skipped` and `degraded`; enforcement additionally
@@ -767,21 +692,27 @@ Two content-aware hooks sit beside the filename/path guards:
   suffix assigned a long, mixed, non-placeholder literal — excluding UUIDs, git shas,
   and env indirection). Bounded to the edit
   (never the repo; that is gitleaks/CI). Escape hatch: `// allow-secret-pattern:`;
-  test/fixture paths are skipped except credential-named source modules admitted by
-  the filename heuristic above, which receive the same content policy. The marker
-  applies only to its own line and does not exempt another line or file.
-- **`stop-typecheck.sh`** (Stop, **advisory**) — when a TS project has uncommitted
-  `.ts` changes at end of turn, it runs a timeout-bounded `tsc --noEmit` scoped to
-  the nearest tsconfig of the touched files and surfaces type errors on stderr, so
-  the "typecheck clean" item of `void-verify` is answered from
-  observation. It **never blocks** (a blocking Stop would trap the session) and
-  no-ops with no TS project, no TS edit, or no `tsc`.
+  high-confidence signatures apply in every path, including tests, fixtures and
+  generated files. Only the ambiguous assignment heuristics retain their fixture
+  exemptions (credential-named source modules still receive all checks). Synthetic
+  values should be assembled at runtime or explicitly marked on the exact fixture
+  line. The marker applies only to its own line, never another line or file. Local
+  hooks and the CI diff driver share this policy and report locations, not values.
 
 ### Pack independence
 
 A pack **may not carry a bundled runtime `dependencies` edge on another pack** — that hides a dependency graph and couples release cycles. If two packs share substantial logic, that logic belongs in `core/`.
 
 One exception is allowed: an **explicit, documented `peerDependency` of composition** — a stack pack that deliberately presupposes another (e.g. `pack-nextjs` peer-depends on `pack-monorepo` for the `Result`/`ok`/`err` primitives, and `init` co-installs them). This is not a hidden edge: it is declared in `package.json` `peerDependencies`, documented in the pack README, and the consumer installs both. Extracting three functional primitives into their own package to avoid it would be premature (see `void-package-extraction`). Prefer this over a new shared package when the shared surface is small and the composition is intentional.
+
+### Security scanner results
+
+The Semgrep adapter uses local rules and `scan --error --json`: `--error` makes
+findings return exit 1 (see the [Semgrep CLI reference](https://semgrep.dev/docs/cli-reference)).
+The runner also reads Semgrep JSON on exit 0 so successful execution cannot hide
+findings. Missing, malformed or error-bearing reports leave the scan errored;
+valid findings still reach the mission engine's classification and blocking policy.
+Other scanners retain their declared exit-code contracts.
 
 ### CLI scope
 
@@ -798,7 +729,7 @@ reuse the appropriate existing capabilities; this document defines no new API.
 ### Product identity: one source
 
 Which repository hosts the product, which npm package ships it and which commands start it are
-written once, in `packages/core/data/identity.json`, with the names it carried before (a former
+written once, in `packages/core/src/data/identity.json`, with the names it carried before (a former
 repository slug, a former package and its last major). Nothing else spells them in code:
 
 - TypeScript reads `PRODUCT_IDENTITY` from `@voidcorp/hook-runner` (`src/identity.ts`, which
@@ -819,9 +750,10 @@ is a bin file named after it; a deprecated one runs the same CLI with one line o
 The same source names what the product writes into a consumer's files and reads from their
 environment, because a release cannot rewrite what an older one left there. `markers` derives the
 begin and end of each managed block (CLAUDE.md and AGENTS.md, `.gitignore` and
-`.git/info/exclude`, the mechanical block of `.void/machine/checkpoint.md`) for the current
+`.git/info/exclude`, legacy mechanical blocks of `.void/machine/checkpoint.md`) for the current
 namespace and every former one; `environment` names the current settings prefix and the former
-ones. Every write uses the current name, every read accepts any of them:
+ones. Every managed write uses the current name, every read accepts any of them. Checkpoint blocks
+are recognized only to exclude retired mechanical content from semantic resume:
 
 - `managed-block.ts` (hook-runner) is the only finder of a managed block. It puts the new block
   where the first recognized one stands and drops any other, so an update from a release that used
@@ -877,196 +809,29 @@ cli  →  core  ←  packs
 
 ## apps/ (surfaces)
 
-`apps/*` are private, unpublished surfaces that consume the packages. They may
-depend on `packages/*` (e.g. `apps/graph-studio` devDepends on
-`@voidcorp/harness-graph`), never the reverse. They are exempt from the 400-line
-skill cap (they are apps, not skills) and from version lockstep (private, not
-shipped). `apps/graph-studio` is the maintainer 3D view of the component graph
-(spec §7): a Node prebuild runs the kernel's `analyze()` into static JSON, and the
-browser bundle is a pure renderer of that JSON (functional core / imperative shell,
-the same split the kernel uses).
+`apps/*` contains private, unpublished applications that may depend on packages,
+never the reverse. The graph studio has been retired.
 
-`apps/eval-harness` (`@voidcorp/eval-harness`) is the **behavioral** skill eval. The
-`test/` suite proves a skill's *form* (frontmatter, size, structure); this proves its
-*effect*: it runs a fixture task with the skill's `SKILL.md` body (frontmatter
-excluded) appended to the system prompt and without it, N times each, and scores
-the delta. A skill "works" when the
-with-skill mean beats the without-skill mean past a noise threshold. It makes every
-prose change testable (and the gstack vendoring verifiable — is the distillate as good
-as the source?). Same functional-core / imperative-shell split: pure `scorers.ts` +
-`runner.ts` (unit-tested, no LLM) behind a `RunOnce` port, with the `claude -p` sandbox
-adapter as the only impure edge. **Deterministic scoring first** — assertions over the
-final files / git state (commit-discipline is scored with zero LLM judge); an LLM judge
-is a last resort. Isolation: `--setting-sources ""` + a fresh sandbox dir keep global
-plugins/skills/`CLAUDE.md` out of the baseline without relocating the config dir (so
-OAuth still works); any constant bias cancels in the with-minus-without delta. Runs cost
-tokens, so it is a **local command (`pnpm eval <skill>`), never a blocking CI gate** in
-v1. See `apps/eval-harness/README.md` for the method.
+The former `apps/eval-harness` workspace has been retired. Its directory now holds
+[optional native scenarios and historical reports](../apps/eval-harness/README.md),
+without an execution/scoring/reporting engine or campaign. Manual checks do not
+provide the removed repeated A/B comparison. Product mission/review/worker tests
+remain the behavioral authority for those retained contracts.
 
-## Consumer graph delivery (`/void-graph`)
+## Retired graph and audit surfaces
 
-The graph kernel uses a common node-link envelope at `schemaVersion: 3` for CatalogGraph,
-MissionGraph, EvidenceGraph, and ProjectGraph. Every node, edge, and hyperedge has a
-namespaced stable ID, typed origin, numeric confidence, and bounded provenance. The source carries
-its producer version and a SHA-256 `rootHash`; validation rejects duplicate IDs, dangling
-relations, invalid observation timestamps, path escapes, oversized payloads, and hash drift.
-Graph deltas name their base and resulting root hashes and are applied only after both the delta and
-the resulting snapshot validate.
+The graph kernel, studio, ProjectGraph API, graph/audit/why commands and their
+exclusive generated artifacts are removed. No replacement topology or automatic
+impact engine is introduced. Use repository search, Git, compiler, linter and
+applicable tests for their respective purposes; these are not equivalent to the
+removed graph analysis. [Public API migration](../packages/cli/README.md#graph-audit-and-score-retirement)
+includes the removed `@voidcorp/harness-graph/project` export.
 
-ProjectGraph is extracted locally through replaceable root-identity, filesystem, workspace,
-Git, cache, change-journal, and TypeScript Compiler API ports. The default Node adapters skip
-project-entry symlinks, stream directory entries, revalidate canonical root, parent, and descriptor
-identities at use, bound file/entry/directory/depth/aggregate/peak-heap/cache/process resources,
-and execute a trusted absolute Git through argv without a shell, protocols, hooks, external diff,
-textconv, repository clean/process filters, or ambient config. Git HEAD, changes, and ownership
-report degradation separately. Validated `HEAD` reads bracket their complete collection; a mismatch
-degrades the whole Git snapshot rather than combining evidence from different repository states.
-Commands that depend on a commit use the initial object ID, which also closes `HEAD` ABA transitions.
-On macOS, fixed Homebrew locations precede the system Git fallback, avoiding Apple's Xcode
-launcher when a direct Git is installed. Absolute executable validation, the closed environment,
-and the five-second default process ceiling remain unchanged; repository `PATH` entries are ignored.
-Apple documents the system launchers in [TN2339](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
-SHA-256 extraction records plus an explicitly authoritative accepted change-journal generation make
-unchanged builds perform zero traversal, extraction reads, hashing, and AST passes without trusting
-mutable JSON. The default Node `fs.watch` journal is advisory, so default builds verify sources before
-reuse; callers may inject an authoritative loss-detecting journal to unlock the fast path.
-The builder's default is a bounded LRU memory cache scoped to the current process. The explicit Node
-repository-cache adapter ignores all repository cache bytes and refuses publication because a
-repository author can reseal a self-hash and portable Node cannot close path-based parent-swap races.
-A complete build whose selected cache port cannot publish remains usable but reports `degraded`.
-Trusted ports prepare and commit an invisible candidate. Finalize validates canonical
-root identity and the same change-journal generation, then publishes with an immediate
-compare-and-swap and no async interleaving; abort only releases pending state. It does not re-read or
-re-hash the tree. The resulting `observed-content-v1` token commits to the canonical root key and
-root/parent identity, root-entry journal generation, observed path/device/inode/size/mtime/ctime and
-content-hash manifest, Git state, and extractor version. The ordinary file-change generation gates
-acceptance and publication without becoming part of the content token. Later mutation is a new
-observation rather than retroactive invalidation. Cached tokens are never accepted as freshness
-evidence. The same memory adapter is injectable for isolated workflows and tests. `.void/cache/` is
-gitignored.
-A stable advisory Node watcher brackets Git with two complete bounded source observations. A watcher
-unavailable before extraction forces a complete degraded rebuild; capability lost during
-the build produces partial or degraded evidence according to the last validated phase. Neither path
-reuses or publishes cache state.
-Cached tombstones, bounded composed lineage with its original Git HEAD/ref proofs, and Git HEAD
-preserve deleted/renamed identity across
-unchanged builds and committed renames. A partial or concurrently-mutated build
-keeps the last green cache and stays explicitly `partial`, so downstream context
-selection falls back to source instead of trusting incomplete topology. Git
-proof is the only authority for `previous-id` rename continuity.
-Declared intent is compiled into the same ProjectGraph: direct ADR Markdown files under
-`docs/decisions-log/` produce `decision` nodes, and direct YAML files under
-`.void/knowledge/invariants/` produce `invariant` nodes. The scanner admits only that
-specific hidden directory in addition to its existing public configuration paths. The
-existing descriptor, root, file and aggregate bounds still apply. Modern ADRs declare
-`id`, `title`, `status`, optional `supersedes` and `affects`; historical date/title ADRs
-retain the existing `legacy:<basename>` identity and accepted status. An invariant
-requires `id`, `scope`, `severity`, `statement`, `enforced_by`, `verified_by` and
-`decided_by`; references are explicit file paths or decision IDs, never inferred.
-
-Implementation files point to decisions through `decided_by` and to invariants through
-`constrained_by`; invariants point to verification files through `verified_by` and to
-decisions through `decided_by`. These three spellings extend only binary relation kind
-validation. New intent nodes and relations carry `origin: declared`, confidence 1 and
-the declaring source's exact SHA-256. Supersession is preserved as readable data, with no
-arbitration of contradictory decisions. Duplicate identities, malformed declarations
-and unresolved references produce source diagnostics without inventing entities.
-
-The declarative YAML adapter uses the existing yaml dependency and explicit bounded
-validators inside the graph package, never CLI parsing code. Declaration extraction is
-stored in the existing cache and its new extraction version invalidates older entries.
-`void-machine why <file>` always observes that incremental builder, preserving current
-diagnostics even when `.void/knowledge.json` already exists; it never writes that artifact.
-It renders decisions, invariants and declared verification evidence with provenance,
-explicit absence and partial/degraded caveats. Traversal uses the existing 500-node,
-12-level default; terminal output and diagnostics are bounded with announced truncation.
-
-Seven read-only queries answer the impact and targeted-context questions over an extracted
-snapshot: `explain`, `path`, `impact`, `subgraph`, `owners`, `testsFor`, and `staleness`. Each is
-deterministic, takes a node/depth budget, and reports `truncated` rather than returning a silently
-short answer. `ownersOf` and `testsFor` answer an explicit `unknown` with a reason where nothing was
-extracted, never an empty list, because "the graph does not know" and "nothing owns/tests this" are
-different claims and only one is safe to act on. `impact` walks dependents and counts
-`dynamic-imports` exactly like `imports`, since a dropped dynamic edge under-reports impact. A
-Git-proven rename is followed forward from the retired path, so a caller holding a pre-rename path is
-told what the file became rather than that nothing depends on it. The CLI surface
-(`void-machine graph <query> <file>`, backed by `packages/cli/src/lib/project-graph-store.ts`) takes
-and answers in repository-relative paths, refuses a target outside the project root, renders owners
-by label because an owner id is hashed when the name is not id-safe, and prints an explicit source
-fallback naming the count, codes, and paths extraction left out whenever the build is `partial` or
-`degraded` or the observed root hash moved. Accuracy is proved against a graph the extractor actually
-produced (`query-corpus.test.ts`: cycles, tsconfig aliases, dynamic imports, renames), and the seven
-queries carry their own seeded benchmark and regression gates
-(`benchmarks/project-graph-query/`, `pnpm benchmark:query`), separate from the extraction benchmark
-so a query regression cannot hide behind extraction cost.
-
-ProjectGraph is exposed from `@voidcorp/harness-graph/project`, keeping its
-TypeScript runtime adapter out of the legacy single-file CatalogGraph bundle.
-The project snapshot can also be materialized as the versioned `.void/knowledge.json` artifact
-with `void-machine graph project-build` and checked against a fresh build with
-`void-machine graph project-check`. The artifact is a validated projection carrying the snapshot
-root hash and build state; project graph queries read it when valid, while missing, corrupt, or
-unknown artifacts trigger a rebuild. It is distinct from `.void/machine/`, whose observation cache
-is disposable and never becomes an authority. The freshness check measures the generated file so
-CI can reject a hand-edited or stale projection.
-Diagnostic counts remain in build reports and do not enter the graph identity:
-an unavailable watcher must not change the hash of otherwise identical partial
-content. Observation state remains part of the graph and artifact. A state
-difference is explicitly refused before content comparison; this does not turn
-degraded observation into a fresh proof or relax cache publication. Existing
-artifacts containing the former root diagnostic count require one regeneration.
-Native file identities use an additive `identity: { device, inode }` pair of
-canonical uint64 decimal strings read through Node's BigInt stats API. Existing
-optional numeric device/inode fields keep their types and are emitted only when
-exact. Valid numeric v1 cache entries remain readable without rewriting their
-checksum. Both representations must agree when present; malformed exact pairs
-cannot fall back to legacy evidence. Snapshot identity includes the exact pair.
-The extractor resolves bounded root-confined string or ordered-array `tsconfig` inheritance with
-official Compiler API option origins, treats `pnpm-workspace.yaml` as authoritative over the package
-workspace fallback, applies pnpm-compatible positive and `!`-excluded patterns before indexing child
-manifests, recognizes a bounded Vitest call grammar, and preserves
-volume-specific case behavior. ESM clauses, re-exports, wildcards, and
-defaults are explicit export surfaces; CommonJS assignment exports are limited to JavaScript input.
-An edge static analysis cannot determine — a non-literal dynamic import, a specifier that is not a
-bounded printable string — is reported as `unresolved-import` on the file that holds it and does not
-degrade the build state, because a whole project marked partial by one ordinary lazy import made the
-source fallback fire unconditionally and therefore say nothing; the query surface reports that
-uncertainty against the files in an answer instead. `invalid-source` is kept for a file that genuinely
-does not parse, and declaration files are no longer transpiled for diagnostics (they have no output,
-and asking for one threw). Stable per-path exclusions — oversized, binary, symlink, permission — never
-abandon the advisory verification scan nor count as a path-set change, so one large generated artifact
-can no longer switch off the check that catches a tree mutated during evidence collection; identical
-issues observed by both passes are reported once. Invalid config chains remain explicit partial
-evidence. CI runs
-package tests/typecheck, a two-track ProjectGraph benchmark, and a packed
-`@voidcorp/harness-graph/project` consumer import on Ubuntu, macOS, and Windows. The performance
-track injects a deterministic authoritative journal port and explicitly emits every fixture mutation,
-while a separate native track classifies the real watcher as advisory, unavailable, or mixed. The
-native track never claims fast-path latency; unavailable and mixed are supported degraded capabilities,
-never relabeled as performance.
-
-The current source catalog is adapted to v3 first. `catalog.v3.json` is the canonical versioned
-snapshot; `model.json` is its read-only v1 compatibility projection for Graph Studio, audit,
-certification, status, and the existing consumer bundle. Those readers also pass v1 through the v3
-validator before use. `graph live` serves both `/catalog.v3.json` and `/model.json`. Rollback can
-restore direct v1 reads and remove the v3 artifact because the adapter never mutates its input.
-
-The graph tooling also ships to consumers, not just the monorepo. A build step
-(`packages/cli/scripts/build-void-graph.ts`) bundles the kernel + `graph` CLI into one
-self-contained `packages/core/graph/void-graph.mjs`: `model.json` is baked in via the
-`__VOID_BUNDLED_MODEL__` esbuild define, and the single-file vite studio is inlined via
-`__VOID_BUNDLED_STUDIO__`. The marketplace ships `packages/core` directly, so the artifact
-reaches consumers with zero npm publish. The `/void-graph` command runs it from
-`${CLAUDE_PLUGIN_ROOT}/graph/void-graph.mjs`.
-
-On a consumer the CLI runs in **bundled mode**: it loads the baked model instead of scanning a
-source tree (no monorepo paths), filters it to the packs enabled in `.claude/settings.json`, and
-correlates it with local mission journals (`.void/machine/runs/*/events.jsonl`, plus
-read-only v2 import, and transcripts). `graph live` serves the inlined studio
-and a `/studio-data.json` endpoint on loopback - fully offline. Freshness
-is gated by `graph check-bundle` (the artifact's embedded compatibility model must match
-`model.json`); see
-DECISIONS.md (2026-07-01). The artifact is excluded from the `core-assets` mirror.
+The Projects UI and project discovery remain. `lib/ui/auth.ts` owns its existing
+process-local token/cookie exchange; `lib/ui/server.ts` owns the unchanged CORS
+and response security headers. `harness-manifest.ts` owns `EnforcementTier` and
+validates the existing skill manifest. Runtime adapters read canonical journals
+directly through the hook-runner's `readMissionJournals` export.
 
 ## Mission event journal (`.void/machine/runs/<mission-id>/events.jsonl`)
 
@@ -1110,9 +875,16 @@ Applicable UI work adds a pure fail-closed quality gate after planning. An Exper
 attestation must match the current mission input before implementation. After implementation, QA
 captures each applicable state at mobile and desktop sizes, and a Visual Craft Director reviews
 that evidence in a distinct fresh context. Tests, captures, and the post-build review carry the
-current diff hash; a later component or CSS change makes them stale. Six named craft dimensions
-must each reach 8/10, and unavailable browser proof blocks instead of falling back to LLM-only
-approval. The gate is exported by `@voidcorp/mission-engine`; browser I/O remains in runtime adapters.
+current diff hash; a later component or CSS change makes them stale. Craft review identifies
+concrete defects against accepted requirements; unavailable browser proof blocks instead of
+falling back to LLM-only approval. The gate is exported by `@voidcorp/mission-engine`; browser I/O remains in runtime adapters.
+
+The current Visual Craft Director contract is v4: findings identify concrete defects rather than
+require numeric ratings. Its v2 and v3 bytes remain under `contract-history/visual-craft-director/`.
+The existing v2-to-v3 migration reads the archived v3 target and still requires an exact installed
+v3 agent. It does not reinterpret a frozen mission using v4 or provide automatic v3-to-v4 migration.
+New missions use v4. The UI assessment API accepts optional legacy ratings for input compatibility
+but bases approval on verdict, independent contexts and current visual/test evidence.
 
 All runtimes now emit one strict, versioned event contract. `@voidcorp/mission-engine`
 validates bounded JSON and reduces it without I/O. `@voidcorp/hook-runner` adapts
@@ -1128,18 +900,9 @@ failure. The same generated dependency-free Node bundle also owns the critical
 inline/CI enforcement rules. It is rebuilt by `pnpm hooks:build` and gated for
 drift before `core-assets` is mirrored.
 
-Graph behavior, cost, audit, status and Studio consume the canonical journal.
-Legacy `.void/activations.jsonl`, `.void/outcomes.jsonl` and `.void/usage.log`
-remain read-only transition inputs; current hooks never append to them. Every
-cross-project reader uses the same bounded scan of configured roots for the
-versioned `.void/config.json` marker. Event capture writes only inside its project.
-
-`graph live` binds loopback only. A random launch token is exchanged once for a
-process-local `HttpOnly; SameSite=Strict` cookie, foreign browser origins are
-rejected, and every data/SSE route requires the session. SSE uses the stable
-event ID, honors `Last-Event-ID` (or the first-connect `after` cursor), backfills
-the bounded snapshot and reports discontinuity as `PARTIAL`, never as live truth.
-Studio renders `LIVE`, `RECONNECTING`, `STALE`, `PARTIAL`, `REPLAY` and `OFFLINE`.
+Runtime adapters and mission/review/worker readers consume the canonical journal.
+Historical logs remain on disk; retirement does not prune or rewrite them.
+Event capture writes only inside its project.
 
 ### Evidence, findings and verdicts
 
@@ -1275,16 +1038,9 @@ native `spawn_agent`; Claude Code with native `Agent`.
 
 ### Harness learning loop
 
-Hooks own measurement and certain enforcement, never orchestration. Skills conduct workflows,
-canonical contracts decide applicability, and agents supply bounded independent judgment.
-`void-graph` joins those declared relations to human-session activations, outcomes and cost;
-`void-audit` reduces the joined evidence to one prioritized proposal per component. Telemetry repair
-precedes behavioral conclusions. Failure repair precedes retirement. Retirement is reviewable only
-after twenty human sessions, while self-host and smoke missions are excluded from adoption proof.
-Every proposal flows to `void-learn` as HITL input; no graph or audit command edits, fuses or removes
-a component. Missing `requested -> started` and `started -> completed|failed` transitions become
-repair proposals only after the same mission has a canonical `mission.closed` event, so active work
-is never diagnosed as a dead agent.
+Hooks enforce concrete rules; skills conduct workflows and agents supply bounded
+independent judgment. Requested evaluation uses `void-learn` and actual evidence.
+No usage aggregation or automatic retirement proposal engine remains.
 
 ### Modes, budgets, and recovery
 
@@ -1339,117 +1095,25 @@ bounded, into quarantine; they are never silently repaired. Runtime journals and
 archives are local artifacts ignored by Git. There is no automatic retention or
 network upload.
 
-## Node frontmatter: `activation` (graph liveness)
+## Skill manifest and factual status
 
-A skill's SKILL.md frontmatter may declare `activation: always` or `activation: on-demand`
-(absent = `on-demand`, the default). It tells the graph cost/behavior kernels how the node
-earns its place:
+The installer reads `harness.yaml` metadata. The existing strict manifest validator
+owns required owner/runtime fields, enforcement tiers and supported metadata;
+it remains independent of graph derivation and frozen certification artifacts.
 
-- `always` — doctrine followed **passively**: its rule applies via `@.void/installed/PHILOSOPHY.md`
-  and enforcing hooks, never invoked through the Skill tool, so `invocations: 0` is expected,
-  not a death signal. Exempt from `dead` / `underused` / `low-yield`, marked with the positive
-  `always` flag (still eligible for `expensive`). Granted only on **auditable backing**: the
-  skill is the target of an `enforces` edge, or its principle is stated in `PHILOSOPHY.md`.
-  16 skills qualify.
-- `on-demand` — a workflow triggered **actively** (brainstorm, plan, ticket-*,
-  autopilot, ...), or a conditional skill with no structural backing (async-safety,
-  api-and-interface-design, ...). If never invoked, a low count is a real signal — historical
-  behavior.
-
-The predicate is "is `invocations: 0` a death signal for this node?" — answered by structural
-proof, not taste. See DECISIONS.md (2026-07-04) for the 16/15 partition, the two accepted proofs
-of backing, and why the mode is declared explicitly rather than inferred.
-
-## Node frontmatter: `owner` (governance)
-
-The capability contract (spec `2026-07-21-void-harness-public-multiruntime-os`, Phase A) is authored
-as **SKILL.md frontmatter fields** — the same channel `activation`/`triggers` already use, so no new
-file discovery is introduced. The first field is `owner:` — the accountable maintainer of the
-capability. It is read in `read-frontmatter.ts` (`parseOwner`) and threaded onto `GraphNode.owner`.
-
-Governance is **fail-closed**: the `missing-owner` detector (`analyze/missing-owner.ts`, wired into
-`DETECTORS`) emits a blocking `error` for any **skill** node with no `owner`, so `graph check` (and
-the CI "Graph integrity" gate) fails. No capacity ships without a proof of ownership. The rule is
-scoped to skills — hooks, commands, packs, and agents are not capabilities.
-
-Two more contract fields land through the same seam (`read-frontmatter.ts` → `GraphNode`):
-
-- `runtimes:` — the runtimes a capability declares it supports (`[claude, codex]`). A second
-  fail-closed detector, `missing-runtimes`, blocks any skill that declares none (the runtime matrix
-  cannot place an undeclared capability).
-- `enforcement:` — the **two-tier** enforcement contract (spec Fork 1). `floor: ci` is the
-  runtime-agnostic CI floor (the void-enforce Action) every runtime inherits; `inline` is the
-  per-runtime in-session tier (`pretooluse` where the runtime supports a blocking hook, `active`
-  otherwise, `ci-only` for Hermes). The `inline.{claude,codex}` tier is **derived, not
-  hand-classified**: a skill that is the target of an `enforces` edge gets `pretooluse`, else
-  `active` — so the map cannot drift from the actual hook wiring. Enforcement is declared per runtime
-  and never masked; Hermes' `ci-only` is a structural limit, scored on its own ceiling, not a failure.
-
-Two more fields complete the authored contract (A3):
-
-- `eval_targets:` — the `(runtime, provider, tier)` cells a capability is authored/certified for,
-  **slug-encoded** `runtime/provider/tier` in a normal YAML list (`[claude/anthropic/opus]`). The slug
-  form is parsed by the shared `parseList` helper (reused with `runtimes:`), not a fragile
-  hand-rolled list-of-maps parser. It drives which cells the certification manifest (A4) may mark
-  `effective`.
-- `success_signal:` — an optional human-readable "what good looks like" sentence. Not
-  mass-backfilled (a uniform placeholder would be dishonest, unlike `owner: folpe` which is
-  uniformly true); authored per skill over time.
-
-Two shared frontmatter helpers back these fields so the scalar and list parsers cannot diverge:
-`parseScalar(block, key)` (quote-stripping, YAML-nil-aware — used by `owner` and `success_signal`)
-and `parseList(block, key)` (flow or block YAML list — used by `runtimes` and `eval_targets`).
-
-### The certification manifest (`certification.json`)
-
-The capability contract is frozen, per release, into `packages/core/data/certification.json` (A4).
-It is the input `ProjectState` (Phase B) reads for the repo-authored half of the five-state model —
-never recomputed on a consumer machine. `buildCertification(model, reports, harnessVersion)`
-(`src/certification/build.ts`, pure) joins the graph model's capability fields with the eval-harness
-JSON reports:
-
-- `proof.verified` is **structural** — the capability declares an owner and at least one runtime.
-- `proof.effective` obeys an **honesty invariant**: it exists only when a real eval report for the
-  skill exists, its verdict is `skill-helps`, and the capability declares an eval target cell to place
-  the delta on. Never inferred, never faked. Today there are no eval JSON reports, so the manifest
-  ships **64 capabilities, 0 effective** — the honest current state; `effective` populates in Phase E
-  when the paid evals run and emit `apps/eval-harness/reports/<skill>.json`.
-
-`certification.json` is a committed artifact regenerated by `pnpm certification:build`; `pnpm
-certification:check` gates drift in CI (mirrors `decisions:check` / `graph:check`). Two things are
-**deliberately deferred** (YAGNI): baking the manifest into the consumer `void-graph` bundle (nothing
-reads it until Phase B's ProjectState) and the eval-harness JSON emission that populates `effective`
-(that is Phase E's paid-eval work). See DECISIONS.md (2026-07-21).
-
-## ProjectState and `void status` (Phase B)
-
-`ProjectState` is the project's legible state: a **deterministic, offline, LLM-free** join of the
-frozen `certification.json` (repo-authored proof) with **local signals** (which capabilities are
-materially installed, which passed executable runtime postconditions, which fired in canonical
-mission events, and the tri-state runtime evidence). The pure core
-lives in `packages/harness-graph/src/state/` — `computeProjectState` derives each capability's
-five-state (`available → installed → verified → used → effective`). Local `verified` now requires a
-compatible runtime with `installed=yes`, `wired=yes` and `fired=yes`; the frozen structural proof is
-reported separately as `certified`. `effective` requires both that local chain and certified
-behavioral proof plus real local use. Each runtime carries independent `installed`, `wired`,
-`fired`, `observed` and `certified` fields; `null` means `unknown`, never success.
-`scoreProjectState` scores the eight dimensions (blocker/gauge,
-cap-69 on a red failure-predicate, pending dimensions excluded, confidence band, impact-ranked next
-actions — see DECISIONS.md 2026-07-21). Both are pure: no I/O, no clock, no model call.
-
-`void-machine status` (`packages/cli/src/commands/status.ts`) is the imperative shell: it reads the
-certification + model + telemetry, executes each detected adapter's bounded local postconditions,
-calls the pure core, renders the terminal surface, and persists
-`.void/machine/status.json` plus a `.void/machine/history/<ts>.json` snapshot (both git-ignored, per-project runtime
-state). `generatedAt` is stamped by the shell so the core stays deterministic. Missing runtime,
-cost, smoke or observation data stays `unknown`/pending and is excluded from scores instead of being
-invented. Consumer-side bundled-certificate resolution and pack-aware filtering remain local and
-offline.
+`void-machine status` inspects the detected runtime adapters and installation
+receipt at the resolved installation root, including when invoked from a linked
+worktree. It reports installed version and runtime installed/wired/fired/observed
+facts, preserving `unknown` observations. Freshness remains advisory. The current
+snapshot at `.void/machine/status.json` uses schema version 2 with `generatedAt`,
+`installedVersion` and `runtimes`; a failed write is reported as render-only.
+No score, capability lifecycle or score history is produced. Existing history is
+never pruned by status. Doctor retains its concrete installation diagnostics.
 
 ## `.void/` ownership: declared, derived, observed
 
-The three levels above answer what deleting a path costs. Ownership answers the
-adjacent question, who wrote it and therefore what git does with it, and it
+The path-specific ownership above answers what deleting a path costs and what
+git does with it. It
 covers all four materialized directories rather than `.void/` alone.
 `VOID_OWNERSHIP` stays the single source, as above.
 
@@ -1460,14 +1124,14 @@ moves off the top of `.void/` into a subdirectory of its own; it classified
 manifest and `hydrate`, which supplied the guarantee the next one needed), then
 `derived-content-is-not-committed` (which took the alternative the first had
 deferred). That subdirectory was later renamed `machine/`, and the derived half
-was given its own `installed/`, so each level is named for whose the content is
-instead of for where it happens to sit. **This page carries the current state;
+was temporarily given its own `installed/`. Philosophy now lives beside project
+doctrine with its distinct manifest ownership explicit. **This page carries the current state;
 the records carry the reasoning at each step.**
 
 | class | what it means | examples | git |
 | --- | --- | --- | --- |
 | `project` | the project authors it; the harness never overwrites what the project wrote | `.void/config.json`, `.void/PROJECT-DOCTRINE.md`, `.void/program.md`, `.claude/settings.json` | tracked |
-| `derived` | `void-machine init` re-materializes it from the harness assets | `.claude/skills/`, `.claude/agents/`, `.agents/skills/`, `.codex/agents/`, `.void/installed/PHILOSOPHY.md` | ignored, per receipt |
+| `derived` | `void-machine init` re-materializes it from the harness assets | `.claude/skills/`, `.claude/agents/`, `.agents/skills/`, `.codex/agents/`, `.void/PHILOSOPHY.md` | ignored, per receipt |
 | `observed` | this machine's history; meaningless in another checkout | `machine/runs/`, `machine/cache/`, `machine/receipts/`, `machine/status.json`, `machine/retired/*.jsonl` | never |
 
 `.void/PROJECT-DOCTRINE.md` is the one `project` file `init` may rewrite, and only
@@ -1521,7 +1185,7 @@ when the file is absent from a fresh clone*:
   therefore committed. Ignoring the runner while keeping the reference gives a
   clone a settings file pointing at a missing file, and every tool call fails.
   That is also why it stays at the top of `.void/` rather than moving into
-  `installed/` with the rest of the derived half.
+  a blanket ignored directory. Ownership and tracking are decided per path.
 - `.codex/hooks.json` **is** the Codex safety floor. Absent, the floor is simply
   not there — a silently weaker clone, the worst of the three states.
 
@@ -1613,7 +1277,7 @@ into the same transaction as everything else, and is committed.
 
 1. **It refuses to run unless the CLI is the version the manifest names**, and
    prints `npx <package>@<version> hydrate`, where `<package>` is the name that version
-   was published under (`packageFor` in `packages/core/data/identity.json`: a rename
+   was published under (`packageFor` in `packages/core/src/data/identity.json`: a rename
    does not move old releases). It does not fetch that version:
    `npx` already selects versions, and doing it inside the CLI would buy a network
    surface and a class of partial failures for nothing. Silently hydrating with
@@ -1702,7 +1366,7 @@ TypeScript compiler settings or the separate static guards.
 ## Versioning
 
 Lockstep: one number governs the CLI, the runtime npm packages, and the
-marketplace plugins. Bumped with `scripts/bump-version.mjs` (see RELEASING.md).
+marketplace plugins. Release Please owns version updates (see RELEASING.md).
 Changesets were removed in v0.5.4 because independent per-package versions
 contradict the lockstep model.
 
@@ -1718,18 +1382,13 @@ Implemented today in `.github/workflows/ci.yml` (all block the PR on failure):
 
 | Gate | What it runs |
 |---|---|
-| Anti-bloat: SKILL.md size | fails if any `SKILL.md` exceeds 400 LOC |
-| Anti-bloat: hook size | fails if any `hooks/*.sh` (excluding `_`-prefixed libs) exceeds 100 LOC |
 | Shell syntax | `bash -n` on every hook |
 | Manifest ↔ disk | fails if `plugin.json` wires a `hooks/<name>.sh` that does not exist on disk |
-| core-assets sync | regenerates `core-assets` and fails if it drifted from `packages/core` |
+| core-assets sync | compares source assemblies with tracked `dist` deliveries without repairing them |
 | Publish safety | packs each npm package with pnpm and fails if a `workspace:` specifier survives into the tarball |
 | Lint | `pnpm lint` (Biome) over first-party TypeScript |
 | Build | `pnpm build` (packs must build before typecheck resolves their exports) |
 | Self-host release gate | compiles current sources in isolation; rejects source/receipt/hook/replay drift |
-| Graph integrity | `pnpm graph:check` — CatalogGraph v3 + model.json projection drift, broken routes, capability governance |
-| Certification freshness | `pnpm certification:check` — committed `certification.json` matches the model + eval reports |
-| Consumer bundle freshness | `pnpm graph:check-bundle` — the shipped `void-graph.mjs` embeds the current `model.json` |
 | Skill tests | `pnpm vitest run` |
 | Live skill references | `pnpm skills:check-references`, including plugin descriptions |
 | Typecheck | `pnpm -r typecheck` |
@@ -1738,12 +1397,20 @@ Maintainer reference checks also inspect descriptions in core, mirrored and pack
 `plugin.json` manifests. Explicit `void-` skill names resolve against the live
 catalogue; ordinary English prose, pack names and the exact product name
 `void-machine` are not skill references. Historical decisions and plans remain
-outside this live-description check.
+outside this live-description check. The same checker validates prefixed names and
+`skills/<name>/SKILL.md` segments in source code, preserving explicit allowances
+for retired names, internal identifiers and consumer-owned skills. Repository
+search replaces the generated skill-reference inventory.
+
+Paths cited only in prose have no dedicated gate. A worker that encounters a stale
+path reports it, searches for the actual target and proposes a correction. An
+uncertain destination grants no additional permission. Executable manifest and
+installation path checks remain in their existing owners.
 
 Roadmap (documented intent, not yet wired): skill front-matter schema check,
 per-hook smoke tests on a sample repo, CLI integration tests on a fresh fixture.
-Releases are cut with `scripts/bump-version.mjs` (lockstep), not changesets; the
-`.changeset/` directory is unused.
+Release Please prepares lockstep releases; the protected release workflow publishes
+the validated CLI archive. See [Releasing](RELEASING.md).
 
 ## Server-side floor (the void-enforce Action)
 
@@ -1777,42 +1444,15 @@ check, never a silent green. Escape hatch: `.github/void-enforce-allow` lists
 path globs the driver skips (each skip logged) — the committed, reviewable
 equivalent of the local `VOID_MACHINE_ALLOW_SECRET_EDIT` override, for files
 legitimately named like a secret store.
-An exact generated artifact may also be exempt only when its authored sources
-remain scanned and a deterministic freshness gate verifies the artifact in the
-same CI. This repository applies that rule to the single-file consumer graph
-bundle, whose size exceeds the bounded hook protocol; `graph:check-bundle`
-proves its source/model correspondence. Broad generated-directory globs remain
-forbidden.
 `void-machine doctor` reports (advisory, never blocking) whether a project has
-adopted the workflow. v1 replays three checks: sensitive-path, secret-content,
-boundary-direction. `boundary-direction` reads each package's own
-`package.json`: an import of a workspace package the importer declares is
-legitimate, an undeclared one is a phantom dependency and is refused. It does
-not impose a topology of its own, and it allows whenever no manifest is
-readable — a rule that blocks on what it could not determine turns every
-unusual layout into a wall. Destructive-shell stays a local runtime guard only — a
+adopted the workflow. It replays sensitive-path and secret-content checks.
+Undeclared package imports belong to the project's configured linter, with
+its real manifest and alias coverage verified. This Action does not install or
+configure a consumer linter. Destructive-shell stays a local runtime guard only — a
 committed pattern self-matches the detector/docs/fixtures, a net-negative false
 positive for a floor check (see DECISIONS). The project test gate stays the
 consumer's own CI (this Action enforces the doctrine floor, not general quality —
 it must not double the existing CI).
-
-## Isolated consumer browser verification
-
-The source-only `test/browser/` suite tests regenerated synthetic cheatsheets on
-a GitHub-hosted runner. It consumes the same immutable archive as install
-conformance, verified against the checkout SHA and tarball digest. Playwright
-and axe are pinned QA tooling outside the shipped CLI and pnpm workspace; they
-do not add a consumer runtime dependency. The runner installs the archive
-offline, and browser contexts disable network access. The official Playwright image
-is derived from the pinned tooling manifest; npm ci and the setup-node npm cache
-reuse standard dependency installation without a browser or node_modules cache. No personal browser,
-developer export or home directory is an input.
-
-`browser conformance` retains SHA-bound reports, document digests, screenshots,
-print output and failure traces for fourteen days. Zero retries and finite
-execution limits keep a failure red. Visual review and real assistive testing
-remain separate from automated assertions; see [the suite contract](../test/browser/README.md)
-and [the decision](decisions-log/2026-09-13-isolated-consumer-browser-ci--392e4254-fb63-4743-af1f-4c99a035170d.md).
 
 ## Bounded independent review
 

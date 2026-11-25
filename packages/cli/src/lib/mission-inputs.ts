@@ -78,7 +78,7 @@ export async function gitFiles(root: string): Promise<DetectedFiles> {
   }
 }
 
-interface MissionReviewSubject {
+export interface MissionReviewSubject {
   readonly baseCommit?: string;
   readonly reviewedCommit?: string;
   readonly diff: string;

@@ -70,7 +70,7 @@ import {
   readSharedState,
   resolveLoopBase,
 } from '../lib/autopilot/loop-observe.js';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { requireAutopilotAuthority } from '../lib/autopilot/authority.js';
 import type {
   SharedStateReading,
   SharedFingerprint,
@@ -261,16 +261,7 @@ function trackerFrom(stdin: string): LoopTracker {
 }
 
 function loopProgram(root: string): LoopProgram {
-  const descriptor = readProgramDescriptor(root);
-  if (descriptor === undefined) {
-    throw autopilotFailure(
-      'AUTOPILOT_PROGRAM',
-      'the loop runs under a programme and this project declares none',
-      '`.void/program.md` is absent',
-      'declare the programme, with its `autopilot` block and `progress` provider',
-    );
-  }
-  return loopProgramOf(descriptor);
+  return loopProgramOf(requireAutopilotAuthority(root));
 }
 
 function renderAction(action: LoopAction, humanWaitLabel: string): string {
@@ -325,7 +316,7 @@ function renderDecision(decision: LoopDecision): string {
 }
 
 /**
- * `autopilot next`: programme, Linear on stdin, GitHub, git and the stop signal
+ * `autopilot next`: config authority, Linear on stdin, GitHub, git and the stop signal
  * in; the kernel's actions out.
  */
 export function nextCommand(stdin: string, context: LoopRunners): LoopCommandOutput {
@@ -534,7 +525,7 @@ function mergeTargetOf(argv: readonly string[], command: string, action: string)
 
 /**
  * What `merge` and `arm` prove again where the merge happens, rather than
- * trust the tick that asked for it: the programme is migrated, no person holds
+ * trust the tick that asked for it: the config authority is migrated, no person holds
  * the merges, a clean local verdict holds exactly this head, the pull request
  * is open on it, and it targets the loop's base, never the branch that deploys.
  * The local checks run first, so a refusal asks GitHub nothing.
@@ -568,6 +559,13 @@ function guardedMerge(target: MergeTarget, context: LoopRunners) {
       `#${number} is not the pull request the kernel approved`,
       view.state !== 'open' ? `#${number} is ${view.state}` : `its head moved to ${view.headSha}, not ${head}`,
       'ask `autopilot next` again; it merges only the head it just read',
+    );
+  }
+  if (view.draft) {
+    throw autopilotFailure(
+      'AUTOPILOT_CONTRACT', `#${number} is still a draft`,
+      'an independent review does not authorize preparation or merging of a draft',
+      'wait for the authorized owner to mark the pull request ready',
     );
   }
   // A check registered since the tick read the head: a failing one goes back

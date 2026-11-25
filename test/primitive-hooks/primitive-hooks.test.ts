@@ -1,6 +1,5 @@
 /**
  * Tests for the lifecycle-event hooks added beyond PreToolUse:
- *   - auto-format.sh        (PostToolUse, non-blocking, fail-open)
  *   - activation-meter.sh   (universal PreToolUse adapter; canonical run events)
  *   - sessionstart-context.sh (SessionStart, injects additionalContext; also
  *                              covers post-compaction via source=compact)
@@ -12,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const H = (n: string) => resolve(process.cwd(), `packages/core/hooks/${n}`);
+const H = (n: string) => resolve(process.cwd(), `packages/core/dist/hooks/${n}`);
 
 function run(hook: string, json: string, env?: Record<string, string>) {
   const proc = spawnSync('bash', [H(hook)], {
@@ -23,14 +22,7 @@ function run(hook: string, json: string, env?: Record<string, string>) {
   return { code: proc.status ?? 1, stdout: proc.stdout ?? '' };
 }
 
-describe('auto-format.sh', () => {
-  it('exits 0 and skips a non-code file', () => {
-    expect(run('auto-format.sh', '{"tool_name":"Edit","tool_input":{"file_path":"README.md"}}').code).toBe(0);
-  });
-  it('exits 0 on a non-edit tool', () => {
-    expect(run('auto-format.sh', '{"tool_name":"Read","tool_input":{"file_path":"a.ts"}}').code).toBe(0);
-  });
-});
+
 
 describe('context-injecting hooks', () => {
   it('sessionstart emits SessionStart additionalContext JSON', () => {

@@ -1,0 +1,35 @@
+schemaVersion: 1
+id: core:expo
+version: 2
+name: expo
+technologies:
+  - id: expo
+    versionIndependent: true
+  - id: react-native
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [expo, react-native]
+  files:
+    extensions: [.ts, .tsx, .js, .jsx, .json]
+    names: [app.json, app.config.js, app.config.ts, eas.json]
+    pathSegments: [app, ios, android]
+sources:
+  - title: Expo documentation
+    url: https://docs.expo.dev/
+  - title: React Native documentation
+    url: https://reactnative.dev/docs/getting-started
+reviewedAt: 2026-07-27
+expiresAfterDays: 90
+invariants:
+  - Verify behavior on the supported native platforms and account for platform-specific capabilities.
+  - Treat native configuration changes as build changes, not over-the-air JavaScript updates.
+patterns:
+  - id: native-app
+    appliesWhen:
+      technologies: [expo, react-native]
+      files:
+        extensions: [.ts, .tsx, .js, .jsx]
+        names: []
+        pathSegments: [app, ios, android]
+    guidance: Verify navigation, permissions, accessibility, keyboard, and device lifecycle states.

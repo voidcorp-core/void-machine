@@ -2,16 +2,16 @@
 
 How to ship a new version. One model, one number — everything moves together.
 
-## Model: total lockstep (pre-1.0)
+## Model: total lockstep
 
-While the harness is pre-1.0, **one version governs everything** that carries a version (below).
+**One release version governs the retained package and plugin manifests listed below.**
+This lockstep policy continues after 1.0; private tooling versions are independent.
 Distinguish **versioned** (all manifests, in lockstep) from **published to npm** (only the CLI):
 
 - Plugin manifests (each `plugin.json`; the catalog is self-hosted at `.claude-plugin/marketplace.json`) — versioned.
-- Packs (`@voidcorp/pack-monorepo`, `@voidcorp/pack-nextjs`, …) and the `@voidcorp/harness-graph`
-  kernel — versioned, but **not published to npm**: packs ship via the marketplace, and the kernel is
-  bundled into the CLI (see DECISIONS.md 2026-07-22).
-- **CLI npm package (`voidmachine`, named in `packages/core/data/identity.json`) — the only package
+- Packs (`@voidcorp/pack-monorepo`, `@voidcorp/pack-nextjs`, …) are versioned;
+  their skills ship via the marketplace and CLI assets.
+- **CLI npm package (`voidmachine`, named in `packages/core/src/data/identity.json`) — the only package
   published to npm.** Self-contained (the kernel is bundled in), so `npx voidmachine` needs nothing
   else from the registry. Releases up to 3.x were published under the former name the identity
   keeps in `formerPackages`.
@@ -22,9 +22,9 @@ A skill change, a CLI bugfix, and a runtime helper addition all ship under the s
 
 - **Coherence.** A skill that references a runtime helper ships in the same version as that helper.
 - **Trace.** `void-machine --version` matches `pnpm view voidmachine version` matches the marketplace HEAD.
-- **No skew incidents.** Pre-1.0, every divergence is a support nightmare. Lockstep eliminates the question.
+- **No skew incidents.** Every divergence is a support nightmare. Lockstep eliminates the question.
 
-### When we might split (post-1.0)
+### When we might split
 
 If runtime npm packages and Claude Code plugins develop genuinely independent cadences (multiple pack runtime patches between marketplace releases), we revisit. Until that's a real observed problem, single number stays.
 
@@ -179,13 +179,12 @@ The bump script touches **all of these**. Don't edit them by hand.
 
 | File | What it's for |
 |---|---|
-| `packages/core/.claude-plugin/plugin.json` | Core plugin manifest. |
+| `packages/core/src/.claude-plugin/plugin.json` | Core plugin manifest. |
 | `packages/packs/<pack>/.claude-plugin/plugin.json` (6 files) | Each pack's plugin manifest. |
 | `packages/cli/package.json` | CLI npm package version. |
-| `packages/harness-graph/package.json` | harness-graph kernel npm package version. |
 | `packages/packs/<pack>/package.json` (pack-monorepo, pack-nextjs) | Runtime npm packages with shipped code. |
 
-`packages/cli/core-assets/.claude-plugin/plugin.json` is **generated** at `prepack` time — do not edit.
+`packages/cli/dist/core-assets/.claude-plugin/plugin.json` is **generated** at `prepack` time — do not edit.
 
 ## The normal flow: exactly two PR merges
 
@@ -207,8 +206,14 @@ Actions on the routine path.
    changelog and after all required checks pass. This merge creates `vX.Y.Z` and the GitHub Release. It is the npm
    publication authorization.
 4. `validate-release`, with `contents: read` and no OIDC, resolves the immutable
-   tag, proves its commit is on protected `main`, validates the exact tree, and
-   packs `voidmachine-X.Y.Z.tgz` once. It uploads that tarball plus an integrity
+   tag, proves its commit is on protected `main`, checks original delivery freshness,
+   and packs the CLI once. Preparation and safety/size readers come from the
+   current `release-control` checkout and explicitly target `RELEASE_TREE`, even
+   when recovering an older tag. The target tree supplies its freshness checks,
+   package lifecycle and type/tests; its historical archive producer/readers are
+   not invoked. Current control binds the fresh archive to the historical
+   source/version and the current run before any readers inspect those bytes. The verified `consumer.tgz` is renamed to `voidmachine-X.Y.Z.tgz`
+   without repacking. It uploads that tarball plus an integrity
    manifest containing the release identity, SHA-256 and npm SHA-512 integrity.
 5. `publish` is the only job with `id-token: write`. It checks the artifact's exact
    GitHub ID, service digest, workflow run and head SHA before download, then
@@ -344,12 +349,20 @@ Transient registry errors and delayed attestations are retried only within the
 documented bounds. Exhaustion stays red; it is never converted into a successful
 publish merely because the version is visible.
 
-Two CI gates fail the build on a drift so a version bump can never ship a stale
-artifact: `pnpm version:check` (every manifest at the canonical version) and
-`pnpm certification:check` (the frozen `certification.json` matches the model +
-its `harnessVersion` stamp). Both the release-please flow (via `extra-files`) and
-the manual script bump the certification's `harnessVersion` in lockstep, so a
-release never breaks CI on a forgotten regenerate.
+`pnpm version:check` keeps the 18 retained release manifests at the canonical core
+plugin version. Development CI and local changed-file selection skip this check
+only for explanatory documentation, known test-only edits and the pure engine
+policies already recognized by impact selection. Manifest, release configuration,
+generation and uncertain changes keep it; promotion to `main` and the tagged
+publication candidate always run it. Hook and core-asset freshness checks remain.
+
+DEV-1409 retains the publication and back-merge controls unchanged. Native npm and
+GitHub signature verification alone does not establish the expected current run
+and attempt versus an existing publication's producer, or bind those identities
+to this release archive. No equivalent replacement for the complete existing
+contract was demonstrated, so no provenance-check reduction is claimed. The
+30-minute job ceiling and 12-minute pause allowance remain; no release timing was
+remeasured and no publication or back-merge was triggered to test this change.
 
 Release PRs receive the same five checks as feature PRs, and getting there took
 three releases to get right — so the reason is worth keeping.
@@ -383,35 +396,36 @@ the next release.
 The OIDC-capable `publish` job deliberately cannot run that repository code; its
 defense in depth is artifact service identity plus independent byte verification.
 
-The CI validation lane also runs `self-host sync --mode release-gate` followed
-by the strict self-host doctor. It builds the hook runner directly from current
+The CI validation lane also runs `self-host sync` followed
+by `self-host doctor`. Sync builds the hook runner directly from current
 TypeScript with the source checkout's esbuild, compiles and executes a
 current-source runtime-adapter worker under the isolated staging boundary,
 revalidates the source hash before publication, verifies the deterministic
 receipt, executes both hooks, and replays their canonical events. No generated
-self-host file is published or committed. Missing Claude/Codex executables are
+self-host file is published or committed. Doctor never builds, and missing, stale or
+drifted artifacts fail independently of legacy receipt rollout modes. Missing Claude/Codex executables are
 reported as degraded rather than certified. When present, a bounded `--version`
 process smoke receives no ambient credentials. Installation steps emit bounded,
 structured start/finish events with their runtime, operation and duration, so an
 outer timeout retains the last active step. Consumer suites stop at the first
 failed proof; later suites are not launched after that failure. These diagnostics
 do not change the 120-second execution limit or authorize a retry.
-The install suite performs one offline npm installation of the verified tarball
-in a suite-local package directory. Its CLI then exercises three independent
-consumer roots (Claude, Codex and both), each with its own environment, receipts
-and user files. Package installation is measured separately; runtime p50 covers
-init and both update paths only. The package directory is never reused across
-runs or operating systems, and all three runtime proofs remain mandatory. The final
-`npm exec --offline --yes -- file:<tarball> --version` uses this same installed
-package directory and cache: it still proves manifest-based bin selection and
-avoids a second cold cache. npm may still materialize its internal execution tree;
-this does not remove the unchanged suite deadline or guarantee its Windows timing.
+The consumer invocation performs one offline npm installation of the verified
+tarball in a temporary package directory. The real
+`npm exec --offline --yes -- file:<tarball> --version` still proves manifest-based
+bin selection against that package directory and cache. npm may materialize its
+internal execution tree. Install, hooks and autopilot suites share the immutable
+CLI on that OS; every writable runtime project keeps its own environment,
+receipts and user files. Real init/update and installed-hook assertions remain.
+Package installation is measured separately; runtime p50 covers init/update only.
+No package directory survives the invocation or crosses OS boundaries, and the
+existing suite deadlines remain unchanged.
 Install conformance and later
 runtime-invocation certification remain separate gates.
 
-There is no manual release fallback. `scripts/bump-version.mjs` remains a local
-maintenance utility, but repository versions, release tags and npm publication
-belong to release-please and the protected chain. A release failure is recovered
+There is no manual release fallback. Release Please owns version and changelog
+updates, including a deliberate version through its native `Release-As` footer.
+The protected release workflow owns npm publication. A release failure is recovered
 with the immutable tag retry above or with a new fix and version.
 
 Consumers on a project pull the new version with:
@@ -423,45 +437,39 @@ void-machine update    # refresh marketplace cache + bump .void/config.json pins
 
 ## Package size ceilings
 
-`pnpm check:size` (`scripts/check-package-size.mjs`, run in CI beside `check:publish`) packs every
-publishable package with `pnpm pack` and fails when a compressed tarball exceeds its declared
-ceiling. The compressed tarball is what a consumer downloads on `npx voidmachine`; unpacked and
-bundle sizes are diagnostics, not budgets. Every size prints on every run, breach or not, so growth
-reads as a trajectory rather than a one-day alarm.
+`pnpm check:size` reads the same CLI archive as safety and conformance in CI and
+release. Only the CLI is published by the supported release workflow; internal
+packs are still built and tested, but are not separately packed or size-budgeted.
+Standalone inspection prepares its own lifecycle-complete archive after checking
+original delivery freshness.
 
-Ceilings live in `PACKAGE_LIMITS` in that script, set 2026-08-06 with roughly one sixth of headroom
-over the sizes measured then (the CLI 728.2 kB, harness-graph 85.7 kB, packs under 8 kB).
-
-**Raising a ceiling is normal.** Do it in the same commit as the change that needs the room, with
-the reason in the commit message, so the growth is a decision on the record rather than a drift
-nobody signed. A package published without a ceiling fails the gate: an unbounded package is the one
-that grows.
+The compressed-byte ceiling in `PACKAGE_LIMITS` is 1,100,000 bytes. DEV-1143
+measured the post-retirement CLI at 914,621 bytes, leaving about 20% headroom
+while catching accidental doubling. This measures downloaded bytes, not startup
+context or execution time. A breach requires inspecting payload growth; a
+necessary ceiling revision requires a measured archive and a documented reason.
 
 ## What counts as breaking
 
-For pre-1.0 we use caret-incompatible semver (`^0.5.x` matches `0.5.*`, not `0.6.*`):
+The existing SemVer policy applies to the shared release version:
 
-- **Major** (or any minor bump pre-1.0): removes/renames a skill, hook, agent, or manifest field consumers reference. Changes the location of doctrine files. Changes a runtime npm package's public API in a breaking way.
+- **Major**: removes/renames a skill, hook, agent, or manifest field consumers reference. Changes the location of doctrine files. Changes a runtime npm package's public API in a breaking way.
 - **Minor**: new skill, new hook, new pack, new runtime export. Additive change to PHILOSOPHY.md.
 - **Patch**: skill content edits, hook bugfixes, CLI bugfixes, internal refactors with no consumer-visible API change.
 
 When in doubt, prefer minor over patch — consumers are alerted either way.
 
-## First-bump formatting note
-
-The first run of `bump-version.mjs` normalizes JSON formatting (2-space indent, multi-line arrays). Subsequent bumps touch only the `version` line. Intentional — the script uses `JSON.stringify(value, null, 2)` so we don't carry a hand-tuned formatter just for these manifests.
-
 ## Why release-please, not changesets
 
 We chose **release-please**: it derives the bump from Conventional Commits (which
 we already enforce), so there is no per-PR ceremony, and its `extra-files` config
-bumps all our non-npm manifests (marketplace + 7 plugin.json + mirror) in lockstep
-from one canonical version. The release PR keeps a human gate.
+updates the retained package and plugin manifests in lockstep from one canonical
+version. The release PR keeps a human gate.
 
 [changesets](https://github.com/changesets/changesets) was used earlier for CLI
 npm versioning and removed in v0.5.4: its model (independent versions per package,
 per-package CHANGELOGs) contradicts the single-number lockstep. If runtime npm
-cadence ever splits from marketplace cadence (post-1.0), revisit.
+cadence ever splits from marketplace cadence, revisit.
 
 ## CHANGELOG
 
@@ -500,7 +508,7 @@ release runs remain on `main`. Push to `main` and manual CI still run. No remote
 protection is changed. Work on merge-control paths still requires human integration.
 
 Consumers receive the same executable guard and workflow template beside installed
-`void-verify` skills. See [the adoption procedure](../packages/core/skills/void-verify/references/ci-feedback.md).
+`void-verify` skills. See [the adoption procedure](../packages/core/src/skills/void-verify/references/ci-feedback.md).
 Adoption is explicit and preserves each project's real validation commands, review
 and enforcement. The reusable enforcement caller declares ready/draft transitions
 and merge-group events, and alone owns PR cancellation; the callee uses an immutable
@@ -520,7 +528,7 @@ including older handoff wording. It preserves private project doctrine and adjac
 user skills; changed files whose ownership cannot be proved remain conflicts rather
 than being silently overwritten. No consumer update is implied by a source change.
 
-## Shared primary Node and browser preparation
+## Shared primary Node
 
 `.node-version` owns the exact primary Node version for local development, CI
 and release. The isolated publication job receives setup-node's resolved version
@@ -534,9 +542,3 @@ conservative compile-time baselines; they do not declare runtime support or
 select a CI runtime. Reusable consumer
 enforcement reads `.void-enforce-runtime/.node-version` from its immutable harness
 checkout, never a required file in the caller repository.
-
-Browser conformance reuses the same consumer tarball as install conformance.
-Its official Playwright noble image follows the exact browser tooling manifest;
-the committed npm lockfile and setup-node npm cache support reproducible installs.
-No custom image, browser cache or node_modules cache is maintained. See
-[the browser suite](../test/browser/README.md) for update and visual evidence rules.

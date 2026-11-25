@@ -6,8 +6,7 @@
 //   3. .claude/settings.json has extraKnownMarketplaces.void-machine + at
 //      least harness@voidcorp in enabledPlugins
 //   4. CLAUDE.md contains the void-machine block
-//   5. gh CLI is available and authenticated (required for the optional
-//      marketplace fetch) — only when remote checks run; --no-remote skips it
+// Remote version comparisons belong to `check`; doctor only inspects local state.
 
 import { execFileSync } from 'node:child_process';
 import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -17,27 +16,22 @@ import {
   isMachineEntry,
   pendingMigrations,
   PRODUCT_COMMAND,
-  resolveFreshness,
   VOID_MACHINE_DIR,
 } from '@voidcorp/hook-runner';
 import { autopilotPreflight } from '../lib/autopilot/preflight.js';
-import { LEGACY_PROGRAM_PATHS, PROGRAM_PATH, programPath, readProgramDescriptor } from '../lib/autopilot/program.js';
+import { readAutopilotAuthority } from '../lib/autopilot/authority.js';
 import { packsCoherenceIssues, validateConfig } from '../lib/config-schema.js';
-import { applyRepair, conformanceRules, inspectConformance } from '../lib/conformance/run.js';
 import { checkGlyph, checkShowsFix } from '../lib/doctor-render.js';
-import { publishedVersionCheck } from '../lib/freshness-check.js';
 import { INSTALL_MANIFEST_PATH, parseInstallManifest, verifyInstallManifest } from '../lib/install-manifest.js';
-import { judgeInvocation, observeInvocation } from '../lib/invocation-health.js';
 import { inspectHarnessLintExclusion } from '../lib/lint-exclusion.js';
 import { observeKeptTracked } from '../lib/git-exclude.js';
 import { type ObservedPathObservation, observedWriteCandidates } from '../lib/observed-write-paths.js';
 import { type DiscoveredAsset, looksHarnessAuthored, orphanedAssets } from '../lib/orphaned-assets.js';
-import { CORE_PLUGIN_NAME, MARKETPLACE_REPO, PACKS, packDirForName } from '../lib/packs.js';
+import { CORE_PLUGIN_NAME, packDirForName } from '../lib/packs.js';
 import { cliVersion, findCoreSource } from '../lib/paths.js';
-import { installedPath, remedyPrefix, resolveProjectRoots } from '../lib/project-roots.js';
-import { type CheckResult, checkEnforceWorkflow, checkGh } from '../lib/prerequisites.js';
+import { remedyPrefix, resolveProjectRoots } from '../lib/project-roots.js';
+import { type CheckResult, checkEnforceWorkflow } from '../lib/prerequisites.js';
 import { readInstallReceipt } from '../lib/receipts.js';
-import { fetchPinnedPluginVersion, fetchRemoteMarketplace } from '../lib/remote.js';
 import { banner, blank, c, footer, glyph, line, meta } from '../lib/render.js';
 import {
   judgeRunnerStaleness,
@@ -47,12 +41,9 @@ import {
 } from '../lib/runner-staleness.js';
 import { detectedAdapters } from '../lib/runtime-adapters.js';
 import { localPackAssetIssues } from '../lib/runtime-assets.js';
-import { selfRepoDoctorTarget } from '../lib/self-repo.js';
-import { marketplaceRepoFrom, readSettings, settingsPathFor } from '../lib/settings.js';
-import { compareVersions, normalizeVersion } from '../lib/version.js';
+import { readSettings, settingsPathFor } from '../lib/settings.js';
 import { judgeLayout, judgeProjectSkills, type LayoutObservation, type ManifestObservation, type ReceiptObservation } from '../lib/void-hygiene.js';
 import { ownedDerivedPaths } from '../lib/void-migration.js';
-import { runSelfHostDoctor } from './self-host.js';
 
 /** Plain pack names (no @voidcorp/ prefix, core excluded) pinned in config.packs. */
 function configPackNames(config: { packs?: Record<string, string> }): string[] {
@@ -69,9 +60,9 @@ function enabledPackNames(plugins: Record<string, unknown>): string[] {
     .filter((name) => name.length > 0 && name !== CORE_PLUGIN_NAME);
 }
 
-function declaresProgram(root: string): boolean {
+function declaresAutopilot(root: string): boolean {
   try {
-    return existsSync(join(root, programPath(root)));
+    return readAutopilotAuthority(root) !== undefined;
   } catch {
     // Ambiguity is still a declaration. The parser owns the actionable error.
     return true;
@@ -95,9 +86,13 @@ function readManifestVersion(root: string): string | undefined {
 }
 
 export async function doctor(args: readonly string[]): Promise<void> {
-  const skipRemote = args.includes('--no-remote');
-  const wantsFix = args.includes('--fix');
-  const dryRun = args.includes('--dry-run');
+  const removed = args.find((arg) => arg === '--fix' || arg === '--dry-run');
+  if (removed !== undefined) {
+    process.stderr.write(`doctor ${removed} was removed; doctor only reports local installation health\n`);
+    process.exitCode = 2;
+    return;
+  }
+  // --no-remote remains a compatible no-op: every doctor run is local.
   const checks: CheckResult[] = [];
   // What doctor judges is the installation, and the installation belongs to
   // the repository: from a linked worktree that is the main checkout, where
@@ -105,30 +100,11 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // it ran in, doctor read a healthy repository as an absent install (DEV-732).
   const roots = resolveProjectRoots();
   const root = roots.installRoot;
-  // One rule, no exception: everything printed below about the installation
-  // names it when the two roots differ. A remedy carries `remedyPrefix`, a path
-  // goes through `installedPath`, and whether the named command would resolve
-  // the root by itself is not part of the test -- that exception is what left
-  // `doctor --fix` with two answers (DEV-768).
+  // Every remedy names the installation when it differs from the working tree.
   const where = remedyPrefix(roots);
 
-  // The source repository is judged where it stands: self-host compares the
-  // current sources with what they last compiled into, and those sources are
-  // the tree at hand.
-  const target = selfRepoDoctorTarget(roots.workRoot);
-  if (target.kind === 'self-host') {
-    await runSelfHostDoctor(roots.workRoot, args);
-    return;
-  }
-
-  // Before judging any structure, judge the judge. A CLI older than the layout
-  // it inspects looks up the previous paths, so it reports correct files as
-  // missing and offers remedies that would damage a healthy install. Reporting
-  // the version gap and stopping is the only honest output.
-  //
-  // This sits ahead of `--fix` on purpose, and that is the load-bearing half: a
-  // stale CLI must never repair a layout it is misreading. Blocking the report
-  // saves a confusing hour, blocking the repair saves the install.
+  // A CLI older than the installed layout must suspend structural diagnostics:
+  // it could otherwise report correct files missing and recommend a harmful repair.
   const staleness = judgeRunnerStaleness({
     running: cliVersion(),
     recorded: readManifestVersion(root),
@@ -186,8 +162,8 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // reported missing while it sits one directory away is a false alarm that
   // sends someone reinstalling for nothing.
   const havePhilo =
-    existsSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'))
-    || existsSync(join(root, '.void', 'PHILOSOPHY.md'));
+    existsSync(join(root, '.void', 'PHILOSOPHY.md'))
+    || existsSync(join(root, '.void', 'installed', 'PHILOSOPHY.md'));
   const doctrinePath = join(root, '.void', 'PROJECT-DOCTRINE.md');
   const haveDoctrine = existsSync(doctrinePath);
   if (havePhilo && haveDoctrine) {
@@ -204,7 +180,6 @@ export async function doctor(args: readonly string[]): Promise<void> {
   const detected = detectedAdapters(root);
   const claudeDetected = detected.some((a) => a.id === 'claude');
   const receipt = await readInstallReceipt(root);
-  const marketplaceInstall = receipt?.source === 'marketplace';
   if (detected.length === 0) {
     // No footprint at all ⇒ nothing is wired. Without this, a project that has
     // .void/config.json but no CLAUDE.md/.claude or AGENTS.md/.codex would run
@@ -288,31 +263,9 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // Action)? Never a blocker (ok stays true).
   checks.push(checkEnforceWorkflow(root));
 
-  // Plugin cache + remote version checks are Claude-marketplace concerns — only
-  // relevant when Claude is wired. gh gates the private-marketplace fetch, so it
-  // rides with the remote checks (--no-remote is a fully offline run).
-  if (claudeDetected && marketplaceInstall) {
-    if (!skipRemote) {
-      checks.push(checkGh());
-      checks.push(await checkRemoteVersions(root));
-    }
-  }
-
-  // Registry freshness is a concern of the PRIMARY npm channel, so unlike the
-  // marketplace checks above it is not gated on Claude being wired. --no-remote
-  // still skips it: that flag promises a fully offline run.
-  if (!skipRemote) {
-    checks.push(await checkPublishedVersion(root));
-  }
-
   // Layout hygiene: does this project actually keep observed state out of its
   // history? Proven with git, not inferred from the ignore file being present.
   checks.push(...judgeLayout(await observeLayout(root)));
-
-  // Is the invocation surface still reachable? A harness cannot observe its own
-  // refused calls, so this reads the traces one leaves: a recorded name that no
-  // longer resolves, and a silence across missions that demonstrably worked.
-  checks.push(judgeInvocation(observeInvocation(root)));
 
   // The one thing the collapsed ignore block can swallow: a skill this project
   // wrote by hand, beside the ones the harness generates.
@@ -323,7 +276,7 @@ export async function doctor(args: readonly string[]): Promise<void> {
   // they do not use. Non-mutating throughout — doctor must stay safe to run
   // while a cluster is in flight, so nothing here touches a tracker, a remote
   // or a git ref, and what it cannot read reports as unknown rather than false.
-  if (declaresProgram(root)) {
+  if (declaresAutopilot(root)) {
     checks.push(...autopilotPreflight(observeAutopilot(root)));
   } else {
     // Naming the path, because silence is the one answer a reader cannot tell
@@ -331,30 +284,10 @@ export async function doctor(args: readonly string[]): Promise<void> {
     // eight autopilot lines at one path and none at the other, and the empty
     // report read as "no active programme" rather than "I looked over there".
     checks.push({
-      name: 'program',
+      name: 'autopilot authority',
       ok: true,
       status: 'pass',
-      message: `no active program at ${[PROGRAM_PATH, ...LEGACY_PROGRAM_PATHS].join(' nor ')}, so autopilot's preconditions do not apply`,
-    });
-  }
-
-  // Structural conformance: conventions the harness DECLARES and can repair
-  // without arbitrating. Reported like any other check; repaired only when
-  // asked, and only on a clean tree.
-  const conformance = inspectConformance(root);
-  for (const finding of conformance.findings) {
-    checks.push({
-      name: finding.ruleId,
-      // Advisory, not a blocker: `ok: false` renders as a hard failure and would
-      // make `doctor` exit 1 for every consumer still on a legacy monolith. The
-      // drift is real and costs nothing today; it is reported to be acted on,
-      // not to fail a build.
-      ok: true,
-      status: 'advisory',
-      message: finding.detail,
-      ...(finding.hasRepair
-        ? { fix: conformance.blocked ?? `${PRODUCT_COMMAND} doctor --fix` }
-        : {}),
+      message: 'no config.autopilot declaration; historical programmes grant no authority; migrate explicitly to schemaVersion: 3 for autonomous work',
     });
   }
 
@@ -401,41 +334,6 @@ export async function doctor(args: readonly string[]): Promise<void> {
     unprobed > 0 ? `${unprobed} not probed (proven by autopilot at preflight)` : undefined,
     advisory > 0 ? `${advisory} advisory` : undefined,
   ].filter((note): note is string => note !== undefined);
-  if (wantsFix) {
-    blank();
-    if (conformance.repairable.length === 0) {
-      line(
-        conformance.blocked === undefined
-          ? c.dim('nothing to repair')
-          // `--fix` judges and repairs `installRoot`, so what blocks it is the
-          // state of THAT tree. Printed bare from a worktree, it told a reader
-          // standing in a clean tree that their tree was dirty.
-          : c.yellow(`${glyph.to} ${where}${conformance.blocked}`),
-      );
-    } else {
-      for (const ruleId of conformance.repairable) {
-        const rule = conformanceRules().find((candidate) => candidate.id === ruleId);
-        if (rule === undefined) continue;
-        const applied = applyRepair(rule, root, { dryRun });
-        line(
-          `${dryRun ? c.dim('would write') : c.green('wrote')}  ${c.dim(rule.id.padEnd(18))} ${String(applied.written.length)} file(s)`,
-        );
-        // Project-relative by contract (`conformance/rule.ts`), and read against
-        // the directory the reader typed the command in: named in full when
-        // that is not the directory being written to.
-        for (const path of applied.written.slice(0, 5)) {
-          line(c.dim(`     ${installedPath(roots, path)}`));
-        }
-        if (applied.written.length > 5) {
-          line(c.dim(`     ... ${String(applied.written.length - 5)} more`));
-        }
-      }
-      // Deliberately not committed: the diff is the review, and committing it
-      // would take that away from the person who has to trust it.
-      if (!dryRun) line(c.dim('nothing was committed — read the diff, then commit it yourself'));
-    }
-  }
-
   if (blockers === 0) {
     // Never "all checks passed" while a line above says otherwise: a summary
     // that contradicts its own body teaches people to skip the summary.
@@ -447,79 +345,6 @@ export async function doctor(args: readonly string[]): Promise<void> {
     process.exit(1);
   }
 }
-
-/** Compare the installed harness against the version published on the npm registry. */
-async function checkPublishedVersion(root: string): Promise<CheckResult> {
-  const receipt = await readInstallReceipt(root);
-  const installed = receipt?.version ?? 'unknown';
-  const freshness = await resolveFreshness({ installed, env: process.env, now: Date.now() });
-  return publishedVersionCheck(freshness, receipt?.source);
-}
-
-async function checkRemoteVersions(root: string): Promise<CheckResult> {
-  const settings = await readSettings(settingsPathFor(root));
-  const repo = marketplaceRepoFrom(settings, MARKETPLACE_REPO);
-
-  const remote = fetchRemoteMarketplace(repo);
-  if (!remote.ok) {
-    return {
-      name: 'remote versions',
-      ok: true,
-      status: 'unknown',
-      message: `unknown (could not fetch ${repo}: ${remote.error})`,
-    };
-  }
-
-  const configPath = join(root, '.void', 'config.json');
-  if (!existsSync(configPath)) {
-    return { name: 'remote versions', ok: true, message: 'skipped (no .void/config.json)' };
-  }
-  let local: { core?: string; packs?: Record<string, string> } = {};
-  try {
-    local = JSON.parse(await readFile(configPath, 'utf8'));
-  } catch {
-    return { name: 'remote versions', ok: true, message: 'skipped (invalid .void/config.json)' };
-  }
-
-  const localFor = (name: string): string | undefined =>
-    name === CORE_PLUGIN_NAME
-      ? local.core
-      : PACKS.some((p) => p.name === name)
-        ? local.packs?.[`@voidcorp/${name}`]
-        : undefined;
-
-  const drifted: string[] = [];
-  for (const plugin of remote.value.plugins) {
-    const declared = localFor(plugin.name);
-    if (!declared) continue;
-    const pinned = fetchPinnedPluginVersion(plugin, repo);
-    if (!pinned.ok) continue;
-    if (compareVersions(normalizeVersion(declared), pinned.value) < 0) {
-      drifted.push(`${plugin.name} ${normalizeVersion(declared)} → ${pinned.value}`);
-    }
-  }
-
-  if (drifted.length === 0) {
-    return { name: 'remote versions', ok: true, message: 'all plugins at remote HEAD' };
-  }
-  // Summarize when many plugins drift (common after a lockstep bump); detailed
-  // enumeration belongs in `check`, not doctor.
-  if (drifted.length > 2) {
-    return {
-      name: 'remote versions',
-      ok: true,
-      message: `${drifted.length} plugins behind — run \`${PRODUCT_COMMAND} check\` for details`,
-      fix: '/plugin marketplace update (inside Claude Code)',
-    };
-  }
-  return {
-    name: 'remote versions',
-    ok: true,
-    message: `update available: ${drifted.join(', ')}`,
-    fix: '/plugin marketplace update (inside Claude Code)',
-  };
-}
-
 
 /** Read the committed manifest and check the assets against it. Never throws. */
 function observeManifest(root: string): ManifestObservation {
@@ -752,10 +577,10 @@ function observeObservedPaths(root: string, insideRepo: boolean): readonly Obser
  * could ever satisfy here, and operators paid for the detour (#193).
  */
 function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0] {
-  let program: ReturnType<typeof readProgramDescriptor>;
+  let program: ReturnType<typeof readAutopilotAuthority>;
   let malformed: { problem: string; fix: string } | undefined;
   try {
-    program = readProgramDescriptor(root);
+    program = readAutopilotAuthority(root);
   } catch (error) {
     // A malformed program is reported by the check below as a failure of the
     // program, not as a crash of doctor — and as malformed, not as absent.
@@ -764,31 +589,30 @@ function observeAutopilot(root: string): Parameters<typeof autopilotPreflight>[0
     // exactly the thing the reader needs (#193).
     const failure = (error as { failure?: { problem?: unknown; fix?: unknown } }).failure;
     malformed = {
-      problem: typeof failure?.problem === 'string' ? failure.problem : 'the frontmatter is not readable',
+      problem: typeof failure?.problem === 'string' ? failure.problem : 'config.autopilot is not readable',
       fix:
         typeof failure?.fix === 'string'
           ? failure.fix
-          : 'fix the `---` frontmatter block, then run doctor again',
+          : 'fix the config.autopilot declaration, then run doctor again',
     };
   }
 
   return {
-    program:
+    authority:
       malformed !== undefined
         ? { malformed }
         : program === undefined
           ? undefined
           : {
               status: program.status,
+              source: program.source,
               autopilotConsentWithheld: program.autopilotConsentWithheld,
               // Absent means the program opted out, which preflight reports as
               // such. Reporting an empty block instead would read as consent.
               ...(program.autopilot === undefined ? {} : {
                 autopilot: {
                   clusterSize: program.autopilot.clusterSize,
-                  ...(program.autopilot.legacyMergeGate === undefined
-                    ? {}
-                    : { legacyMergeGate: program.autopilot.legacyMergeGate }),
+                  schemaVersion: program.autopilot.schemaVersion,
                   // Carried so the merge check can name where the loop never
                   // merges; absent, that is the repository default branch.
                   // Spread rather than set: under exactOptionalPropertyTypes an

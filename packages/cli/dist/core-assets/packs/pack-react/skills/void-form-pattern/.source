@@ -1,0 +1,7 @@
+Sources for `void-form-pattern` skill (see `docs/plans/skill-audits/void-form-pattern.md` for the full audit):
+
+- react-hook-form docs — canonical controlled-form pattern and skeleton.
+- @hookform/resolvers Zod adapter — schema-sharing resolver pattern.
+- Distilled by repeated form bugs on real projects — the "when NOT to use" and shared-schema discipline.
+
+Strategy: distill. Default stack (react-hook-form + Zod resolver + shared schema with Server Action) eliminates the recurring "where does validation live" question.

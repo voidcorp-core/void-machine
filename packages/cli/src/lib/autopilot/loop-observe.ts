@@ -336,9 +336,14 @@ export function parseEjections(text: string): number {
   return ejections;
 }
 
-const QUEUE_QUERY = `query($owner: String!, $name: String!, $branch: String!) {
-  repository(owner: $owner, name: $name) { mergeQueue(branch: $branch) { url } }
-}`;
+function repositoryQuery(defaultBranch: boolean): string {
+  return `query($owner: String!, $name: String!, $branch: String!) {
+    repository(owner: $owner, name: $name) {
+      mergeQueue(branch: $branch) { url }
+      ${defaultBranch ? 'defaultBranchRef { name }' : ''}
+    }
+  }`;
+}
 
 const QUEUE_MEMBERSHIP_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { id isInMergeQueue } }
@@ -350,9 +355,11 @@ const QUEUE_MEMBERSHIP_QUERY = `query($owner: String!, $name: String!, $number: 
  */
 const TIMELINE_WINDOW = 20;
 
-const TIMELINE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+function timelineQuery(membership: boolean): string {
+  return `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
+      ${membership ? 'id isInMergeQueue' : ''}
       timelineItems(last: ${TIMELINE_WINDOW}, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT,
         REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT]) {
         nodes { __typename ... on RemovedFromMergeQueueEvent { reason } }
@@ -360,6 +367,7 @@ const TIMELINE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
+}
 
 // gh fills `{owner}` and `{repo}` from the current repository.
 const REPOSITORY_FIELDS = ['-F', 'owner={owner}', '-F', 'name={repo}'] as const;
@@ -383,13 +391,33 @@ const defaultBranchSchema = z.object({
 });
 
 /**
- * The repository's default branch: the one that deploys when the programme
+ * The repository's default branch: the one that deploys when the config authority
  * names none. An empty name, or none at all, is undefined, and the kernel then
  * refuses to merge anywhere it cannot tell apart from it.
  */
 export function parseDefaultBranch(text: string): string | undefined {
-  const name = parseJson('default branch', defaultBranchSchema, text).defaultBranchRef?.name;
+  return defaultBranchName(parseJson('default branch', defaultBranchSchema, text));
+}
+
+function defaultBranchName(repository: z.infer<typeof defaultBranchSchema>): string | undefined {
+  const name = repository.defaultBranchRef?.name;
   return name === undefined || name.trim().length === 0 ? undefined : name;
+}
+
+const repositoryDefaultSchema = z.object({
+  data: z.object({ repository: defaultBranchSchema }),
+});
+
+/** One ephemeral repository answer, with the deploying branch only when needed. */
+function readRepository(run: GhRunner, request: GithubRequest) {
+  const args = ['api', 'graphql', ...REPOSITORY_FIELDS, '-F', `branch=${request.base}`];
+  const answer = run([...args, '-f', `query=${repositoryQuery(request.defaultBranch)}`]);
+  // Validate GraphQL errors before trusting either field of a partial answer.
+  const mergeQueue = parseMergeQueuePresence(answer);
+  const defaultBranch = request.defaultBranch
+    ? defaultBranchName(parseJson('default branch', repositoryDefaultSchema, answer).data.repository)
+    : undefined;
+  return { mergeQueue, defaultBranch };
 }
 
 /** The default branch, read now: what `merge` and `arm` refuse to target. */
@@ -448,7 +476,7 @@ export interface GithubRequest {
   readonly base: string;
   readonly pullRequests: readonly number[];
   /**
-   * Whether the kernel needs the default branch: only when the programme names
+   * Whether the kernel needs the default branch: only when the config authority names
    * no deploying branch, so a tick depends on nothing it does not use.
    */
   readonly defaultBranch: boolean;
@@ -467,24 +495,18 @@ export function observeGithub(run: GhRunner, request: GithubRequest): GithubObse
       'report only the tickets that hold a slot',
     );
   }
-  const queueArgs = ['api', 'graphql', ...REPOSITORY_FIELDS, '-F', `branch=${request.base}`];
-  const mergeQueue = observed('the merge queue', () =>
-    parseMergeQueuePresence(run([...queueArgs, '-f', `query=${QUEUE_QUERY}`])),
-  );
-  const defaultBranch = request.defaultBranch
-    ? observed('the default branch', () => readDefaultBranch(run))
-    : undefined;
+  const { mergeQueue, defaultBranch } = observed('the repository', () => readRepository(run, request));
   const pullRequests = new Map<number, PullRequestObservation>();
   for (const number of request.pullRequests) {
     const view = observed(`#${number}`, () => readPullRequest(run, number));
     const timelineArgs = ['api', 'graphql', ...REPOSITORY_FIELDS, '-F', `number=${number}`];
     const timeline = observed(`#${number}`, () =>
-      run([...timelineArgs, '-f', `query=${TIMELINE_QUERY}`]),
+      run([...timelineArgs, '-f', `query=${timelineQuery(mergeQueue)}`]),
     );
     // The timeline tells an ejection apart; whether the pull request sits in
     // the queue now is read from GitHub, where a timeline window can lag.
     const queued =
-      mergeQueue && observed(`#${number}`, () => readQueueMembership(run, number).queued);
+      mergeQueue && observed(`#${number}`, () => parseQueueMembership(timeline).queued);
     const event = observed(`#${number}`, () => parseQueueTimeline(timeline));
     const queue = queued ? 'queued' : event === 'queued' ? 'none' : event;
     const ejections = observed(`#${number}`, () => parseEjections(timeline));
@@ -521,7 +543,7 @@ export function resolveLoopBase(run: GhRunner, requested: string): string {
     'AUTOPILOT_PROGRAM',
     'the loop has no base to merge into',
     selection.detail,
-    'set `autopilot.base` to an existing branch in the programme',
+    'set `autopilot.base` to an existing branch in the config authority',
   );
 }
 
@@ -615,7 +637,7 @@ export function readSharedState(run: GitRunner, request: SharedStateRequest): Sh
       'AUTOPILOT_CONTRACT',
       'the shared Git state was read without a base branch',
       'no base was named, so the local refs a unit must not move are unknown',
-      'pass the loop base candidates from the programme',
+      'pass the loop base candidates from the config authority',
     );
   }
   const commands = sharedStateCommands(request.bases);

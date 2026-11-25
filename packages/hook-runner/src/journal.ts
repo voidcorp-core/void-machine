@@ -100,20 +100,3 @@ export function readMissionJournals(root: string, options: JournalReadOptions = 
   return parts.join('\n');
 }
 
-/**
- * A cheap answer to "did the journals move since last time".
- *
- * Stat only, never a read: the banner cannot afford the 11 MB the real corpus
- * weighs, measured at 49 ms for the twenty-mission window. Total bytes and the
- * newest write together catch an appended line, a new mission, and a mission
- * appearing at the other location, which is every way this corpus changes.
- */
-export function journalFingerprint(root: string): string {
-  let bytes = 0;
-  let newest = 0;
-  for (const file of journalFiles(root)) {
-    bytes += file.bytes;
-    if (file.modifiedMs > newest) newest = file.modifiedMs;
-  }
-  return `${Math.round(newest)}:${bytes}`;
-}

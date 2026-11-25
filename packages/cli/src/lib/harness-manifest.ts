@@ -1,24 +1,15 @@
-// The closed schema of a skill's `harness.yaml`: the one list of keys a manifest
-// may carry. The installer (`readHarnessMeta`) and the graph
-// (`harness-graph/src/derive/read-frontmatter.ts`) stay tolerant readers on
-// purpose, so a consumer install never crashes on a sidecar; the cost of that
-// tolerance was that a duplicated key or a misspelt `runtime:` made a skill
-// vanish from Codex in silence. This module is what CI validates the source
-// manifests against instead. Pure: text in, verdict out.
-
-import type { EnforcementTier } from '@voidcorp/harness-graph';
+// Validates the source harness.yaml contracts used by the installer.
 import { parseDocument } from 'yaml';
 import * as z from 'zod';
 import { ALL_RUNTIMES } from './runtime.js';
 
-// Keyed by the graph's own type, so `satisfies` refuses a tier added or removed
-// on either side: the graph exports the type but not its values.
 const ENFORCEMENT_TIERS = {
   pretooluse: 'pretooluse',
   active: 'active',
   'ci-only': 'ci-only',
   'n/a': 'n/a',
-} as const satisfies Record<EnforcementTier, EnforcementTier>;
+} as const;
+export type EnforcementTier = typeof ENFORCEMENT_TIERS[keyof typeof ENFORCEMENT_TIERS];
 
 // A runtime that inherits only the CI floor: every manifest declares its tier,
 // but it has no install adapter, which is why it is not a `Runtime`. Adding it

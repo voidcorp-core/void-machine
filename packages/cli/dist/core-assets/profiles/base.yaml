@@ -1,0 +1,29 @@
+schemaVersion: 1
+id: core:base
+version: 1
+name: base
+technologies: []
+detectors:
+  always: true
+  technologies: []
+  files:
+    extensions: []
+    names: []
+    pathSegments: []
+sources:
+  - title: void-machine repository
+    url: https://github.com/voidcorp-core/void-machine
+reviewedAt: 2026-07-27
+expiresAfterDays: 180
+invariants:
+  - Keep changes minimal, testable, reversible, and explicit at trust boundaries.
+  - Preserve project conventions unless the mission deliberately changes them.
+patterns:
+  - id: universal-change
+    appliesWhen:
+      technologies: []
+      files:
+        extensions: []
+        names: []
+        pathSegments: []
+    guidance: Apply the universal safety, verification, and maintainability doctrine.

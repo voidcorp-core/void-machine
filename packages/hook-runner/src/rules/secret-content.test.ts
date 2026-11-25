@@ -43,8 +43,19 @@ describe('secretContent', () => {
     '/repo/fixtures/ordinary.ts', '/repo/__tests__/ordinary.ts', '/repo/__fixtures__/ordinary.ts',
     '/repo/__generated__/ordinary.ts', '/repo/fixtures/secrets.json',
     'fixtures/client-secrets.test.json', 'fixtures/client-secrets.test.mjs.bak',
-  ])('preserves the unrelated fixture exemption for %s', (path) => {
-    expect(secretContent([{ path, addedContent: `AKIA${'A1'.repeat(8)}` }]).allow).toBe(true);
+  ])('scans high-confidence signatures in %s', (path) => {
+    for (const addedContent of [`AKIA${'A1'.repeat(8)}`, ['-----BEGIN', 'PRIVATE KEY-----'].join(' '),
+      `ghp_${'A1'.repeat(18)}`, `sk_live_${'A1'.repeat(12)}`, `sk-proj-${'A1'.repeat(24)}`,
+      `xoxb-${'A1'.repeat(12)}`, `AIza${'A'.repeat(35)}`]) {
+      const verdict = secretContent([{ path, addedContent }]);
+      expect(verdict).toMatchObject({ allow: false, code: 'SECRET_IN_CONTENT' });
+      expect(JSON.stringify(verdict)).not.toContain(addedContent);
+      expect(secretContent([{ path, addedContent: `${addedContent} // example placeholder` }]).allow)
+        .toBe(false);
+      expect(secretContent([{ path,
+        addedContent: `${addedContent} // allow-secret-pattern: intentional synthetic fixture`,
+      }]).allow).toBe(true);
+    }
   });
 
   it.each(['apiKey', 'clientSecret', 'authToken', 'privateKey', 'accessToken', 'dbPassword'])(
@@ -113,9 +124,9 @@ describe('secretContent', () => {
     }]).allow).toBe(true);
   });
 
-  it('exempts tests and an explicit allow tag', () => {
+  it('exempts only the explicitly marked synthetic line', () => {
     const token = `AKIA${'A1'.repeat(8)}`;
-    expect(secretContent([{ path: 'src/a.test.ts', addedContent: token }]).allow).toBe(true);
+    expect(secretContent([{ path: 'src/a.test.ts', addedContent: token }]).allow).toBe(false);
     expect(secretContent([{
       path: 'src/a.ts',
       addedContent: `${token} // allow-secret-pattern: generated fixture`,

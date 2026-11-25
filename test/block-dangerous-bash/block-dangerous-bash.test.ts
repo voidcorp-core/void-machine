@@ -1,5 +1,5 @@
 /**
- * Tests for packages/core/hooks/block-dangerous-bash.sh
+ * Tests for packages/core/dist/hooks/block-dangerous-bash.sh
  *
  * PreToolUse hook: reads the Bash tool-call JSON from stdin and blocks
  * catastrophic, irreversible commands (recursive root delete, fork bomb, raw
@@ -11,7 +11,67 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HOOK = resolve(process.cwd(), 'packages/core/hooks/block-dangerous-bash.sh');
+const HOOK = resolve(process.cwd(), 'packages/core/dist/hooks/block-dangerous-bash.sh');
+
+// Exercise both the authored hook bundle and the copied consumer artifact.
+describe.each(['packages/core/dist', 'packages/cli/dist/core-assets'])('quoted command boundary: %s', (root) => {
+  it.each([
+    [['sh', '-c', 'rm -rf /'], 2],
+    [['printf', '%s', 'rm -rf /; DROP TABLE users'], 0],
+    [['rg', '$(rm -rf /)', 'docs'], 0],
+  ])('preserves argv roles for %j', (command, expected) => {
+    const hook = resolve(process.cwd(), root, 'hooks/block-dangerous-bash.sh');
+    const result = spawnSync('bash', [hook], {
+      input: JSON.stringify({ tool_name: 'shell', tool_input: { command } }), encoding: 'utf8',
+    });
+    expect(result.status, result.stderr).toBe(expected);
+  });
+  it.each([
+    ['rg "rm -rf /; DROP TABLE users | mkfs.ext4" docs', 0],
+    ['command -p rm -rf /', 2],
+    ["command -p printf '%s' 'rm -rf /'", 0],
+    ['sudo -p prompt rm -rf /', 2],
+    ['env -u USER rm -rf /', 2],
+    ['exec -a worker rm -rf /', 2],
+    ["psql -Xc 'DROP TABLE users'", 2],
+    ["psql -Xc'DROP TABLE users'", 2],
+    ["psql -Xc 'SELECT 1'", 0],
+    ["psql -Xd 'DROP TABLE users' -c 'SELECT 1'", 0],
+    ["psql -Xdc 'DROP TABLE users'", 0],
+    ["printf $'%s\\n' hello", 0],
+    ["rg $'rm -rf /; DROP TABLE users' docs", 0],
+    ["printf $'$(rm -rf /)\\n'", 0],
+    ["sh -c $'printf safe'", 0],
+    ["sh -c $'\\x72m -rf /'", 2],
+    ["$'\\162m' -rf $'\\x2f'", 2],
+    ["rm -rf $'/\\0literal'", 2],
+    ["printf $'DROP\\x20TABLE users' | psql", 2],
+    ["grep 'sudo rm -rf / && git push --force' README.md", 0],
+    ["printf '%s' '$(rm -rf /)'", 0],
+    ['echo "DROP TABLE users"', 0],
+    ['git rebase --rebase-merges --strategy-option=theirs main', 0],
+    ["cat <<'EOF'\nrm -rf /\nDROP TABLE users;\nEOF", 0],
+    ['echo ok | /bin/rm -rf /', 2],
+    ['printf safe; sudo -u root /bin/rm -rf /', 2],
+    ['sh -c "rm -rf /"', 2],
+    ['printf "$(rm -rf /)"', 2],
+    ['printf "`rm -rf /`"', 2],
+    ['printf "DROP TABLE users" | psql', 2],
+    ['psql --command="DROP TABLE users"', 2],
+    ['psql <<EOF\nDROP TABLE users;\nEOF', 2],
+    ['printf ok > "/dev/sda"', 2],
+    ['git push -f | echo --force-with-lease', 2],
+    ['git rebase -x true main', 2],
+    ['git apply --unsafe-paths patch', 2],
+  ])('classifies inert payload %s', (command, expected) => {
+    const hook = resolve(process.cwd(), root, 'hooks/block-dangerous-bash.sh');
+    const result = spawnSync('bash', [hook], {
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }), encoding: 'utf8',
+    });
+    expect(result.status, result.stderr).toBe(expected);
+    if (expected === 2) expect(result.stderr).toContain('DANGEROUS_COMMAND');
+  });
+});
 
 function runHook(command: string, env?: Record<string, string>): { code: number; stderr: string } {
   const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
@@ -171,11 +231,11 @@ describe('block-dangerous-bash.sh', () => {
   it('BLOCKS git apply --unsafe-paths (exit 2)', () => {
     expect(runHook('git apply --unsafe-paths /tmp/p.patch').code).toBe(2);
   });
-  it('BLOCKS git rebase --rebase-merges (exit 2)', () => {
-    expect(runHook('git rebase -i --rebase-merges main').code).toBe(2);
+  it('allows git rebase --rebase-merges (exit 0)', () => {
+    expect(runHook('git rebase -i --rebase-merges main').code).toBe(0);
   });
-  it('BLOCKS git rebase --strategy-option (exit 2)', () => {
-    expect(runHook('git rebase --onto a b --strategy-option=theirs').code).toBe(2);
+  it('allows git rebase --strategy-option (exit 0)', () => {
+    expect(runHook('git rebase --onto a b --strategy-option=theirs').code).toBe(0);
   });
   it('allows a plain git rebase --onto (exit 0)', () => {
     expect(runHook('git rebase --onto main feature~3 feature').code).toBe(0);

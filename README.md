@@ -59,6 +59,11 @@ npx voidmachine init --pack nextjs --pack monorepo
 
 Available: `nextjs`, `monorepo`, `react`, `server`, `pwa`, `mobile`.
 
+The delivered doctrine is `.void/PHILOSOPHY.md`, owned by the installation manifest.
+The adjacent `.void/PROJECT-DOCTRINE.md` holds your rules and keeps its project ownership.
+Every runtime receives common `AGENTS.md` instructions; Claude loads them through
+`CLAUDE.md`'s native `@AGENTS.md` import. Existing text outside managed blocks survives updates.
+
 ## Most of it never needs a command
 
 This is the part that surprises people, so it goes first: you do not drive the
@@ -71,9 +76,9 @@ What is installed, in numbers:
 
 | | Count | How it fires |
 |---|---|---|
-| Core skills | 42 | Automatically, when what you are doing matches |
+| Core skills | 40 | Automatically, when what you are doing matches |
 | Stack pack skills | 28 | Same, for the packs you activated |
-| Hooks | 31 | Native tool guards and optional diagnostics; see the runtime manifests |
+| Hooks | 15 | Native tool guards and optional diagnostics; see the runtime manifests |
 | Agents | 21 | Delegated by a skill, or invoked by name |
 | Specialists | 16 | Invoked in their own fresh context during review |
 
@@ -83,19 +88,11 @@ Agents work the same way: `doctrine-critic` judges a diff against the doctrine,
 while `solution-architect`, `security-engineer` and `test-qa-engineer` each
 review in their own fresh context.
 
-**[The cheat sheet](docs/CHEATSHEET.md) lists every one of them**, grouped by
-what it is for, with what each hook actually blocks. It is generated from the
-same catalogue these counts come from, so it cannot drift from what ships.
-
-To explore that catalogue alongside your project's installation evidence, run
-`void-machine cheatsheet > cheatsheet.html`. Open the resulting file offline:
-search by intention, filter by runtime, pack or type, and copy invocations.
-`--format markdown` and `--format json` export the same information. Inspection
-writes only to stdout; creating the file is your shell redirection.
-
-At ticket end, `void-machine mission inspect --id <mission> --usage` adds observed skill,
-hook and specialist counts. Unlinked telemetry stays unknown; counts do not certify quality.
-See [the usage recap contract](docs/TICKET-USAGE.md).
+The [essential workflow guide](docs/CHEATSHEET.md) explains where to start.
+Use your runtime's native skill discovery for available skills and
+`void-machine --help` for CLI commands. The generated cheatsheet and its
+HTML, Markdown and JSON export command have been removed; existing exports
+remain your files.
 
 For your own project rather than the catalogue, `npx voidmachine status` reports
 what is installed, active and actually used.
@@ -111,50 +108,21 @@ npx voidmachine runtime add codex # wire a second runtime
 npx voidmachine update            # recompile owned assets from a newer CLI
 ```
 
-## Context continuity, within the limits the runtimes expose
+## Manual checkpoint and semantic resume
 
-Claude Code and Codex both route `UserPromptSubmit`, `PostToolUse`, `PreCompact`, and
-`SessionStart` through the same local continuity handler. It keeps one bounded mechanical block in
-`.void/machine/checkpoint.md`: the latest complete token observation, the 20 most recent unique
-read paths, the 20 most recent unique modified paths, overflow counts, and semantic/work revisions.
-`PreCompact` seals that block atomically; the next `SessionStart` injects the semantic checkpoint,
-the bounded working set, and an explicit complete/degraded status.
+Use `void-checkpoint` to save useful session residue before leaving or clearing context.
+On Claude Code and Codex, `SessionStart` reads that checkpoint and Git state.
+It reports missing or stale context without requiring a mechanical block, seal or revision.
+Existing checkpoints remain untouched; legacy mechanical blocks are ignored on reads.
+No continuous context tracker, automatic checkpoint reminder or end-of-session audit runs.
 
-The runtime does not expose a reliable context-window size. If you know it, opt into a threshold
-nudge in `.void/config.json`:
-
-```json
-{
-  "context": {
-    "windowTokens": 200000,
-    "checkpointThresholdPercent": 50
-  }
-}
-```
-
-The threshold must be an integer from 40 through 60 and defaults to 50 when `context` is present.
-Without `windowTokens` there is no percentage to compare, so the nudge cannot fire — and the
-handler says so once rather than going quiet, because a watchdog that stays silent about not
-watching is indistinguishable from one that found nothing.
-Without `windowTokens`, the handler records the latest usage counters but computes no percentage
-and emits no threshold nudge. Transcript reads stay local, inspect only usage counters, and are
-bounded to 1,048,576 bytes per invocation; prompt and response content are neither logged nor sent.
-Only runtime-reported direct read/write paths are observed. Shell-mediated reads are intentionally
-not inferred. Codex transcripts must stay inside the project; Claude may also use its
-project-scoped transcript directory when an exact, bounded session identifier names the file.
-
-The limits are intentional: the harness never invokes `/clear` or `/compact`, and the hook never
-writes objective, progress, dead ends, assumptions, or a next action. A nudge asks the agent to
-invoke `void-checkpoint`; it does not invoke the skill. A brutal `/clear` before a recent semantic
-checkpoint can therefore still require reconstruction.
-
-The reproducible performance check runs 25 fresh processes against the exact shipped hook bundle
-and publishes bare Node, same-bundle no-op, representative continuity, and their wall and CPU
-measurements. DEV-651 gates the representative hot wall path below 75 ms p95 and its incremental
-CPU cost over the same-bundle no-op below 25 ms p95. Raw wall latency stays visible without making
-shared-CI scheduler noise a feature gate. The unchanged shared-runner wall budgets, cold below
-150 ms p95 and no-op over Node below 25 ms p95, are tracked in
-[DEV-662](https://linear.app/voidcorp/issue/DEV-662/reduire-le-cold-start-du-hook-runner-livre).
+Optional Herdr metadata can still display Claude's latest complete token usage when
+`.void/config.json` supplies a positive `context.windowTokens`. This read-only measurement
+examines at most 1,048,576 transcript bytes and uses only usage counters. Project containment,
+no-follow file checks and exact session binding protect external Claude transcript reads.
+Unknown windows, unavailable transcripts and Codex yield no percentage. No threshold nudge,
+checkpoint write or automatic compaction follows. Herdr discovery failure disables only the
+relevant Herdr operations; commands still require a verified target.
 
 ## What it does not do
 
@@ -176,21 +144,22 @@ Some things are honestly incomplete:
 ## See what is actually there
 
 ```
-npx voidmachine status     # per-capability lifecycle, offline, no model call
+npx voidmachine status     # installation facts and runtime observations
 npx voidmachine doctor     # health check of the wiring itself
 npx voidmachine check      # version freshness for the installed channel
 ```
 
-`status` reads a frozen capability certification plus local telemetry and shows
-each capability's state: `available`, `installed`, `verified`, `used`,
-`effective`. The distinction is the point. A skill that is installed and never
-invoked is not doing anything for you, and the report says so instead of
-counting it as a win.
+`status` reports the installed version and each detected runtime's installation,
+wiring, hook firing and observation facts. Missing evidence stays `unknown`.
+It writes one current status snapshot without producing or pruning score history.
+The graph, audit and frozen certification surfaces have been removed; see the
+[public migration note](packages/cli/README.md#graph-audit-and-score-retirement).
 
-Both surfaces also report whether your install is behind the version published
-on npm. That check is advisory, never fails a run, sends nothing about your
-machine, and reports `unknown` with a cause when the registry is unreachable
-rather than claiming you are current. `doctor --no-remote` skips it.
+`status` retains its advisory npm freshness notice, reporting `unknown` with a cause
+when the registry is unreachable. `doctor` checks only the local published installation,
+even in this source repository; `--no-remote` is a compatible no-op. Explicit `check`
+compares available versions. Current-source validation uses `self-host sync` followed
+by `self-host doctor`; it never substitutes for the published installation.
 
 `check` uses the installed bundled version from the local receipt, or the committed
 manifest on a fresh clone. Legacy plugin pins apply only to marketplace installs;
@@ -237,7 +206,7 @@ filters. For a new caller, `.github/workflows/void-enforce.yml` can contain:
 name: void-enforce
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
   merge_group:
     types: [checks_requested]
 permissions:
@@ -266,13 +235,16 @@ The floor checks protected paths, secret content, TDD and boundaries through the
 portable Node bundle, failing closed on missing dependencies or an unresolved
 base. It complements your existing quality workflow. Keep the project's package
 manager, lockfile and Node version owner when adopting the installed `void-verify`
-[quality example](packages/core/skills/void-verify/references/ci-feedback.md).
+[quality example](packages/core/src/skills/void-verify/references/ci-feedback.md).
 For Bun projects, the optional [dependency audit](docs/DEPENDENCY-AUDIT.md) keeps
 required candidate checks and periodic advisory surveillance independent of quality.
 Do not install Bun just to add this example to an npm or pnpm project.
 
 Adoption is explicit: neither installation nor update overwrites your workflows
-or changes branch protection. Check the actual required names before rollout.
+or changes branch protection. The pinned floor protects implementation identity,
+not invocation: a removable caller or an unrequired check can still omit it. Inspect
+the actual caller protection and required names before claiming enforced coverage.
+Add project-specific quality jobs separately while keeping the versioned floor intact.
 GitHub-hosted runner usage for this public reusable workflow is billed to the
 caller, including a private caller; reuse does not transfer billing to this repo.
 See GitHub's [reusable workflow contract](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
@@ -294,14 +266,15 @@ makes no claim about a consumer's invoice savings.
   `/plugin marketplace add voidcorp-core/void-machine`. The bundled local
   assets remain the default.
 
+Decision records are authored directly as Markdown with light frontmatter through
+`void-decide`. The public `decisions new`, `decisions check` and `decisions render`
+commands have been removed; see the [migration note](packages/cli/README.md#decision-records-breaking-command-removal). Historical records and their readers remain available.
+
 ## Contributing
 
-Source maintainers: consult the [Linear idea index](docs/LINEAR-INDEX.md) before
-revisiting backlog decisions. After a confirmed Linear issue or comment write,
-follow its incremental-refresh procedure; a local failure never replays the
-remote write. The index and `pnpm backlog:index` are private-workspace tooling,
-excluded from consumer installations. Export data stays under the source-only
-ignore rules in `.void/.gitignore`.
+Source maintainers read complete issues and relations through the native tracker.
+The local backlog index generator has been retired; existing exports and indexes
+are left untouched. See [tracker access](docs/LINEAR-INDEX.md).
 
 ```bash
 pnpm install
@@ -313,23 +286,22 @@ pnpm verify     # every gate CI runs, in its order
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md), then
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the package boundaries.
 
-Eight anti-bloat rules gate every pull request: a skill stays under 400 lines
-and covers one subject, two skills may not overlap by more than 30%, a
-discovery description has a non-blocking 250-character target and a hard cap at 500, hooks stay under 100 lines
-with no home-grown DSL, agents keep an explicit scope, and skill tests gate the
-release. They exist because a doctrine that grows without limit stops being
-read.
+Keep skills and hooks concise and focused without absolute line caps or a
+home-grown DSL. Review responsibility overlap in context. Discovery descriptions
+keep a non-blocking 250-character target and a hard cap at 500; technical names,
+resolved references, explicit agent scopes and applicable skill tests remain
+required. Load detailed references only when useful so the doctrine stays readable.
 
 ## Philosophy
 
-Three non-negotiables, in order: **safety** (test-first, paired assertions,
-schema-validated boundaries), **performance** (back-of-the-envelope before code,
+Three non-negotiables, in order: **safety** (test-first, validation at trust boundaries
+and where invariants can change), **performance** (back-of-the-envelope before code,
 mechanical sympathy, batch over react), **developer experience** (fast feedback,
 no magic, every convention motivated in writing).
 
 Inspired by Wing Chun's economy of means, TigerStyle from TigerBeetle, the
 citypaul dotfiles, and the compound-engineering loop. Read
-[`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) for the reasoning and the sources.
+[`packages/core/src/PHILOSOPHY.md`](packages/core/src/PHILOSOPHY.md) for the reasoning and the sources.
 
 > *Du vide naît la structure.* Build more, move fast, be better.
 

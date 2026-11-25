@@ -3,14 +3,15 @@
 void-machine targets two runtimes from one doctrine. This page states honestly
 what is parity-real today and what is opt-in or pending.
 
-## One doctrine, per-runtime docs
+## One common instruction owner
 
-`CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) carry identical doctrine,
-terminology adapted (Skill tool ↔ tools, Claude ↔ Codex): `CLAUDE.md` uses
-`@imports`, `AGENTS.md` uses explicit "read at session start" pointers (Codex has
-no `@import`). In the **harness repo itself** the `scripts/sync-agent-docs.sh`
-gate keeps both in lockstep (section-heading parity in CI + a both-or-neither
-pre-commit check).
+`AGENTS.md` carries common instructions for both runtimes. Claude loads it through
+`CLAUDE.md`'s native `@AGENTS.md` import, which also expands its doctrine imports.
+Codex discovers `AGENTS.md` directly and follows its instruction to read the two
+doctrine files; Codex does not expand `@` imports. Claude-only consumers receive
+AGENTS too, while Codex-only consumers need no CLAUDE file. Existing project text
+outside managed blocks is preserved. Native loading observations replace the
+retired heading-parity and sister-document staging checks.
 
 The shared agent-doc generator gives both runtimes the same bounded merge-consent
 rule: an authorized merge includes the coordinator's routine local synchronization
@@ -61,32 +62,12 @@ plugin marketplace remains available only through explicit opt-in.
 [build-skills]: https://learn.chatgpt.com/docs/build-skills
 [build-plugins]: https://learn.chatgpt.com/docs/build-plugins
 
-### Usage measurement (a Codex platform limit)
+### Runtime observations
 
-`status`/`void-graph` count skill **usage** from observable invocations — on
-Claude, a skill runs through the `Skill` tool, which the activation-meter hook
-records. Codex loads skills as context and fires **no hook event** for them (its
-hooks cover `Bash`, `apply_patch`, MCP and other function tools, not skill use).
-So on a Codex-only project the usage counts reflect Claude usage only — a low
-count means "not observed", not "not useful". This is a Codex limitation, not a
-gap in the harness; nothing to instrument until Codex surfaces skill use.
-
-The invocation-health check preserves the event's runtime source. Only
-`runtime:claude` tool calls enter its three-working-mission silence window.
-Codex and missing/unknown sources remain explicitly **not observable**, with
-collected tool-call counts and an unknown activation count. `doctor` reports
-`unknown`, never a passing zero; the session banner states the same limitation.
-The banner and doctor inspect the same bounded journal corpus (64 MiB, at most
-10,000 mission directories per location); runtime filtering precedes the
-three-mission window, so newer Codex missions cannot evict Claude evidence. Recorded retired
-skill names still fail independently of runtime. Reading `SKILL.md` or declaring
-that a skill was applied never synthesizes a skill activation.
-
-The verdict cache is versioned so an unchanged journal cannot preserve a verdict
-computed under the old, runtime-blind rule. Collection and enforcement hooks are
-unchanged. This follows the [Codex skill-loading contract][build-skills] and
-[documented hook coverage](https://learn.chatgpt.com/docs/hooks#tool-coverage).
-
+`status` reports installation and runtime facts from the existing adapters.
+Unavailable observations stay `unknown`. Usage scores, graph reporting and the
+invocation-health cache are retired; no missing skill-use event is interpreted
+as proof that a skill is unused. Canonical mission and worker journals remain.
 
 ## The hooks (a full mirror, not a floor)
 
@@ -98,11 +79,12 @@ are enforcement on top. Codex and Claude share the lifecycle events used here:
 runner. The continuity path depends only on observing `PreCompact`; it never
 depends on Codex's ability to block that event.
 
-Codex used to receive only two guardrails where Claude received eighteen. It now
-receives the **same enforcement surface**: the blocking greps (`no-any`,
-`no-console-log`, `secret-in-content`, `boundary-direction-check`, `tdd-guard`,
-…), plus `auto-format` on `PostToolUse`, `sessionstart-context`, and the
-`stop-typecheck` gate on `Stop`.
+Codex and Claude receive the same targeted write protections: secret content,
+protected files, dangerous shell commands and invalid control characters. The
+manifests also retain the lifecycle hooks still shipped, including formatting and
+Stop typechecking. Syntax and test-selection checks use the project's configured
+validation tooling, not lexical write refusals. A consumer's lint configuration
+is not installed or activated by this runtime wiring.
 
 ### The one real difference: `apply_patch`
 
@@ -135,6 +117,12 @@ nudge requires explicit `context.windowTokens` configuration; model names are ne
 guessed windows. The handler does not invoke `/clear`, `/compact`, or a semantic checkpoint.
 
 ### Secret environment reads
+
+The runtime-secret policy in
+[`void-security-guidance`](../packages/core/src/skills/void-security-guidance/SKILL.md)
+uses the project's adopted manager for runtime injection and preserves protected legacy `.env`
+setups. The [server onboarding guide](../packages/packs/pack-server/src/skills/void-env-validation/SKILL.md)
+documents configuration without requiring a plaintext secret file.
 
 The existing `protected-file` PreToolUse handler also refuses direct reads of
 `.env` and `.env.*`, before its write-only gate or `ALLOW_SECRET_EDIT` override.
@@ -200,7 +188,7 @@ runtime (auto-detected from a `.codex/` dir or `AGENTS.md`, or forced with
 1. Stages one asset into `<project>/.void/hooks/`: `_void-hook.mjs`.
    `CODEX_FLOOR_SCRIPTS` is explicit and a drift guard proves every manifest
    command resolves to that asset.
-2. Compiles `<project>/.codex/hooks.json` from `packages/core/codex/hooks.json`,
+2. Compiles `<project>/.codex/hooks.json` from `packages/core/src/codex/hooks.json`,
    turning each `node "${VOID_HOOKS_DIR}/<asset>"` into `node -e "<bootstrap>"`.
    The file is versioned, so it holds no machine path: the bootstrap walks up
    from the session directory to the nearest `.void/hooks/<asset>` and runs it.
@@ -225,7 +213,15 @@ a CLI upgrade, `void-machine update` re-stages the floor to the running CLI's
 version (only on real drift), so a Codex project catches floor-script updates the
 same way the Claude side catches marketplace bumps.
 
-The former manual copy is no longer needed. `packages/core/codex/hooks.json`
+The Codex manifest is exclusively managed once the install receipt claims it;
+editing it does not create a supported user extension of the safety floor. A
+pre-existing project-owned `.codex/hooks.json` is preserved byte-for-byte by local
+`init` and `update`, withheld from the staged transaction and never claimed by
+its receipt or manifest. In that case its hooks remain the project's responsibility;
+the preserved file is not evidence that the generated floor was activated.
+Claude's co-owned settings follow their separate merge contract.
+
+The former manual copy is no longer needed. `packages/core/src/codex/hooks.json`
 remains the single source `init` compiles from. Its top level uses only the
 Codex-supported `description` and `hooks` fields; a live `--strict-config` smoke
 guards that boundary in addition to the compiler regression test.
@@ -239,7 +235,7 @@ teaching contracts; agents provide fresh context.
 
 The v3 specialists, `solution-architect`, `security-engineer`, `test-qa-engineer`,
 `experience-designer`, and `visual-craft-director`, are authored once under
-`packages/core/specialists/*.yaml`.
+`packages/core/src/specialists/*.yaml`.
 The Claude and Codex compilers embed the exact same scope, applicability, budget,
 failure policy, and JSON result contract in their native files. Manual and
 orchestrated invocation therefore parse through one identity/version-aware output
@@ -256,14 +252,10 @@ subagent configuration].
 
 ## The commands
 
-Claude gets `/void-graph`, `/void-doctor`, `/void-audit`, `/void-feedback` and
-`/void-autopilot` as plugin commands. Nothing is missing on Codex:
-
-- `void-autopilot` **is already a skill**, so it is staged like any other.
-- The `void-*` commands are thin wrappers around the CLI, which is
-  runtime-agnostic. Under Codex, invoke it directly: `void-machine doctor`,
-  `void-machine audit`, `void-graph`. Codex custom prompts are not an option
-  regardless — they are deprecated and live only in `~/.codex`, never in a repo.
+`void-doctor` and `void-autopilot` are skills available on both runtimes.
+The CLI is runtime-agnostic: invoke `void-machine doctor` or the applicable
+operational command directly. Graph and usage audit commands are retired; see
+[the public migration note](../packages/cli/README.md#graph-audit-and-score-retirement).
 
 ## Parallel fan-out
 
@@ -329,12 +321,11 @@ plainly is the point — this is the only place where "prerequisite" keeps meani
 | --- | --- | --- |
 | claude-in-chrome MCP | a Claude-bound browser extension | `void-qa`, `void-ui-review` live browser passes |
 | `@voidcorp/make-pdf` | package not published | the `void-make-pdf` skill |
-| `trim-large-output` hook | its `PostToolUse` output rewriting (`updatedToolOutput`) is unconfirmed on Codex, and a sibling field is documented as failing there | token-frugality trimming only; deliberately not wired rather than shipped dead |
 | enforced specialist read-only isolation | parent sandbox overrides and no per-agent process allowlist | native agents work, but team mode stays degraded |
 
 ## Status (verified vs pending)
 
-- **Verified**: sister-doc gate; `init` emits `AGENTS.md` and auto-wires
+- **Verified**: shared instruction loading; `init` emits `AGENTS.md` and auto-wires
   `.codex/hooks.json` (one staged runner + compiled manifest, unit-tested); `doctor`
   checks the wiring; the hooks parse both runtimes' payload shapes, including
   multi-file `apply_patch` (unit-tested); all ten agents compile from the real

@@ -2,8 +2,8 @@ name: void-machine enforce
 description: >-
   Replay the void-machine enforcement floor (protected files, leaked secrets,
   TDD order, @repo/* import direction) over a pull-request diff. Critical rules
-  run through the same Node bundle as local hooks, so no author
-  (human, local agent, cloud agent) can bypass it.
+  run through the same Node bundle as local hooks. Blocking merges additionally
+  requires a protected caller and the resulting check required by branch rules.
 
 inputs:
   base-ref:
@@ -35,4 +35,4 @@ runs:
         [ -z "$base" ] && base="${MERGE_GROUP_BASE_SHA:-}"
         [ -z "$base" ] && [ -n "${PR_BASE_REF:-}" ] && base="origin/${PR_BASE_REF}"
         # A missing base is handled fail-closed by the script itself (red check).
-        "${GITHUB_ACTION_PATH}/../../../packages/core/enforce/ci-enforce.sh" --base "$base"
+        "${GITHUB_ACTION_PATH}/../../../packages/core/dist/enforce/ci-enforce.sh" --base "$base"

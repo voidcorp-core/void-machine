@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 
 /**
  * Scripts that are valid for their engine and invalid as ES modules.

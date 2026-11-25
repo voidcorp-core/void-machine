@@ -1,0 +1,33 @@
+schemaVersion: 1
+id: core:monorepo
+version: 2
+name: monorepo
+technologies:
+  - id: monorepo
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [monorepo]
+  files:
+    extensions: [.json, .yaml, .yml, .ts]
+    names: [package.json, pnpm-workspace.yaml, turbo.json]
+    pathSegments: [apps, packages]
+sources:
+  - title: pnpm workspaces documentation
+    url: https://pnpm.io/workspaces
+  - title: npm workspaces documentation
+    url: https://docs.npmjs.com/cli/using-npm/workspaces
+reviewedAt: 2026-07-27
+expiresAfterDays: 180
+invariants:
+  - Preserve dependency direction and assign each shared concern a single owner.
+  - Test affected packages without hiding failures behind cache or task filtering.
+patterns:
+  - id: workspace-boundary
+    appliesWhen:
+      technologies: [monorepo]
+      files:
+        extensions: [.json, .yaml, .yml, .ts]
+        names: [package.json, pnpm-workspace.yaml, turbo.json]
+        pathSegments: [apps, packages]
+    guidance: Verify package ownership, dependency direction, and affected task coverage.

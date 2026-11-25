@@ -9,7 +9,7 @@ export default defineConfig({
   // `baseUrl`, which TypeScript 6 deprecates and TypeScript 7 removes.
   dts: false,
   sourcemap: true,
-  clean: true,
+  clean: ['dist/*.js', 'dist/*.map', 'dist/*.d.ts', 'dist/async'],
   splitting: false,
   treeshake: true,
 });

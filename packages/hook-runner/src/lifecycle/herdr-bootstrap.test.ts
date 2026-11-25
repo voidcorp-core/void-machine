@@ -32,6 +32,8 @@ describe('consumer worker host bootstrap before any mission exists', () => {
     expect(result.status).toBe('ok');
     expect(result.output?.hookSpecificOutput.additionalContext).toContain('void-orchestrate');
     expect(result.output?.hookSpecificOutput.additionalContext).toContain('w1:p1');
+    expect(result.output?.hookSpecificOutput.additionalContext).toContain('Herdr is optional');
+    expect(result.output?.hookSpecificOutput.additionalContext).not.toContain('create or reuse its worker tab');
     expect(result.details).toMatchObject({ host: 'herdr', mission: 'absent' });
     expect(f.calls.map(call => call.slice(0, 2))).toEqual([
       ['git', 'rev-parse'], ['herdr', 'pane'], ['herdr', 'pane'],
@@ -64,9 +66,29 @@ describe('consumer worker host bootstrap before any mission exists', () => {
     const result = executeHerdrMetadata(start, f.root, f.env, 'codex', run);
     expect(result.status).toBe('degraded');
     expect(result.diagnostic).toBeTruthy();
-    expect(result.output?.hookSpecificOutput.additionalContext).toContain('Native delegation');
+    expect(result.output).toBeUndefined();
     expect(f.calls.flat()).not.toContain('report-metadata');
     expect(f.calls.flat()).not.toContain('start');
+  });
+  it.each(['codex', 'claude'] as const)('keeps %s repository work independent when ownership is unproven', runtime => {
+    const f = fixture();
+    const calls: string[][] = [];
+    const run: MetadataRun = (command, args, options) => {
+      calls.push([command, ...args]);
+      if (args[1] === 'process-info') return JSON.stringify({ result: { process_info: {
+        pane_id: f.pane.pane_id, foreground_processes: [{ pid: process.pid + 100000 }],
+      } } });
+      return f.run(command, args, options);
+    };
+    const result = executeHerdrMetadata(start, f.root, f.env, runtime, run);
+    expect(result.status).toBe('degraded');
+    expect(result.details).toEqual({ reason: 'ownership-unproven' });
+    expect(result.diagnostic).toBe('herdr-metadata: ownership-unproven\n');
+    // A diagnostic must not inject a repository-wide prohibition or permission decision.
+    expect(result.output).toBeUndefined();
+    expect(calls.filter(([command]) => command === 'herdr')).toEqual([
+      ['herdr', 'pane', 'list'], ['herdr', 'pane', 'process-info', '--pane', f.pane.pane_id],
+    ]);
   });
   it('does not bootstrap past an invalid explicit mission selection', () => {
     const f = fixture();

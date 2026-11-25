@@ -1,7 +1,0 @@
-{
-	"name": "@fixture/app",
-	"type": "module",
-	"dependencies": {
-		"@fixture/core": "workspace:*"
-	}
-}

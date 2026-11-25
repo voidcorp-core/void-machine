@@ -1,0 +1,6 @@
+Sources for `void-background-job-pattern` skill (see `docs/plans/skill-audits/void-background-job-pattern.md` for the full audit):
+
+- No external source audited — native distillation of the void-machine job taxonomy (event-driven vs cron vs one-shot) and per-type wrapper patterns.
+- Tooling referenced (not vendored): Inngest, Trigger.dev, Cloudflare Queues, Vercel Cron.
+
+Strategy: distill. Distilled from the harness's own job-type decision table; queue tooling is named but no source skill was copied.

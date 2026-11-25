@@ -1,141 +1,118 @@
-# Test evidence in pre-write hooks
+# Test evidence and validation
 
-## Focused tests
+## Editing and accepting evidence
 
-The hook inspects the proposed file, including unchanged comment delimiters.
-Write supplies a complete replacement. Edit requires an exact old_string match;
-multiple matches require replace_all. Native apply_patch supports Add File and
-exact context-bearing Update File hunks. Stale or ambiguous context, moves,
-unanchored insertions and unsupported inputs refuse with TEST_SYNTAX_UNVERIFIED.
-Submit a supported exact edit or complete Write to resolve that refusal.
-Internal symbolic paths retain the tool's original spelling for reconstruction;
-physical paths own containment and evidence. Multiple sections naming the same
-physical file refuse, including sections using different internal aliases.
+Writing a test temporarily focused or skipped is allowed. Before accepting test
+results as delivery evidence, run the project's configured validation that detects
+those forms. A green partial run is not proof that the complete applicable suite
+passed. Keep platform exclusions, conditional skips and todos visible in the
+result; do not count them as passed coverage.
 
-When syntax is needed, the harness uses its own official TypeScript 6 API:
-`@typescript/typescript6` 6.0.2, resolving to TypeScript 6.0.3 in the lockfile.
-The API and traversal are bundled into an ordinary companion worker. The parent
-verifies its size and SHA-256 identity, then starts the isolated child. The
-versioned JSON protocol carries source as data and returns syntax facts.
-There is no consumer package lookup, dependency installation,
-network request or fallback to the project's compiler. TypeScript 7 projects and
-projects without TypeScript use the same parser. Ordinary unambiguous cases
-retain their inexpensive paths without starting it.
+TDD relies on relevant observed RED/GREEN behavior where strict mode applies.
+Neither a sibling test file nor a `tdd-cover` comment proves coverage. The retired
+structural write gate and TypeScript syntax worker are not required to edit code.
 
-The parser supports the syntax understood by the pinned release, including TSX.
-Unsupported or malformed syntax refuses rather than being silently accepted.
-A broken bundled parser asks to repair the harness installation, never to
-downgrade the consumer compiler. This syntax-only ownership does not change
-project graph module resolution or claim native TypeScript 7 API support.
+## Existing linter, explicit scope
 
-The parser traverses syntax, including template substitutions and JSX expressions.
-Comments, ordinary strings and regular-expression text are not executable calls.
-Skipped `xit` and `xdescribe` aliases remain blocked through parameterized calls,
-tagged tables, computed member access and TypeScript expression wrappers. The
-callee walk shares the existing syntax-operation budget. See the
-[Jest API](https://jestjs.io/docs/api).
-It does not execute the inspected source, resolve its imports, read tsconfig,
-load config plugins or run tests. The parser is trusted, versioned harness code; process isolation bounds resources.
-The worker bundles its compiler dependency and never imports consumer packages.
-It uses public `createSourceFile` and `getSyntacticDiagnostics` APIs with a
-source-only virtual compiler host; no semantic type checking is performed.
+This repository configures Biome 2.4.16 with these rules at error severity:
 
-Limits: 64 KiB per proposed file, 128 patch hunks, one million context comparisons,
-32 inspected test files per operation, five seconds cooperative operation budget,
-128 MiB child V8 old-space limit, 64 KiB child output and 20,000 syntax nodes. The child
-inherits no environment variables. Timeout uses SIGKILL; a compiler trapping
-SIGTERM cannot keep the synchronous hook waiting. Errors are fixed diagnostics,
-never source content or raw compiler output. Limit refusals are not verification.
+- `suspicious/noExplicitAny`: explicit type escapes; strict TypeScript checks
+  separately cover implicit `any`.
+- `suspicious/noConsole`: application code uses the project logger. Legitimate
+  CLI/script output and a logger's explicit transport are narrow exceptions.
+- `correctness/noUndeclaredDependencies`: supported package imports are checked
+  against the nearest manifest. Relative paths, `#`/`@/` aliases and protocol
+  imports are outside this rule; it does not validate all architectural boundaries.
+- `suspicious/noFocusedTests` and `suspicious/noSkippedTests`: supported test forms
+  are checked before accepting evidence. Confirm the files and forms actually
+  covered, including test files outside conventional source directories.
 
-This pre-write observation is not an atomic filesystem transaction. The runtime
-still owns applying the edit and rejecting stale patch context. The check is not
-a semantic guarantee against renamed APIs, aliases or malicious project tooling.
+A comment or string holding invalid source for a negative test is test data.
+Prefer that representation or a tightly scoped fixture exception; do not exempt
+all tests or an application directory. Assertions are reviewed against a local,
+identifiable guarantee, not rejected lexically. Unvalidated external data and
+unexplained double assertions do not establish that guarantee.
 
-## Declared E2E coverage
+The configuration is local to void-machine, not copied into consumers by `init`.
+Consumers use and verify equivalent checks in their existing tooling. When a
+check is absent or cannot cover a form, report the limitation; do not invent an
+activation proof, install another checker automatically or forbid unrelated work.
+Run checks after coherent changes as well as at the acceptance boundary.
 
-A production file can put this exact comment on its first line:
+## Runtime and installation protections
 
-```ts
-// tdd-cover: e2e tests/e2e/invitations.spec.ts
-```
+Claude and Codex retain targeted secret, protected-file, dangerous-command and
+control-character guards. Unknown enforcement rule names still refuse. Removing
+a rule therefore requires updating its manifest with the runner that removes it.
 
-The path is literal and relative to the project root; spaces inside filenames
-are supported. It must identify an existing regular .test/.spec file with a
-ts, tsx, js or jsx extension. Absolute paths, parent traversal, backslashes and
-links outside the physical project root refuse. The target is inspected only
-for existence and kind, not read or executed. Every governed production edit is
-reconstructed before declaration discovery,
-including edits to only part of the marker and declaration removal. Missing or
-ambiguous context and files over 64 KiB refuse with TDD_DECLARATION_UNVERIFIED;
-supply exact context for bounded edits. An oversized original cannot be recovered
-by a smaller Edit: provide a complete replacement within 64 KiB or restructure
-into supported files. Exempt paths stay exempt.
+The installer no longer requires the syntax worker. Normal update removes an
+unchanged receipt-owned obsolete file through the existing transaction; modified
+or unowned files are preserved. Adding a runtime may retain an older inert asset.
+Preserve the installation, rollback and user-file ownership proofs.
 
-Declaration-shaped lines elsewhere require the same bounded harness parser to
-identify actual comments. Template/JSX text and block-comment examples are not
-declarations; actual misplaced or duplicate line comments still refuse, including
-trailing comments after code. Declaration-token discovery conservatively requests
-the compiler; only its actual comment ranges establish a declaration. Missing
-syntax capability is TDD_DECLARATION_UNVERIFIED. A sole first-line declaration
-needs no compiler. Original source remains separate from proposed declarations:
-the barrel-file exemption requires both known complete original and complete
-proposed source to contain only re-exports. Normalized additions never establish
-this property; neither uncommenting behavior nor removing behavior bypasses the floor.
+### Destructive shell operations
 
-Before source reads or reconstruction, an operation admits at most 32 governed
-production edits. Content-based barrel exemptions count; path-exempt files and
-explicit deletions do not. A shared five-second budget is checked before and after
-each reconstruction, after syntax inspection, and before returning the rule result.
-Exhaustion refuses with TDD_DECLARATION_UNVERIFIED and asks to split the operation.
-This is a cooperative deadline, not interruption of synchronous filesystem work;
-the byte, file, hunk and comparison limits bound work between checks. The syntax
-child retains its separately enforced remaining-time process limit.
+`dangerous-command` checks targeted operations in command position, including
+executable basenames, ordinary `sudo`/`env`/`command`/`exec` wrappers and literal
+assignments. Quotes and escapes preserve argument boundaries: searching for or
+printing destructive shell or SQL text does not itself execute that text.
+Wrapper options consume operands only for their own executable: `command -p`
+leaves the following program in command position, while `sudo -p` consumes a
+prompt and `exec -a` consumes an argv name.
+Tool payloads supplied as argv retain each literal argument, including empty
+arguments, apostrophes and dollar signs, before lexical inspection.
+Unquoted operators and pipelines start commands; redirections to raw devices
+are checked independently of the executable. Shell `-c`, `eval`, visible shell
+stdin, command/process substitutions and backticks are inspected recursively.
+Single quotes suppress shell substitutions; double quotes do not.
+ANSI-C quotes decode character escapes into one literal argument without running
+its substitutions or treating its separators as shell operators. When that
+argument becomes shell code, SQL, an option or an operation target, inspection
+uses its decoded value, including numeric escapes and NUL termination.
 
-Original mode headers and complete original source are separate evidence. A bounded
-8 KiB header read preserves the original first-five-line TDD mode even when the
-original exceeds the complete-source limit. Unreadable or nonregular originals
-refuse rather than silently falling back to the configured mode. Oversized
-originals cannot establish the barrel exemption from their header alone.
+Destructive SQL is checked in command arguments to `psql`, `mysql`/`mariadb`,
+`sqlite3` and `sqlcmd`, or visible pipeline/here-string input to those clients.
+For `psql`, short-option groups such as `-Xc` retain the command argument;
+operand-taking options such as `-d` and `-v` consume their remainder or following
+argument instead of treating that data as another executable option.
+One here-document at the end of a command line is supported, with quoted
+delimiter suppression of substitutions. Its body is inspected as code only
+when the receiving command executes it. Git rebase `--rebase-merges` and
+`--strategy-option` are ordinary options; `--exec`/`-x` remain execution flags.
+Git apply/am `--unsafe-paths` and forced pushes without a lease remain refused.
 
-Focused-test operations check the same cooperative deadline before and after
-reconstruction, after parsing, and before success, including marker-free files.
-Budget exhaustion reports TEST_SYNTAX_UNVERIFIED with an instruction to split.
+This is a bounded lexical guard, not a shell or SQL interpreter and not a
+security boundary. It does not resolve aliases, variables, external scripts,
+SQL files or generated output. SQL matching does not parse SQL string literals
+or comments. Pipeline text is conservative evidence, not evaluated output.
+Unclosed syntax, unsupported here-document layouts, invalid ANSI-C code points and dynamic
+command names refuse explicitly instead of being treated as safe quoted data;
+recursive inspection is limited to eight levels. Other shell dialects, arbitrary
+wrapper options and indirect execution remain outside its proven coverage.
+No command fixture is executed: source tests pass strings to the rule, and
+delivered tests pass JSON to both hook bundles in `packages/core` and
+`packages/cli/dist/core-assets`.
 
-One declaration on the first line is permitted. A malformed, conflicting or
-misplaced declaration refuses; it cannot silently fall back to an existing
-sibling or exploratory mode. With no declaration, existing sibling and configured
-mode behavior remains. A valid declaration satisfies the same structural floor
-as a sibling test and reports TDD_DECLARED_TEST: the file exists, suite not executed.
-The engineer still owns real coverage and the red/green test evidence.
-
-## CI adapter
-
-CI sends added lines for content guards, but TDD reads the complete checked-out
-file after selecting governed paths, including changes that only remove lines.
-Whole-file deletions remain exempt; removing a declaration from surviving code
-does not skip the TDD check. A diff fragment cannot establish a current
-coverage declaration. The source choice is an adapter option, never a tool-payload
-override. Missing or oversized final source refuses; path exemptions are unchanged.
-
-Syntax inspection in CI uses the same bundled parser without provisioning consumer
-dependencies. Missing or invalid complete source and exhausted budgets still
-refuse; parser ownership does not change the CI adapter's evidence requirements.
+Semantics checked against [Git 2.54 rebase](https://git-scm.com/docs/git-rebase/2.54.0),
+[Git apply](https://git-scm.com/docs/git-apply/2.51.0),
+[Bash quoting and substitutions](https://www.gnu.org/software/bash/manual/bash.html#Quoting)
+and [psql command/stdin input](https://www.postgresql.org/docs/current/app-psql.html).
 
 ## CI content boundary
 
-`enforce-ci` receives complete added artifact content, not a runtime tool payload.
-Its input is capped at 8 MiB so the shipped compiler worker remains fully scanned.
-Runtime hook payloads retain their independent 1 MiB cap; syntax source retains
-its 64 KiB cap and the shared five-second operation deadline. Both content readers
-reject invalid UTF-8 and NUL bytes. CI refuses oversized input without truncation,
-and every enforcement input failure returns a nonzero exit code. No generated
-artifact exemption or line splitting is used to bypass the secret scanner.
+`enforce-ci` receives added artifact content, not a runtime tool payload. Its
+input remains capped at 8 MiB; runtime payloads retain their 1 MiB cap. Both
+readers reject invalid UTF-8 and NUL bytes. CI refuses oversized input without
+truncation, and enforcement input failures return a nonzero exit code. These
+content protections are separate from the retired test-syntax worker.
 
-## Sources
+## References
 
-- [Microsoft's TypeScript 7 guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6-0):
-  tooling using the JavaScript compiler API can use the official TypeScript 6 package.
-- [Official Compiler API examples](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API):
-  source files, compiler hosts and syntax traversal.
-- [Native API roadmap](https://github.com/microsoft/TypeScript/issues/63875):
-  future native APIs do not constitute the current worker contract.
+Rule capabilities and defaults were checked against `biome explain` in the
+installed 2.4.16 release and the official documentation:
+
+- [Explicit any](https://biomejs.dev/linter/rules/no-explicit-any/)
+- [Console output](https://biomejs.dev/linter/rules/no-console/)
+- [Undeclared dependencies](https://biomejs.dev/linter/rules/no-undeclared-dependencies/)
+- [Focused tests](https://biomejs.dev/linter/rules/no-focused-tests/)
+- [Skipped tests](https://biomejs.dev/linter/rules/no-skipped-tests/)

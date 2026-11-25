@@ -18,11 +18,11 @@ it('updates old managed PR guidance in both installed runtimes without overwriti
   try {
     const legacy = join(fixture, 'previous-package');
     mkdirSync(legacy);
-    for (const name of ['bin', 'dist', 'core-assets', 'package.json']) {
+    for (const name of ['dist', 'package.json']) {
       cpSync(join(CLI, name), join(legacy, name), { recursive: true });
     }
     for (const name of SKILLS) {
-      writeFileSync(join(legacy, 'core-assets/skills', name, 'SKILL.md'),
+      writeFileSync(join(legacy, 'dist/core-assets/skills', name, 'SKILL.md'),
         `---\nname: ${name}\ndescription: Previous PR handoff guidance.\n---\n\n${LEGACY[name]}\n`);
     }
     const project = join(fixture, 'consumer');
@@ -40,7 +40,7 @@ it('updates old managed PR guidance in both installed runtimes without overwriti
       });
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     };
-    run(join(legacy, 'bin/void-machine.mjs'), ['init', '--runtime', 'both', '--no-interactive']);
+    run(join(legacy, 'dist/bin/void-machine.mjs'), ['init', '--runtime', 'both', '--no-interactive']);
     for (const runtime of ['.agents', '.claude']) {
       for (const name of SKILLS) {
         expect(readFileSync(join(project, runtime, 'skills', name, 'SKILL.md'), 'utf8'))
@@ -51,16 +51,11 @@ it('updates old managed PR guidance in both installed runtimes without overwriti
     }
     // The actual previous installer produced ownership. Never edit receipts to
     // make update accept an otherwise unowned file, and never use --force.
-    run(join(CLI, 'bin/void-machine.mjs'), ['update']);
+    run(join(CLI, 'dist/bin/void-machine.mjs'), ['update']);
     for (const runtime of ['.agents', '.claude']) {
       for (const name of SKILLS) {
         const installed = readFileSync(join(project, runtime, 'skills', name, 'SKILL.md'), 'utf8');
-        expect(installed).toBe(readFileSync(join(ROOT, 'packages/core/skills', name, 'SKILL.md'), 'utf8'));
-        expect(installed).toContain('coordinator may create or reuse a draft pull request');
-        expect(installed).toContain('mark the same pull request ready');
-        expect(installed).toContain('commit-only');
-        expect(installed).not.toContain('ready for review rather than as a draft');
-        expect(installed).not.toContain('worker pushes its own branch and opens the PR');
+        expect(installed).toBe(readFileSync(join(ROOT, 'packages/core/src/skills', name, 'SKILL.md'), 'utf8'));
       }
       expect(readFileSync(join(project, runtime, 'skills/private/SKILL.md'), 'utf8')).toBe(privateRule);
     }

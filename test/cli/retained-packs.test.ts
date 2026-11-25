@@ -56,7 +56,7 @@ function expectAssets(names: readonly string[]) {
   for (const pack of PACKS) {
     const directory = packDirForName(pack.name);
     if (directory === undefined) throw new Error('Expected a pack directory');
-    const skills = readdirSync(join(PACK_ROOT, directory, 'skills'));
+    const skills = readdirSync(join(PACK_ROOT, directory, 'src', 'skills'));
     for (const skill of skills) {
       for (const runtime of ['.claude', '.agents']) {
         const path = join(runtime, 'skills', skill, 'SKILL.md');
@@ -189,13 +189,12 @@ describe('retained pack reconciliation', () => {
     expect(output).not.toMatch(/Added(?: locally)?:/);
   });
 
-  it('allows force to replace unparseable config through the existing config verdict', async () => {
+  it('preserves unknown authority in unparseable config even under force', async () => {
     mkdirSync('.void');
-    writeFileSync('.void/config.json', '{ broken');
-    await init([...ARGS, '--force', '--pack', 'react']);
-    expect(readConfig().packs).toEqual({ '@voidcorp/harness-react': `^${cliVersion()}` });
-    expect(output).toContain('overwriting unparseable config');
-    expectAssets(['harness-react']);
+    const bytes = '{ "autopilot": { "enabled": false,';
+    writeFileSync('.void/config.json', bytes);
+    await expect(init([...ARGS, '--force', '--pack', 'react'])).rejects.toThrow(/unreadable configuration/);
+    expect(readFileSync('.void/config.json', 'utf8')).toBe(bytes);
   });
 
   it('does not let force erase a readable config with invalid pack declarations', async () => {

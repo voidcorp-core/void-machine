@@ -10,7 +10,6 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,7 +58,7 @@ function enforce(rule: string, payload: unknown): { code: number; stderr: string
 
 describe('secret reads through the shipped manifests and bundled runner', () => {
   it.each(['claude', 'codex'])('refuses before reading for %s with a content-free diagnostic', (runtime) => {
-    const manifestPath = runtime === 'claude' ? '../core/.claude-plugin/plugin.json' : '../core/codex/hooks.json';
+    const manifestPath = runtime === 'claude' ? '../core/src/.claude-plugin/plugin.json' : '../core/src/codex/hooks.json';
     const manifest = JSON.parse(readFileSync(join(here, '..', manifestPath), 'utf8')) as {
       hooks: { PreToolUse: { matcher: string; hooks: { command: string }[] }[] };
     };
@@ -157,6 +156,29 @@ describe('bundled credential source content enforcement', () => {
             expect(reason).not.toContain(content);
           }
         }
+      }
+    }
+  });
+
+  it.each(['claude', 'codex'])('scans ordinary tests and fixture content for %s', (runtime) => {
+    const token = `AKIA${'A1'.repeat(8)}`;
+    for (const relative of ['ordinary.test.ts', 'fixtures/ordinary.ts', '__generated__/ordinary.ts']) {
+      const path = join(workspace, relative);
+      const payload = runtime === 'claude'
+        ? { tool_name: 'Write', tool_input: { file_path: path, content: token } }
+        : { tool_name: 'apply_patch', tool_input: {
+          patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+${token}\n*** End Patch`,
+        } };
+      const result = spawnSync(process.execPath, [hook, 'enforce', 'secret-content', runtime], {
+        input: JSON.stringify(payload), encoding: 'utf8', cwd: workspace,
+        env: { ...process.env, VOID_PROJECT_ROOT: workspace },
+      });
+      expect(result.status).toBe(runtime === 'claude' ? 2 : 0);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain('SECRET_IN_CONTENT');
+      expect(output).not.toContain(token);
+      if (runtime === 'codex') {
+        expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe('deny');
       }
     }
   });
@@ -286,45 +308,6 @@ describe('bundled co-owned enforcement', () => {
   });
 });
 
-describe('CI TDD source evidence', () => {
-  it('accepts the generated worker identity with its actual syntax inspection coverage', () => {
-    const root = join(here, '../../..');
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order',
-      'packages/hook-runner/src/enforcement/syntax-worker-identity.generated.ts'], {
-      input: '', encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toContain('TDD_DECLARED_TEST');
-  });
-
-  it('can inspect the real Autopilot command without exceeding the bounded source reader', () => {
-    const root = join(here, '../../..');
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order',
-      'packages/cli/src/commands/autopilot.ts'], {
-      input: '', encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.stderr).not.toContain('TDD_DECLARATION_UNVERIFIED');
-    expect(result.status).toBe(0);
-  });
-
-  it.each([true, false])('judges the checked-out declaration instead of diff fragments: %s', (declared) => {
-    const root = mkdtempSync(join(tmpdir(), 'void-ci-tdd-'));
-    mkdirSync(join(root, 'apps/web/src'), { recursive: true });
-    mkdirSync(join(root, 'tests'));
-    writeFileSync(join(root, 'tests/page.spec.ts'), 'test("page", () => {});');
-    const header = '// tdd-cover: e2e tests/page.spec.ts\n';
-    writeFileSync(join(root, 'apps/web/src/page.ts'), `${declared ? header : ''}export const value = 1;`);
-    const result = spawnSync(process.execPath, [hook, 'enforce-ci', 'tdd-order', 'apps/web/src/page.ts'], {
-      input: `${declared ? '' : header}export const added = 2;`, encoding: 'utf8', cwd: root,
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-    });
-    expect(result.status).toBe(declared ? 0 : 2);
-    expect(result.stderr).toContain(declared ? 'TDD_DECLARED_TEST' : 'TDD_SIBLING_TEST_MISSING');
-  });
-});
-
 describe('CI content transport', () => {
   const ci = (input: string | Buffer) => {
     const path = join(workspace, 'ci-input');
@@ -376,65 +359,35 @@ const write = (file: string, content: string): unknown => ({
   tool_input: { file_path: file, content },
 });
 
-function stageLifecycle(
-  root: string,
-  payload: unknown,
-): { readonly release: () => void; readonly completed: Promise<number | null> } {
-  const child = spawn(
-    process.execPath,
-    [hook, 'lifecycle', 'context-continuity', 'codex'],
-    {
-      env: { ...process.env, VOID_PROJECT_ROOT: root },
-      stdio: ['pipe', 'ignore', 'pipe'],
-    },
-  );
-  let stderr = '';
-  child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (chunk: string) => {
-    stderr += chunk;
-  });
-  const completed = new Promise<number | null>((resolveRun, rejectRun) => {
-    child.on('error', rejectRun);
-    child.on('close', (code) => {
-      if (code === 0) resolveRun(code);
-      else rejectRun(new Error(`staged hook failed (${String(code)}): ${stderr}`));
-    });
-  });
-  return {
-    release: () => child.stdin.end(JSON.stringify(payload)),
-    completed,
-  };
-}
-
 describe('enforce', () => {
   it('names the doctrine a refusal comes from, so the skill can be reached from the message', () => {
-    const { code, stderr } = enforce('no-any', write('src/x.ts', 'const a: any = 1;'));
+    const { code, stderr } = enforce('secret-content', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     expect(code).toBe(2);
-    expect(stderr).toContain('TYPESCRIPT_ANY:');
-    expect(stderr).toContain('(doctrine: the void-typescript-strict skill)');
+    expect(stderr).toContain('SECRET_IN_CONTENT:');
+    expect(stderr).toContain('(doctrine: the void-security-guidance skill)');
   });
 
   it('keeps the evidence under the named doctrine rather than inside the sentence', () => {
-    const { stderr } = enforce('no-console', write('src/x.ts', 'console.log("x");'));
+    const { stderr } = enforce('secret-content', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     const [first] = stderr.split('\n');
-    expect(first).toMatch(/\(doctrine: the void-observability skill\)$/);
-    expect(stderr).toContain('\n- console.* in src/x.ts:1');
+    expect(first).toMatch(/\(doctrine: the void-security-guidance skill\)$/);
+    expect(stderr).toContain('\n- ');
   });
 
   it('stays silent and allows when the rule finds nothing', () => {
-    const { code, stderr } = enforce('no-any', write('src/x.ts', 'const a: number = 1;'));
+    const { code, stderr } = enforce('secret-content', write('src/x.ts', 'const a: number = 1;'));
     expect(code).toBe(0);
     expect(stderr).toBe('');
   });
 
   it('refuses an unknown rule rather than failing open on it', () => {
-    const { code, stderr } = enforce('no-such-rule', write('src/x.ts', 'const a: any = 1;'));
+    const { code, stderr } = enforce('no-such-rule', write('src/x.ts', `const token = 'ghp_${'a'.repeat(36)}';`));
     expect(code).toBe(2);
     expect(stderr).toContain('HOOK_INPUT_REJECTED: UNKNOWN_ENFORCEMENT_RULE');
   });
 
   it('refuses a payload it cannot parse rather than letting the write through', () => {
-    const result = spawnSync(process.execPath, [hook, 'enforce', 'no-any'], {
+    const result = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
       input: 'not json',
       encoding: 'utf8',
       env: { ...process.env, VOID_PROJECT_ROOT: workspace },
@@ -469,24 +422,24 @@ describe('enforce', () => {
 
   it('refuses a Codex tool call with a denial every shell passes through intact', () => {
     const { code, stdout } = enforceCodex(
-      'no-any',
-      JSON.stringify(write('src/café.ts', 'const a: any = 1;')),
+      'secret-content',
+      JSON.stringify(write('src/café.ts', `const token = 'ghp_${'a'.repeat(36)}';`)),
     );
     expect(code).toBe(0);
     expect(stdout).toMatch(/^[\x20-\x7e]*\n$/);
-    expectCodexDenial(stdout, 'TYPESCRIPT_ANY:');
+    expectCodexDenial(stdout, 'SECRET_IN_CONTENT:');
     expectCodexDenial(stdout, 'src/café.ts');
   });
 
   it('refuses a Codex payload it cannot parse through the same denial', () => {
-    const { code, stdout } = enforceCodex('no-any', 'not json');
+    const { code, stdout } = enforceCodex('secret-content', 'not json');
     expect(code).toBe(0);
     expectCodexDenial(stdout, 'HOOK_INPUT_REJECTED:');
   });
 
   it('lets a clean Codex tool call through without any decision', () => {
     const { code, stdout } = enforceCodex(
-      'no-any',
+      'secret-content',
       JSON.stringify(write('src/x.ts', 'const a: number = 1;')),
     );
     expect(code).toBe(0);
@@ -504,48 +457,25 @@ describe('lifecycle context', () => {
     return result.stdout ?? '';
   }
 
-  function projectWith(skill: string, recorded: string): string {
+  it('ignores historical usage alerts without rewriting user history', () => {
     const root = mkdtempSync(join(tmpdir(), 'void-banner-'));
-    mkdirSync(join(root, '.claude', 'skills', skill), { recursive: true });
-    writeFileSync(join(root, '.claude', 'skills', skill, 'SKILL.md'), '---\n---\n');
-    const mission = join(root, '.void', 'machine', 'runs', 'mis_aaaaaaaaaaaaaaaa');
-    mkdirSync(mission, { recursive: true });
-    writeFileSync(
-      join(mission, 'events.jsonl'),
-      `${JSON.stringify({
-        kind: 'runtime.tool.started',
-        subject: `skill:${recorded}`,
-        ts: new Date().toISOString(),
-        payload: { category: 'skill', tool: 'Skill' },
-      })}\n`,
-    );
-    return root;
-  }
-
-  it('names a skill the project recorded but can no longer resolve, from the session after', () => {
-    const root = projectWith('void-ticket', 'ticket-writer');
+    const machine = join(root, '.void', 'machine');
+    mkdirSync(machine, { recursive: true });
+    const cache = join(machine, 'invocation.json');
+    const historical = JSON.stringify({ version: 2, fingerprint: 'historical', alert: 'STALE-USAGE-ALERT' });
+    writeFileSync(cache, historical);
     try {
-      // The first opening computes the verdict after its own stdout, so it is
-      // the next one that carries it. One session of delay costs nothing here,
-      // and it is what keeps the start instant.
-      expect(banner(root)).not.toContain('ticket-writer');
-      expect(banner(root)).toContain('ticket-writer');
+      expect(banner(root)).not.toContain('STALE-USAGE-ALERT');
+      expect(readFileSync(cache, 'utf8')).toBe(historical);
+      rmSync(cache);
+      expect(banner(root)).toContain('Non-negotiable floor');
+      expect(existsSync(cache)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it('says nothing extra when every recorded name still resolves', () => {
-    const root = projectWith('void-ticket', 'void-ticket');
-    try {
-      banner(root);
-      expect(banner(root)).not.toContain('cannot resolve');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('injects identical resume context for Claude Code and Codex', () => {
+  it.each(['startup', 'resume', 'clear', 'compact'])('injects identical work handoff on %s for Claude Code and Codex', source => {
     const root = mkdtempSync(join(tmpdir(), 'void-resume-parity-'));
     mkdirSync(join(root, '.void', 'machine'), { recursive: true });
     writeFileSync(join(root, '.void', 'config.json'), '{}\n');
@@ -553,198 +483,30 @@ describe('lifecycle context', () => {
       join(root, '.void', 'program.md'),
       '---\nschemaVersion: 1\nstatus: executing\nprogram: parity\nplan: docs/plan.md\nspec: docs/spec.md\nautopilot:\n  enabled: false\n---\n',
     );
-    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nResume equally.\n');
+    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Engaged work\n\nA-1: worker uncertain.\n\n## Planned work\n\nA-3\nA-2\n');
 
     try {
       const context = (agentRuntime: 'claude' | 'codex'): string => {
         const result = spawnSync(process.execPath, [hook, 'lifecycle', 'context', agentRuntime], {
-          input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact' }),
+          input: JSON.stringify({ hook_event_name: 'SessionStart', source }),
           encoding: 'utf8',
           env: { ...process.env, VOID_PROJECT_ROOT: root },
         });
         return JSON.parse(result.stdout ?? '{}').hookSpecificOutput.additionalContext as string;
       };
-      expect(context('claude')).toBe(context('codex'));
-      expect(context('codex')).toContain('Program: parity');
-      expect(context('codex')).toContain('Objective: Resume equally.');
+      const claude = context('claude');
+      const codex = context('codex');
+      expect(claude).toBe(codex);
+      expect(codex).not.toContain('Program: parity');
+      expect(codex).toContain('Engaged work: A-1: worker uncertain.');
+      expect(codex).toContain('Planned work: A-3\nA-2');
+      expect(codex).toContain('Full checkpoint: .void/machine/checkpoint.md');
+      expect(codex).toContain('Observations and intentions to verify; no authorization.');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it('seals PreCompact and resumes through the unique continuity handler', () => {
-    const root = mkdtempSync(join(tmpdir(), 'void-continuity-cli-'));
-    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
-    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
-    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nCLI parity.\n');
-
-    try {
-      const compact = spawnSync(
-        process.execPath,
-        [hook, 'lifecycle', 'context-continuity', 'codex'],
-        {
-          input: JSON.stringify({ hook_event_name: 'PreCompact', trigger: 'auto' }),
-          encoding: 'utf8',
-          env: { ...process.env, VOID_PROJECT_ROOT: root },
-        },
-      );
-      expect(compact.status).toBe(0);
-      expect(readFileSync(join(root, '.void', 'machine', 'checkpoint.md'), 'utf8')).toContain(
-        'void-machine:context-continuity:begin',
-      );
-
-      const resume = spawnSync(
-        process.execPath,
-        [hook, 'lifecycle', 'context-continuity', 'claude'],
-        {
-          input: JSON.stringify({ hook_event_name: 'SessionStart', source: 'compact' }),
-          encoding: 'utf8',
-          env: { ...process.env, VOID_PROJECT_ROOT: root },
-        },
-      );
-      expect(JSON.parse(resume.stdout ?? '{}').hookSpecificOutput.additionalContext).toContain(
-        'Context continuity: complete',
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('lets each stale-lock takeover read what the previous one wrote', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'void-continuity-concurrent-'));
-    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
-    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
-    const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
-    const lock = `${checkpoint}.lock`;
-    const orphanClaim = `${lock}.recovery`;
-    writeFileSync(
-      checkpoint,
-      `## Objective\n\nSerialize stale recovery.\n\n${'bounded context '.repeat(25_000)}`,
-    );
-    writeFileSync(lock, 'stale\n');
-    utimesSync(lock, new Date(0), new Date(0));
-    writeFileSync(orphanClaim, 'abandoned\n');
-    utimesSync(orphanClaim, new Date(0), new Date(0));
-
-    try {
-      await new Promise((resolveWait) => setTimeout(resolveWait, 1_100));
-      const paths = ['src/first.ts', 'src/second.ts', 'src/third.ts'];
-      const contenders = paths.map((path) => stageLifecycle(root, {
-          hook_event_name: 'PostToolUse',
-          session_id: 'concurrent-context',
-          tool_name: 'read_file',
-          tool_input: { path },
-          tool_response: { success: true },
-      }));
-      await new Promise((resolveReady) => setTimeout(resolveReady, 500));
-      for (const contender of contenders) contender.release();
-      await Promise.all(contenders.map((contender) => contender.completed));
-
-      // How many contenders meet each other on the lock is the operating system's
-      // business: on a loaded machine the first one releases before the next one
-      // even asks, and that one takes a free lock legitimately. What must hold
-      // whatever the interleaving is that no admitted writer erased another. A
-      // writer reads the checkpoint only after taking the lock and replaces it by
-      // rename, so two overlapping critical sections would leave the later
-      // observation alone; every observation still present therefore proves its
-      // writer read the one before it.
-      const concurrent = readFileSync(checkpoint, 'utf8');
-      const admitted = paths.filter((path) => concurrent.includes(path));
-      expect(admitted.length).toBeGreaterThanOrEqual(1);
-      expect(concurrent.match(/void-machine:context-continuity:begin/g)).toHaveLength(1);
-      expect(concurrent).toContain('Serialize stale recovery.');
-      expect(concurrent.match(/bounded context /g)).toHaveLength(25_000);
-      expect(existsSync(orphanClaim)).toBe(false);
-      expect(
-        readdirSync(join(root, '.void', 'machine')).filter((entry) => entry.includes('.lock')),
-      ).toEqual([]);
-      const runs = join(root, '.void', 'machine', 'runs');
-      const statuses = readdirSync(runs).flatMap((mission) =>
-        readFileSync(join(runs, mission, 'events.jsonl'), 'utf8')
-          .trim()
-          .split('\n')
-          .filter((line) => line !== '')
-          .map((line) => JSON.parse(line) as { readonly payload?: { readonly status?: string } })
-          .map((event) => event.payload?.status)
-          .filter((status): status is string => status !== undefined));
-      // An 'ok' with no observation left in the checkpoint would be a writer whose
-      // work another one overwrote, which is the failure this test exists to refuse.
-      expect(statuses.sort()).toEqual([
-        ...admitted.map(() => 'ok'),
-        ...paths.slice(admitted.length).map(() => 'skipped'),
-      ]);
-      for (const path of paths.filter((candidate) => !concurrent.includes(candidate))) {
-        spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
-          input: JSON.stringify({
-            hook_event_name: 'PostToolUse',
-            session_id: 'concurrent-context',
-            tool_name: 'read_file',
-            tool_input: { path },
-            tool_response: { success: true },
-          }),
-          encoding: 'utf8',
-          env: { ...process.env, VOID_PROJECT_ROOT: root },
-        });
-      }
-      const recovered = readFileSync(checkpoint, 'utf8');
-      expect(recovered).toContain('src/first.ts');
-      expect(recovered).toContain('src/second.ts');
-      expect(recovered).toContain('src/third.ts');
-      expect(recovered.match(/void-machine:context-continuity:begin/g)).toHaveLength(1);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('injects a threshold nudge without replacing the submitted prompt', () => {
-    const root = mkdtempSync(join(tmpdir(), 'void-continuity-nudge-'));
-    mkdirSync(join(root, '.void', 'machine'), { recursive: true });
-    writeFileSync(
-      join(root, '.void', 'config.json'),
-      '{"context":{"windowTokens":1000,"checkpointThresholdPercent":50}}\n',
-    );
-    writeFileSync(join(root, '.void', 'machine', 'checkpoint.md'), '## Objective\n\nNudge once.\n');
-    const transcript = join(root, 'transcript.jsonl');
-    writeFileSync(transcript, `${JSON.stringify({
-      message: {
-        usage: {
-          input_tokens: 470,
-          output_tokens: 10,
-          cache_read_input_tokens: 10,
-          cache_creation_input_tokens: 10,
-        },
-      },
-    })}\n`);
-
-    try {
-      spawnSync(process.execPath, [hook, 'lifecycle', 'context-continuity', 'codex'], {
-        input: JSON.stringify({ hook_event_name: 'PreCompact' }),
-        encoding: 'utf8',
-        env: { ...process.env, VOID_PROJECT_ROOT: root },
-      });
-      const result = spawnSync(
-        process.execPath,
-        [hook, 'lifecycle', 'context-continuity', 'codex'],
-        {
-          input: JSON.stringify({
-            hook_event_name: 'UserPromptSubmit',
-            transcript_path: transcript,
-            prompt: 'continue the implementation',
-          }),
-          encoding: 'utf8',
-          env: { ...process.env, VOID_PROJECT_ROOT: root },
-        },
-      );
-
-      expect(result.status).toBe(0);
-      expect(JSON.parse(result.stdout ?? '{}').hookSpecificOutput.additionalContext).toMatch(
-        /void-checkpoint/i,
-      );
-      expect(result.stdout).not.toContain('continue the implementation');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('delegation-result lifecycle', () => {
@@ -808,46 +570,6 @@ describe('delegation-capture lifecycle', () => {
   });
 });
 
-describe('session close lifecycle', () => {
-  it('emits a checkpoint reminder only for explicit close intent', () => {
-    const invoke = (prompt: string): string => {
-      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'checkpoint-reminder', 'codex'], {
-        input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt }),
-        encoding: 'utf8',
-        env: { ...process.env, VOID_PROJECT_ROOT: workspace },
-      });
-      return result.stdout ?? '';
-    };
-    expect(invoke('on reprend demain')).toContain('void-checkpoint');
-    expect(invoke('stop the process')).toBe('');
-  });
-
-  it('audits SessionEnd without creating or changing a checkpoint', () => {
-    const root = mkdtempSync(join(tmpdir(), 'void-session-end-'));
-    mkdirSync(join(root, '.void'), { recursive: true });
-    writeFileSync(join(root, '.void', 'config.json'), '{}\n');
-    const checkpoint = join(root, '.void', 'machine', 'checkpoint.md');
-
-    try {
-      const result = spawnSync(process.execPath, [hook, 'lifecycle', 'checkpoint-audit', 'claude'], {
-        input: JSON.stringify({ hook_event_name: 'SessionEnd', reason: 'other' }),
-        encoding: 'utf8',
-        env: { ...process.env, VOID_PROJECT_ROOT: root },
-      });
-      expect(result.status).toBe(0);
-      expect(result.stderr).toContain('checkpoint-absent');
-      expect(existsSync(checkpoint)).toBe(false);
-      expect(readFileSync(join(root, '.void', 'config.json'), 'utf8')).toBe('{}\n');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-});
-
-// Neutralising the freshness call in `cli.ts` changed nothing any test could see,
-// so the wiring was carried by nobody. It matters more than the wording: a
-// SessionStart hook cannot write to the user, so if this line stops being emitted
-// the upgrade prompt does not degrade, it disappears.
 describe('the upgrade prompt the session banner carries', () => {
   function staleProject(): { root: string; cache: string } {
     const root = mkdtempSync(join(tmpdir(), 'void-freshness-root-'));
@@ -936,8 +658,8 @@ describe('a hook fired from a worktree', () => {
     if (explicit) env['VOID_MISSION_ID'] = 'mis_ffffffffffffffff';
     const jobs = [worktree, nested, second].flatMap((cwd) => [
       { cwd, args: ['activation', 'codex'] },
-      { cwd, args: ['enforce', 'tdd-order', 'codex'] },
-      { cwd, args: ['lifecycle', 'checkpoint-reminder', 'codex'] },
+      { cwd, args: ['enforce', 'secret-content', 'codex'] },
+      { cwd, args: ['lifecycle', 'context', 'codex'] },
     ]);
     await Promise.all(jobs.map(({ cwd, args }) => new Promise<void>((resolveJob, rejectJob) => {
       const child = spawn(process.execPath, [hook, ...args], { cwd, env });
@@ -961,15 +683,12 @@ describe('a hook fired from a worktree', () => {
     renameSync(second, join(main, 'retired-second'));
     const replay = replayEventLog(readFileSync(join(main, '.void/machine/runs', mission, 'events.jsonl'), 'utf8'));
     expect(replay.continuity).toBe('complete');
-    expect(replay.events).toHaveLength(9);
-    expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(replay.events).toHaveLength(3);
+    expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3]);
     expect(replay.events.every((event) => event.missionId === mission && event.correlationId === mission)).toBe(true);
     expect(replay.events.filter((event) => event.kind.startsWith('runtime.'))).toHaveLength(3);
     const outcomes = replay.events.filter((event) => event.kind === 'hook.completed');
-    expect(outcomes).toHaveLength(6);
-    for (const event of outcomes) {
-      expect(event.payload).toEqual(expect.objectContaining({ status: expect.stringMatching(/^(ok|skipped)$/) }));
-    }
+    expect(outcomes).toEqual([]);
   });
 
   it('writes its event under the installation root, never under the worktree it ran in', () => {
@@ -1027,7 +746,7 @@ describe('a hook fired from a worktree', () => {
     }
   });
 
-  it.each([false, true])('keeps enforcement local with nested configuration: %s', (nested) => {
+  it.each([false, true])('keeps secret enforcement local with nested configuration: %s', (nested) => {
     const { main, worktree } = repositoryWithWorktree();
     const workingDirectory = nested ? join(worktree, 'app') : worktree;
     try {
@@ -1037,12 +756,12 @@ describe('a hook fired from a worktree', () => {
       const env: NodeJS.ProcessEnv = { ...process.env, VOID_MISSION_ID: 'mis_cccccccccccccccc' };
       delete env['VOID_PROJECT_ROOT'];
       delete env['CLAUDE_PROJECT_DIR'];
-      const done = spawnSync(process.execPath, [hook, 'enforce', 'tdd-order'], {
+      const done = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
         cwd: workingDirectory, env, encoding: 'utf8',
-        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), 'export const answer = 42;')),
+        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), `const token = 'ghp_${'a'.repeat(36)}';`)),
       });
       expect(done.status).toBe(2);
-      expect(done.stderr).toContain('void-tdd');
+      expect(done.stderr).toContain('void-security-guidance');
       expect(runsIn(main)).toContain('mis_cccccccccccccccc');
       expect(runsIn(worktree)).toEqual([]);
       expect(runsIn(workingDirectory)).toEqual([]);
@@ -1061,13 +780,13 @@ describe('a hook fired from a worktree', () => {
       const env: NodeJS.ProcessEnv = { ...process.env, PATH: '', VOID_MISSION_ID: 'mis_dddddddddddddddd' };
       delete env['VOID_PROJECT_ROOT'];
       delete env['CLAUDE_PROJECT_DIR'];
-      const done = spawnSync(process.execPath, [hook, 'enforce', 'tdd-order'], {
+      const done = spawnSync(process.execPath, [hook, 'enforce', 'secret-content'], {
         cwd: workingDirectory, env, encoding: 'utf8',
-        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), 'export const answer = 42;')),
+        input: JSON.stringify(write(join(workingDirectory, 'sample.ts'), `const token = 'ghp_${'a'.repeat(36)}';`)),
       });
       expect(done.status).toBe(2);
       expect(done.stderr).toContain('TELEMETRY_ROOT_UNRESOLVED');
-      expect(done.stderr).toContain('void-tdd');
+      expect(done.stderr).toContain('void-security-guidance');
       expect(done.stdout).toBe('');
       expect(runsIn(main)).toEqual([]);
       expect(runsIn(worktree)).toEqual([]);

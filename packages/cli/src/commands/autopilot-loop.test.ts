@@ -15,28 +15,11 @@ const FIXTURES = new URL('../lib/autopilot/__fixtures__/gh/', import.meta.url);
 const fixture = (name: string): string => readFileSync(new URL(name, FIXTURES), 'utf8');
 const NOW = '2026-09-22T12:00:00.000Z';
 
-const PROGRAM = `---
-schemaVersion: 1
-status: executing
-program: loop
-plan: docs/plans/p.md
-spec: docs/specs/s.md
-progress:
-  provider: linear
-  scope: voidcorp/DEV
-  order: [DEV-1]
-  states:
-    ready: [Todo]
-    started: [In Progress]
-    review: [In Review]
-    done: [Done]
-autopilot:
-  schemaVersion: 2
-  clusterSize: 4
-  base: develop
-  deployBranch: main
----
-`;
+const PROGRAM = JSON.stringify({ autopilot: {
+  schemaVersion: 3, enabled: true, clusterSize: 4, base: 'develop', deployBranch: 'main',
+  progress: { provider: 'linear', scope: 'voidcorp/project/milestone',
+    states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] } },
+} });
 
 const roots: string[] = [];
 afterEach(() => {
@@ -54,7 +37,7 @@ function project(): string {
   mkdirSync(join(root, '.void'));
   // What the harness install ignores: the loop's local state lives there.
   writeFileSync(join(root, '.gitignore'), '.void/machine/\n');
-  writeFileSync(join(root, '.void', 'program.md'), PROGRAM);
+  writeFileSync(join(root, '.void', 'config.json'), PROGRAM);
   git(root, 'add', '.');
   git(root, 'commit', '-qm', 'init');
   return root;
@@ -123,17 +106,27 @@ const gh = (args: readonly string[]): string => answer(args);
 
 function answer(args: readonly string[], view: string = reviewedPull()): string {
   const line = args.join(' ');
-  if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
+  if (line.includes('mergeQueue(branch')) {
+    const queue = JSON.parse(fixture('queue-present.json')) as { data: { repository: object } };
+    const branch = JSON.parse(fixture('repo-view-default-branch.json')) as object;
+    return JSON.stringify({ data: { repository: { ...queue.data.repository, ...branch } } });
+  }
   if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
   if (line.includes('pr view 11')) return view;
   if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(view);
   if (line.includes('/actions/runs?')) return noWorkflowRuns;
   if (line.includes('pulls/11/files')) return pullFiles();
+  if (line.includes('timelineItems')) {
+    const timeline = JSON.parse(fixture('timeline-commit-then-ejection.json').replace(
+      /"nodes":\[.*\]/,
+      '"nodes":[{"__typename":"PullRequestCommit","commit":{"oid":"x"}}]',
+    )) as { data: { repository: { pullRequest: object } } };
+    const current = JSON.parse(membership(false)) as { data: { repository: { pullRequest: object } } };
+    return JSON.stringify({ data: { repository: { pullRequest: {
+      ...timeline.data.repository.pullRequest, ...current.data.repository.pullRequest,
+    } } } });
+  }
   if (line.includes('isInMergeQueue')) return membership(false);
-  if (line.includes('timelineItems')) return fixture('timeline-commit-then-ejection.json').replace(
-    /"nodes":\[.*\]/,
-    '"nodes":[{"__typename":"PullRequestCommit","commit":{"oid":"x"}}]',
-  );
   throw new Error(`unexpected gh call: ${line}`);
 }
 
@@ -281,9 +274,9 @@ describe('autopilot next', () => {
     expect(result.stderr).toMatch(/tracker observation was refused/);
   });
 
-  it('refuses to run without a programme', () => {
+  it('refuses to run without config authority', () => {
     const root = project();
-    rmSync(join(root, '.void', 'program.md'));
+    rmSync(join(root, '.void', 'config.json'));
     const result = next(root, trackerJson([], []));
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toMatch(/AUTOPILOT_PROGRAM/);
@@ -351,6 +344,19 @@ describe('autopilot arm and disarm', () => {
     call !== undefined &&
     call.includes(`id=${PULL_NODE_ID}`) &&
     call.some((arg) => arg.includes('dequeuePullRequest'));
+
+  it.each(['merge', 'arm'])('refuses %s when the approved ready head is now draft, without mutation', command => {
+    const root = project();
+    recordLocalVerdict(root);
+    const draft = JSON.stringify({ ...JSON.parse(reviewedPull()), isDraft: true });
+    const gh = sequence([draft]);
+    const result = runAutopilotCommand([command, '--ticket', 'DEV-1', '--pr', '11', '--head', HEAD],
+      '', { ...context(root), gh: gh.run });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/draft/);
+    expect(gh.writes()).toEqual([]);
+    expect(existsSync(armedPath(root))).toBe(false);
+  });
 
   it('records the head, arms on exactly that head, and checks GitHub armed it', () => {
     const root = project();
@@ -728,15 +734,15 @@ describe('autopilot merge', () => {
     expect(existsSync(armedPath(root))).toBe(false);
   });
 
-  it('refuses a programme still written for the 4.0 merge gate', () => {
+  it('refuses older config authority before attempting a merge', () => {
     const root = project();
     recordLocalVerdict(root);
-    const legacy = PROGRAM.replace('  schemaVersion: 2\n', '  schemaVersion: 1\n').replace('deployBranch: main', 'mergeGate: human');
-    writeFileSync(join(root, '.void', 'program.md'), legacy);
+    const legacy = PROGRAM.replace('"schemaVersion":3', '"schemaVersion":2');
+    writeFileSync(join(root, '.void', 'config.json'), legacy);
     const runner = github({ views: [reviewedPull(), merged()] });
     const result = mergeWith(root, runner);
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toMatch(/autopilot merges --by-human/);
+    expect(result.stderr).toMatch(/migration/);
     expect(runner.calls).toEqual([]);
   });
 });
@@ -929,6 +935,22 @@ describe('guarded publication and human fingerprint renewal', () => {
       '--expected', record.currentDigest, '--cause', 'authorized repair', '--decision', 'human:approval-42'];
   }
 
+  it.each(['disabled', 'invalid', 'unknown', 'unreadable'])('refuses %s authority during fingerprint and publication without pushing', failure => {
+    const root = candidate();
+    runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
+    const bytes = failure === 'unreadable' ? '{' : JSON.stringify({ autopilot: {
+      ...CONFIG_AUTHORITY, ...(failure === 'disabled' ? { enabled: false } : failure === 'invalid' ? { enabled: 'true' } : { trusted: true }),
+    } });
+    writeFileSync(join(root, '.void/config.json'), bytes);
+    const original = readFileSync(recordPath(root), 'utf8');
+    const spy = publication(root);
+    for (const args of [['fingerprint', '--after', 'DEV-1'], publishArgs(root)]) {
+      expect(runAutopilotCommand(args, '', spy.context).exitCode).toBe(2);
+    }
+    expect(spy.pushes).toEqual([]);
+    expect(readFileSync(recordPath(root), 'utf8')).toBe(original);
+  });
+
   it('pushes the literal checked SHA and explicit target only after a successful guard', () => {
     const root = candidate();
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
@@ -940,7 +962,7 @@ describe('guarded publication and human fingerprint renewal', () => {
   it.each(['default-target', 'absent-default', 'unreadable', 'malformed', 'missing-runner'])(
     'does not push when deployment protection is %s', (failure) => {
       const root = candidate();
-      writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+      writeFileSync(join(root, '.void/config.json'), PROGRAM.replace(',"deployBranch":"main"', ''));
       git(root, 'branch', 'main');
       runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
       const spy = publication(root);
@@ -961,7 +983,7 @@ describe('guarded publication and human fingerprint renewal', () => {
 
   it('allows an ordinary candidate after resolving an undeclared deployment branch', () => {
     const root = candidate();
-    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('  deployBranch: main\n', ''));
+    writeFileSync(join(root, '.void/config.json'), PROGRAM.replace(',"deployBranch":"main"', ''));
     runAutopilotCommand(['fingerprint', '--before', 'DEV-1'], '', context(root));
     const spy = publication(root);
     const calls: string[][] = [];
@@ -1145,5 +1167,55 @@ describe('guarded publication and human fingerprint renewal', () => {
     writeFileSync(join(directory, `${prior}.json`), '{');
     expect(runAutopilotCommand(['fingerprint', '--after', 'DEV-1'], '', context(root)).exitCode).toBe(2);
     expect(runAutopilotCommand(valid, '', context(root)).exitCode).toBe(2);
+  });
+});
+
+const CONFIG_AUTHORITY = {
+  schemaVersion: 3,
+  enabled: true,
+  clusterSize: 4,
+  base: 'develop',
+  deployBranch: 'main',
+  progress: {
+    provider: 'linear', scope: 'voidcorp/DEV',
+    states: { ready: ['Todo'], started: ['In Progress'], review: ['In Review'], done: ['Done'] },
+  },
+};
+
+describe('autopilot authority migration', () => {
+  it.each([
+    ['withheld consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: false } })],
+    ['invalid consent', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, enabled: 'true' } })],
+    ['unknown field', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, trusted: true } })],
+    ['old authority', JSON.stringify({ autopilot: { ...CONFIG_AUTHORITY, schemaVersion: 2 } })],
+    ['unreadable config', '{ unfinished'],
+  ])('refuses %s before contacting GitHub despite a legacy grant', (_name, config) => {
+    const root = project();
+    writeFileSync(join(root, '.void/config.json'), config);
+    const calls: string[] = [];
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']), args => {
+      calls.push(args.join(' '));
+      return answer(args);
+    });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toMatch(/autopilot|config/i);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not let historical programme status veto explicit v3 authority', () => {
+    const root = project();
+    writeFileSync(join(root, '.void/program.md'), PROGRAM.replace('status: executing', 'status: completed'));
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
+    expect(result.exitCode).toBe(0);
+    expect(result.decision.actions).toContainEqual({ kind: 'assign', ticketId: 'DEV-2', footprint: ['packages/dev-2'] });
+  });
+
+  it('uses explicit config authority without inventing a programme', () => {
+    const root = project();
+    writeFileSync(join(root, '.void/config.json'), JSON.stringify({ autopilot: CONFIG_AUTHORITY }));
+    const result = next(root, trackerJson([queuedTicket], ['DEV-2']));
+    expect(result.exitCode).toBe(0);
+    expect(result.decision.actions).toContainEqual({ kind: 'assign', ticketId: 'DEV-2', footprint: ['packages/dev-2'] });
+    expect(existsSync(join(root, '.void/program.md'))).toBe(false);
   });
 });

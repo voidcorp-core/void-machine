@@ -14,7 +14,7 @@ import {
   type RuntimeWireContext,
 } from './runtime-adapters.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'core', 'dist');
 
 function scratch(): string {
   return mkdtempSync(join(tmpdir(), 'void-adapters-'));
@@ -159,7 +159,9 @@ describe('claude adapter', () => {
     expect(existsSync(join(dir, '.claude', 'agents', 'visual-craft-director.md'))).toBe(true);
     expect(existsSync(join(dir, '.void', 'hooks', '_void-hook.mjs'))).toBe(true);
     expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(true);
-    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true);
+    expect(readFileSync(join(dir, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
+    expect(adapterFor('codex').detect(dir)).toBe(false);
     const settings = JSON.parse(readFileSync(join(dir, '.claude', 'settings.json'), 'utf8')) as {
       hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
       extraKnownMarketplaces?: unknown;
@@ -215,6 +217,15 @@ describe('claude adapter', () => {
     expect(adapterFor('claude').prerequisites('repo', 'local')).toEqual([]);
   });
 
+  it('doctor rejects a Claude import whose common instruction owner is missing', async () => {
+    const dir = scratch();
+    await adapterFor('claude').wire(ctxFor(dir));
+    const { unlinkSync } = await import('node:fs');
+    unlinkSync(join(dir, 'AGENTS.md'));
+    const checks = await adapterFor('claude').doctorChecks(dir);
+    expect(checks.find((check) => check.name === 'CLAUDE.md')?.ok).toBe(false);
+  });
+
   it('doctorChecks reds a missing settings.json', async () => {
     const dir = scratch();
     const checks = await adapterFor('claude').doctorChecks(dir);
@@ -240,14 +251,7 @@ describe('claude adapter', () => {
     expect(inspection.specialistCapability.limitations.join(' ')).not.toMatch(/MCP/i);
   });
 
-  it('refuses wired evidence for an incompatible local syntax worker', async () => {
-    const dir = scratch();
-    await adapterFor('claude').wire(ctxFor(dir));
-    writeFileSync(join(dir, '.void/hooks/_syntax-worker.cjs'), 'incompatible worker');
-    const inspection = await adapterFor('claude').inspect(dir);
-    expect(inspection.evidence.wired).toBe(false);
-    expect(inspection.evidence.fired).toBe(false);
-  });
+
 });
 
 describe('specialists from a linked worktree', () => {

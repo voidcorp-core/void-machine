@@ -29,11 +29,11 @@ describe('network lane admission', () => {
     expect(result).toEqual({ status: 'passed', exitCode: 0 });
     expect(calls.map(({ options }) => options.timeout)).toEqual([2_000, 120_000]);
     expect(calls.every(({ options }) => options.shell === false)).toBe(true);
-    expect(calls[1]?.args).toContain('--project=*:network-browser');
+    expect(calls[1]?.args).toContain('--project=network');
     expect(calls[1]?.args).toContain('--pool=threads');
   });
 
-  it('delivers distinct campaign seeds to Vitest without changing lane budgets', () => {
+  it('delivers distinct diagnostic seeds to Vitest without changing lane budgets', () => {
     const observed = [20_401, 20_402].map((seed) => {
       const commands: string[][] = [];
       const result = runNetworkLane((_command: string, args: string[]) => {
@@ -43,7 +43,7 @@ describe('network lane admission', () => {
       expect(result).toEqual({ status: 'passed', exitCode: 0 });
       const parsed = parseCLI(['vitest', ...commands[1].slice(1)]);
       expect(parsed.options).toMatchObject({
-        project: ['*:network-browser'], maxWorkers: 1, pool: 'threads',
+        project: ['network'], maxWorkers: 1, pool: 'threads',
         sequence: { shuffle: true, seed },
       });
       return parsed.options.sequence?.seed;

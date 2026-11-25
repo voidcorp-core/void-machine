@@ -19,40 +19,11 @@ Pack names accept any form: `pack-nextjs`, `harness-nextjs`, or `nextjs`.
 
 ## Commands
 
-### `cheatsheet`
-
-Discover shipped skills, hooks, agents, specialist contracts and CLI commands,
-with local installation evidence and invocation details.
-
-```bash
-void-machine cheatsheet > cheatsheet.html
-void-machine cheatsheet --format markdown > cheatsheet.md
-void-machine cheatsheet --format json
-```
-
-HTML is a self-contained offline document with catalogue, availability and intent
-views, composable filters, selectable/copyable invocations and print styling.
-The catalogue remains readable without JavaScript. No server, browser launch,
-installation, status refresh or network request is performed by the command.
-
-JSON schema version 1 contains `installation` and stable, sorted `entries` with
-canonical `id`, `type`, `name`, `description`, `pack`, `runtimes`, `invocations`,
-`triggers`, `relatedIds` and per-runtime `availability`. Specialist roles link to
-their agent implementations; they are not two independent capabilities.
-Availability distinguishes `installed`, `absent`, `disabled`, `inactive-pack`,
-`unsupported` and `unknown`, always with a reason. Installed means a receipt-owned
-asset matches, not that runtime execution was verified. No consumer content,
-absolute machine paths or journals are exported. User-global settings and
-marketplace caches are outside the snapshot; missing proof stays unknown.
-
-Project Claude `skillOverrides: { "void-tdd": "off" }` is explicit disabled
-evidence; local settings override project settings. Manual-only visibility is
-not disabled. No Codex home configuration is read. Missing hook wiring is
-reported as undeclared rather than inferred from the hook name.
-
-Exit codes: `0` exported, `1` invalid/unavailable bundled catalogue, `2` invalid
-arguments. Diagnostics go to stderr; a corrupt local install still exports the
-global catalogue with unknown local availability.
+The generated `cheatsheet` command and its HTML, Markdown and JSON exports
+have been removed. See the [essential workflow guide](https://github.com/voidcorp-core/void-machine/blob/develop/docs/CHEATSHEET.md),
+use native skill discovery in your runtime, or run `void-machine --help`.
+Invoking the former command follows the unknown-command contract (exit 2).
+Previously exported files are left untouched.
 
 ### `init`
 
@@ -60,7 +31,7 @@ Sets up the current project:
 
 - Creates `.void/config.json` (pinned plugin versions, stack, paths, TDD modes)
 - Registers the marketplace in `.claude/settings.json` and enables `harness` plus the chosen packs
-- Patches `CLAUDE.md` / `AGENTS.md` (sister docs, cross-referenced)
+- Patches common `AGENTS.md`; Claude receives a native `@AGENTS.md` import in `CLAUDE.md`
 
 ```
 npx voidmachine init [--pack <name>...] [--all-packs] [--force]
@@ -79,7 +50,7 @@ npx voidmachine remove pack-nextjs
 
 ### `doctor`
 
-Health-check: `.void/config.json` validity, marketplace + plugins registered in `.claude/settings.json`, the CLAUDE.md block, `jq` (required by the hooks), and version drift against the marketplace HEAD. `--no-remote` runs fully offline. Exit `0` if all checks pass, `1` otherwise.
+Health-check the published installation at `installRoot`: configuration, doctrine, file integrity, runtime wiring and CLI/layout compatibility. This is local in every repository, including the source checkout; `--no-remote` is a compatible no-op. Use `check` for remote version comparisons. Exit `0` without blockers, `1` on installation failures. The retired `--fix` and `--dry-run` flags exit `2` with a diagnostic.
 
 ```
 npx voidmachine doctor [--no-remote]
@@ -89,23 +60,19 @@ npx voidmachine doctor [--no-remote]
 
 `list` shows packs and their detection status; `check` reports version drift; `update` refreshes pinned versions.
 
-### `decisions`
+### Decision records: breaking command removal
 
-Creates, validates and projects ADRs without a shared counter or generated
-index. Existing decision directories are preserved; new projects default to
-`docs/decisions/`.
+`decisions new`, `decisions check` and `decisions render` have been removed.
+Remove calls to them from scripts and CI. Write Markdown files with light YAML
+frontmatter directly, following `void-decide`: a stable unique `id`, `title`,
+`createdAt` or `date`, `status`, and optional `supersedes` references.
+No replacement CLI, schema gate or generated index is required.
 
-```bash
-npx voidmachine decisions new --title "Use X" --slug use-x
-npx voidmachine decisions check [--base <git-ref>]
-npx voidmachine decisions render --format markdown|json
-```
-
-Accepted decision content is immutable. Reverse it with a new record and
-`--supersedes <adr:id>`. A proven repository-local path substitution is the
-only in-place exception; the new target must exist and the surrounding record
-must remain unchanged. Rendered views expose both declared and effective status
-and identify the records that supersede an older decision.
+Keep existing records, IDs, metadata and links. Ordinary wording and link corrections
+use normal Git commits; a material change creates a new record linking its
+predecessor. Established directories remain valid; new projects may use
+`docs/decisions/`. The projects view and separate
+conformance capability remain available with their existing parsing limits.
 
 ### `install --global`
 
@@ -122,3 +89,49 @@ Print the command reference.
 ## License
 
 MIT.
+
+## Evaluation and usage retirement (breaking removal)
+
+The `mission usage-bind`, `mission usage-unbind`, `mission advisory-start` commands
+and `mission inspect --usage` option are removed. Use ordinary `mission inspect`
+for mission verdicts and `agents status` for observed workers. The eval workspace
+and root `pnpm eval` script no longer exist; optional scenarios and historical
+reports remain in `apps/eval-harness/README.md`.
+
+The `@voidcorp/hook-runner` invocation-health exports are removed:
+`cachedInvocationAlert`, `refreshInvocationVerdict`, `invocationAlert`, `journalFingerprint`,
+`installedSkillNames`, `resolutionVerdict`, `livenessVerdict`, `replacementFor`,
+`withSuccessor`, `ResolutionVerdict` and `LivenessVerdict`. Consumers should remove
+usage-based health calls; no replacement absence-of-use heuristic is provided.
+Doctor retains installation and runtime wiring diagnostics. Existing journals and
+caches remain untouched; startup no longer reads or refreshes invocation alerts.
+
+## Graph, audit and score retirement
+
+Breaking removal: the CLI no longer accepts `graph` (including project,
+knowledge, impact, owners, tests-for, path, live, build and check variants), `why`
+or `audit`. The `void-graph` and `void-audit` skills, graph studio, bundled graph,
+frozen certification and local `backlog:index` generator are retired.
+
+The public `@voidcorp/harness-graph/project` API and root package exports are
+removed from the workspace and release inputs. Consumers must remove those
+imports or stay on an earlier release that supplies them. There is no compatible
+replacement API; this change does not unpublish historical releases.
+
+Use Git and repository search for navigation, and the compiler, linter and
+applicable tests for verification. These do not reproduce graph topology,
+automatic impact analysis or test selection. Do not narrow verification by
+claiming the removed graph has established the affected scope.
+
+`status` now reports installation receipt/version and detected runtime facts
+(`installed`, `wired`, `fired`, `observed`), with unavailable evidence shown as
+`unknown`. Its current `.void/machine/status.json` snapshot is schema version 2;
+readers must stop expecting `score` or `capabilities`. `doctor`, Projects UI,
+project discovery, checkpoint/resume and canonical mission/review/worker proofs
+remain available.
+
+No command removes historical graph caches, custom knowledge files, score
+history, usage logs, reports or local backlog exports as part of this retirement.
+Old files are historical inputs owned by the user, not a reason to recreate the
+removed engine. Installation/update retains the existing ownership/conflict
+rules for shipped assets; customized assets are not silently overwritten.

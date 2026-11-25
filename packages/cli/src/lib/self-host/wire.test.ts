@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { wireSelfHostRuntimeSurfaces } from './wire.js';
 
-const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core');
+const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'core', 'dist');
 
 function scratch(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -28,7 +28,6 @@ describe('wireSelfHostRuntimeSurfaces', () => {
       overlayRoot: CORE_ROOT,
       finalRoot,
       sourceHash: 'deadbeef',
-      mode: 'shadow',
     });
 
     const manifest = readFileSync(join(artifactRoot, '.codex', 'hooks.json'), 'utf8');

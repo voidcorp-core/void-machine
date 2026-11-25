@@ -311,6 +311,15 @@ describe('parsePullRequestFiles', () => {
   });
 });
 
+// Aggregate existing captured fields in the same GraphQL repository/PR object.
+function groupedAnswer(primary: string, extra: string, pullRequest = false): string {
+  const answer = JSON.parse(primary) as { data: { repository: Raw & { pullRequest: Raw } } };
+  const fields = JSON.parse(extra) as Raw & { data: { repository: { pullRequest: Raw } } };
+  if (pullRequest) Object.assign(answer.data.repository.pullRequest, fields.data.repository.pullRequest);
+  else Object.assign(answer.data.repository, fields);
+  return JSON.stringify(answer);
+}
+
 describe('observeGithub', () => {
   function runner(answers: Record<string, string>) {
     const calls: string[][] = [];
@@ -318,17 +327,107 @@ describe('observeGithub', () => {
       calls.push([...args]);
       const key = Object.keys(answers).find((prefix) => args.join(' ').includes(prefix));
       if (key === undefined && args.join(' ').includes('CurrentPullRequestChecks')) {
-        const viewKey = Object.keys(answers).find((key) => key.startsWith('pr view'));
+        const number = args.find((arg) => arg.startsWith('number='))?.slice('number='.length);
+        const viewKey = Object.keys(answers).find((key) => key === `pr view ${number}`);
         const capturedView = viewKey === undefined ? undefined : answers[viewKey];
         if (capturedView === undefined) throw new Error('view fixture missing');
         return currentChecksFixture(capturedView);
       }
       if (key === undefined && args.join(' ').includes('/actions/runs?')) return noWorkflowRuns;
       if (key === undefined) throw new Error(`unexpected gh call: ${args.join(' ')}`);
-      return answers[key] as string;
+      const value = answers[key] as string;
+      if (args.join(' ').includes('mergeQueue(branch') && args.join(' ').includes('defaultBranchRef')) {
+        return groupedAnswer(value, answers.defaultBranchRef as string);
+      }
+      if (args.join(' ').includes('timelineItems') && args.join(' ').includes('isInMergeQueue')) {
+        return groupedAnswer(value, answers.isInMergeQueue as string, true);
+      }
+      return value;
     };
     return { run, calls };
   }
+
+  it.each([0, 1, 4].flatMap((count) => [false, true].flatMap((queue) =>
+    [false, true].map((defaultBranch) => ({ count, queue, defaultBranch })),
+  )))('observes $count PRs with queue=$queue and default=$defaultBranch', ({ count, queue, defaultBranch }) => {
+    const numbers = Array.from({ length: count }, (_, index) => 381 + index);
+    const answers: Record<string, string> = {
+      'mergeQueue(branch': fixture(queue ? 'queue-present.json' : 'queue-absent.json'),
+      'defaultBranchRef': fixture('repo-view-default-branch.json'),
+      'timelineItems': fixture('timeline-requeued-after-ejections.json'),
+      'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
+      '/files?': fixture('pulls-files-rest.json'),
+      '/compare/': fixture('compare-ahead.json'),
+    };
+    for (const number of numbers) answers[`pr view ${number}`] = JSON.stringify({ ...openView(), number });
+    const { run, calls } = runner(answers);
+    const observed = observeGithub(run, { base: 'develop', pullRequests: numbers, defaultBranch });
+    expect(observed).toMatchObject({ base: 'develop', mergeQueue: queue,
+      defaultBranch: defaultBranch ? 'main' : undefined });
+    expect([...observed.pullRequests.keys()]).toEqual(numbers);
+    for (const number of numbers) expect(observed.pullRequests.get(number)).toEqual({
+      ...parsePullRequestView(answers[`pr view ${number}`] as string),
+      queue: 'none', ejections: 2, files: parsePullRequestFiles(fixture('pulls-files-rest.json')),
+    });
+    expect(calls).toHaveLength(1 + (queue ? 5 : 6) * count);
+    expect(calls.filter((call) => call.join(' ').includes('isInMergeQueue')))
+      .toHaveLength(queue ? count : 0);
+    expect(calls.filter((call) => call.join(' ').includes('defaultBranchRef')))
+      .toHaveLength(Number(defaultBranch));
+  });
+
+  it.each(['default', 'membership', 'node', 'timeline', 'repository-error', 'pull-error'])(
+    'refuses an incomplete grouped observation: %s', (failure) => {
+      const { run } = runner({
+        'mergeQueue(branch': fixture('queue-present.json'),
+        'defaultBranchRef': fixture('repo-view-default-branch.json'),
+        'pr view 381': viewText('pr-view-open.json'),
+        'timelineItems': fixture('timeline-requeued-after-ejections.json'),
+        'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
+        'pulls/381/files': fixture('pulls-files-rest.json'),
+      });
+      const broken = (args: readonly string[]): string => {
+        const text = run(args); const query = args.join(' ');
+        const repository = query.includes('mergeQueue(branch') && query.includes('defaultBranchRef');
+        const pull = query.includes('timelineItems') && query.includes('isInMergeQueue');
+        const answer = JSON.parse(text) as {
+          data: { repository: Raw & { pullRequest: Raw } }; errors?: { message: string }[];
+        };
+        if (repository && failure === 'default') delete answer.data.repository.defaultBranchRef;
+        if (pull && failure === 'membership') delete answer.data.repository.pullRequest.isInMergeQueue;
+        if (pull && failure === 'node') delete answer.data.repository.pullRequest.id;
+        if (pull && failure === 'timeline') delete answer.data.repository.pullRequest.timelineItems;
+        if ((repository && failure === 'repository-error') || (pull && failure === 'pull-error')) {
+          answer.errors = [{ message: 'Field unavailable' }];
+        }
+        return JSON.stringify(answer);
+      };
+      expect(() => observeGithub(broken, {
+        base: 'develop', pullRequests: [381], defaultBranch: true,
+      })).toThrow(/GitHub could not be observed/);
+    },
+  );
+
+  it('refreshes checks and repository fields on successive ticks with the same head', () => {
+    const answers = {
+      'mergeQueue(branch': fixture('queue-present.json'),
+      'defaultBranchRef': fixture('repo-view-default-branch.json'),
+      'pr view 381': viewText('pr-view-open.json'),
+      'timelineItems': fixture('timeline-requeued-after-ejections.json'),
+      'isInMergeQueue': fixture('pr-queue-membership-absent.json'),
+      'pulls/381/files': fixture('pulls-files-rest.json'),
+    };
+    const { run } = runner(answers);
+    const request = { base: 'develop', pullRequests: [381], defaultBranch: true };
+    const before = observeGithub(run, request);
+    answers['pr view 381'] = withRollup(openView(), [...(openView().statusCheckRollup as Raw[]), queuedRun()]);
+    answers.defaultBranchRef = JSON.stringify({ defaultBranchRef: { name: 'release' } });
+    const after = observeGithub(run, request);
+    expect(before.pullRequests.get(381)?.checks).toBe('passing');
+    expect(after.pullRequests.get(381)?.checks).toBe('pending');
+    expect(after.pullRequests.get(381)?.headSha).toBe(before.pullRequests.get(381)?.headSha);
+    expect(after.defaultBranch).toBe('release');
+  });
 
   it('uses the ready successes after draft failures on the same head', () => {
     const captured = JSON.parse(fixture('pr-current-checks.json')) as {
@@ -439,12 +538,16 @@ describe('observeGithub', () => {
       const run = (args: readonly string[]): string => {
         calls.push([...args]);
         const line = args.join(' ');
-        if (line.includes('mergeQueue(branch')) return fixture('queue-present.json');
+        if (line.includes('mergeQueue(branch')) return groupedAnswer(
+          fixture('queue-present.json'), fixture('repo-view-default-branch.json'),
+        );
         if (line.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
         if (line.includes('pr view 381')) return JSON.stringify({ ...openView(), changedFiles });
         if (line.includes('CurrentPullRequestChecks')) return currentChecksFixture(viewText('pr-view-open.json'));
         if (line.includes('/actions/runs?')) return noWorkflowRuns;
-        if (line.includes('timelineItems')) return fixture('timeline-requeued-after-ejections.json');
+        if (line.includes('timelineItems')) return groupedAnswer(
+          fixture('timeline-requeued-after-ejections.json'), fixture('pr-queue-membership-absent.json'), true,
+        );
         if (line.includes('isInMergeQueue')) return fixture('pr-queue-membership-absent.json');
         if (line.includes('pulls/381/files')) return page();
         throw new Error(`unexpected gh call: ${line}`);
@@ -484,7 +587,8 @@ describe('observeGithub', () => {
       'defaultBranchRef': fixture('repo-view-default-branch.json'),
     });
     expect(observeGithub(run, { base: 'develop', pullRequests: [], defaultBranch: true }).defaultBranch).toBe('main');
-    expect(calls.filter((call) => call.join(' ') === 'repo view --json defaultBranchRef')).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.join(' ')).toContain('defaultBranchRef { name }');
   });
 
   it('reads no default branch when the programme names the one that deploys', () => {
@@ -542,7 +646,7 @@ describe('observeGithub', () => {
     const run = (args: readonly string[]): string => {
       if (args.includes('defaultBranchRef')) return fixture('repo-view-default-branch.json');
       if (args.includes('view')) throw new Error('HTTP 502');
-      return fixture('queue-absent.json');
+      return groupedAnswer(fixture('queue-absent.json'), fixture('repo-view-default-branch.json'));
     };
     expect(() => observeGithub(run, { base: 'develop', pullRequests: [7], defaultBranch: true })).toThrow(/#7/);
   });

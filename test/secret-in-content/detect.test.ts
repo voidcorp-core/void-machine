@@ -1,5 +1,5 @@
 /**
- * Tests for packages/core/hooks/secret-in-content.sh
+ * Tests for packages/core/dist/hooks/secret-in-content.sh
  *
  * Blocks writing a high-confidence secret into ANY file (companion to
  * protect-sensitive-files, which only guards secret FILENAMES). Reads the Claude
@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HOOK = resolve(process.cwd(), 'packages/core/hooks/secret-in-content.sh');
+const HOOK = resolve(process.cwd(), 'packages/core/dist/hooks/secret-in-content.sh');
 
 function runHook(file: string, content: string): { code: number; stderr: string } {
   const input = JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file, content } });
@@ -62,9 +62,13 @@ describe('secret-in-content.sh — false positives stay allowed', () => {
 });
 
 describe('secret-in-content.sh — escape hatches', () => {
-  it('skips test/fixture files even with a real-looking key (exit 0)', () => {
-    expect(runHook('apps/web/src/a.test.ts', `const k = '${AWS}';\n`).code).toBe(0);
-  });
+  it.each(['apps/web/src/a.test.ts', 'fixtures/data.ts', '__generated__/data.ts'])(
+    'blocks high-confidence keys in %s', (path) => {
+      const result = runHook(path, `const k = '${AWS}';\n`);
+      expect(result.code).toBe(2);
+      expect(result.stderr).not.toContain(AWS);
+    },
+  );
 
   it('honors the allow-secret-pattern tag (exit 0)', () => {
     expect(runHook('apps/web/src/a.ts', `const k = '${AWS}'; // allow-secret-pattern: docs example\n`).code).toBe(0);

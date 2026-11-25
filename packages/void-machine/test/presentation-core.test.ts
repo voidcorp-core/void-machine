@@ -128,6 +128,7 @@ describe('describing a presentation failure', () => {
     expect(cause.code).toBe('exit-nonzero');
     expect(cause.step).toBe('pane split');
     expect(cause.detail?.length).toBeLessThanOrEqual(400);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: verifies terminal control bytes are removed.
     expect(cause.detail).not.toMatch(/[\u0000-\u001f\u007f]/);
   });
 

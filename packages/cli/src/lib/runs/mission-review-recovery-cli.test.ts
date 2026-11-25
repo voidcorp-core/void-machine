@@ -16,7 +16,7 @@ import { recordSpecialistLifecycle } from './specialist-lifecycle.js';
 import { appendMissionEvent, createMission, inspectMission, missionControllerRoutingHash, writeMissionControllerPlan } from './store.js';
 import { verifyMissionCommand } from './verify.js';
 
-const CORE = fileURLToPath(new URL('../../../../core/', import.meta.url));
+const CORE = fileURLToPath(new URL('../../../../core/dist/', import.meta.url));
 const ID = 'mis_review_recovery_cli_12345678';
 const REVIEWER = 'core:independent-code-reviewer';
 

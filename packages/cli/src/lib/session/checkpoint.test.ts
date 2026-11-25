@@ -6,7 +6,7 @@ describe('checkpoint public boundary', () => {
     expect(parseCheckpoint('## Objective\n\nResume once.\n').objective).toBe('Resume once.');
   });
 
-  it('finds a mechanical block written by a 3.x install, under the former name', () => {
+  it('ignores a legacy mechanical block without losing semantic residue', () => {
     const raw = [
       '## Objective', '', 'Resume once.', '',
       '<!-- void-harness:context-continuity:begin -->', 'schema_version: 9',
@@ -14,6 +14,6 @@ describe('checkpoint public boundary', () => {
     ].join('\n');
     const checkpoint = parseCheckpoint(raw);
     expect(checkpoint.objective).toBe('Resume once.');
-    expect(checkpoint.mechanicalBlockStatus).toBe('invalid');
+    expect(checkpoint).not.toHaveProperty('mechanicalContext');
   });
 });

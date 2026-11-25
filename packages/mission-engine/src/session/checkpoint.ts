@@ -13,94 +13,6 @@
 // doctrine — see the `checkpoint` skill, which owns that routing. A
 // checkpoint that grew long has failed its triage, not its format.
 
-import { createHash } from 'node:crypto';
-
-export interface MechanicalContextState {
-  readonly schemaVersion: 1;
-  readonly objectiveHash: string;
-  readonly workRevision: number;
-  readonly semanticRevision: number;
-  readonly sealedWorkRevision: number;
-  readonly nudgeEmitted: boolean;
-  /**
-   * Whether the hook has already admitted it has nothing to watch with.
-   *
-   * A second latch rather than a second use of `nudgeEmitted`, because the two
-   * say opposite things. `nudgeEmitted` means the reminder fired and must not
-   * repeat; this one means the reminder CANNOT fire and the reason was stated
-   * once. Folding the admission into the fired latch consumes the reminder that
-   * configuring a window is supposed to enable -- the message says "set this to
-   * turn it on", and setting it turns nothing on.
-   */
-  readonly unwatchableNotified: boolean;
-  readonly transcriptFingerprint: string;
-  readonly transcriptCursorBytes: number;
-  readonly lastMeasurementAtMs: number;
-  readonly lastUsedTokens: number;
-  readonly readFiles: readonly string[];
-  readonly modifiedFiles: readonly string[];
-  readonly readFilesOverflow: number;
-  readonly modifiedFilesOverflow: number;
-  readonly clearPending: boolean;
-  readonly lastResumeSource: MechanicalResumeSource;
-}
-
-export type MechanicalResumeSource =
-  | 'none'
-  | 'startup'
-  | 'resume'
-  | 'clear'
-  | 'compact'
-  | 'fork';
-
-export interface MechanicalContextObservation {
-  readonly objectiveHash?: string;
-  readonly readFiles?: readonly string[];
-  readonly modifiedFiles?: readonly string[];
-  readonly usedTokens?: number;
-  readonly resumeSource?: Exclude<MechanicalResumeSource, 'none'>;
-  readonly semanticCheckpointWritten?: boolean;
-  readonly compactionSealed?: boolean;
-}
-
-export interface ContextMeasurement {
-  readonly usedTokens: number;
-  readonly measuredAtMs: number;
-  readonly windowTokens?: number;
-  readonly thresholdPercent: number;
-}
-
-/**
- * Why a measurement could not be judged, when it could not be.
- *
- * Absent means judged. The reminder was silent at 73% of window with
- * `nudge_emitted: false`, and the cause was a threshold outside 40-60 being
- * normalized to 0 and then refused — so the mechanism was disarmed for the life
- * of that project and reported the same `false` as a project sitting at 10%.
- *
- * The two reasons stay separate because they have different fixes: one asks for
- * a window to be configured, the other for a number that IS configured to be
- * corrected. Telling someone to set what they already set is how the earlier
- * version of this admission wasted an operator's afternoon (#193).
- */
-export type ContextUnjudgeable = 'window-unknown' | 'threshold-unusable';
-
-export interface ContextMeasurementDecision {
-  readonly state: MechanicalContextState;
-  readonly emitNudge: boolean;
-  readonly usagePercent?: number;
-  readonly unjudgeable?: ContextUnjudgeable;
-}
-
-export type MechanicalContextBlock =
-  | { readonly status: 'absent' }
-  | { readonly status: 'invalid'; readonly reason: 'ambiguous' | 'malformed' }
-  | { readonly status: 'valid'; readonly state: MechanicalContextState };
-
-export type MergeMechanicalContextResult =
-  | { readonly ok: true; readonly value: string }
-  | { readonly ok: false; readonly error: 'ambiguous-mechanical-block' };
-
 export interface Checkpoint {
   /** What this session was for. One line. */
   readonly objective?: string;
@@ -108,6 +20,10 @@ export interface Checkpoint {
   readonly position?: string;
   /** What is actually done and proven, and against which commit. */
   readonly state?: string;
+  /** Observed work and exact references; reconcile before resuming. */
+  readonly engagedWork?: string;
+  /** Mutable intentions, never progress or authorization. */
+  readonly plannedWork?: string;
   /** Exactly one, exact enough to execute. */
   readonly nextAction?: string;
   readonly openLoops: readonly string[];
@@ -119,18 +35,18 @@ export interface Checkpoint {
   readonly date?: string;
   /** The single most useful sentence, for a project card. */
   readonly resumeLine?: string;
-  readonly mechanicalContext?: MechanicalContextState;
-  readonly mechanicalBlockStatus: MechanicalContextBlock['status'];
   /** True when nothing usable was found, so callers can say so plainly. */
   readonly isEmpty: boolean;
 }
 
 /** Section titles, normalised. Anything else is ignored rather than rejected. */
-const PROSE_SECTIONS: Readonly<Record<string, 'objective' | 'position' | 'state' | 'nextAction'>> =
+const PROSE_SECTIONS: Readonly<Record<string, 'objective' | 'position' | 'state' | 'nextAction' | 'engagedWork' | 'plannedWork'>> =
   {
     objective: 'objective',
     position: 'position',
     state: 'state',
+    'engaged work': 'engagedWork',
+    'planned work': 'plannedWork',
     'where you are': 'state',
     'next action': 'nextAction',
     next: 'nextAction',
@@ -150,7 +66,6 @@ const LIST_SECTIONS: Readonly<
 const MAX_INPUT = 500_000;
 const MAX_LINE = 200;
 const MAX_ITEMS = 20;
-const MAX_PATH = 500;
 
 /** The delimiters of the mechanical block. */
 export interface CheckpointMarkerPair {
@@ -159,436 +74,34 @@ export interface CheckpointMarkerPair {
 }
 
 /**
- * The markers are the product's brand, which this pure package does not own: the caller passes
- * them, from the product identity. Writes use `current`; reads accept every pair of `recognized`,
- * so a block written under a former name is found and replaced in place, never duplicated.
+ * The product supplies current and former markers so legacy machine blocks can
+ * be ignored during semantic reads. Saved checkpoint bytes are never migrated.
  */
 export interface CheckpointMarkers {
   readonly current: CheckpointMarkerPair;
   readonly recognized: readonly CheckpointMarkerPair[];
 }
 
-/** Every checkpoint operation that has to find, write or strip the mechanical block. */
+/** Read semantic prose while ignoring retired machine-owned blocks. */
 export interface CheckpointCodec {
   readonly parseCheckpoint: (raw: string) => Checkpoint;
-  readonly parseMechanicalContextBlock: (raw: string) => MechanicalContextBlock;
-  readonly renderMechanicalContextBlock: (state: MechanicalContextState) => string;
-  readonly mergeMechanicalContextBlock: (
-    raw: string,
-    state: MechanicalContextState,
-  ) => MergeMechanicalContextResult;
-  /** True when `text` contains any recognized marker, begin or end. */
-  readonly mentionsMarker: (text: string) => boolean;
-}
-
-export function hashCheckpointObjective(objective: string | undefined): string {
-  return `sha256:${createHash('sha256').update(objective?.trim() ?? '').digest('hex')}`;
-}
-
-function markerPositions(raw: string, marker: string): readonly number[] {
-  const positions: number[] = [];
-  let cursor = 0;
-  while (cursor <= raw.length) {
-    const found = raw.indexOf(marker, cursor);
-    if (found < 0) break;
-    positions.push(found);
-    cursor = found + marker.length;
-  }
-  return positions;
-}
-
-type MechanicalBounds =
-  | { readonly status: 'absent' }
-  | { readonly status: 'invalid' }
-  | {
-    readonly status: 'valid';
-    readonly begin: number;
-    readonly end: number;
-    readonly body: string;
-  };
-
-// Exactly one begin and one end across every recognized pair, and of the same pair. Two blocks,
-// even under two names, are as ambiguous as two under one: which is the record is unknowable.
-function mechanicalBounds(raw: string, markers: CheckpointMarkers): MechanicalBounds {
-  const begins = markers.recognized.flatMap((pair) =>
-    markerPositions(raw, pair.begin).map((at) => ({ at, pair })));
-  const ends = markers.recognized.flatMap((pair) =>
-    markerPositions(raw, pair.end).map((at) => ({ at, pair })));
-  if (begins.length === 0 && ends.length === 0) return { status: 'absent' };
-  const begin = begins[0];
-  const end = ends[0];
-  if (begins.length !== 1 || ends.length !== 1 || begin === undefined || end === undefined) {
-    return { status: 'invalid' };
-  }
-  if (begin.pair !== end.pair || end.at <= begin.at) return { status: 'invalid' };
-  return {
-    status: 'valid',
-    begin: begin.at,
-    end: end.at + end.pair.end.length,
-    body: raw.slice(begin.at + begin.pair.begin.length, end.at),
-  };
 }
 
 function semanticMarkdown(raw: string, markers: CheckpointMarkers): string {
-  const bounds = mechanicalBounds(raw, markers);
-  return bounds.status === 'valid'
-    ? `${raw.slice(0, bounds.begin)}${raw.slice(bounds.end)}`
-    : raw;
-}
-
-function scalar(block: string, key: string): string | undefined {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^${escaped}:\\s*(.*?)\\s*$`, 'm').exec(block)?.[1];
-}
-
-function integerScalar(block: string, key: string): number | undefined {
-  const value = Number(scalar(block, key));
-  return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
-}
-
-function booleanScalar(block: string, key: string): boolean | undefined {
-  const value = scalar(block, key);
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return undefined;
-}
-
-function pathList(block: string, heading: string): readonly string[] | undefined {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const section = new RegExp(
-    `^### ${escaped}\\s*$([\\s\\S]*?)(?=^### |(?![\\s\\S]))`,
-    'm',
-  ).exec(block)?.[1];
-  if (section === undefined) return undefined;
-  const paths = section
-    .split(/\r?\n/)
-    .map((line) => /^- (.+)$/.exec(line)?.[1])
-    .filter((path): path is string => path !== undefined);
-  if (paths.length > MAX_ITEMS) return undefined;
-  if (
-    paths.some(
-      (path) => path.length > MAX_PATH
-        || [...path].some((character) => character.charCodeAt(0) < 0x20),
-    )
-  ) return undefined;
-  return paths;
-}
-
-function stateFromMechanicalBody(block: string): MechanicalContextState | undefined {
-  const objectiveHash = scalar(block, 'objective_hash');
-  const transcriptFingerprint = scalar(block, 'transcript_fingerprint');
-  const workRevision = integerScalar(block, 'work_revision');
-  const semanticRevision = integerScalar(block, 'semantic_revision');
-  const sealedWorkRevision = integerScalar(block, 'sealed_work_revision');
-  const readFiles = pathList(block, 'Read files');
-  const modifiedFiles = pathList(block, 'Modified files');
-  if (
-    scalar(block, 'schema_version') !== '1'
-    || objectiveHash === undefined
-    || !/^sha256:[a-f0-9]{64}$/.test(objectiveHash)
-    || transcriptFingerprint === undefined
-    || !/^sha256:[a-f0-9]{64}$/.test(transcriptFingerprint)
-    || workRevision === undefined
-    || semanticRevision === undefined
-    || sealedWorkRevision === undefined
-    || semanticRevision > workRevision
-    || sealedWorkRevision > workRevision
-    || readFiles === undefined
-    || modifiedFiles === undefined
-  ) return undefined;
-  return mechanicalScalars(block, {
-    objectiveHash,
-    transcriptFingerprint,
-    workRevision,
-    semanticRevision,
-    sealedWorkRevision,
-    readFiles,
-    modifiedFiles,
-  });
-}
-
-function mechanicalScalars(
-  block: string,
-  required: Pick<MechanicalContextState,
-    | 'objectiveHash' | 'transcriptFingerprint' | 'workRevision' | 'semanticRevision'
-    | 'sealedWorkRevision'
-    | 'readFiles' | 'modifiedFiles'>,
-): MechanicalContextState | undefined {
-  const nudgeEmitted = booleanScalar(block, 'nudge_emitted');
-  // Absent means "never said", which is the honest reading of a block written
-  // before this field existed. Required would turn every older checkpoint
-  // malformed, and a parser that throws away the record is the failure this file
-  // is written to avoid.
-  const unwatchableNotified = booleanScalar(block, 'unwatchable_notified') ?? false;
-  const clearPending = booleanScalar(block, 'clear_pending');
-  const transcriptCursorBytes = integerScalar(block, 'transcript_cursor_bytes');
-  const lastMeasurementAtMs = integerScalar(block, 'last_measurement_at_ms');
-  const lastUsedTokens = integerScalar(block, 'last_used_tokens');
-  const readFilesOverflow = integerScalar(block, 'read_files_overflow');
-  const modifiedFilesOverflow = integerScalar(block, 'modified_files_overflow');
-  const lastResumeSource = scalar(block, 'last_resume_source');
-  if (
-    nudgeEmitted === undefined || clearPending === undefined
-    || transcriptCursorBytes === undefined || lastMeasurementAtMs === undefined
-    || lastUsedTokens === undefined || readFilesOverflow === undefined
-    || modifiedFilesOverflow === undefined
-    || !isMechanicalResumeSource(lastResumeSource)
-  ) return undefined;
-  return {
-    schemaVersion: 1,
-    ...required,
-    nudgeEmitted,
-    unwatchableNotified,
-    transcriptCursorBytes,
-    lastMeasurementAtMs,
-    lastUsedTokens,
-    readFilesOverflow,
-    modifiedFilesOverflow,
-    clearPending,
-    lastResumeSource,
-  };
-}
-
-function isMechanicalResumeSource(value: string | undefined): value is MechanicalResumeSource {
-  return value === 'none' || value === 'startup' || value === 'resume' || value === 'clear'
-    || value === 'compact' || value === 'fork';
-}
-
-function parseMechanicalContextBlock(raw: string, markers: CheckpointMarkers): MechanicalContextBlock {
-  const bounds = mechanicalBounds(raw, markers);
-  if (bounds.status === 'absent') return { status: 'absent' };
-  if (bounds.status === 'invalid') return { status: 'invalid', reason: 'ambiguous' };
-  const state = stateFromMechanicalBody(bounds.body);
-  return state === undefined
-    ? { status: 'invalid', reason: 'malformed' }
-    : { status: 'valid', state };
-}
-
-function renderPaths(paths: readonly string[]): string {
-  return paths.map((path) => `- ${path}`).join('\n');
-}
-
-function renderMechanicalContextBlock(
-  state: MechanicalContextState,
-  markers: CheckpointMarkers,
-): string {
-  return [
-    markers.current.begin,
-    '## Mechanical context',
-    '',
-    '```yaml',
-    'schema_version: 1',
-    `objective_hash: ${state.objectiveHash}`,
-    `work_revision: ${String(state.workRevision)}`,
-    `semantic_revision: ${String(state.semanticRevision)}`,
-    `sealed_work_revision: ${String(state.sealedWorkRevision)}`,
-    `nudge_emitted: ${String(state.nudgeEmitted)}`,
-    `unwatchable_notified: ${String(state.unwatchableNotified)}`,
-    `transcript_fingerprint: ${state.transcriptFingerprint}`,
-    `transcript_cursor_bytes: ${String(state.transcriptCursorBytes)}`,
-    `last_measurement_at_ms: ${String(state.lastMeasurementAtMs)}`,
-    `last_used_tokens: ${String(state.lastUsedTokens)}`,
-    `read_files_overflow: ${String(state.readFilesOverflow)}`,
-    `modified_files_overflow: ${String(state.modifiedFilesOverflow)}`,
-    `clear_pending: ${String(state.clearPending)}`,
-    `last_resume_source: ${state.lastResumeSource}`,
-    '```',
-    '',
-    '### Read files',
-    '',
-    renderPaths(state.readFiles),
-    '',
-    '### Modified files',
-    '',
-    renderPaths(state.modifiedFiles),
-    markers.current.end,
-  ].join('\n');
-}
-
-interface RecentPaths {
-  readonly paths: readonly string[];
-  readonly overflow: number;
-  readonly changed: boolean;
-}
-
-function mergeRecentPaths(
-  current: readonly string[],
-  overflow: number,
-  observed: readonly string[] | undefined,
-): RecentPaths {
-  if (observed === undefined || observed.length === 0) {
-    return { paths: current, overflow, changed: false };
+  const lines: string[] = [];
+  let inside = false;
+  for (const line of raw.split('\n')) {
+    if (markers.recognized.some(pair => line.includes(pair.begin))) {
+      inside = true;
+      continue;
+    }
+    if (markers.recognized.some(pair => line.includes(pair.end))) {
+      inside = false;
+      continue;
+    }
+    if (!inside) lines.push(line);
   }
-  const uniqueObserved = [...new Set(observed)];
-  const merged = [
-    ...current.filter((path) => !uniqueObserved.includes(path)),
-    ...uniqueObserved,
-  ];
-  const displaced = Math.max(0, merged.length - MAX_ITEMS);
-  const paths = merged.slice(displaced);
-  const changed = displaced > 0
-    || paths.length !== current.length
-    || paths.some((path, index) => path !== current[index]);
-  return {
-    paths: changed ? paths : current,
-    overflow: overflow + displaced,
-    changed,
-  };
-}
-
-/** Advance the bounded mechanical chain for one newly observed runtime fact. */
-export function advanceMechanicalContext(
-  state: MechanicalContextState,
-  observation: MechanicalContextObservation,
-): MechanicalContextState {
-  if (
-    observation.objectiveHash !== undefined
-    && observation.objectiveHash !== state.objectiveHash
-  ) {
-    const revision = state.workRevision + 1;
-    return {
-      ...state,
-      objectiveHash: observation.objectiveHash,
-      workRevision: revision,
-      semanticRevision: revision,
-      sealedWorkRevision: 0,
-      nudgeEmitted: false,
-      unwatchableNotified: false,
-      readFiles: [],
-      modifiedFiles: [],
-      readFilesOverflow: 0,
-      modifiedFilesOverflow: 0,
-      clearPending: false,
-    };
-  }
-
-  const reads = mergeRecentPaths(
-    state.readFiles,
-    state.readFilesOverflow,
-    observation.readFiles,
-  );
-  const modifications = mergeRecentPaths(
-    state.modifiedFiles,
-    state.modifiedFilesOverflow,
-    observation.modifiedFiles,
-  );
-  const tokensChanged = observation.usedTokens !== undefined
-    && observation.usedTokens !== state.lastUsedTokens;
-  const sourceChanged = observation.resumeSource !== undefined
-    && observation.resumeSource !== state.lastResumeSource;
-  const cycleChanged = observation.resumeSource === 'compact'
-    ? state.nudgeEmitted
-    : observation.resumeSource === 'clear' && !state.clearPending;
-  const workChanged = reads.changed
-    || modifications.changed
-    || tokensChanged
-    || sourceChanged
-    || cycleChanged;
-  const workRevision = state.workRevision + (workChanged ? 1 : 0);
-  const reconcile = observation.semanticCheckpointWritten === true;
-  const sealChanged = observation.compactionSealed === true
-    && state.sealedWorkRevision !== workRevision;
-
-  if (!workChanged && !reconcile && !sealChanged) return state;
-  return {
-    ...state,
-    workRevision,
-    semanticRevision: reconcile ? workRevision : state.semanticRevision,
-    sealedWorkRevision: observation.compactionSealed === true
-      ? workRevision
-      : reconcile
-        ? 0
-        : state.sealedWorkRevision,
-    nudgeEmitted: observation.resumeSource === 'clear' || observation.resumeSource === 'compact'
-      ? false
-      : state.nudgeEmitted,
-    unwatchableNotified: observation.resumeSource === 'clear' || observation.resumeSource === 'compact'
-      ? false
-      : state.unwatchableNotified,
-    lastUsedTokens: observation.usedTokens ?? state.lastUsedTokens,
-    readFiles: reads.paths,
-    modifiedFiles: modifications.paths,
-    readFilesOverflow: reads.overflow,
-    modifiedFilesOverflow: modifications.overflow,
-    clearPending: reconcile
-      ? false
-      : observation.resumeSource === 'clear' || state.clearPending,
-    lastResumeSource: observation.resumeSource ?? state.lastResumeSource,
-  };
-}
-
-/** Decide one threshold observation without guessing an unknown context window. */
-export function evaluateContextMeasurement(
-  state: MechanicalContextState,
-  measurement: ContextMeasurement,
-): ContextMeasurementDecision {
-  const usedTokens = Number.isSafeInteger(measurement.usedTokens) && measurement.usedTokens >= 0
-    ? measurement.usedTokens
-    : state.lastUsedTokens;
-  const tokensChanged = usedTokens !== state.lastUsedTokens;
-  const windowKnown = Number.isSafeInteger(measurement.windowTokens)
-    && (measurement.windowTokens ?? 0) > 0;
-  const thresholdValid = Number.isSafeInteger(measurement.thresholdPercent)
-    && measurement.thresholdPercent >= 40
-    && measurement.thresholdPercent <= 60;
-  const usagePercent = windowKnown
-    ? (usedTokens / (measurement.windowTokens ?? 1)) * 100
-    : undefined;
-  const revisionAfterTokens = state.workRevision + (tokensChanged ? 1 : 0);
-  // Named before it is used, so the silence carries its reason out of here
-  // instead of being reconstructed by each caller from the inputs it happens to
-  // still hold. The window is checked first: with no window there is no
-  // percentage to compare a threshold against, so reporting the threshold would
-  // point at the wrong knob.
-  const unjudgeable: ContextUnjudgeable | undefined = !windowKnown
-    ? 'window-unknown'
-    : thresholdValid
-      ? undefined
-      : 'threshold-unusable';
-  const emitNudge = usagePercent !== undefined
-    && thresholdValid
-    && usagePercent >= measurement.thresholdPercent
-    && !state.nudgeEmitted
-    && state.semanticRevision < revisionAfterTokens;
-  const workChanged = tokensChanged || emitNudge;
-  const measuredAtMs = Number.isSafeInteger(measurement.measuredAtMs)
-    && measurement.measuredAtMs >= 0
-    ? measurement.measuredAtMs
-    : state.lastMeasurementAtMs;
-  const changed = workChanged || measuredAtMs !== state.lastMeasurementAtMs;
-  const next = changed
-    ? {
-        ...state,
-        workRevision: state.workRevision + (workChanged ? 1 : 0),
-        nudgeEmitted: state.nudgeEmitted || emitNudge,
-        lastMeasurementAtMs: measuredAtMs,
-        lastUsedTokens: usedTokens,
-      }
-    : state;
-  return {
-    state: next,
-    emitNudge,
-    ...(usagePercent === undefined ? {} : { usagePercent }),
-    ...(unjudgeable === undefined ? {} : { unjudgeable }),
-  };
-}
-
-function mergeMechanicalContextBlock(
-  raw: string,
-  state: MechanicalContextState,
-  markers: CheckpointMarkers,
-): MergeMechanicalContextResult {
-  const bounds = mechanicalBounds(raw, markers);
-  if (bounds.status === 'invalid') return { ok: false, error: 'ambiguous-mechanical-block' };
-  const block = renderMechanicalContextBlock(state, markers);
-  if (bounds.status === 'absent') {
-    const separator = raw === '' || raw.endsWith('\n\n') ? '' : raw.endsWith('\n') ? '\n' : '\n\n';
-    return { ok: true, value: `${raw}${separator}${block}\n` };
-  }
-  return {
-    ok: true,
-    value: `${raw.slice(0, bounds.begin)}${block}${raw.slice(bounds.end)}`,
-  };
+  return lines.join('\n');
 }
 
 function clamp(text: string): string {
@@ -679,7 +192,6 @@ function bullets(lines: readonly string[]): readonly string[] {
 /** Interpret a checkpoint file. Never throws. */
 function parseCheckpoint(raw: string, markers: CheckpointMarkers): Checkpoint {
   const bounded = raw.length > MAX_INPUT ? raw.slice(0, MAX_INPUT) : raw;
-  const mechanical = parseMechanicalContextBlock(bounded, markers);
   const semantic = semanticMarkdown(bounded, markers);
   const proseFields: Record<string, string | undefined> = {};
   const listFields: Record<string, readonly string[]> = {
@@ -715,13 +227,16 @@ function parseCheckpoint(raw: string, markers: CheckpointMarkers): Checkpoint {
     && nextAction === undefined
     && proseFields['state'] === undefined
     && proseFields['position'] === undefined
-    && Object.values(listFields).every((items) => items.length === 0)
-    && mechanical.status !== 'valid';
+    && proseFields['engagedWork'] === undefined
+    && proseFields['plannedWork'] === undefined
+    && Object.values(listFields).every((items) => items.length === 0);
 
   return {
     ...(objective === undefined ? {} : { objective }),
     ...(proseFields['position'] === undefined ? {} : { position: proseFields['position'] }),
     ...(proseFields['state'] === undefined ? {} : { state: proseFields['state'] }),
+    ...(proseFields['engagedWork'] === undefined ? {} : { engagedWork: proseFields['engagedWork'] }),
+    ...(proseFields['plannedWork'] === undefined ? {} : { plannedWork: proseFields['plannedWork'] }),
     ...(nextAction === undefined ? {} : { nextAction }),
     openLoops: listFields['openLoops'] ?? [],
     deadEnds: listFields['deadEnds'] ?? [],
@@ -731,20 +246,11 @@ function parseCheckpoint(raw: string, markers: CheckpointMarkers): Checkpoint {
     ...(head === undefined ? {} : { head }),
     ...(date === undefined ? {} : { date }),
     ...(resumeLine === undefined || resumeLine === '' ? {} : { resumeLine }),
-    ...(mechanical.status === 'valid' ? { mechanicalContext: mechanical.state } : {}),
-    mechanicalBlockStatus: mechanical.status,
     isEmpty,
   };
 }
 
-/** Bind every marker-dependent checkpoint operation to the markers of the running product. */
+/** Recognize legacy markers for reads; never rewrite the saved checkpoint. */
 export function checkpointCodec(markers: CheckpointMarkers): CheckpointCodec {
-  const all = markers.recognized.flatMap((pair) => [pair.begin, pair.end]);
-  return {
-    parseCheckpoint: (raw) => parseCheckpoint(raw, markers),
-    parseMechanicalContextBlock: (raw) => parseMechanicalContextBlock(raw, markers),
-    renderMechanicalContextBlock: (state) => renderMechanicalContextBlock(state, markers),
-    mergeMechanicalContextBlock: (raw, state) => mergeMechanicalContextBlock(raw, state, markers),
-    mentionsMarker: (text) => all.some((marker) => text.includes(marker)),
-  };
+  return { parseCheckpoint: raw => parseCheckpoint(raw, markers) };
 }

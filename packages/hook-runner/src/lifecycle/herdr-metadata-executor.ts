@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as z from 'zod/mini';
-import { measureHerdrContext } from './context-continuity-executor.js';
+import { measureHerdrContext } from './herdr-context.js';
 import { type Environment, type LifecycleExecution, record } from './executor-shared.js';
 import { metadataCommands, metadataSequence } from './herdr-metadata.js';
 import { foreground, proveOwnership } from './herdr-ownership.js';
@@ -34,7 +34,6 @@ export function executeHerdrMetadata(
   run: MetadataRun = runCommand,
 ): Execution {
   if (env['HERDR_ENV'] !== '1') return { status: 'skipped', details: { reason: 'outside-herdr' } };
-  const now = Date.now();
   const seq = metadataSequence(performance.timeOrigin, performance.now());
   const deadline = performance.now() + 2000;
   const input = record(raw);
@@ -75,15 +74,15 @@ export function executeHerdrMetadata(
       if (denied !== undefined) throw Error(denied);
       return { status: 'ok', details: { host: 'herdr', mission: 'absent' }, output: { hookSpecificOutput: {
         hookEventName: 'SessionStart', additionalContext: `Validated Herdr caller: ${paneId}. No Orchestra mission selected.\n`
-          + 'Use void-orchestrate before delegating a ticket: register the mission, create or reuse its worker tab, '
-          + 'and launch the worker once. Revalidate live identity before acting; this hook never launches workers.',
+          + 'Herdr is optional. Use void-orchestrate for native delegation. '
+          + 'Revalidate the target before Herdr operations; this hook never launches workers.',
       } } };
     }
     const workspace = snapshot.coordinator
       ? record(record(JSON.parse(call('herdr', ['workspace', 'get', snapshot.pane.workspace_id])))?.['result'])
       : undefined;
     const workspaceMission = record(record(workspace?.['workspace'])?.['tokens'])?.['mission'];
-    const percent = measureHerdrContext(input, root, runtime, now);
+    const percent = measureHerdrContext(input, root, runtime);
     const commands = metadataCommands(snapshot, { hook_event_name: String(event),
       ...(typeof input['source'] === 'string' ? { source: input['source'] } : {}) }, seq, percent,
     typeof workspaceMission === 'string' ? workspaceMission : undefined);
@@ -104,10 +103,7 @@ export function executeHerdrMetadata(
       } } } : {}) };
   } catch (error) {
     const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-    return { status: 'degraded', details: { reason }, diagnostic: `herdr-metadata: ${reason}\n`,
-      ...(event === 'SessionStart' ? { output: { hookSpecificOutput: {
-        hookEventName: 'SessionStart', additionalContext: `Herdr discovery refused: ${reason}.\n`
-          + 'Do not act on this host until resolved. Native delegation independent of that action may continue.',
-      } } } : {}) };
+    // Optional presentation failures do not grant or revoke permission for repository work.
+    return { status: 'degraded', details: { reason }, diagnostic: `herdr-metadata: ${reason}\n` };
   }
 }

@@ -39,13 +39,6 @@ dispatch still authenticates the coordinator runtime; the preference does not ch
 binding or permit foreign completion receipts. A real independent review outside that dispatch
 must retain its actual provenance and limitations, never pretend to be a canonical receipt.
 
-## Deliberately subsequent work
-
-The follow-up described in [TICKET-USAGE.md](TICKET-USAGE.md) reuses the existing cheatsheet and adds a
-per-ticket recap of actual skills, hooks and specialists used, including unobservable states.
-That tracking work was deliberately delivered separately from the workflow correction. No Langfuse
-integration, event schema change, new dashboard or external transcript export is introduced.
-
 Consumer measurements should compare elapsed delivery time, human interruptions, useful defects
 found and escaped regressions on comparable tasks. Reading fewer instructions is not alone proof
 of faster or better delivery. No productivity percentage is claimed by this policy.

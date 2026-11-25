@@ -11,7 +11,7 @@ import { stageInstallManifest } from '../lib/local-install.js';
 import type { CheckResult } from '../lib/prerequisites.js';
 import type { Stack } from '../lib/stack.js';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -124,7 +124,7 @@ describe('sourceRepoVerdict', () => {
 // can prove it wrote. `.void/config.json` is co-owned -- the project tunes its
 // paths, modes and commands, and the harness only adds pack pins. So the flag
 // buys nothing here, and overwriting cost a monorepo its enforcement floor.
-// It stays useful for exactly one case: a config too broken to merge into.
+// Even malformed bytes may contain consent: only a deliberate repair may replace them.
 describe('configWriteVerdict', () => {
   it('writes the seeded scaffold when the project has no config yet', () => {
     expect(configWriteVerdict({ exists: false, readable: false, force: false })).toBe('scaffold');
@@ -142,8 +142,8 @@ describe('configWriteVerdict', () => {
     expect(configWriteVerdict({ exists: true, readable: false, force: false })).toBe('keep-unreadable');
   });
 
-  it('lets --force replace an unparseable config, the one case nothing can be merged', () => {
-    expect(configWriteVerdict({ exists: true, readable: false, force: true })).toBe('overwrite-unreadable');
+  it('preserves an unparseable authority even when --force was supplied', () => {
+    expect(configWriteVerdict({ exists: true, readable: false, force: true })).toBe('keep-unreadable');
   });
 });
 
@@ -168,18 +168,20 @@ describe('installDoctrineFiles', () => {
   it('writes the packaged philosophy into a project that has none', async () => {
     const stage = project();
     await installDoctrineFiles(stage, source());
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
   });
 
-  it('refreshes the installed copy from canonical source doctrine without overwriting its owner', async () => {
+  it('preserves the published floor while source doctrine changes', async () => {
     const stage = project();
     const installed = project();
     mkdirSync(join(installed, '.void/installed'), { recursive: true });
     mkdirSync(join(installed, 'docs'), { recursive: true });
-    writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'STALE DERIVED PHILOSOPHY\n');
+    mkdirSync(join(installed, 'packages/core/src/src'), { recursive: true });
+    writeFileSync(join(installed, 'packages/core/src/PHILOSOPHY.md'), 'UNRELEASED PHILOSOPHY\n');
+    writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'PUBLISHED PHILOSOPHY\n');
     writeFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'CANONICAL SOURCE PHILOSOPHY\n');
     await installDoctrineFiles(stage, source(), { preserveFrom: installed });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('CANONICAL SOURCE PHILOSOPHY\n');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toBe('PUBLISHED PHILOSOPHY\n');
     expect(readFileSync(join(installed, 'docs/PHILOSOPHY.md'), 'utf8')).toBe('CANONICAL SOURCE PHILOSOPHY\n');
   });
 
@@ -189,13 +191,14 @@ describe('installDoctrineFiles', () => {
     mkdirSync(join(installed, '.void/installed'), { recursive: true });
     writeFileSync(join(installed, '.void/installed/PHILOSOPHY.md'), 'LEGACY PHILOSOPHY\n');
     await installDoctrineFiles(stage, source(), { preserveFrom: installed });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toBe('LEGACY PHILOSOPHY\n');
+    expect(readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8')).toBe('LEGACY PHILOSOPHY\n');
   });
 
-  it('still writes the packaged one when preserving a project that has none, rather than leaving a hole', async () => {
+  it('refuses to activate working doctrine when the published source-repository floor is missing', async () => {
     const stage = project();
-    await installDoctrineFiles(stage, source(), { preserveFrom: project() });
-    expect(readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8')).toContain('PACKAGED');
+    await expect(installDoctrineFiles(stage, source(), { preserveFrom: project() }))
+      .rejects.toThrow('published doctrine');
+    expect(existsSync(join(stage, '.void/PHILOSOPHY.md'))).toBe(false);
   });
 
   /**
@@ -244,7 +247,7 @@ describe('installDoctrineFiles', () => {
   });
 
   it('distributes the universal worktree invariant while preserving a customized doctrine on repeated installs', async () => {
-    const core = fileURLToPath(new URL('../../../core/', import.meta.url));
+    const core = fileURLToPath(new URL('../../../core/dist/', import.meta.url));
     const custom = '# My project\r\n\r\n- Keep my conventions and accents: dépôt.\r\n';
     const stage = staged(custom);
     const installed = attesting('ORIGINAL TEMPLATE\n');
@@ -253,7 +256,7 @@ describe('installDoctrineFiles', () => {
     await installDoctrineFiles(stage, core, { installRoot: installed });
 
     expect(doctrineIn(stage)).toBe(custom);
-    const philosophy = readFileSync(join(stage, '.void/installed/PHILOSOPHY.md'), 'utf8');
+    const philosophy = readFileSync(join(stage, '.void/PHILOSOPHY.md'), 'utf8');
     expect(philosophy).toBe(readFileSync(join(core, 'PHILOSOPHY.md'), 'utf8'));
     expect(philosophy).toContain(`\${VOID_WORKTREES:-\${XDG_DATA_HOME:-$HOME/.local/share}/git-worktrees}`);
     expect(philosophy).toContain('git worktree move');

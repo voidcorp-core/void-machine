@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { isSeq, parseDocument } from 'yaml';
 
 const ROOT = resolve(import.meta.dirname, '../../../..');
-const REFERENCES = join(ROOT, 'packages/core/skills/void-verify/references');
+const REFERENCES = join(ROOT, 'packages/core/src/skills/void-verify/references');
 const contexts = {
   draft: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: true } }, run_id: 10 },
   ready: { event_name: 'pull_request', event: { pull_request: { number: 7, draft: false } }, run_id: 11 },
@@ -28,10 +28,10 @@ function sequence(document: ReturnType<typeof workflow>, path: readonly string[]
   return node.toJSON() as unknown[];
 }
 
-function evaluate(value: unknown, github: object): unknown {
+function evaluate(value: unknown, github: object, extra: Record<string, unknown> = {}): unknown {
   if (typeof value !== 'string') return value;
   return value.replace(/\$\{\{([\s\S]*?)\}\}/g, (_match, expression: string) =>
-    String(runInNewContext(expression, { github }, { timeout: 100 })));
+    String(runInNewContext(expression, { github, ...extra }, { timeout: 100 })));
 }
 
 function admission(eventName: string, event: object) {
@@ -47,26 +47,39 @@ function admission(eventName: string, event: object) {
 }
 
 describe('development feedback and integration admission', () => {
-  it('does not schedule heavy work for drafts, and restores it for the same ready head', () => {
+  it('refuses drafts before producer setup or pack work', () => {
+    const steps = sequence(workflow('.github/workflows/ci.yml'), ['jobs', 'consumer-artifact', 'steps']) as { run?: string; uses?: string }[];
+    const admissionIndex = steps.findIndex(step => step.run?.includes('ci-admission.mjs'));
+    const installIndex = steps.findIndex(step => step.run?.includes('pnpm install'));
+    const packIndex = steps.findIndex(step => step.run?.includes('conformance:pack'));
+    expect(admissionIndex).toBeGreaterThanOrEqual(0);
+    expect(installIndex).toBeGreaterThan(admissionIndex);
+    expect(packIndex).toBeGreaterThan(installIndex);
+    expect(admission('pull_request', contexts.draft.event).status).toBe(1);
+    expect(admission('pull_request', contexts.ready.event).status).toBe(0);
+  });
+
+  it.each(['success', 'failure', 'skipped'])('keeps required validation admitted after producer %s unless cancelled', result => {
     const ci = workflow('.github/workflows/ci.yml');
-    for (const job of ['consumer-artifact', 'project-graph-conformance']) {
-      const condition = ci.getIn(['jobs', job, 'if']);
-      expect(evaluate(condition, contexts.draft), job).toBe('false');
-      for (const context of [contexts.ready, contexts.queue, contexts.manual, contexts.push]) {
-        expect(evaluate(condition, context), job).toBe('true');
-      }
+    expect(ci.getIn(['jobs', 'validate', 'needs'])).toBe('consumer-artifact');
+    const condition = ci.getIn(['jobs', 'validate', 'if']);
+    for (const cancelled of [false, true]) {
+      expect(evaluate(condition, contexts.draft, {
+        needs: { 'consumer-artifact': { result } }, cancelled: () => cancelled,
+      })).toBe(String(!cancelled));
     }
-    expect(ci.getIn(['jobs', 'validate', 'if'])).toBeUndefined();
+    // Draft refusal still executes inside the admitted required job.
+    expect(admission('pull_request', contexts.draft.event).status).toBe(1);
   });
 
   it.each([
     '.github/workflows/ci.yml', '.github/workflows/void-enforce.yml',
-    'packages/core/skills/void-verify/references/quality.yml',
-    'packages/core/templates/github/void-dependency-audit.yml',
+    'packages/core/src/skills/void-verify/references/quality.yml',
+    'packages/core/src/templates/github/void-dependency-audit.yml',
   ])('%s starts fresh on ready and cancels only obsolete PR runs', (name) => {
     const ci = workflow(name);
     const types = sequence(ci, ['on', 'pull_request', 'types']);
-    expect(types).toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft', 'synchronize']));
+    expect(types).toEqual(expect.arrayContaining(['ready_for_review', 'converted_to_draft', 'synchronize', 'edited']));
     const group = ci.getIn(['concurrency', 'group']);
     const cancel = ci.getIn(['concurrency', 'cancel-in-progress']);
     expect(evaluate(group, { ...contexts.draft, workflow: name }))
@@ -115,7 +128,7 @@ describe('development feedback and integration admission', () => {
     const admissionIndex = steps.findIndex(step => step.run?.includes('ci-admission.mjs'));
     expect(admissionIndex).toBeGreaterThanOrEqual(0);
     expect(steps[admissionIndex]?.run).toBe(
-      'node .void-enforce-runtime/packages/core/skills/void-verify/references/ci-admission.mjs',
+      'node .void-enforce-runtime/packages/core/src/skills/void-verify/references/ci-admission.mjs',
     );
     expect(steps[admissionIndex]?.['continue-on-error']).toBeUndefined();
     const implementationIndex = steps.findIndex(step => step.with?.path === '.void-enforce-runtime');
@@ -140,10 +153,10 @@ describe('development feedback and integration admission', () => {
     for (const [path, id] of [
       ['.github/workflows/ci.yml', 'validate'],
       ['.github/workflows/void-enforce.yml', 'enforce'],
-      ['packages/core/skills/void-verify/references/quality.yml', 'quality'],
+      ['packages/core/src/skills/void-verify/references/quality.yml', 'quality'],
     ] as const) {
       const ci = workflow(path);
-      expect(ci.getIn(['jobs', id, 'if'])).toBeUndefined();
+      expect(ci.getIn(['jobs', id, 'if'])).toBe(id === 'validate' ? `\${{ !cancelled() }}` : undefined);
       const steps = sequence(ci, ['jobs', id, 'steps']) as {
         run?: string; uses?: string; 'continue-on-error'?: boolean;
       }[];
@@ -188,4 +201,60 @@ describe('development feedback and integration admission', () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('CI_INVALID_EVENT');
     });
+});
+
+
+describe('native CI failure and applicability', () => {
+  const ci = workflow('.github/workflows/ci.yml');
+  const producerSteps = sequence(ci, ['jobs', 'consumer-artifact', 'steps']) as { name?: string; id?: string; run?: string; env?: Record<string, string>; 'continue-on-error'?: boolean }[];
+  const guard = producerSteps.find(step => step.name === 'Require every applicable cheap check');
+  it.each(['failure', 'skipped', 'cancelled', ''])('refuses %s for an applicable cheap check despite continue-on-error', outcome => {
+    const steps = Object.fromEntries(['references', 'version', 'structure', 'lint'].map(id => [id, { outcome: 'success' }]));
+    steps.lint = { outcome };
+    const passed = evaluate(guard?.env?.CHECKS_PASSED, {}, { steps: { ...steps, impact: { outputs: { docs: 'false', version: 'true' } } } });
+    const result = spawnSync('bash', ['-e', '-c', guard?.run ?? 'exit 99'], { env: { CHECKS_PASSED: String(passed) } });
+    expect(result.status).not.toBe(0);
+  });
+  it.each(['false', 'true', '', undefined])('requires version evidence unless explicitly inapplicable (%j)', version => {
+    const versionStep = producerSteps.find(step => step.id === 'version') as { if?: string } | undefined;
+    for (const outcome of ['success', 'failure', 'skipped', 'cancelled', '']) {
+      const steps = {
+        ...Object.fromEntries(['references', 'structure', 'lint'].map(id => [id, { outcome: 'success' }])),
+        version: { outcome }, impact: { outputs: { docs: 'false', version } },
+      };
+      expect(evaluate(versionStep?.if, {}, { steps })).toBe(String(version !== 'false'));
+      expect(evaluate(guard?.env?.CHECKS_PASSED, {}, { steps })).toBe(String(version === 'false' || outcome === 'success'));
+    }
+  });
+  it('separates docs non-applicability from missing required test evidence', () => {
+    const steps = { references: { outcome: 'success' }, impact: { outputs: { docs: 'true', version: 'false' } } };
+    expect(evaluate(guard?.env?.CHECKS_PASSED, {}, { steps })).toBe('true');
+    const buildIndex = producerSteps.findIndex(step => step.run?.includes('conformance:pack'));
+    expect(producerSteps.indexOf(guard ?? {})).toBeLessThan(buildIndex);
+    expect(producerSteps.filter(step => step['continue-on-error']).map(step => step.id)).toEqual(['references', 'version', 'structure', 'lint']);
+  });
+  it.each(['failure', 'skipped', 'cancelled', ''])('required validation refuses producer %s', result => {
+    const steps = sequence(ci, ['jobs', 'validate', 'steps']) as { run?: string }[];
+    expect(spawnSync('bash', ['-e', '-c', steps[0]?.run ?? 'exit 99'], { env: { PREPARATION_RESULT: result } }).status).not.toBe(0);
+  });
+  it('preserves all required OS identities while scheduling only applicable work', () => {
+    for (const [id, os] of [['install-linux', 'ubuntu'], ['install-macos', 'macos'], ['install-windows', 'windows']] as const) {
+      expect(ci.getIn(['jobs', id, 'name'])).toBe(`install conformance (${os}-latest)`);
+      const nativeCondition = String(ci.getIn(['jobs', id, 'if'])).replaceAll('consumer-artifact', 'producer');
+      for (const [consumer, crossPlatform, expected] of [[false, false, false], [true, false, os === 'ubuntu'], [true, true, true]]) {
+        expect(evaluate(nativeCondition, {}, { needs: { producer: { outputs: { consumer: String(consumer), crossPlatform: String(crossPlatform) } } } })).toBe(String(expected));
+      }
+      // Alias resolution is native YAML, not generated duplication or a matrix losing names.
+      const resolved = ci.toJS().jobs[id].steps as { run?: string }[];
+      expect(resolved.some(step => step.run?.startsWith('pnpm conformance:consumer '))).toBe(true);
+    }
+  });
+  it('binds develop head, combined merge group, and current main candidate separately', () => {
+    const value = ci.getIn(['env', 'GATE_SHA']);
+    const head = 'a'.repeat(40), combined = 'b'.repeat(40);
+    const event = (base: string) => ({ event: { pull_request: { base: { ref: base }, head: { sha: head } } }, sha: combined });
+    expect(evaluate(value, event('develop'))).toBe(head);
+    expect(evaluate(value, event('main'))).toBe(combined);
+    expect(evaluate(value, { event: { pull_request: { base: {}, head: {} } }, sha: combined })).toBe(combined);
+  });
 });

@@ -40,13 +40,13 @@ describe('judge', () => {
     expect(failure.overshootBytes).toBe(50_000);
     // A ceiling breach is a decision to make, so the message has to say what the
     // two options are rather than only that a number moved.
-    expect(failure.nextAction).toMatch(/raise the ceiling|remove the weight/i);
+    expect(failure.nextAction).toMatch(/remove accidental payload growth/i);
   });
 
   it('judges every package, not just the first that breaches', () => {
     const verdict = judge([
       { package: PRODUCT_IDENTITY.packageName, bytes: PACKAGE_LIMITS[PRODUCT_IDENTITY.packageName] + 1 },
-      { package: '@voidcorp/harness-graph', bytes: PACKAGE_LIMITS['@voidcorp/harness-graph'] + 1 },
+      { package: '@voidcorp/pack-monorepo', bytes: 20_001 },
     ]);
 
     expect(verdict.failures).toHaveLength(2);
@@ -80,22 +80,7 @@ describe('formatBytes', () => {
 });
 
 describe('PACKAGE_LIMITS', () => {
-  it('covers every package the publish-safety gate packs', async () => {
-    // The two gates must not drift apart: a package that publishes without a
-    // ceiling is exactly the gap this gate was added to close.
-    const source = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('../../scripts/check-publish-safety.mjs', import.meta.url), 'utf8'),
-    );
-    const packed = [...source.matchAll(/'(packages\/[^']+)'/g)].map((match) => match[1]);
-
-    expect(packed.length).toBeGreaterThan(0);
-    for (const directory of packed) {
-      const manifest = await import('node:fs').then((fs) =>
-        JSON.parse(
-          fs.readFileSync(new URL(`../../${directory}/package.json`, import.meta.url), 'utf8'),
-        ),
-      );
-      expect(Object.keys(PACKAGE_LIMITS)).toContain(manifest.name);
-    }
+  it('bounds only the CLI archive that the release workflow publishes', () => {
+    expect(Object.keys(PACKAGE_LIMITS)).toEqual([PRODUCT_IDENTITY.packageName]);
   });
 });

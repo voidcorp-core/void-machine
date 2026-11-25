@@ -8,12 +8,15 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "packages/**/src/**/*.ts",
+      "packages/**/src/**/*.{ts,tsx,js,mjs,cjs}",
+      "packages/**/test/**/*.{ts,tsx,js,mjs,cjs}",
+      "packages/**/*.{test,spec}.{ts,tsx,js,mjs,cjs}",
+      "packages/core/src/hooks/*.test.ts",
       "packages/**/*.config.ts",
-      "apps/**/src/**/*.ts",
+      "apps/**/src/**/*.{ts,tsx,js,mjs,cjs}",
       "apps/**/scripts/**/*.ts",
       "apps/**/*.config.ts",
-      "test/**/*.ts",
+      "test/**/*.{ts,tsx,js,mjs,cjs}",
       "!**/node_modules",
       "!**/dist",
       "!**/templates",
@@ -24,7 +27,16 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "recommended": true,
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": "error",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error"
+      },
+      "correctness": {
+        "noUndeclaredDependencies": "error"
+      }
     }
   },
   "javascript": {
@@ -34,5 +46,32 @@
   },
   "formatter": {
     "enabled": false
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "packages/cli/src/commands/install.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/eval-harness/fixtures/ui/frontend-tdd/src/ActionMenu.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ]
 }

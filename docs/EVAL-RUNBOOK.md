@@ -1,6 +1,9 @@
 # Evaluation runner runbook
 
-Status: approved implementation reference, 2026-09-07.
+Status: historical reference, retired by DEV-1400. The engine, campaign commands
+and protocol inputs described below no longer ship. Preserve these observations
+for history; they are not executable instructions. For optional native scenarios,
+see [the retained scenario guide](../apps/eval-harness/README.md). No paid run is authorized.
 
 This document is the durable operating model for the autonomous-value
 evaluation path. It exists to keep the implementation reproducible, bounded and
@@ -56,8 +59,8 @@ just in time, and compact before the context limit becomes an emergency.
 For this repository that becomes five explicit context layers:
 
 1. Stable doctrine: `AGENTS.md`, `CLAUDE.md` and the installed philosophy.
-2. Programme slice: `.void/program.md`, the linked spec and the linked plan,
-   only when selecting or executing programme work.
+2. Execution scope: explicit config authority, native milestone membership and its approved
+   plan/spec links, only when selecting or executing scoped work.
 3. Current task: the exact ticket, relevant files and the smallest necessary
    reference material.
 4. Runtime state: bounded tool output, test failures and durable artifacts,
@@ -86,7 +89,7 @@ session changes direction:
 4. Write the checkpoint, preserving the mechanical continuity block and keeping
    one exact next action.
 5. Clear the conversation.
-6. Resume by reading the doctrine, programme descriptor, runbook and checkpoint;
+6. Resume by reading the doctrine, config authority, native milestone plan, runbook and checkpoint;
    do not reconstruct the history from the transcript.
 7. Reconcile its next action with Git, the provider and the latest explicit user
    instruction. Execute that bounded action until fresh evidence changes it.
@@ -310,9 +313,8 @@ The default feedback loop is intentionally layered:
 
 | Lane | Command | Allowed dependencies | Gate |
 | --- | --- | --- | --- |
-| Fast | `pnpm test:fast` | pure CPU and contracts | changed behavior; target its regression first |
-| Filesystem | `pnpm test:filesystem` | temp dirs, git, local fixtures | runner/workspace changes |
-| Subprocess | `pnpm test:subprocess` | child processes, bounded I/O | process/adapter changes |
+| Engine | `pnpm test:engine` | I/O-free mission-engine package | changed pure behavior |
+| Local | `pnpm test:local` | temp dirs, git, subprocess fixtures; one worker | target the changed file first |
 | Network/browser | `pnpm test:network` | local loopback server/client | release or changed network boundary |
 | Release | `pnpm verify` on the final tree | all required gates | before promotion |
 

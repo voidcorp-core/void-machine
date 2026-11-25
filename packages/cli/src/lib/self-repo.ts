@@ -1,17 +1,5 @@
-// Detect whether the CLI is being run *inside the void-machine source repo*
-// (the meta-repo that produces the harness) rather than a project consuming it.
-//
-// `init` and `doctor` target consumers. Run against the source they misbehave:
-//   - `init` would overwrite the canonical CLAUDE.md / AGENTS.md and drop
-//     doctrine files at the repo root, corrupting the source of truth.
-//   - `doctor` reports a wall of "missing" consumer artifacts that have no
-//     reason to exist here, reading as a broken install when nothing is wrong.
-//
-// Both commands call this to bail out (or hard-guard) early.
-
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 /**
  * True when `root` is the void-machine source repo itself. Keyed on the root
@@ -31,23 +19,4 @@ export function isHarnessSourceRepo(root: string): boolean {
   } catch {
     return false;
   }
-}
-
-export type SelfRepoDoctorTarget =
-  | { readonly kind: 'consumer' }
-  | {
-      readonly kind: 'self-host';
-      readonly command: string;
-    };
-
-/**
- * Route source checkouts to the executable self-host doctor. It validates the
- * generated receipt and current source hash instead of consumer root files.
- */
-export function selfRepoDoctorTarget(root: string): SelfRepoDoctorTarget {
-  if (!isHarnessSourceRepo(root)) return { kind: 'consumer' };
-  return {
-    kind: 'self-host',
-    command: `${PRODUCT_COMMAND} self-host sync`,
-  };
 }

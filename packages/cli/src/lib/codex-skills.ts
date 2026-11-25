@@ -123,13 +123,13 @@ export async function listCodexSkills(sourceRoot: string): Promise<string[]> {
 /**
  * Locate a pack's skills directory relative to the resolved core source. In the
  * published tarball the packs are bundled at `<sourceRoot>/packs/<dir>/skills`;
- * in the dev monorepo `sourceRoot` is `packages/core`, so packs live one level up
- * at `packages/packs/<dir>/skills`. Returns undefined when the pack ships no skills.
+ * in the dev monorepo `sourceRoot` is `packages/core/dist`, with each pack at
+ * `packages/packs/<dir>/dist/skills`. Returns undefined when the pack ships no skills.
  */
 export function packSkillsDir(sourceRoot: string, packDir: string): string | undefined {
   const candidates = [
     join(sourceRoot, 'packs', packDir, 'skills'),
-    resolve(sourceRoot, '..', 'packs', packDir, 'skills'),
+    resolve(sourceRoot, '../..', 'packs', packDir, 'dist', 'skills'),
   ];
   return candidates.find((c) => existsSync(c));
 }

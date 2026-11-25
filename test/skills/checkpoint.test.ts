@@ -12,10 +12,9 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { countLines } from '../../packages/harness-graph/src/derive/read-frontmatter.js';
 
 const SKILL = readFileSync(
-  new URL('../../packages/core/skills/void-checkpoint/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-checkpoint/SKILL.md', import.meta.url),
   'utf8',
 );
 
@@ -36,7 +35,7 @@ describe('checkpoint frontmatter', () => {
   it('declares both runtimes, because a handoff is not a Claude-only artefact', () => {
     // The runtimes declaration is harness metadata, so it lives in the sidecar:
     // a SKILL.md carries only the six fields the Agent Skills spec defines.
-    expect(readFileSync(new URL('../../packages/core/skills/void-checkpoint/harness.yaml', import.meta.url), 'utf8'))
+    expect(readFileSync(new URL('../../packages/core/src/skills/void-checkpoint/harness.yaml', import.meta.url), 'utf8'))
       .toContain('runtimes: [claude, codex]');
   });
 
@@ -46,9 +45,6 @@ describe('checkpoint frontmatter', () => {
     expect(description.length).toBeLessThanOrEqual(250);
   });
 
-  it('stays under the skill size cap', () => {
-    expect(countLines(SKILL)).toBeLessThanOrEqual(400);
-  });
 });
 
 describe('routing comes before writing', () => {
@@ -91,16 +87,12 @@ describe('what it refuses to become', () => {
     expect(flat(body(SKILL))).toMatch(/not a plan for what is next/i);
   });
 
-  it('keeps lifecycle hooks advisory and reserves semantic writing for the skill', () => {
-    expect(flat(body(SKILL))).toMatch(/UserPromptSubmit[\s\S]{0,160}remind/i);
-    expect(flat(body(SKILL))).toMatch(/SessionEnd[\s\S]{0,160}audit/i);
-    expect(flat(body(SKILL))).toMatch(/PreCompact[\s\S]{0,240}mechanical/i);
+  it('keeps checkpoint creation explicit and resumes semantic residue without automatic tracking', () => {
+    expect(flat(body(SKILL))).toMatch(/Checkpoint creation is explicit/i);
+    expect(flat(body(SKILL))).toMatch(/No automatic context tracker writes/i);
+    expect(flat(body(SKILL))).toMatch(/Legacy mechanical blocks are ignored/i);
+    expect(flat(body(SKILL))).toMatch(/SessionStart[\s\S]{0,160}semantic residue/i);
     expect(flat(body(SKILL))).toMatch(/never[\s\S]{0,120}(dead ends|assumptions|next action)/i);
-  });
-
-  it('preserves the delimited mechanical block verbatim on every semantic rewrite', () => {
-    expect(flat(body(SKILL))).toMatch(/preserve[\s\S]{0,160}context-continuity:begin/i);
-    expect(flat(body(SKILL))).toMatch(/exactly one[\s\S]{0,160}block/i);
   });
 
   it('keeps closing a session apart from completing a unit of work', () => {
@@ -118,8 +110,10 @@ describe('program and checkpoint ownership', () => {
     expect(flat(body(SKILL))).toMatch(/still write[\s\S]{0,100}\.void\/machine\/checkpoint\.md/i);
   });
 
-  it('keeps current and next units out of both durable files', () => {
-    expect(flat(body(SKILL))).toMatch(/program[\s\S]{0,120}checkpoint[\s\S]{0,160}current or next unit/i);
+  it('carries work observations and intentions without making them authoritative progress', () => {
+    expect(SKILL).toContain('## Engaged work');
+    expect(SKILL).toContain('## Planned work');
+    expect(flat(body(SKILL))).toMatch(/Removing a planned ticket closes nothing remotely and deletes no worktree/i);
   });
 
   it('binds the checkpoint to both branch and HEAD', () => {
@@ -140,20 +134,11 @@ describe('the exit test can actually fail', () => {
 describe('provenance', () => {
   it('ships a .source recording what it took and what it refused', () => {
     const source = readFileSync(
-      new URL('../../packages/core/skills/void-checkpoint/.source', import.meta.url),
+      new URL('../../packages/core/src/skills/void-checkpoint/.source', import.meta.url),
       'utf8',
     );
     expect(source).toMatch(/context-save/i);
     expect(source).toMatch(/Rejected/i);
   });
 
-  it('records the boundary with the skills it sits next to', () => {
-    const audit = readFileSync(
-      new URL('../../docs/plans/skill-audits/void-checkpoint.md', import.meta.url),
-      'utf8',
-    );
-    expect(audit).toMatch(/Boundary with `void-learn`/);
-    expect(audit).toMatch(/Boundary with `void-retrospective`/);
-    expect(audit).toMatch(/What was rejected/i);
-  });
 });

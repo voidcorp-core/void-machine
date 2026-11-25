@@ -1,0 +1,36 @@
+schemaVersion: 1
+id: core:expo-config
+version: 1
+name: expo-config
+technologies:
+  - id: expo
+    minimumVersion: 52.0.0
+    maximumVersionExclusive: 60.0.0
+  - id: react-native
+    minimumVersion: 0.75.0
+    maximumVersionExclusive: 1.0.0
+detectors:
+  always: false
+  technologies: [expo]
+  files:
+    extensions: []
+    names: [app.json, app.config.js, app.config.ts, eas.json]
+    pathSegments: []
+sources:
+  - title: Expo documentation
+    url: https://docs.expo.dev/
+  - title: React Native documentation
+    url: https://reactnative.dev/docs/getting-started
+reviewedAt: 2026-07-27
+expiresAfterDays: 90
+invariants:
+  - Validate version-specific configuration against the installed tool's official documentation.
+patterns:
+  - id: native-config
+    appliesWhen:
+      technologies: [expo]
+      files:
+        extensions: []
+        names: [app.json, app.config.js, app.config.ts, eas.json]
+        pathSegments: []
+    guidance: Validate configuration against the covered Expo documentation and rebuild native binaries when required.

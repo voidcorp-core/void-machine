@@ -1,0 +1,8 @@
+Sources for `void-accessibility-check` skill (see `docs/plans/skill-audits/void-accessibility-check.md` for the full audit):
+
+- WCAG 2.2 quick reference — authoritative for contrast and touch target sizes.
+- WebAIM "Designing for Screen Reader Compatibility" — source of the "name accessible to AT" framing.
+- Apple HIG / Material Design (touch targets) — 44×44 / 48×48 numbers.
+- accessibility (parent skill) — doctrine source; this skill is its execution arm.
+
+Strategy: distill. The doctrine lives in accessibility; this skill is the per-component operational gate.

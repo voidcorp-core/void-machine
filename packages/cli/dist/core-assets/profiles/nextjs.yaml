@@ -1,0 +1,31 @@
+schemaVersion: 1
+id: core:nextjs
+version: 2
+name: nextjs
+technologies:
+  - id: nextjs
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [nextjs]
+  files:
+    extensions: [.ts, .tsx, .js, .jsx, .css]
+    names: [next.config.js, next.config.mjs, next.config.ts]
+    pathSegments: [app, pages]
+sources:
+  - title: Next.js documentation
+    url: https://nextjs.org/docs
+reviewedAt: 2026-07-27
+expiresAfterDays: 120
+invariants:
+  - Make server and client boundaries explicit and minimize client-side JavaScript.
+  - Treat caching, revalidation, authorization, and request input as explicit contracts.
+patterns:
+  - id: app-router
+    appliesWhen:
+      technologies: [nextjs]
+      files:
+        extensions: [.ts, .tsx]
+        names: []
+        pathSegments: [app]
+    guidance: Keep routing and data-flow ownership explicit; verify framework-specific APIs against the installed version.

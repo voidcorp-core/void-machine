@@ -17,8 +17,8 @@ From the repo root:
 
 ```bash
 pnpm vitest run                                  # all tests
-pnpm vitest run test/tdd-guard/                  # one skill / hook
-pnpm vitest --watch test/tdd-guard/              # iterate
+pnpm vitest run test/secret-in-content/                  # one skill / hook
+pnpm vitest --watch test/secret-in-content/              # iterate
 ```
 
 ## What to test
@@ -38,6 +38,9 @@ For a hook (shell script):
 
 The CI workflow runs `pnpm vitest run` on every PR. A broken skill or hook test blocks the release.
 
-## Status
+## Coverage
 
-Phase E in progress. `test/tdd-guard/` shipped as the reference. Remaining 19 hooks + 21 SKILL.md tests land in Phase E follow-up commits.
+`test/secret-in-content/` exercises a retained content guard. Keep behavioral
+regressions for active protections; tests preserving retired lexical gates are
+removed with those gates. Lint coverage and consumer installation proofs have
+their own suites.

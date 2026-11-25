@@ -3,7 +3,7 @@
 // PreToolUse hooks); Codex's equivalent is a project-local .codex/hooks.json
 // pointing at resolvable hook scripts. `init` stages the scripts under
 // .void/hooks/ and writes .codex/hooks.json compiled from the shipped template
-// (packages/core/codex/hooks.json), so the former manual three-step opt-in
+// (packages/core/src/codex/hooks.json), so the former manual three-step opt-in
 // (docs/CODEX.md) is now automatic and symmetric with the Claude path.
 //
 // This module owns the whole Codex-floor domain: the pure transforms
@@ -14,7 +14,6 @@
 
 import { chmod, cp, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { syntaxWorkerHealth } from './syntax-worker-health.js';
 import { PRODUCT_COMMAND } from '@voidcorp/hook-runner';
 
 async function readOrUndefined(path: string): Promise<string | undefined> {
@@ -33,12 +32,11 @@ async function isExecutable(path: string): Promise<boolean> {
   }
 }
 
-// Codex stages the Node runner and its isolated TypeScript worker. Shell adapters stay
+// Codex stages the Node runner. Shell adapters stay
 // in the source package for older installs, but native manifests never reference
 // or copy them into a consumer project.
 export const CODEX_FLOOR_SCRIPTS = [
   '_void-hook.mjs',
-  '_syntax-worker.cjs',
 ] as const;
 
 // Project-relative directory the scripts are staged into on disk (mkdir/cp/chmod
@@ -290,9 +288,6 @@ export async function codexFloorHealth(projectRoot: string): Promise<CodexFloorH
   if (notExecutable.length > 0) {
     return { ok: false, detail: `staged hooks not executable: ${notExecutable.join(', ')}` };
   }
-
-  const syntaxIssue = syntaxWorkerHealth(hooksDir);
-  if (syntaxIssue !== undefined) return { ok: false, detail: syntaxIssue };
 
   return {
     ok: true,

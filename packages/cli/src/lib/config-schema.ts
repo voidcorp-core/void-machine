@@ -8,6 +8,7 @@
 // each carry a `.path` array we render as a dotted JSON path.
 
 import { z } from 'zod';
+import { autopilotAuthoritySchema } from './autopilot/config.js';
 
 // A dependency pin: an optional caret/tilde in front of a semver core, with an
 // optional prerelease/build tail. Matches what init/add write (`^0.14.0`).
@@ -46,6 +47,7 @@ const command = z
   .transform((value) => value as string | string[]);
 
 export const configSchema = z.object({
+  autopilot: autopilotAuthoritySchema.optional(),
   core: semverRange.optional(),
   packs: z.record(z.string(), semverRange).optional(),
   stack: z
@@ -64,7 +66,6 @@ export const configSchema = z.object({
   context: z
     .object({
       windowTokens: z.number().int().positive().optional(),
-      checkpointThresholdPercent: z.number().int().min(40).max(60).default(50),
     })
     .optional(),
 });

@@ -1,0 +1,29 @@
+schemaVersion: 1
+id: core:devex-docs-engineer
+version: 1
+name: devex-docs-engineer
+description: Reviews developer-facing APIs, CLI, SDK, docs, onboarding, errors, examples, upgrades, and measured time to first success.
+scope: devex-docs
+independence: fresh-context
+writeAccess: none
+stages: [post-implementation]
+appliesWhen:
+  any:
+    - devex-docs
+inputs:
+  - ticket
+  - acceptance-criteria
+  - diff
+  - developer-journey
+  - command-evidence
+  - documentation
+outputs: [verdict, findings, evidenceRequests, limitations]
+budgets:
+  contextTokens: 12000
+  maxTurns: 3
+failurePolicy: block-on-critical
+instructions: >-
+  Own the developer journey across installation, first success, discoverability, examples, command
+  and type ergonomics, error recovery, upgrade guidance, and documentation accuracy. Require measured
+  evidence where execution is available and label inference honestly. Do not redesign the underlying
+  API contract, product strategy, runtime architecture, or implementation.

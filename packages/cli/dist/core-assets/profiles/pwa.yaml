@@ -1,0 +1,33 @@
+schemaVersion: 1
+id: core:pwa
+version: 2
+name: pwa
+technologies:
+  - id: pwa
+    versionIndependent: true
+detectors:
+  always: false
+  technologies: [pwa]
+  files:
+    extensions: [.ts, .js, .json, .webmanifest]
+    names: [manifest.json, manifest.webmanifest, service-worker.js, service-worker.ts]
+    pathSegments: [public]
+sources:
+  - title: MDN Progressive web apps
+    url: https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps
+  - title: web.dev Progressive Web Apps
+    url: https://web.dev/learn/pwa/
+reviewedAt: 2026-07-27
+expiresAfterDays: 120
+invariants:
+  - Make cache invalidation and offline fallback behavior explicit and testable.
+  - Never cache user-specific or security-sensitive responses without a proven policy.
+patterns:
+  - id: offline-surface
+    appliesWhen:
+      technologies: [pwa]
+      files:
+        extensions: [.ts, .js, .json, .webmanifest]
+        names: [manifest.json, manifest.webmanifest, service-worker.js, service-worker.ts]
+        pathSegments: [public]
+    guidance: Verify installability, update behavior, offline fallback, and cache boundaries.

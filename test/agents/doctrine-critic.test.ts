@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(__dirname, '..', '..');
 const r = (p: string): string => readFileSync(resolve(ROOT, p), 'utf8');
 
-const CORE_AGENT = 'packages/core/agents/doctrine-critic.md';
-const MIRROR_AGENT = 'packages/cli/core-assets/agents/doctrine-critic.md';
+const CORE_AGENT = 'packages/core/src/agents/doctrine-critic.md';
+const MIRROR_AGENT = 'packages/cli/dist/core-assets/agents/doctrine-critic.md';
 const DROPPED = ['senior-reviewer', 'security-reviewer', 'architect-critic'];
 
 /** Parse a leading `--- ... ---` YAML-ish frontmatter block into key/value pairs. */
@@ -73,8 +73,8 @@ describe('manifests and docs no longer advertise the three roadmap agents', () =
   // The marketplace catalog moved to voidcorp-core/void-plugins; only the
   // plugin manifests of this repo advertise agents now.
   const manifests = [
-    'packages/core/.claude-plugin/plugin.json',
-    'packages/cli/core-assets/.claude-plugin/plugin.json',
+    'packages/core/src/.claude-plugin/plugin.json',
+    'packages/cli/dist/core-assets/.claude-plugin/plugin.json',
   ];
   const docs = ['README.md', 'docs/ARCHITECTURE.md'];
 

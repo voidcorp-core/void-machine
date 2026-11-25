@@ -1,0 +1,15 @@
+Sources:
+- Nielsen Norman Group, Ten Usability Heuristics: https://www.nngroup.com/articles/ten-usability-heuristics/
+- W3C Web Content Accessibility Guidelines 2.2: https://www.w3.org/TR/WCAG22/
+- Apple Human Interface Guidelines, Designing for iOS: https://developer.apple.com/design/human-interface-guidelines/designing-for-ios
+- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
+- Codex custom agents: https://learn.chatgpt.com/docs/agent-configuration/subagents
+
+Adapted:
+- Kept user intent, visible system state, error recovery, responsive intent, keyboard flow, and accessibility constraints.
+- Reframed broad UX practice as a bounded pre-build brief over ticket and repository evidence.
+- Added the shared Void specialist identity, fresh-context, budget, failure, and JSON output contract.
+
+Rejected:
+- Brand creation, visual-polish approval, implementation, browser operation, functional QA, and product roadmap ownership.
+- Generic persona workshops and research claims unsupported by supplied project evidence.

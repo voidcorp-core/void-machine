@@ -17,7 +17,6 @@ import { join } from 'node:path';
 import { CO_OWNED_FILES } from '../../packages/cli/src/lib/co-owned.js';
 import { init } from '../../packages/cli/src/commands/init.js';
 import { update } from '../../packages/cli/src/commands/update.js';
-import { evaluateRule } from '../../packages/hook-runner/src/enforcement/runner.js';
 
 let dir: string;
 let cwd: string;
@@ -81,8 +80,7 @@ describe('--force never seizes a co-owned file', () => {
       const target = join(dir, ...path.split('/'));
       if (!existsSync(target)) continue;
       // Marked in the file's own grammar. A text line appended to JSON makes it
-      // unparseable, and replacing a config nothing can parse is legitimate --
-      // the test would have been reading its own damage as the defect.
+      // unparseable, which is a separate refusal case exercised below.
       const mark = `void-force-test-mark-for-${path}`;
       marks[path] = mark;
       const before = readFileSync(target, 'utf8');
@@ -102,28 +100,33 @@ describe('--force never seizes a co-owned file', () => {
     }
   });
 
-  it('still overwrites a config it cannot parse, since nothing there can be merged', async () => {
+  it('preserves unreadable consent instead of reviving legacy authority under force', async () => {
     await init(['--runtime', 'claude', '--no-interactive']);
-    writeFileSync(join(dir, '.void', 'config.json'), '{ this is not json\n');
-
-    await init(['--runtime', 'claude', '--no-interactive', '--force']);
-
-    expect(readConfig().paths).toBeDefined();
+    const bytes = '{ "autopilot": { "enabled": false,\n';
+    writeFileSync(join(dir, '.void', 'config.json'), bytes);
+    await expect(init(['--runtime', 'claude', '--no-interactive', '--force']))
+      .rejects.toThrow(/unreadable configuration/);
+    expect(readFileSync(join(dir, '.void/config.json'), 'utf8')).toBe(bytes);
   });
+
+  it.each([true, false, 'invalid'])('preserves the co-owned authority %s across pack reconciliation and update', async enabled => {
+    await init(['--runtime', 'claude', '--no-interactive']);
+    const autopilot = { enabled, schemaVersion: 2, customFutureRestriction: ['preserve'] };
+    const historical = join(dir, '.void/program.md');
+    const history = 'Customized programme with old consent; preserve byte for byte.\n';
+    writeFileSync(historical, history);
+    writeFileSync(join(dir, '.void/config.json'), JSON.stringify({ ...readConfig(), autopilot }));
+    await init(['--runtime', 'claude', '--no-interactive', '--force', '--replace-packs', '--pack', 'react']);
+    expect(readConfig()).toHaveProperty('autopilot', autopilot);
+    expect(readFileSync(historical, 'utf8')).toBe(history);
+    await update([]);
+    expect(readConfig()).toHaveProperty('autopilot', autopilot);
+    expect(readFileSync(historical, 'utf8')).toBe(history);
+  });
+
 });
 
 describe('mono-app defaults and existing installations', () => {
-  it('enforces TDD for fresh Bun root-src and apps sources after real init', async () => {
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ packageManager: 'bun@1.3.0' }));
-    writeFileSync(join(dir, 'bun.lock'), '');
-    await init(['--runtime', 'claude', '--no-interactive']);
-    for (const path of ['src/feature.ts', 'apps/web/src/feature.ts']) {
-      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
-        file_path: path, content: 'export const feature = 1;',
-      } }, { root: dir }).code).toBe('TDD_SIBLING_TEST_MISSING');
-    }
-  });
-
   it.each([{ business: 'apps/*/src/**' }, { business: 'services/**' }, { business: ['services/**', 'domain/**'] }])(
     'preserves existing business scope $business across init and update', async ({ business }) => {
       await init(['--runtime', 'claude', '--no-interactive']);
@@ -133,9 +136,7 @@ describe('mono-app defaults and existing installations', () => {
       expect(readConfig().paths).toEqual(config.paths);
       await update([]);
       expect(readConfig().paths).toEqual(config.paths);
-      expect(evaluateRule('tdd-order', { tool_name: 'Write', tool_input: {
-        file_path: 'src/feature.ts', content: 'export const feature = 1;',
-      } }, { root: dir }).code).toBe('ALLOW');
+
     },
   );
 });

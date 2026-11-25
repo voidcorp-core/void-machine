@@ -8,42 +8,42 @@
       "extra-files": [
         {
           "type": "json",
-          "path": "packages/core/.claude-plugin/plugin.json",
+          "path": "packages/core/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-monorepo/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-monorepo/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-react/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-react/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-nextjs/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-nextjs/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-server/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-server/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-pwa/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-pwa/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/packs/pack-mobile/.claude-plugin/plugin.json",
+          "path": "packages/packs/pack-mobile/src/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/cli/core-assets/.claude-plugin/plugin.json",
+          "path": "packages/cli/dist/core-assets/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
@@ -63,18 +63,38 @@
         },
         {
           "type": "json",
-          "path": "packages/harness-graph/package.json",
+          "path": "packages/core/dist/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/core/data/certification.json",
-          "jsonpath": "$.harnessVersion"
+          "path": "packages/packs/pack-monorepo/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "packages/cli/core-assets/data/certification.json",
-          "jsonpath": "$.harnessVersion"
+          "path": "packages/packs/pack-react/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/packs/pack-nextjs/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/packs/pack-server/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/packs/pack-pwa/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/packs/pack-mobile/dist/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
         }
       ]
     }

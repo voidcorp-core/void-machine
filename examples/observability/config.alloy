@@ -1,0 +1,201 @@
+// Explicit local example for Alloy 1.22.0. No logs or traces are routed.
+logging {
+	level = "error"
+}
+
+otelcol.receiver.otlp "native" {
+	http {
+		endpoint               = "127.0.0.1:14318"
+		max_request_body_size  = "2MiB"
+		read_header_timeout    = "2s"
+		read_timeout           = "2s"
+		write_timeout          = "2s"
+		compression_algorithms = [""]
+	}
+
+	output {
+		metrics = [otelcol.processor.memory_limiter.native.input]
+	}
+}
+
+otelcol.processor.memory_limiter "native" {
+	check_interval = "1s"
+	limit          = "256MiB"
+	spike_limit    = "64MiB"
+
+	output {
+		metrics = [otelcol.processor.filter.contract.input]
+	}
+}
+
+// Unknown versions, signals, types, units and temporality fail closed.
+otelcol.processor.filter "contract" {
+	error_mode = "propagate"
+
+	metric_conditions {
+		context    = "metric"
+		conditions = [
+			`not ((resource.attributes["service.name"] == "claude-code" and resource.attributes["service.version"] == "2.1.330" and metric.type == METRIC_DATA_TYPE_SUM and metric.is_monotonic == true and ((metric.name == "claude_code.token.usage" and metric.unit == "tokens") or (metric.name == "claude_code.cost.usage" and metric.unit == "USD") or (metric.name == "claude_code.session.count" and metric.unit == "") or (metric.name == "claude_code.active_time.total" and metric.unit == "s"))) or (resource.attributes["service.name"] == "codex_exec" and resource.attributes["service.version"] == "0.171.0" and metric.type == METRIC_DATA_TYPE_HISTOGRAM and ((metric.name == "codex.turn.token_usage" and metric.unit == "") or (metric.name == "codex.turn.e2e_duration_ms" and metric.unit == "ms"))))`,
+			`metric.aggregation_temporality != AGGREGATION_TEMPORALITY_DELTA`,
+		]
+	}
+
+	metric_conditions {
+		context    = "datapoint"
+		conditions = [
+			`Len(datapoint.exemplars) > 0`,
+			`metric.name == "claude_code.token.usage" and not (datapoint.attributes["type"] == "input" or datapoint.attributes["type"] == "output" or datapoint.attributes["type"] == "cacheRead" or datapoint.attributes["type"] == "cacheCreation")`,
+			`metric.name == "claude_code.active_time.total" and not (datapoint.attributes["type"] == "cli" or datapoint.attributes["type"] == "user")`,
+			`metric.name == "codex.turn.token_usage" and not (datapoint.attributes["token_type"] == "input" or datapoint.attributes["token_type"] == "output" or datapoint.attributes["token_type"] == "total" or datapoint.attributes["token_type"] == "cached_input" or datapoint.attributes["token_type"] == "reasoning_output")`,
+		]
+	}
+
+	output {
+		metrics = [otelcol.processor.transform.claude.input]
+	}
+}
+
+// Mapping 1: native delta counters become explicitly named last-export gauges.
+otelcol.processor.transform "claude" {
+	error_mode = "propagate"
+
+	metric_statements {
+		context    = "datapoint"
+		conditions = [`resource.attributes["service.name"] == "claude-code"`]
+		statements = [
+			`keep_keys(attributes, ["type"])`,
+			`delete_key(attributes, "type") where metric.name == "claude_code.cost.usage" or metric.name == "claude_code.session.count"`,
+			`set(attributes["runtime"], "claude_code")`,
+			`set(attributes["runtime_version"], "2.1.330")`,
+			`set(attributes["source"], metric.name)`,
+		]
+	}
+
+	metric_statements {
+		context    = "metric"
+		conditions = [`resource.attributes["service.name"] == "claude-code"`]
+		statements = [
+			`aggregate_on_attributes("sum")`,
+			`convert_sum_to_gauge()`,
+			`set(name, Concat([name, "delta"], "."))`,
+		]
+	}
+
+	output {
+		metrics = [otelcol.processor.transform.codex.input]
+	}
+}
+
+// Mapping 2: histogram sums describe tokens in THIS export, not lifetime totals.
+// Duration sum/count remain separate. No Codex cost or fabricated native unit.
+otelcol.processor.transform "codex" {
+	error_mode = "propagate"
+
+	metric_statements {
+		context    = "datapoint"
+		conditions = [`resource.attributes["service.name"] == "codex_exec"`]
+		statements = [
+			`keep_keys(attributes, ["token_type"])`,
+			`delete_key(attributes, "token_type") where metric.name == "codex.turn.e2e_duration_ms"`,
+			`set(attributes["runtime"], "codex")`,
+			`set(attributes["runtime_version"], "0.171.0")`,
+			`set(attributes["source"], metric.name)`,
+		]
+	}
+
+	metric_statements {
+		context    = "metric"
+		conditions = [`resource.attributes["service.name"] == "codex_exec"`]
+		statements = [
+			`aggregate_on_attributes("sum")`,
+			`extract_sum_metric(true, ".delta") where name == "codex.turn.token_usage"`,
+			`extract_sum_metric(true, ".delta_sum") where name == "codex.turn.e2e_duration_ms"`,
+			`extract_count_metric(true, ".delta_count") where name == "codex.turn.e2e_duration_ms"`,
+			`convert_sum_to_gauge() where type == METRIC_DATA_TYPE_SUM`,
+			`set(unit, "") where name == "codex.turn.e2e_duration_ms.delta_count"`,
+		]
+	}
+
+	output {
+		metrics = [otelcol.processor.filter.projected.input]
+	}
+}
+
+otelcol.processor.filter "projected" {
+	error_mode = "propagate"
+
+	metric_conditions {
+		conditions = [`metric.type != METRIC_DATA_TYPE_GAUGE`]
+	}
+
+	output {
+		metrics = [otelcol.processor.transform.privacy.input]
+	}
+}
+
+// Scrub metadata; exemplar-bearing points were rejected before any mapping.
+otelcol.processor.transform "privacy" {
+	error_mode = "propagate"
+
+	metric_statements {
+		context    = "resource"
+		statements = [
+			`keep_keys(attributes, [])`,
+			`set(schema_url, "")`,
+		]
+	}
+
+	metric_statements {
+		context    = "scope"
+		statements = [
+			`keep_keys(attributes, [])`,
+			`set(name, "")`,
+			`set(version, "")`,
+			`set(schema_url, "")`,
+		]
+	}
+
+	metric_statements {
+		context    = "metric"
+		statements = [
+			`set(description, "Last received native export delta; not a cumulative usage total")`,
+			`keep_keys(metadata, [])`,
+		]
+	}
+
+	output {
+		metrics = [otelcol.exporter.otlphttp.local.input]
+	}
+}
+
+// A local test destination only. Future deployment chooses ONE authenticated backend.
+otelcol.exporter.otlphttp "local" {
+	encoding = "json"
+
+	client {
+		endpoint    = "http://127.0.0.1:14319"
+		compression = "none"
+		timeout     = "500ms"
+	}
+
+	retry_on_failure {
+		initial_interval = "100ms"
+		max_interval     = "500ms"
+		max_elapsed_time = "2s"
+	}
+
+	sending_queue {
+		sizer             = "items"
+		queue_size        = 64
+		num_consumers     = 1
+		block_on_overflow = false
+		wait_for_result   = false
+
+		batch {
+			sizer         = "items"
+			min_size      = 16
+			max_size      = 32
+			flush_timeout = "100ms"
+		}
+	}
+}

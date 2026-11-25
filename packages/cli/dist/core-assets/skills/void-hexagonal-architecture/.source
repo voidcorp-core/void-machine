@@ -1,0 +1,12 @@
+Sources for `void-hexagonal-architecture` skill (see `docs/plans/skill-audits/void-hexagonal-architecture.md` for full audit):
+
+- Alistair Cockburn "Hexagonal Architecture" 2005 — https://alistair.cockburn.us/hexagonal-architecture/ — original ports + adapters definition
+- Bruno Boucard & Thomas Pierrain workshops/talks — testing strategy at the boundary
+- Herberto Graca "Explicit Architecture" — https://herbertograca.com/2017/11/16/explicit-architecture-01-ddd-hexagonal-onion-clean-cqrs-how-i-put-it-all-together/ — layered hex with use-cases
+- Gary Bernhardt "Functional Core, Imperative Shell" — DCDC 2012 talk — mental model twin of hex
+- Vladimir Khorikov "Enterprise Craftsmanship" — functional / architecture framing
+- citypaul/.dotfiles hex notes — cross-package import enforcement via tsconfig paths
+
+Strategy: distill. Reject DI containers, CQRS, mediator, event sourcing as defaults (per docs/PHILOSOPHY.md Wing Chun). Function-parameter injection only.
+
+Companion hook: boundary-direction-check (greps domain → infrastructure imports).

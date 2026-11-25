@@ -29,9 +29,9 @@ const everyKindListed: [Exclude<LoopAction['kind'], (typeof LOOP_ACTION_KINDS)[n
   ? true
   : never = true;
 
-const SKILL = readFileSync(new URL('../../packages/core/skills/void-autopilot/SKILL.md', import.meta.url), 'utf8');
+const SKILL = readFileSync(new URL('../../packages/core/src/skills/void-autopilot/SKILL.md', import.meta.url), 'utf8');
 const TICKET_RUNNER = readFileSync(
-  new URL('../../packages/core/skills/void-implement/SKILL.md', import.meta.url),
+  new URL('../../packages/core/src/skills/void-implement/SKILL.md', import.meta.url),
   'utf8',
 );
 
@@ -48,7 +48,7 @@ describe('autopilot skill frontmatter', () => {
   it('declares both runtimes, because the plan is runtime-neutral by design', () => {
     // The runtimes declaration is harness metadata, so it lives in the sidecar:
     // a SKILL.md carries only the six fields the Agent Skills spec defines.
-    expect(readFileSync(new URL('../../packages/core/skills/void-autopilot/harness.yaml', import.meta.url), 'utf8'))
+    expect(readFileSync(new URL('../../packages/core/src/skills/void-autopilot/harness.yaml', import.meta.url), 'utf8'))
       .toContain('runtimes: [claude, codex]');
   });
 
@@ -141,7 +141,7 @@ describe('remote effects stay with the roles that own them', () => {
     expect(spawning).not.toMatch(/cockpit presentation|agents dispatch/i);
     // The shared policy publishes actual observations; presentation grants no authority.
     const orchestration = flat(readFileSync(
-      new URL('../../packages/core/skills/void-orchestrate/SKILL.md', import.meta.url), 'utf8',
+      new URL('../../packages/core/src/skills/void-orchestrate/SKILL.md', import.meta.url), 'utf8',
     ));
     expect(orchestration).toMatch(/After an actual successful native dispatch acknowledgement/);
     expect(orchestration).toMatch(/same assignment through corrections and resume/);
@@ -157,20 +157,6 @@ describe('remote effects stay with the roles that own them', () => {
 
   it('keeps migrations out of production', () => {
     expect(flat(body(SKILL))).toMatch(/dev\/local/i);
-  });
-});
-
-describe('the curator ranks, and never disposes', () => {
-  it('walks the tracker in the declared order and ranks on the project, not the label', () => {
-    expect(flat(body(SKILL))).toMatch(/Todo, then Backlog, then Triage/);
-    expect(flat(body(SKILL))).toMatch(/not by the priority label/i);
-  });
-
-  it('justifies every move, enriches through void-ticket, and never closes', () => {
-    expect(flat(body(SKILL))).toMatch(/every ticket you move a justification/i);
-    expect(flat(body(SKILL))).toMatch(/goes through `void-ticket` before it can be declared `ready`/);
-    expect(flat(body(SKILL))).toMatch(/Never close, cancel or delete/);
-    expect(flat(body(SKILL))).toMatch(/Re-rank after every merge/);
   });
 });
 
@@ -192,10 +178,8 @@ describe('the review is local, bound to the head and to the session it delegated
     expect(flat(body(SKILL))).toMatch(/a reviewer that failed without a verdict is an attempt it delegates again, not a round/);
   });
 
-  it('blocks only on a scenario, files advisories once, and stops at two rounds', () => {
+  it('blocks only on a scenario and files advisories once', () => {
     expect(flat(body(SKILL))).toMatch(/Only what is wrong or dangerous, with a concrete scenario/);
-    expect(flat(body(SKILL))).toMatch(/single Triage issue per ticket/);
-    expect(flat(body(SKILL))).toMatch(/round 2 is handed round 1's blocking findings and checks only those/i);
   });
 });
 
@@ -216,7 +200,7 @@ describe('the orchestrator acts on every action the kernel returns', () => {
 
 describe('provenance', () => {
   it('ships a .source next to the skill', () => {
-    const source = readFileSync(new URL('../../packages/core/skills/void-autopilot/.source', import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../../packages/core/src/skills/void-autopilot/.source', import.meta.url), 'utf8');
     expect(source).toMatch(/backlog-autopilot/);
     expect(source).toMatch(/worktree/i);
   });

@@ -4,7 +4,7 @@
  * The Agent Skills specification defines six fields, and the official validator
  * refuses everything else:
  *
- *     $ npx skills-ref validate packages/core/skills/tdd
+ *     $ npx skills-ref validate packages/core/src/skills/tdd
  *     Unexpected fields in frontmatter: activation, enforcement, eval_targets,
  *     kind, owner, runtimes. Only allowed-tools, compatibility, description,
  *     license, metadata, name are allowed.
@@ -40,13 +40,13 @@ const SPEC_FIELDS = new Set(['name', 'description', 'license', 'compatibility', 
 /** Every core and pack skill directory, as [label, absolute path]. */
 function skillDirectories(): [string, string][] {
   const found: [string, string][] = [];
-  const core = join(ROOT, 'packages/core/skills');
+  const core = join(ROOT, 'packages/core/src/skills');
   for (const name of readdirSync(core)) {
     if (existsSync(join(core, name, 'SKILL.md'))) found.push([name, join(core, name)]);
   }
   const packs = join(ROOT, 'packages/packs');
   for (const pack of readdirSync(packs)) {
-    const dir = join(packs, pack, 'skills');
+    const dir = join(packs, pack, 'src', 'skills');
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       if (existsSync(join(dir, name, 'SKILL.md'))) found.push([`${pack}/${name}`, join(dir, name)]);
@@ -69,6 +69,7 @@ function frontmatterKeys(path: string): string[] {
 describe('the skill file carries only what the specification defines', () => {
   it('finds the skills to check, so an empty sweep cannot pass silently', () => {
     expect(SKILLS.length).toBeGreaterThan(30);
+    expect(SKILLS.some(([label]) => label.includes('/'))).toBe(true);
   });
 
   it.each(SKILLS)('%s declares no field outside the spec', (_label, path) => {

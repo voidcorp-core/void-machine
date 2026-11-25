@@ -1,0 +1,8 @@
+Sources for the `type-design-analyzer` agent (see `docs/plans/skill-audits/type-design-analyzer.md` for the full audit):
+
+- everything-claude-code (affaan-m) — the type-design-review agent concept. https://github.com/affaan-m/everything-claude-code
+- Yaron Minsky, "Effective ML / Make illegal states unrepresentable" — the load-bearing principle the agent judges against.
+- Scott Wlaschin, "Domain Modeling Made Functional" — discriminated unions / sum types over primitive obsession.
+- void-machine skills `void-typescript-strict`, `void-functional`, `void-api-and-interface-design` — the doctrine the agent's judgment inherits (the agent judges the design; these skills prescribe it).
+
+Strategy: original (distill + compose). Narrow scope: illegal-states-representable, primitive obsession, missing discriminated unions, leaky boundary types. Not a general review; routes bugs to /code-review. model: opus (design-reasoning task).

@@ -244,7 +244,7 @@ describe('completeOwnership, against content the project changed', () => {
 describe('update on a marketplace install that predates the receipt', () => {
   const HERE = dirname(fileURLToPath(import.meta.url));
   const REPO = resolve(HERE, '..', '..', '..', '..');
-  const CLI = resolve(HERE, '..', '..', 'bin', 'void-harness.mjs');
+  const CLI = resolve(HERE, '..', '..', 'dist', 'bin', 'void-harness.mjs');
 
   function git(cwd: string, ...args: string[]): void {
     const result = spawnSync('git', args, { cwd, encoding: 'utf8' });

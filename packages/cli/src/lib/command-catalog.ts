@@ -54,7 +54,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "status",
-        "description": "Project health: the five-state capability lifecycle + a score. Deterministic, offline, no LLM."
+        "description": "Installation facts, runtime observations and version freshness; unavailable evidence stays unknown."
       }
     ]
   },
@@ -62,8 +62,8 @@ export const COMMAND_CATALOG = {
     "aliases": [],
     "help": [
       {
-        "signature": "doctor [--no-remote] [--fix]",
-        "description": "Health-check the install (config, doctrine, per-runtime wiring), and report structural drift from the conventions the harness declares. --fix repairs the mechanical ones, refused on a dirty tree, never committed. --dry-run shows the mutations."
+        "signature": "doctor [--no-remote]",
+        "description": "Check the published installation locally (config, doctrine, integrity, runtime wiring). --no-remote is a compatible no-op; use check for remote versions."
       }
     ]
   },
@@ -94,42 +94,12 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
-  "graph": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "graph <sub>",
-        "description": "Build / gate / report the skill-agent graph (build, check, audit, live, behavior)."
-      },
-      {
-        "signature": "graph <query> <file>",
-        "description": "Ask this project's graph: explain \u00b7 path \u00b7 impact \u00b7 subgraph \u00b7 owners \u00b7 tests-for \u00b7 staleness. Bounded (--max-nodes/--max-depth), read-only, and explicit when the answer may be incomplete."
-      },
-      {
-        "signature": "graph project-build|project-check",
-        "description": "Generate .void/knowledge.json or verify its freshness against a new ProjectGraph build."
-      }
-    ]
-  },
-  "why": {
-    "aliases": [],
-    "help": [{ "signature": "why <file>", "description": "Explain declared decisions, invariants and verification references with provenance; report incomplete knowledge and dangling references." }]
-  },
   "autopilot": {
     "aliases": [],
     "help": [
       {
         "signature": "autopilot [sub]",
-        "description": "The kernel of the continuous delivery loop: next \u00b7 stop \u00b7 arm \u00b7 disarm \u00b7 fingerprint \u00b7 judgment; --json for the skill. Reads .void/program.md, the tracker on stdin and GitHub; decides, and acts only to arm and disarm."
-      }
-    ]
-  },
-  "audit": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "audit",
-        "description": "Self-evolution audit: surface stale / never-fired skills as deprecation candidates. HITL."
+        "description": "The kernel of the continuous delivery loop: next \u00b7 stop \u00b7 arm \u00b7 disarm \u00b7 fingerprint \u00b7 judgment; --json for the skill. Reads explicit config.autopilot v3, provider observations on stdin and GitHub; decides, and acts only to arm and disarm."
       }
     ]
   },
@@ -147,7 +117,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "resume",
-        "description": "Pick this project back up: the session checkpoint, recent decisions, and what is NOT answered. Reads, never guesses."
+        "description": "Pick this project back up: the session checkpoint, Git and what is NOT answered. Reads, never guesses."
       }
     ]
   },
@@ -156,7 +126,7 @@ export const COMMAND_CATALOG = {
     "help": [
       {
         "signature": "ui",
-        "description": "Serve the projects view on localhost, read per request. Loopback only, one-shot token, stops with the command."
+        "description": "Serve the projects view on localhost, read per request. Loopback only, process-local launch token, stops with the command."
       }
     ]
   },
@@ -169,21 +139,12 @@ export const COMMAND_CATALOG = {
       }
     ]
   },
-  "decisions": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "decisions <sub>",
-        "description": "Create, validate, or render one-file ADRs without a shared counter or index."
-      }
-    ]
-  },
   "mission": {
     "aliases": [],
     "help": [
       {
         "signature": "mission <sub>",
-        "description": "Plan a deterministic DAG, then start, resume, verify, inspect, archive, or explicitly prune an auditable local mission run. Inspect --usage adds local skill, hook and specialist counts."
+        "description": "Plan a deterministic DAG, then start, resume, verify, inspect, archive, or explicitly prune an auditable local mission run."
       }
     ]
   },
@@ -220,15 +181,6 @@ export const COMMAND_CATALOG = {
       {
         "signature": "install [--global] [--dry-run]",
         "description": "Install the bundled Claude plugin at user-global scope; init is the project installation entry point."
-      }
-    ]
-  },
-  "cheatsheet": {
-    "aliases": [],
-    "help": [
-      {
-        "signature": "cheatsheet [--format html|markdown|json]",
-        "description": "Discover the shipped catalogue and local availability. Offline document on stdout; HTML by default."
       }
     ]
   },

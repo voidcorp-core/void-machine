@@ -2,7 +2,7 @@
 //
 // A command reads and writes code in the WORK TREE: the directory it was run
 // in. It also reads what `void-machine init` installed -- `.claude/agents`,
-// `.claude/skills`, `.void/installed`, the hook bundle -- and that is a
+// `.claude/skills`, `.void/PHILOSOPHY.md`, the hook bundle -- and that is a
 // property of the REPOSITORY, exactly like the git config or the
 // `info/exclude` file that hides those assets from git. In the main checkout
 // the two coincide. In a linked worktree they do not: `git worktree add`

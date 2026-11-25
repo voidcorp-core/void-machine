@@ -4,7 +4,7 @@
 // A central worker report is coordination state, never independent evidence.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { type ReviewSubject, sameReviewSubject } from '@voidcorp/mission-engine';
+import { ambiguousEffects, canonicalJsonHash, freshReviewProofIds, parseEvidence, type ReviewSubject, sameReviewSubject } from '@voidcorp/mission-engine';
 import {
   existsSync,
   mkdirSync,
@@ -38,12 +38,13 @@ import {
 } from '../lib/autopilot/judgments.js';
 import { loopProgramOf, protectedPathsOf, REVIEW_ATTEMPTS_MAX, REVIEW_RUNNING_MS } from '../lib/autopilot/loop.js';
 import { type GhRunner, type GitRunner, PULL_REQUEST_FIELDS, parsePullRequestView } from '../lib/autopilot/loop-observe.js';
-import { readProgramDescriptor } from '../lib/autopilot/program.js';
+import { requireAutopilotAuthority } from '../lib/autopilot/authority.js';
 import { flagValue } from './autopilot-usage.js';
 import { collectNativeReview } from '../lib/autopilot/native-review.js';
 import { inspectMission, loadMissionControllerPlan } from '../lib/runs/store.js';
 import { resolveProjectRoots } from '../lib/project-roots.js';
-import { readTicket } from '../lib/mission-inputs.js';
+import { observeMissionTeam } from './mission.js';
+import { captureMissionReviewSubject, readTicket } from '../lib/mission-inputs.js';
 import { computeProjectState } from '../lib/runs/project-state.js';
 
 /** Where each head's review is recorded, one directory per ticket. */
@@ -70,7 +71,7 @@ export interface ReviewCommandOutput {
 }
 
 export interface ReviewRunners {
-  /** The coordinator checkout, which owns the programme and `.void/machine/autopilot`. */
+  /** The coordinator checkout, which owns the config authority and `.void/machine/autopilot`. */
   readonly root: string;
   readonly gh: GhRunner;
   /** git with argv in one directory, never through a shell. */
@@ -415,7 +416,7 @@ interface Change {
   readonly paths: readonly string[];
 }
 
-function changeOf(runners: ReviewRunners, path: string, base: string): Change {
+function changeOf(runners: ReviewRunners, path: string, base: string, readOnly = false): Change {
   if (!BRANCH_PATTERN.test(base)) {
     throw autopilotFailure(
       'AUTOPILOT_INPUT',
@@ -424,9 +425,22 @@ function changeOf(runners: ReviewRunners, path: string, base: string): Change {
       'hand the ticket to a person',
     );
   }
-  runners.git(runners.root)(['fetch', '--no-tags', '--quiet', 'origin', base]);
+  const coordinator = runners.git(runners.root);
+  let baseRef = `refs/remotes/origin/${base}`;
+  if (readOnly) {
+    // Git 2.54: ls-remote reads <oid> TAB <ref> without updating local refs.
+    // https://git-scm.com/docs/git-ls-remote/2.54.0
+    const remote = coordinator(['ls-remote', '--refs', 'origin', `refs/heads/${base}`]).trim().split('\t');
+    if (remote.length !== 2 || !SHA_PATTERN.test(remote[0] ?? '') || remote[1] !== `refs/heads/${base}`) {
+      throw Error('NATIVE_DRAFT_REVIEW_REFUSED: current base cannot be observed');
+    }
+    baseRef = remote[0] ?? '';
+  } else coordinator(['fetch', '--no-tags', '--quiet', 'origin', base]);
   const git = runners.git(path);
-  const mergeBase = git(['merge-base', 'HEAD', `refs/remotes/origin/${base}`]).trim();
+  const mergeBase = git(['merge-base', 'HEAD', baseRef]).trim();
+  if (readOnly && mergeBase !== baseRef) {
+    throw Error('NATIVE_DRAFT_REVIEW_REFUSED: base advanced beyond the committed candidate');
+  }
   const range = [mergeBase, 'HEAD'];
   const paths = git(['diff', '--name-only', '--no-renames', ...range]).split('\n').filter((line) => line !== '');
   const full = git(['diff', '--no-color', '--no-ext-diff', '--no-textconv', ...range]);
@@ -441,16 +455,7 @@ function changeOf(runners: ReviewRunners, path: string, base: string): Change {
  * agents, settings, hooks and MCP servers the moment it starts there.
  */
 function protectedPathOf(root: string, paths: readonly string[]): string | undefined {
-  const descriptor = readProgramDescriptor(root);
-  if (descriptor === undefined) {
-    throw autopilotFailure(
-      'AUTOPILOT_PROGRAM',
-      'the loop reviews only under a programme, and this project declares none',
-      '`.void/program.md` is absent, so the protected paths cannot be read',
-      'declare the programme, with its `autopilot` block, before the loop reviews anything',
-    );
-  }
-  const areas = protectedPathsOf(loopProgramOf(descriptor).autopilot).map(compileArea);
+  const areas = protectedPathsOf(loopProgramOf(requireAutopilotAuthority(root)).autopilot).map(compileArea);
   return paths.find((path) => areas.some((area) => areaClaims(area, path)));
 }
 
@@ -614,6 +619,7 @@ async function executeReviewCommand(
   argv: readonly string[], runners: ReviewRunners, legacy: boolean,
 ): Promise<ReviewCommandOutput> {
   const target = targetOf(argv);
+  loopProgramOf(requireAutopilotAuthority(runners.root));
   const fields = PULL_REQUEST_FIELDS.join(',');
   const view = parsePullRequestView(runners.gh(['pr', 'view', String(target.pullRequest), '--json', fields]));
   if (view.state !== 'open' || view.headSha !== target.head) {
@@ -626,17 +632,34 @@ async function executeReviewCommand(
   }
   const path = reviewPath(runners.root, target.ticket, target.head);
   const existing = recordedReview(path, target);
-  if (existing?.verdict !== undefined) {
+  if (existing?.verdict !== undefined && !view.draft) {
     return { value: existing, human: `${target.ticket} at ${target.head} is already reviewed\n` };
   }
   const last = existing?.attempts.at(-1);
   const legacyOpen = last?.runId !== undefined && last.endedAt === undefined;
+  if (view.draft && (legacy || legacyOpen)) {
+    throw Error('NATIVE_DRAFT_REVIEW_REFUSED: a draft requires canonical native mission admission');
+  }
   const native = !legacy && !legacyOpen
-    ? await prepareNativeMission(argv, runners, target, view.baseRef) : undefined;
+    ? await prepareNativeMission(argv, runners, target, view.baseRef, view.draft, existing) : undefined;
   const release = lockHead(path, runners.now());
   try {
     // Preflight yields to other invocations. Only the locked record owns the attempt and routing.
     const current = recordedReview(path, target);
+    if (view.draft && native !== undefined) {
+      const latest = parsePullRequestView(runners.gh(['pr', 'view', String(target.pullRequest), '--json', fields]));
+      if (latest.state !== 'open' || latest.headSha !== target.head || latest.baseRef !== view.baseRef
+        || latest.draft !== view.draft) {
+        throw Error('NATIVE_DRAFT_REVIEW_REFUSED: pull request changed during admission');
+      }
+      const refreshed = await prepareNativeMission(argv, runners, target, view.baseRef, true, current);
+      if (native.admission !== refreshed.admission) {
+        throw Error('NATIVE_DRAFT_REVIEW_REFUSED: mission or candidate changed during admission');
+      }
+      if (current?.subject !== undefined && !sameReviewSubject(current.subject, refreshed.subject)) {
+        throw Error('native review subject changed during the attempt');
+      }
+    }
     if (current?.verdict !== undefined) {
       return { value: current, human: `${target.ticket} at ${target.head} is already reviewed\n` };
     }
@@ -676,10 +699,13 @@ function payloadField(payload: unknown, key: string): unknown {
 /** Bind the assigned checkout before consuming an attempt or creating its review checkout. */
 async function prepareNativeMission(
   argv: readonly string[], runners: ReviewRunners, target: ReviewTarget,
-  base: string,
+  base: string, draft = false, existing?: LocalReview,
 ) {
   const mission = flagValue(argv, '--mission');
   if (mission === undefined) throw Error('NATIVE_REVIEW_REQUIRED: pass --mission with the canonical review mission; use void-orchestrate for the actual native reviewer');
+  if (draft && flagValue(argv, '--worktree') === undefined) {
+    throw Error('NATIVE_DRAFT_REVIEW_REFUSED: pass the known --mission and --worktree explicitly');
+  }
   const roots = resolveProjectRoots(resolve(runners.root, flagValue(argv, '--worktree') ?? '.'));
   const common = (root: string) => realpathSync(runners.git(root)([
     'rev-parse', '--path-format=absolute', '--git-common-dir',
@@ -704,11 +730,55 @@ async function prepareNativeMission(
   }
   const writer = payloadField(start?.payload, 'leadWriterId');
   if (typeof writer !== 'string') throw Error('native mission has no canonical lead writer identity');
-  const change = changeOf(runners, roots.workRoot, base);
+  const change = changeOf(runners, roots.workRoot, base, draft);
   if (stored.baseCommit !== change.mergeBase) throw Error('native review base differs from the frozen mission base');
   const subject: ReviewSubject = { taskId: mission, reviewedCommit: target.head,
     baseCommit: change.mergeBase, acceptanceCriteriaHash: stored.ticket.contentHash };
-  return { mission, roots, stored, writer, change, subject };
+  const admission = draft ? await admitDraftMission(roots, subject, change.paths, runners.root, writer, target.round, existing) : undefined;
+  return { mission, roots, stored, writer, change, subject, admission };
+}
+
+/** The controller owns lifecycle and applicable obligations; this adapter binds its proof to Git. */
+async function admitDraftMission(
+  roots: ReturnType<typeof resolveProjectRoots>, subject: ReviewSubject, paths: readonly string[],
+  coordinatorRoot: string, writer: string, round: 1 | 2, existing?: LocalReview,
+): Promise<string> {
+  const observed = await observeMissionTeam(roots, subject.taskId);
+  const { current, inspected, decision } = observed;
+  const events = inspected.stream.events;
+  const action = decision.action;
+  const diffHash = current?.project.diffHash;
+  const context = { missionId: subject.taskId, dependencies: diffHash === undefined ? {}
+    : { 'git:working-tree': diffHash } };
+  const last = existing?.attempts.at(-1);
+  const collecting = action.kind === 'run-correction' && existing?.verdict === undefined
+    && last !== undefined && last.endedAt === undefined && last.runId === undefined
+    && existing?.subject !== undefined && sameReviewSubject(existing.subject, subject);
+  if (collecting) await collectNativeReview(roots.installRoot, events, subject, writer, round, context);
+  if (ambiguousEffects(events) || !(collecting || action.kind === 'complete'
+    || (action.kind === 'invoke-specialists' && action.stage === 'post-implementation'
+      && action.specialistIds.includes(REVIEWER_SPECIALIST)))) {
+    throw Error(`NATIVE_DRAFT_REVIEW_REFUSED: ${decision.reasons.join('; ') || action.kind}`);
+  }
+  const captured = await captureMissionReviewSubject(roots.workRoot, subject.baseCommit, true);
+  if (captured.reviewedCommit !== subject.reviewedCommit
+    || observed.stored.ticket.contentHash !== subject.acceptanceCriteriaHash) {
+    throw Error('NATIVE_DRAFT_REVIEW_REFUSED: committed subject changed');
+  }
+  const guarded = protectedPathOf(coordinatorRoot, paths);
+  if (guarded !== undefined) throw Error(`NATIVE_DRAFT_REVIEW_REFUSED: protected path ${guarded}`);
+  const fresh = new Set(freshReviewProofIds(events, context));
+  const boundProof = events.some(event => {
+    if (event.kind !== 'evidence.recorded') return false;
+    const parsed = parseEvidence(payloadField(event.payload, 'evidence'));
+    return parsed.ok && fresh.has(parsed.value.evidenceId) && parsed.value.exitCode === 0
+      && parsed.value.diffHash === diffHash && parsed.value.dependencies.some(dependency =>
+        dependency.key === 'git:working-tree' && dependency.hash === diffHash);
+  });
+  if (!boundProof || inspected.verdict.status !== 'verified' || inspected.verdict.staleEvidence > 0) {
+    throw Error(`NATIVE_DRAFT_REVIEW_REFUSED: current applicable verification is missing or invalid; ${inspected.verdict.reasons.join('; ')}`);
+  }
+  return canonicalJsonHash({ events, subject, diffHash });
 }
 
 async function reviewNativeHead(

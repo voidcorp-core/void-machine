@@ -1,5 +1,5 @@
 /**
- * Tests for packages/core/hooks/protect-sensitive-files.sh
+ * Tests for packages/core/dist/hooks/protect-sensitive-files.sh
  *
  * PreToolUse hook (https://code.claude.com/docs/en/hooks): reads the tool-call
  * JSON from stdin and blocks Edit/Write to files that must never be hand-edited
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HOOK = resolve(process.cwd(), 'packages/core/hooks/protect-sensitive-files.sh');
+const HOOK = resolve(process.cwd(), 'packages/core/dist/hooks/protect-sensitive-files.sh');
 
 interface Call {
   readonly tool: string;

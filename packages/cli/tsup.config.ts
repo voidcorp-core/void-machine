@@ -10,7 +10,7 @@ export default defineConfig({
   // No source map in the published CLI: consumers never debug it, and it is the largest file in the
   // tarball. Rebuild locally with `--sourcemap` if you ever need one for development.
   sourcemap: false,
-  clean: true,
+  clean: ['dist/*.js', 'dist/*.map', 'dist/*.d.ts'],
   splitting: false,
   // Bundled CommonJS internals (notably yaml) need createRequire in the ESM
   // artifact; without the shim an extracted offline tarball crashes at startup.
@@ -23,7 +23,6 @@ export default defineConfig({
   // These packages remain devDependencies for compilation/tests only.
   noExternal: [
     '@clack/prompts',
-    '@voidcorp/harness-graph',
     '@voidcorp/hook-runner',
     '@voidcorp/mission-engine',
     '@voidcorp/void-machine',

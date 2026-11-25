@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   readFileSync,
+  renameSync,
   readdirSync,
   writeFileSync,
 } from 'node:fs';
@@ -13,6 +14,9 @@ import {
   createReleaseArtifactManifest,
   parseReleaseTag,
 } from './release-artifact-contract.mjs';
+import { packConformanceArtifact, verifyConformanceArtifact } from '../packages/cli/scripts/conformance-artifact.mjs';
+import { checkPublishSafety } from './check-publish-safety.mjs';
+import { checkPackageSize } from './check-package-size.mjs';
 import { PRODUCT_IDENTITY } from './product-identity.mjs';
 
 function requiredEnv(name) {
@@ -93,7 +97,7 @@ function versionEntries(root) {
   return [{ file: '.release-please-manifest.json', version: manifest['.'] }, ...entries];
 }
 
-function prepareArtifact() {
+function releaseCandidate() {
   const releaseTag = requiredEnv('RELEASE_TAG');
   const version = parseReleaseTag(releaseTag);
   const releaseCommit = requiredEnv('RELEASE_COMMIT');
@@ -104,10 +108,46 @@ function prepareArtifact() {
     throw new Error('checked-out release tree does not match the resolved release commit');
   }
   assertVersionEntries(version, versionEntries(releaseTree));
+  const status = git(releaseTree, ['status', '--porcelain=v1', '--untracked-files=all']);
+  if (status !== '') throw new Error(`release source checkout is not clean:\n${status}`);
+  return { releaseTag, version, releaseCommit, releaseTree, artifactDir };
+}
+
+async function packArtifact() {
+  requiredEnv('GITHUB_RUN_ID');
+  requiredEnv('GITHUB_RUN_ATTEMPT');
+  const candidate = releaseCandidate();
+  // Current control owns generation order and metadata, even for historical tags.
+  await packConformanceArtifact(candidate.artifactDir, candidate.releaseTree);
+}
+
+function checkArtifact() {
+  const candidate = releaseCandidate();
+  const tarball = join(candidate.artifactDir, 'consumer.tgz');
+  verifyConformanceArtifact(tarball, candidate.releaseCommit, {
+    packageVersion: candidate.version,
+    runIdentity: `${requiredEnv('GITHUB_RUN_ID')}:${requiredEnv('GITHUB_RUN_ATTEMPT')}`,
+  });
+  checkPublishSafety(tarball);
+  checkPackageSize(tarball);
+}
+
+function prepareArtifact() {
+  const { releaseTag, version, releaseCommit, artifactDir } = releaseCandidate();
 
   const tarballNames = readdirSync(artifactDir).filter((name) => name.endsWith('.tgz'));
   if (tarballNames.length !== 1) {
     throw new Error('release artifact directory must contain exactly one tarball');
+  }
+  if (tarballNames[0] === 'consumer.tgz') {
+    const source = join(artifactDir, 'consumer.tgz');
+    verifyConformanceArtifact(source, releaseCommit, {
+      packageVersion: version,
+      runIdentity: `${requiredEnv('GITHUB_RUN_ID')}:${requiredEnv('GITHUB_RUN_ATTEMPT')}`,
+    });
+    const canonical = `${PRODUCT_IDENTITY.packageName}-${version}.tgz`;
+    renameSync(source, join(artifactDir, canonical));
+    tarballNames[0] = canonical;
   }
   const tarballPath = join(artifactDir, tarballNames[0]);
   const tarballBytes = readFileSync(tarballPath);
@@ -137,8 +177,10 @@ function prepareArtifact() {
 try {
   const command = process.argv[2];
   if (command === 'resolve') resolveRelease();
+  else if (command === 'pack') await packArtifact();
+  else if (command === 'check') checkArtifact();
   else if (command === 'prepare') prepareArtifact();
-  else throw new Error('usage: prepare-release-artifact.mjs <resolve|prepare>');
+  else throw new Error('usage: prepare-release-artifact.mjs <resolve|pack|check|prepare>');
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`prepare-release-artifact: ${message}\n`);

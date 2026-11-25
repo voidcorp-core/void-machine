@@ -4,24 +4,24 @@
 
 ## Void Machine (managed by `void-machine init`)
 
-Codex doctrine active in this project:
+Shared doctrine active in this project:
 
 - `void` — universal craftsman skills (TDD, TypeScript strict, hexagonal, DDD, ...)
 
 ### Doctrine — read at the start of every session
 
-- `.void/installed/PHILOSOPHY.md`
-- `.void/PROJECT-DOCTRINE.md`
+- Read exactly one published universal doctrine: `.void/PHILOSOPHY.md` when present, otherwise `.void/installed/PHILOSOPHY.md`. Never substitute working product sources.
+@.void/PROJECT-DOCTRINE.md
 
 `PHILOSOPHY.md` is the universal Void Machine doctrine (managed — overwritten on init). `PROJECT-DOCTRINE.md` holds project-specific rules: context, ADRs, in-flight decisions (yours; init never overwrites what you have written in it).
 
 To capture a new rule, just say it ("ajoute la règle…", "always X here", "never Y"). The `void-learn` workflow classifies project-specific vs universal, proposes the wording, waits for your confirmation, then writes. Never silent.
 
-Every skill is invoked by its name: `$void-implement`, `$void-tdd`. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.
+Every skill is invoked by its name: Codex uses `$void-implement`, `$void-tdd`; Claude Code uses `/void-implement`, `/void-tdd` in this locally installed repository. A skill that composes another names it the same way; the syntax is the runtime's, the name is the skill's.
 
-### Program — when present
+### Resume and autonomous selection
 
-If `.void/program.md` exists with `status: executing`, read it and its linked plan/spec before choosing implementation work. The programme holds global context; the local checkpoint holds session residue, and `ResumeBundle` composes both with Git. On a continue/start/resume request without a named work unit, use the declared progress provider: recover the scoped unit if exactly one is started; if several are started, stop and surface the competing claims; otherwise select the first ready unit from the declared order and native blocker relations. Fetch the complete unit before running `void-implement`. The declared progress provider owns mutable execution state; the program and checkpoint never store a current or next unit. If the provider or a required capability is unavailable, do not infer remote progress; stop the action that needs it. If no progress provider is declared, require a specific unit instead of selecting one. A specific user request overrides selection; human holds, protected-path changes and deployment promotion remain human; an explicitly enabled autopilot may merge an admissible exact head into its integration branch. The file's `autopilot` block carries consent to autonomous execution and is never inferred: `enabled: false`, an absent block, or an unreadable one forbids autonomous selection entirely.
+Autonomous selection requires an explicit `.void/config.json` `autopilot` declaration with `schemaVersion: 3` and boolean `enabled`. `enabled: false`, an absent block, an older version, invalid or unreadable config refuses dependent autonomous actions. Historical programmes and checkpoint intentions grant no authority; never migrate consent automatically. On continue/start/resume, read the complete checkpoint and the approved plan linked by the native milestone located through `progress.provider/scope/states`. The scope is an opaque native project-and-milestone locator. Verify actual ticket membership, full criteria, blockers and human holds before selection. Reconcile all engaged tickets, PRs, Git and native workers; do not duplicate uncertain workers or stop independent authorized work merely because several tickets are engaged. Refresh affected observations and use the mutable planned list as intent within the authorized scope, preserving human priorities and assignments. The declared progress provider owns mutable execution state. If provider, scope or plan is unavailable, do not infer remote progress; stop only dependent selection. A specific user request governs its named unit. Human holds, protected paths and deployment promotion remain human. Fetch the complete unit before running `void-implement`. `ResumeBundle` composes checkpoint and Git offline; references and intentions are not authorization or fresh proof.
 
 An authorized merge includes routine local synchronization by the coordinator without asking for confirmation again. Verify the branch, remote, and verified merged commit, then fetch and advance the clean local target branch with `git merge --ff-only` to that commit. Stop on local changes, divergence, or an unexpected remote tip; preserve the work. This does not authorize another remote merge, deployment, history rewrite, or changes to shared Git state by commit-only workers. Runtime sandbox and approval controls still apply; never bypass them.
 
@@ -31,7 +31,9 @@ Run `void-machine doctor` to verify the install.
 
 <!-- void-machine:end -->
 
-> **Sister doc**: `CLAUDE.md` is the Claude Code-flavored mirror of this file. The two are maintained in sync — any change to one MUST be reflected in the other in the same commit. CI enforces this on every push (`pnpm sync:docs`, which compares section headings after terminology normalization); the pre-commit hook in `.githooks/` refuses a commit that stages one sister doc without the other, and `pnpm install` wires it through the root `prepare` script so a fresh clone inherits the check instead of having to opt in. Adapted terminology only (Codex/tools ↔ Claude/Skill tool); the doctrine is identical.
+> **Published source-checkout floor**: the explicit philosophy read above works before and after a separately authorized installed migration without importing both copies. Consumer instructions directly reference `.void/PHILOSOPHY.md`; changing source documentation never activates working doctrine.
+
+> **Common instructions**: this file is the shared source. `CLAUDE.md` imports it with native `@AGENTS.md`; runtime-specific invocation syntax is stated explicitly here. Edit the owner rather than maintaining a second copy.
 
 You are working inside the **void-machine** repo itself — the meta-repo that produces the harness (Codex + Claude Code) for every VoidCorp project. This file governs work **on the harness**, not work on projects that consume it.
 
@@ -55,28 +57,16 @@ A **public, MIT** harness installed free and account-free via `npx voidmachine` 
 ## Read before writing
 
 1. `README.md` — vision + target architecture
-2. `docs/PHILOSOPHY.md` — three pillars (safety / performance / DX) + sources
+2. `packages/core/src/PHILOSOPHY.md` — three pillars (safety / performance / DX) + sources
 3. `docs/ARCHITECTURE.md` — package boundaries + dependency direction
 4. `docs/specs/` and `docs/plans/` — approved designs, and how each was executed
 
-## Program bootstrap
+## Resume and selection
 
-`.void/program.md` is the durable global programme descriptor when it exists with
-`status: executing`. Before choosing implementation work, read its global plan and spec.
-`ResumeBundle` composes that context with the local checkpoint and Git.
-
-If the user asks to continue, start, or resume without naming a work unit:
-
-1. use the declared progress adapter and recover exactly one already-started scoped unit;
-2. if several units are started, stop and surface the competing claims;
-3. otherwise select the first ready unit from the declared order and native blocker relations;
-4. fetch the complete provider-native unit and relations before running `void-implement`;
-5. keep mutable provider state and review evidence current when the adapter supports them.
-
-The declared provider owns mutable progress. The programme and checkpoint never store a current or
-next unit. If no provider is declared, require a specific unit; if a required capability is
-unavailable, stop that action rather than infer remote progress. A specific user request overrides
-automatic selection. Human holds, protected-path changes and deployment promotion remain human. An explicitly enabled autopilot may merge an admissible exact head into its integration branch.
+Config owns explicit autonomous authority; the native milestone links the approved plan and
+owns ticket membership. The checkpoint preserves local observations and planned intentions.
+Follow the managed bootstrap above and `void-autopilot` for bounded selection and reconciliation.
+Historical programmes remain project-owned files and are not read or rewritten by the runtime.
 
 ## Visible mission workspace
 
@@ -90,14 +80,14 @@ an agent for display or control an existing surface from the harness.
 
 Eight hard rules. **Any PR violating these is blocked.**
 
-1. **≤ 400 lines per skill.** No exception. If you need more, split.
+1. **Keep skills concise.** Load detailed references only when useful; split by responsibility, not line count.
 2. **One skill = one subject.** A skill that talks about TDD AND mutation testing splits into two.
 3. **No responsibility overlap > 30%** between two skills. If detected, fuse or clarify boundary.
 4. **Discovery `description` hard cap 500 chars; editorial target ≤ 250**, for skills and agents. Exceeding the target alone is non-blocking; use 251–500 only for triggers, synonyms, or exclusions that improve selection. Procedure stays in the body.
-5. **Hooks ≤ 100 lines**, shell or simple TS. No DSL maison, no framework. Shared logic goes in a sourced, `_`-prefixed hook library (e.g. `hooks/_hooklib.sh`), which is exempt from the per-hook cap.
+5. **Focused hooks**, shell or simple TS. Keep injected context concise, diagnostics actionable and shared logic in a sourced, `_`-prefixed library. Preserve syntax and behavioral checks; no line-count cap.
 6. **Agents have an explicit scope**. `doctrine-critic` judges code against doctrine — it does not also do QA, design, or shipping (those are their own skills/workflows).
 7. **Skill tests pass in CI.** A broken skill blocks the release.
-8. **Every skill this harness ships is named `void-<what someone would type>`**, and its frontmatter declares which grammar applies to the part after the prefix. `kind: action` takes the bare verb (`void-plan`, `void-verify`, `void-implement`); `kind: standard` takes the subject it governs (`void-tdd`, `void-observability`, `void-accessibility`). The prefix is not decoration: a runtime resolves skills from several providers, a bare name is a claim on a common word, and the level this harness installs into loses every collision it enters — silently. See the decision on prefixing every shipped skill. Agents, which live apart, take a person you could hire (`solution-architect`, `doctrine-critic`). No gerund on an action, no agent-noun for a mechanism (`-writer`, `-runner`), no filler suffix (`-workflow`, `-management`, `-first`). Enforced by `scripts/anti-bloat-check.sh`, and every reference is proven to resolve by `pnpm skills:check-references`. **Renaming a skill starts at `docs/SKILL-REFERENCES.md`** — the generated register of every place code names a skill, plus every `void-` name that is machinery rather than a skill. It is not maintained by hand: `pnpm derive` regenerates it, `pnpm derive:check` fails when it is stale, and the same script refuses any `void-` token or any `skills/<name>/SKILL.md` path that resolves to nothing. A probe naming the `tdd` directory survived the prefix pass and made `init` report sixteen missing native specialists, which is nowhere near the cause; that class of failure is now a red build. That name has exactly one owner: a runtime answers `/<name>` from `skills/<name>/SKILL.md` and from `commands/<name>.md` alike, so a name defined in both is offered twice with two descriptions that drift apart — a command that only restates a skill is deleted, not renamed.
+8. **Every skill this harness ships is named `void-<what someone would type>`**, and its frontmatter declares which grammar applies to the part after the prefix. `kind: action` takes the bare verb (`void-plan`, `void-verify`, `void-implement`); `kind: standard` takes the subject it governs (`void-tdd`, `void-observability`, `void-accessibility`). The prefix is not decoration: a runtime resolves skills from several providers, a bare name is a claim on a common word, and the level this harness installs into loses every collision it enters — silently. See the decision on prefixing every shipped skill. Agents, which live apart, take a person you could hire (`solution-architect`, `doctrine-critic`). Prefer bare action verbs and meaningful subjects; review unclear names in context. Technical names, prefix, kind and directory identity are enforced by `scripts/anti-bloat-check.sh`, and every reference is proven to resolve by `pnpm skills:check-references`. Use repository search when renaming a skill. The existing reference checker validates names and `skills/<name>/SKILL.md` paths in code, with explicit allowances for retired names, internal identifiers and consumer-owned skills; no generated register is maintained. A probe naming the `tdd` directory survived the prefix pass and made `init` report sixteen missing native specialists, which is nowhere near the cause; that class of failure is now a red build. That name has exactly one owner: a runtime answers `/<name>` from `skills/<name>/SKILL.md` and from `commands/<name>.md` alike, so a name defined in both is offered twice with two descriptions that drift apart — a command that only restates a skill is deleted, not renamed.
 
 ## Sourcing discipline (no verbatim vendoring)
 
@@ -108,7 +98,7 @@ For each skill:
 - Read the source, extract the load-bearing principles ("why it works")
 - Rewrite for void-machine, removing what doesn't fit, adding what's missing
 - Add a `.source` file next to the skill listing inspirations + URLs
-- Document the specific adaptations and rejections in `docs/plans/skill-audits/<skill-name>.md` (one audit note per skill)
+- Keep important adaptation rationale with `.source`; retain useful historical audit notes without requiring a second document per skill
 - **Never reinvent without justified improvement.** YAGNI applies hardest here.
 
 A skill that ends up 95% the same as its source remains valuable as "voidcorp's deliberately authored version" — but it was rewritten, not pasted.
@@ -127,7 +117,7 @@ A skill that ends up 95% the same as its source remains valuable as "voidcorp's 
 
 void-machine is installed **in void-machine**, through the same `npx voidmachine init` a consumer runs. The enforcement floor that guards a customer project guards this one: write a secret, a `console.log`, an `any` or a `null` here and the write is refused, exactly as it would be in their repo.
 
-What is active here is the **published** harness, not the working tree. That distinction is the whole safety of the arrangement: a rule broken while being developed cannot lock the repo it is being developed in. `.void/hooks/` therefore carries a released bundle, deliberately different from `packages/core/hooks/`, and is committed so a fresh clone — or an autopilot worktree — inherits the floor rather than silently losing it. `.codex/hooks.json` is committed for the same reason.
+What is active here is the **published** harness, not the working tree. That distinction is the whole safety of the arrangement: a rule broken while being developed cannot lock the repo it is being developed in. `.void/hooks/` therefore carries a released bundle, deliberately different from `packages/core/src/hooks/`, and is committed so a fresh clone — or an autopilot worktree — inherits the floor rather than silently losing it. `.codex/hooks.json` is committed for the same reason.
 
 This is separate from `void-machine self-host sync`, which compiles the **current sources** into an isolated artifact under `.void/machine/generated/` and never wires the repo root (see `docs/ARCHITECTURE.md`, "Source self-host boundary"). Two different questions: self-host asks *do the sources still compile into a working harness*, the install asks *does the shipped harness hold while we work*.
 
@@ -136,7 +126,7 @@ Before this, the floor ran in every consumer project and in none of ours — whi
 ## Meta-rules
 
 - Any new convention added in a commit MUST be reflected in `docs/*.md` in the same commit
-- Any non-obvious decision (where a credible alternative exists) MUST be created as its own collision-free file with `void-machine decisions new`; accepted decision content is immutable and changes supersede it. The only in-place exception is a bounded repository-local reference migration whose surrounding text is unchanged and whose new target exists inside the repository. Accepted files are never deleted or renamed. `docs/DECISIONS.md` is a frozen legacy landing page, never a worker-owned artifact; `pnpm decisions:check` gates structure and immutability.
+- Record a lasting structural decision with a credible alternative as a short Markdown file with light frontmatter, following `void-decide`. Use a stable unique name and identity, with no shared counter. Preserve historical files, IDs, metadata and links, including `docs/DECISIONS.md`. Ordinary wording, typo and link corrections use normal Git commits; a material change is a new decision linking its predecessor. Doctrine changes still require the human agreement owned by `void-learn`.
 - Removed concepts must be removed from the docs at the same time
 - Tests run via `pnpm test`; do not skip TDD when adding logic
 - Versions are never hand-edited: release-please bumps every manifest in lockstep from Conventional Commits, and `pnpm version:check` fails CI on any drift (see `docs/RELEASING.md`)
@@ -169,9 +159,9 @@ Before this, the floor ran in every consumer project and in none of ours — whi
 The harness improves from real project usage, never auto-applied.
 
 - **Inbound**: while coding in a consumer project, a perceived "the harness should have X" is filed directly as a GitHub issue here (with source-project context), once it clears the agnostic + harness-worthy bar. The tracker is the triage zone; there is no per-project `proposed/` queue and no `feedback push` step.
-- **Outbound**: the maintainer CLI `void-machine audit` reports skills not invoked recently, upstream deprecations, repeated matrix conflicts. Proposes deprecations as PRs.
+- **Requested evaluation**: inspect concrete evidence and propose a bounded change through `void-learn`; no automatic usage audit or absence-of-use inference.
 - **HITL is absolute**: no automatic write into doctrine, ever. Every change is a deliberate commit.
 
 ## Autonomous mode (opt-in)
 
-`void-autopilot` (core skill) is the single, **in-session** delivery loop. It replaced the cluster engine at the 2026-09-24 cutover, which deleted that engine rather than deprecating it — two engines in one release means two answers to "how does autonomous work reach `develop`". A human launches `void-autopilot`; it keeps up to four tickets in flight, one worker and one pull request each. A curator ranks the ready work; the loop admits a ticket only with a footprint that names its ground, runs disjoint footprints in parallel and colliding ones in sequence (lockfiles and migrations always sequential), and gives each worker its own worktree, where it runs `void-implement` whole. There is **one merge mode**, with no key to configure: the loop merges into the integration branch on a local verdict, and `autopilot review` produces it by collecting an actual fresh-context, read-only native reviewer's canonical receipt in a worktree detached at the exact head, checking that worktree's `HEAD` before and after collection, and recording the verdict bound to its exact commit, base, acceptance criteria and independent invocation; nothing read on GitHub decides a merge. A head merges once that verdict is clean, no check on it fails or is pending, no protected path is touched and its branch is up to date with the base: `autopilot merge` merges exactly that head with `gh pr merge --match-head-commit`, falling back to the native auto-merge on the same head when the base's policy refuses a direct merge, and `autopilot arm` enters it in the merge queue where the base has one. When a person says they merge themselves, `void-machine autopilot merges --by-human` writes a hold in the machine's local state (`.void/machine/autopilot/merge-hold.json`, never the protected programme), read on every tick: each pull request then goes to that person after its review, never before, and `--automatic` removes the hold. A consumer project sets up nothing on GitHub. This repository uses the same local independent review authority; GitHub enforces deterministic CI and the merge queue. External contributions require maintainer review, and protected paths and promotion to `main` stay human. The deterministic kernel is the CLI `void-machine autopilot` (`next`, `review`, `merges`, `merge`, `update-branch`, `stop`, `arm`, `disarm`, `fingerprint`, `judgment`): `next` rebuilds the state from the tracker, GitHub, git and the hold on every tick and decides; the skill acts. Durable boundaries: consent is the programme's `autopilot` block, never a run flag; **there is no `--auto-merge` flag, on any path**; a merge happens only on a head a clean local verdict holds, which `merge` and `arm` prove again themselves, re-read afterwards, and an armed merge is disarmed the moment the loop can no longer vouch for it or a person takes the merges; never into the branch that deploys (`autopilot.deployBranch`, or the repository default branch); never on a pull request that touches the machinery that judges merges (the protected-paths floor), which goes to a person; workers are **commit-only** and write nothing the repository shares across worktrees (`refs/stash`, tags, notes, remotes, config), which a fingerprint before and after each unit proves; without a merge queue the loop merges one pull request at a time and brings the base into a head it moved past, whose new head is reviewed again; security hooks live; skip-permissions full-auto sandbox-gated. Promotion to the deploying branch stays human, and what a person judges there is the feature, not the code. A **headless backend** (walk-away/cron) is reserved and deferred. See `docs/specs/2026-09-22-autopilot-native-loop.md`, `docs/plans/2026-09-22-autopilot-native-loop-plan.md`, the continuous-loop ADR, and `docs/specs/2026-09-28-autopilot-merge-without-consumer-setup.md` with its ADR for the single merge mode.
+`void-autopilot` (core skill) is the single, **in-session** delivery loop. It replaced the cluster engine at the 2026-09-24 cutover, which deleted that engine rather than deprecating it — two engines in one release means two answers to "how does autonomous work reach `develop`". A human launches `void-autopilot`; it keeps up to four tickets in flight, one worker and one pull request each. A curator selects bounded ready work within the authorized project and milestone; the loop admits a ticket only with a footprint that names its ground, runs disjoint footprints in parallel and colliding ones in sequence (lockfiles and migrations always sequential), and gives each worker its own worktree, where it runs `void-implement` whole. There is **one merge mode**, with no key to configure: the loop merges into the integration branch on a local verdict, and `autopilot review` produces it by collecting an actual fresh-context, read-only native reviewer's canonical receipt in a worktree detached at the exact head, checking that worktree's `HEAD` before and after collection, and recording the verdict bound to its exact commit, base, acceptance criteria and independent invocation; nothing read on GitHub decides a merge. A head merges once that verdict is clean, no check on it fails or is pending, no protected path is touched and its branch is up to date with the base: `autopilot merge` merges exactly that head with `gh pr merge --match-head-commit`, falling back to the native auto-merge on the same head when the base's policy refuses a direct merge, and `autopilot arm` enters it in the merge queue where the base has one. When a person says they merge themselves, `void-machine autopilot merges --by-human` writes a hold in the machine's local state (`.void/machine/autopilot/merge-hold.json`, never the protected config declaration), read on every tick: each pull request then goes to that person after its review, never before, and `--automatic` removes the hold. A consumer project sets up nothing on GitHub. This repository uses the same local independent review authority; GitHub enforces deterministic CI and the merge queue. External contributions require maintainer review, and protected paths and promotion to `main` stay human. The deterministic kernel is the CLI `void-machine autopilot` (`next`, `review`, `merges`, `merge`, `update-branch`, `stop`, `arm`, `disarm`, `fingerprint`, `judgment`): `next` rebuilds the state from the tracker, GitHub, git and the hold on every tick and decides; the skill acts. Durable boundaries: consent is the explicit config `autopilot` block, requiring an explicit schemaVersion: 3 declaration (see `docs/AUTOPILOT-AUTHORITY.md`), never a run flag; **there is no `--auto-merge` flag, on any path**; a merge happens only on a head a clean local verdict holds, which `merge` and `arm` prove again themselves, re-read afterwards, and an armed merge is disarmed the moment the loop can no longer vouch for it or a person takes the merges; never into the branch that deploys (`autopilot.deployBranch`, or the repository default branch); never on a pull request that touches the machinery that judges merges (the protected-paths floor), which goes to a person; workers are **commit-only** and write nothing the repository shares across worktrees (`refs/stash`, tags, notes, remotes, config), which a fingerprint before and after each unit proves; without a merge queue the loop merges one pull request at a time and brings the base into a head it moved past, whose new head is reviewed again; security hooks live; skip-permissions full-auto sandbox-gated. Promotion to the deploying branch stays human, and what a person judges there is the feature, not the code. A **headless backend** (walk-away/cron) is reserved and deferred. See `docs/specs/2026-09-22-autopilot-native-loop.md`, `docs/plans/2026-09-22-autopilot-native-loop-plan.md`, the continuous-loop ADR, and `docs/specs/2026-09-28-autopilot-merge-without-consumer-setup.md` with its ADR for the single merge mode.

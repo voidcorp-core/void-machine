@@ -1,0 +1,14 @@
+Sources for `void-functional` skill (see `docs/plans/skill-audits/void-functional.md` for full audit):
+
+- Scott Wlaschin "Domain Modeling Made Functional" — https://pragprog.com/titles/swdddf — DDD + FP synthesis, Result for railway-oriented programming
+- Mark Seemann "Code That Fits in Your Head" — FP discipline, complexity budget, command-query separation
+- Gary Bernhardt "Functional Core, Imperative Shell" — DCDC 2012 talk — mental model
+- Vlad Khorikov "Enterprise Craftsmanship" — Result alternative to exceptions, immutability rationale
+- citypaul/.dotfiles fp notes — pragmatic FP-in-TS without Effect-TS
+- fp-ts — https://gcanti.github.io/fp-ts/ — referenced, NOT vendored as default
+- Effect-TS — https://effect.website — referenced as future opt-in pack, NOT default
+- Eric Normand "Grokking Simplicity" — calculations vs actions framing
+
+Strategy: distill. Reject Effect-TS / fp-ts / point-free / monad transformers as defaults. Standardize Result<T, E> + Option<T> + pipe helpers in @voidcorp/core (≤ 50 LOC total).
+
+Absence handling is checked through types, behavior tests and review; no literal-null write gate.

@@ -5,7 +5,7 @@ the trade-offs already settled, the rules it has paid for. Loaded into every ses
 only what you want read every time.
 
 This file is yours. `void-machine init` creates it, and never overwrites one you have written in.
-Universal rules live in `.void/installed/PHILOSOPHY.md` and belong to the harness.
+Universal rules belong to the harness; AGENTS.md selects the active published philosophy.
 
 Say a rule out loud — "ajoute la règle…", "always X here", "never Y" — and `void-learn` proposes
 the wording, waits for your yes, then writes it here. Sections appear as you use them.
@@ -27,8 +27,8 @@ https://github.com/voidcorp-core/void-machine/blob/main/docs/PROJECT-DOCTRINE-FO
 ## Hard rules
 
 - **Worktrees Git** : appliquer l'invariant universel
-  [Git worktree placement and lifetime](https://github.com/voidcorp-core/void-machine/blob/develop/packages/core/PHILOSOPHY.md#git-worktree-placement-and-lifetime),
-  porté dans `packages/core/PHILOSOPHY.md` et sa copie `docs/PHILOSOPHY.md`.
+  [Git worktree placement and lifetime](https://github.com/voidcorp-core/void-machine/blob/develop/packages/core/src/PHILOSOPHY.md#git-worktree-placement-and-lifetime),
+  porté dans `packages/core/src/PHILOSOPHY.md`.
   Il couvre emplacement durable, réutilisation, migration conservatrice et cycle
   de vie lié au ticket, indépendamment des outils d'affichage.
   - **Why** : une seule règle autoritaire partagée par les consommateurs et les skills.

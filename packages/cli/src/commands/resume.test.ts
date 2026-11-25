@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,12 +29,12 @@ function project(withProgram = true): { readonly root: string; readonly output: 
 }
 
 describe('resume command', () => {
-  it('renders the canonical program with generic work units', async () => {
+  it('keeps historical programmes out of local resume output', async () => {
     const capture = project();
 
     await resume([]);
 
-    expect(capture.output()).toContain('demo');
+    expect(capture.output()).not.toContain('demo');
     expect(capture.output()).not.toContain('tickets');
   });
 
@@ -44,7 +44,8 @@ describe('resume command', () => {
     await resume(['--json']);
 
     const bundle = JSON.parse(capture.output()) as Record<string, unknown>;
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
+    expect(bundle).not.toHaveProperty('program');
     expect(bundle).toHaveProperty('project');
     expect(bundle).toHaveProperty('git');
     expect(bundle).not.toHaveProperty('recentDecisions');
@@ -55,16 +56,39 @@ describe('resume command', () => {
 
     await resume(['--context']);
 
-    expect(capture.output()).toContain('Program: demo');
+    expect(capture.output()).toBe('');
     expect(capture.output().length).toBeLessThanOrEqual(4_000);
   });
 
-  it('keeps degraded recovery visible without a program or useful checkpoint', async () => {
+  it('emits no automatic recovery instruction without useful resume context', async () => {
     const capture = project(false);
 
     await resume(['--context']);
 
-    expect(capture.output()).toContain('Context continuity: degraded');
-    expect(capture.output()).toContain('Reconstruct context before any mutation.');
+    expect(capture.output()).toBe('');
   });
+});
+
+
+it.each(['human', '--json', '--context'])('reads work handoff in %s without rewriting its legacy file', async format => {
+  const capture = project(false);
+  const reference = `https://example.com/${'project-reference/'.repeat(20)}A-2`;
+  const raw = `## Engaged work\n\n- A-1: worker uncertain.\n\n## Planned work\n\n2. ${reference}\n1. A-3\n`;
+  const path = join(capture.root, '.void', 'local', 'checkpoint.md');
+  mkdirSync(join(capture.root, '.void', 'local'));
+  writeFileSync(path, raw);
+  await resume(format === 'human' ? [] : [format]);
+  expect(capture.output()).toContain(reference);
+  expect(capture.output()).toContain('worker uncertain.');
+  if (format === '--json') {
+    expect(JSON.parse(capture.output())).toMatchObject({
+      checkpointPath: '.void/local/checkpoint.md',
+      checkpointNotice: 'Observations and intentions to verify; no authorization.',
+      checkpoint: { engagedWork: '- A-1: worker uncertain.', plannedWork: `2. ${reference}\n1. A-3`, isEmpty: false },
+    });
+  } else {
+    expect(capture.output()).toContain('Observations and intentions to verify; no authorization.');
+    expect(capture.output()).toContain('.void/local/checkpoint.md');
+  }
+  expect(readFileSync(path, 'utf8')).toBe(raw);
 });

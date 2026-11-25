@@ -1,7 +1,7 @@
 {
   "name": "@voidcorp/pack-monorepo",
   "version": "7.0.2",
-  "description": "Turborepo monorepo conventions for Void Machine — shared tsconfig.strict, @repo/core helpers (Result, Option, pipe), package boundary discipline.",
+  "description": "Turborepo monorepo conventions for Void Machine \u2014 shared tsconfig.strict, @repo/core helpers (Result, Option, pipe), package boundary discipline.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,17 +23,15 @@
       "import": "./dist/pipe.js",
       "types": "./dist/pipe.d.ts"
     },
-    "./tsconfig.strict.json": "./tsconfig.strict.json",
-    "./claude/*": "./claude/*"
+    "./tsconfig.strict.json": "./dist/tsconfig.strict.json",
+    "./claude/*": "./dist/claude/*"
   },
   "files": [
     "dist",
-    "claude",
-    "tsconfig.strict.json",
     "README.md"
   ],
   "scripts": {
-    "build": "tsup && tsc --emitDeclarationOnly --declarationMap false",
+    "build": "tsup && tsc --emitDeclarationOnly --declarationMap false && node ../../cli/scripts/copy-core-assets.mjs --pack pack-monorepo",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

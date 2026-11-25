@@ -1,24 +1,11 @@
 export { CO_OWNED_FILES, isCoOwned, PROJECT_DOCTRINE_PATH } from './co-owned.js';
-export { journalFingerprint, readMissionJournals, type JournalReadOptions } from './journal.js';
+export { readMissionJournals, type JournalReadOptions } from './journal.js';
 export { type ProjectRoots, resolveProjectRoots } from './project-roots.js';
-export {
-  cachedInvocationAlert,
-  installedSkillNames,
-  invocationAlert,
-  type LivenessVerdict,
-  livenessVerdict,
-  refreshInvocationVerdict,
-  replacementFor,
-  type ResolutionVerdict,
-  resolutionVerdict,
-  withSuccessor,
-} from './invocation.js';
 export {
   classifyMaterialized,
   DERIVED_LOAD_BEARING,
   derivedIgnoreEntries,
   isOwnedDerived,
-  INSTALLED_ENTRIES,
   LEGACY_RENAMES,
   RETIRED_DIR,
   RETIRED_ENTRIES,
@@ -28,7 +15,6 @@ export {
   type Ownership,
   ownershipOf,
   VOID_DIR,
-  VOID_INSTALLED_DIR,
   VOID_OWNERSHIP,
   VOID_MACHINE_DIR,
   VOID_PREVIOUS_MACHINE_DIR,
@@ -40,8 +26,6 @@ export {
   pendingMigrations,
   previousMachinePath,
   voidDir,
-  voidInstalledDir,
-  voidInstalledPath,
   voidMachineDir,
   voidMachinePath,
   voidReadPath,

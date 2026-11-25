@@ -1,0 +1,13 @@
+Sources for `void-api-and-interface-design` skill (see `docs/plans/skill-audits/void-api-and-interface-design.md` for full audit):
+
+- David Parnas "On the Criteria To Be Used in Decomposing Systems into Modules" (1972) — https://www.cs.umd.edu/class/spring2003/cmsc838p/Design/criteria.pdf — information hiding: a module exposes an interface and hides its design decisions; the contract is the stable surface, the implementation is replaceable.
+- Joshua Bloch "How to Design a Good API and Why It Matters" — https://www.infoq.com/presentations/effective-api-design/ (slides: https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/32713.pdf) — "when in doubt, leave it out"; minimal public surface; make it hard to misuse; public APIs are forever.
+- Contract-first / API-first design with OpenAPI — https://swagger.io/resources/articles/adopting-an-api-first-approach/ — write the contract (spec) before the implementation; the spec is reviewable and consumable on its own.
+- Semantic Versioning 2.0.0 — https://semver.org/ — MAJOR breaks, MINOR adds, PATCH fixes; encodes the backward-compatibility promise and the deprecation discipline.
+- void-machine `void-hexagonal-architecture` skill — ports are interfaces the domain owns; this skill shapes those ports as seen from outside (it does not decide where the boundary sits).
+
+Strategy: distill. Parnas (information hiding) + Bloch (minimal, misuse-resistant surface) + contract-first (spec before code) + SemVer (versioning + deprecation cycle), rewritten for void-machine and composed with hexagonal-architecture, domain-driven-design, typescript-strict, functional, security-guidance, async-safety.
+
+Boundary: narrower than hexagonal-architecture (no layering / dependency direction) and DDD (no domain vocabulary). Owns only the design of a public contract: shape, misuse-resistance, boundary types, error contract, versioning.
+
+Companion hooks: none in v1 (versioning/compat discipline is guidance + code-review surface; a future contract-diff hook is an open question).

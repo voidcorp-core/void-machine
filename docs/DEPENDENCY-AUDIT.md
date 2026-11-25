@@ -1,6 +1,6 @@
 # Independent dependency audit for Bun consumers
 
-The optional `packages/core/templates/github/void-dependency-audit.yml` workflow
+The optional `packages/core/src/templates/github/void-dependency-audit.yml` workflow
 runs independently of lint, types, tests and build. It has no `needs` edge and does
 not run inside a quality job. A registry outage therefore cannot prevent those
 checks from running. Both vulnerabilities and unavailable evidence still fail the

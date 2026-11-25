@@ -1,0 +1,35 @@
+{
+  "name": "harness-react",
+  "version": "7.0.2",
+  "description": "React 19 conventions for Void Machine: component layer purity, shadcn/Radix primitives, mobile-first dual-quality tokens, Tappable touch targets, accessibility defaults.",
+  "author": {
+    "name": "VoidCorp",
+    "email": "florent.pellegrin@voidcorp.io"
+  },
+  "homepage": "https://github.com/voidcorp-core/void-machine",
+  "license": "MIT",
+  "keywords": [
+    "voidcorp",
+    "react",
+    "shadcn",
+    "radix",
+    "accessibility"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/no-db-in-components.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/require-img-alt.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

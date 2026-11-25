@@ -87,14 +87,20 @@ const SEMGREP_SEVERITY: Record<string, FindingSeverity> = {
 };
 
 function fromSemgrep(payload: unknown): NormalizedOutput {
-  const results = (payload as { results?: unknown }).results;
+  const { results, errors } = payload as { results?: unknown; errors?: unknown };
   if (!Array.isArray(results)) return UNREADABLE;
+  if (errors !== undefined && (!Array.isArray(errors) || errors.length > 0)) return UNREADABLE;
   const findings: NormalizedFinding[] = [];
-  for (const entry of results as Record<string, unknown>[]) {
-    const checkId = text(entry['check_id'], 'unknown-rule');
-    const file = text(entry['path']) || undefined;
-    const line = positiveInteger((entry['start'] as { line?: unknown } | undefined)?.line);
-    const extra = (entry['extra'] ?? {}) as Record<string, unknown>;
+  for (const entry of results as unknown[]) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return UNREADABLE;
+    if (!('check_id' in entry) || typeof entry.check_id !== 'string' || !entry.check_id.trim()) {
+      return UNREADABLE;
+    }
+    const result = entry as Record<string, unknown>;
+    const checkId = text(result['check_id'], 'unknown-rule');
+    const file = text(result['path']) || undefined;
+    const line = positiveInteger((result['start'] as { line?: unknown } | undefined)?.line);
+    const extra = (result['extra'] ?? {}) as Record<string, unknown>;
     findings.push({
       adapter: 'semgrep',
       securityClass: semgrepClass(checkId),

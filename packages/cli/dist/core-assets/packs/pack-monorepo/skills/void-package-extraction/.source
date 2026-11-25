@@ -1,0 +1,5 @@
+Sources for `void-package-extraction` skill (see `docs/plans/skill-audits/void-package-extraction.md` for the full audit):
+
+- No external source. Native 3-question decision gate for the monorepo-specific "should this be extracted into a package?" trade-off.
+
+Strategy: native. The gate is monorepo-specific; single-app code reorganization has no equivalent boundary cost, so nothing external was adapted.

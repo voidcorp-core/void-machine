@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 import { isSeq, parseDocument } from 'yaml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
-const CORE = join(ROOT, 'packages/core/templates/github');
+const CORE = join(ROOT, 'packages/core/src/templates/github');
 const SCRIPT = join(CORE, 'dependency-audit.mjs');
 const advisory = { example: [{ id: 123, url: 'https://github.com/advisories/GHSA-example',
   title: 'Example vulnerability', severity: 'high', vulnerable_versions: '<2.0.0' }] };
@@ -81,7 +81,7 @@ it('ships a bounded dependency-audit job independently from quality, preserving 
 it('distributes the exact workflow and wrapper through the existing core-assets copier', () => {
   expect(existsSync(SCRIPT)).toBe(true);
   // Run the actual copier; no consumer install, build, network or lifecycle scripts.
-  // It copies into a private directory, never into packages/cli/core-assets: the
+  // It copies into a private directory, never into packages/cli/dist/core-assets: the
   // copier empties its target before refilling it, and findCoreSource() reads that
   // directory first, so a copy there made concurrent mission tests read a
   // half-built core (ENOENT on policies/, profiles/, specialists/).

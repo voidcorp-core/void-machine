@@ -145,3 +145,12 @@ Left for sibling tickets (ticket-boundary discipline): `/benchmark` (perf, lines
 
 Align the existing standard with the owning workflow, preserving its technical protection while
 removing repeated or pattern-only obligations. See [Proportional delivery](../../PROPORTIONAL-DELIVERY.md).
+
+## 2026-11-25 — Acceptance before quality (DEV-1411)
+
+The existing acceptance-criteria identity did not require checking the committed result against
+that scope before quality review. The skill now makes that order explicit in the same review:
+missing requirements and implemented unauthorized additions block acceptance, while necessary
+implementation details and advisory suggestions are distinguished. The reviewer, receipt and
+correction budget are reused. No second review, executable gate or budget change is introduced;
+`docs/BOUNDED-REVIEWS.md` remains unchanged.

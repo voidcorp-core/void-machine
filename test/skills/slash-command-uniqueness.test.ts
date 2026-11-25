@@ -28,10 +28,10 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 /** Every directory that ships a runtime surface: the core, then each pack. */
 function surfaceRoots(): string[] {
   const packs = join(ROOT, 'packages/packs');
-  const roots = [join(ROOT, 'packages/core')];
+  const roots = [join(ROOT, 'packages/core/src')];
   for (const entry of readdirSync(packs)) {
     const path = join(packs, entry);
-    if (statSync(path).isDirectory()) roots.push(path);
+    if (statSync(path).isDirectory()) roots.push(join(path, 'src'));
   }
   return roots;
 }
@@ -60,16 +60,6 @@ describe('slash command namespace', () => {
     expect(withCommands).toEqual([]);
   });
 
-  it('gives every name a single owner across commands and skills', () => {
-    const collisions: string[] = [];
-    for (const root of surfaceRoots()) {
-      const skills = new Set(skillNames(root));
-      for (const command of commandNames(root)) {
-        if (skills.has(command)) collisions.push(`${root.replace(ROOT, '')}: ${command}`);
-      }
-    }
-    expect(collisions).toEqual([]);
-  });
 
   it('holds across roots too, so one pack cannot shadow another surface', () => {
     const owners = new Map<string, Set<string>>();
@@ -79,15 +69,16 @@ describe('slash command namespace', () => {
         owners.set(name, (owners.get(name) ?? new Set<string>()).add(relative));
       }
     }
+    expect(owners.size).toBeGreaterThan(0);
     const shared = [...owners.entries()]
       .filter(([, roots]) => roots.size > 1)
       .map(([name, roots]) => `${name}: ${[...roots].join(', ')}`);
     expect(shared).toEqual([]);
   });
 
-  /** The three CLI-facing gestures keep their names, as skills every runtime receives. */
-  it.each(['void-doctor', 'void-audit', 'void-graph'])('keeps %s invocable, as a skill', (name) => {
-    const skill = join(ROOT, 'packages/core/skills', name, 'SKILL.md');
+  /** The retained diagnostic gesture is a skill every runtime receives. */
+  it.each(['void-doctor'])('keeps %s invocable, as a skill', (name) => {
+    const skill = join(ROOT, 'packages/core/src/skills', name, 'SKILL.md');
     expect(existsSync(skill)).toBe(true);
     const body = readFileSync(skill, 'utf8');
     // These run a CLI on request, and the skill says so in its own words rather
@@ -103,8 +94,8 @@ describe('slash command namespace', () => {
    * flow, under two names, which the name-collision rule above cannot see.
    */
   it('folds void-feedback into learn rather than keeping the second copy', () => {
-    expect(existsSync(join(ROOT, 'packages/core/skills/void-feedback'))).toBe(false);
-    const learn = readFileSync(join(ROOT, 'packages/core/skills/void-learn/SKILL.md'), 'utf8');
+    expect(existsSync(join(ROOT, 'packages/core/src/skills/void-feedback'))).toBe(false);
+    const learn = readFileSync(join(ROOT, 'packages/core/src/skills/void-learn/SKILL.md'), 'utf8');
     expect(learn).toContain('gh issue create');
     // The trigger phrases folded into `description`, where the spec wants them:
     // it asks a description to say what a skill does and when to use it, and

@@ -15,26 +15,15 @@ import type { RuleName } from './runner.js';
  * frontmatter field, only ever *narrows* automatic activation and cannot make one
  * happen.
  *
- * The pairs are declared in `packages/harness-graph/relations.graph.yaml` as
- * `enforces` edges with their evidence. This table is the copy that ships inside
- * the compiled hook, and a test holds the two together so they cannot drift.
+ * The rule owner names its governing skill here; tests prove it resolves.
  */
 const GOVERNING_SKILL = {
-  'boundary-direction': 'void-hexagonal-architecture',
   // The remedy the refusal teaches -- build the byte rather than type it -- is a
   // fixture practice, and void-testing is the only skill that already carries it.
   'control-character': 'void-testing',
   'dangerous-command': 'void-security-guidance',
-  'design-slop': 'void-frontend-design',
-  'no-any': 'void-typescript-strict',
-  'no-as-cast': 'void-typescript-strict',
-  'no-console': 'void-observability',
-  'no-focused-test': 'void-testing',
-  'no-null': 'void-functional',
   'protected-file': 'void-security-guidance',
   'secret-content': 'void-security-guidance',
-  'tdd-order': 'void-tdd',
-  'test-name': 'void-testing',
 } satisfies Record<RuleName, string>;
 
 /**
@@ -43,19 +32,10 @@ const GOVERNING_SKILL = {
  * instead of a cast asserting it.
  */
 export const RULE_NAMES = [
-  'boundary-direction',
   'control-character',
   'dangerous-command',
-  'design-slop',
-  'no-any',
-  'no-as-cast',
-  'no-console',
-  'no-focused-test',
-  'no-null',
   'protected-file',
   'secret-content',
-  'tdd-order',
-  'test-name',
 ] as const satisfies readonly RuleName[];
 
 /** The skill whose doctrine a refusal of `rule` comes from. */

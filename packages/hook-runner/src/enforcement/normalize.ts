@@ -23,7 +23,9 @@ function safeString(value: unknown, label: string, limit = MAX_FIELD_BYTES): str
 }
 
 function commandText(value: unknown): string {
-  if (Array.isArray(value)) return value.map((part) => safeString(part, 'command')).join(' ');
+  // An argv item is already one literal argument, not shell source to concatenate.
+  if (Array.isArray(value)) return value.map((part) =>
+    `'${safeString(part, 'command').replaceAll("'", "'\\''")}'`).join(' ');
   return safeString(value, 'command');
 }
 
@@ -35,7 +37,8 @@ function patchText(input: Record<string, unknown>): string {
     input['command'],
   ];
   return candidates
-    .map((value) => commandText(value))
+    .map((value) => Array.isArray(value)
+      ? value.map((part) => safeString(part, 'patch')).join('\n') : safeString(value, 'patch'))
     .filter((value) => value.includes('*** Begin Patch'))
     .join('\n');
 }

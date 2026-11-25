@@ -2,12 +2,24 @@
 
 The working rules for this repo live in `CLAUDE.md` (mirrored as `AGENTS.md` for Codex) and the docs it points to. This file is the short index; those are the source of truth.
 
+## Install the workspace
+
+Use the pnpm version pinned in root `package.json` (currently 12.23.0), then run
+`pnpm install --frozen-lockfile`. pnpm 12 reads dependency overrides from
+`pnpm-workspace.yaml`; the legacy `package.json#pnpm` field is ignored. Keep the
+package-manager and dependency documents generated in `pnpm-lock.yaml` together.
+Do not drop overrides or regenerate dependency versions to silence a configuration
+mismatch. Only esbuild is approved to run its dependency installation script;
+other dependency builds remain subject to pnpm approval. Verify a pnpm migration
+with a fresh normal install before testing `--ignore-scripts`, since reusing an
+installation can hide missing build approvals. See the [pnpm migration guide](https://pnpm.io/migration).
+
 ## Before you write code
 
 1. Read `CLAUDE.md` — the anti-bloat discipline (eight hard rules), sourcing discipline, and hard rules for any added code. A PR that violates the anti-bloat rules is blocked.
-2. Read `docs/PHILOSOPHY.md` — the three pillars (safety / performance / DX) and why they win.
+2. Read `packages/core/src/PHILOSOPHY.md` — the three pillars (safety / performance / DX) and why they win.
 3. Read `docs/ARCHITECTURE.md` — package boundaries and dependency direction.
-4. Skim `docs/DECISIONS.md`, then use `void-machine decisions render` for the current decision projection. Do not re-litigate a settled call without superseding it.
+4. Read the relevant Markdown records in `docs/decisions-log/`; `docs/DECISIONS.md` preserves the older history. Link a new record to its predecessor when materially changing a settled choice.
 
 ## Running the CLI you just changed
 
@@ -23,42 +35,45 @@ tree rather than the last build.
 
 ## The gates (run before you push)
 
-The three daily commands are deliberately few:
+Use the existing Vitest projects for focused feedback: `pnpm test:engine`,
+`pnpm test:local`, and `pnpm test:network`. `pnpm verify --changed-from <ref>`
+selects local checks conservatively; `--list` explains the commands without executing.
+`pnpm verify` runs the retained complete local checks, collecting independent cheap
+errors before starting dependent work. Build/freshness failures stop dependents.
+Run relevant checks during implementation and reuse unaffected proofs at handoff.
 
-- `pnpm test:fast` for the CPU-only edit loop.
-- `pnpm test:component` when filesystem or subprocess behavior changed.
-- `pnpm verify` once before handoff or push; it runs every required gate in the same order as CI.
+CI is ordinary YAML calling these project commands. Native exit codes and Actions
+outcomes own failure; there is no workflow generator or per-gate JSON report.
+The cheap group explicitly requires successful outcomes even with continue-on-error.
+The required `validate` job refuses failed, skipped or missing preparation.
+Docs-only changes keep reference/enforcement checks. Shared, unknown, installer,
+configuration, renamed or deleted paths broaden. Product Markdown is source.
+Native skipped OS jobs mean non-applicability, never an executed conformance proof.
+See [CI chain](CI-CHAIN.md) for selection, candidate identity and promotion.
 
-Agent campaigns are a separate measurement lane. A campaign cell runs only
-targeted checks for its fixture; it must not invoke `pnpm verify`, certification
-stress, or network checks as an inner loop. The campaign scheduler uses bounded
-parallelism and persists each cell result as it completes. A failed or
-unavailable runtime stops admission when configured and leaves the remaining
-cells as `unknown`; it never turns an incomplete campaign into a green report.
-The release lane still runs `pnpm verify` once on the integrated result.
+There is no repository pre-commit installation or `prepare` hook mutating Git config.
+Personal hooks remain untouched. A maintainer may remove an obsolete local
+`core.hooksPath` only after proving it is exactly the repository-owned `.githooks`
+value; workers never mutate configuration shared between worktrees.
 
-`scripts/verify.mjs` is the only gate catalogue. The managed block in
-`.github/workflows/ci.yml` is generated from it, and every CI gate writes one report bound to the
-checked-out SHA and exact argv. The final step rejects a missing, duplicate, stale or red report.
-Performance benchmarks remain explicit observations through `pnpm verify --observations`; shared
-PR runners do not authorize correctness from wall-clock thresholds.
-Install conformance proves the packed syntax worker by the identity the runtime verifies and two
-exact answers; its repeated latency campaign is printed as the `syntax-worker-latency` observation
-(`complete` or `latency-anomaly`) with every sample kept. Only a measured timeout is an anomaly; a
-wrong answer, a launch error or an incomplete campaign still fails consumer conformance.
-The campaign runs in its own `latency` suite against the same verified tarball, with the same
-120-second process budget. Its 180 samples never consume the functional install suite's budget;
-installation still verifies each runtime's worker identity and exact answers.
-Repeated reliability stress is not a laptop gate. `.github/workflows/test-certification.yml` runs
-twenty seeded fast attempts and ten seeded complete attempts weekly or on explicit dispatch, with
-fixed worker budgets and exact-SHA JSON reports. A failure stops the campaign and remains red; the
-workflow never retries an attempt. A separately triggered GitHub run has a new run identity and
-does not erase the earlier red evidence.
+`pnpm lint` uses this repository's Biome 2.4.16 configuration. The explicit-any,
+console, undeclared-dependency and focused/skipped-test rules are errors. Run the
+configured checks after coherent changes, before accepting test evidence; do not
+wait until the final handoff to discover violations. Tests containing intentional
+invalid source should use data strings or narrowly justified fixture handling.
+CLI output exceptions must not exempt application logging.
+The repository configuration is not a consumer preset installed by `init`.
+Consumers configure and verify equivalents in their existing toolchain; missing
+coverage is reported honestly, without a new checker or a general work veto.
+See [test evidence and validation](HOOK-TEST-EVIDENCE.md) for scope and limitations.
+
+The scheduled/manual certification campaign is retired. Historical reports remain evidence of
+those runs. For an explicitly requested ordering investigation, use native Vitest once with
+`--sequence.shuffle --sequence.seed=10401`; a failed invocation remains red. The network command
+accepts the same two options while retaining its fixed worker and timeout bounds.
 
 - `pnpm verify --artifacts` — only the generated-artefact gates, in seconds.
-  Adding a skill moves the graph, `certification.json`, the consumer bundle AND
-  the `core-assets` mirror; this is the class of failure that otherwise gets
-  discovered from CI, one round trip at a time.
+  Adding a skill changes the `core-assets` mirror; verify it alongside hook bundle freshness.
 - `pnpm verify --fix` — regenerate those artefacts instead of being told they
   are stale, then verify them. Never implicit: regenerating a committed file is
   a change, and a change happens because someone asked for it.
@@ -69,74 +84,74 @@ does not erase the earlier red evidence.
   `VOID_GLOBAL_DIR` into it before test modules load. Global teardown removes the root after all
   workers finish. A package-local run and the root run therefore have the same containment and
   timeout contract; do not duplicate those values in package configs.
-- The root Vitest config derives exclusive projects from `test/support/test-catalog.ts`. Proof tier
-  answers what a test proves; resource class controls how it is scheduled. `pnpm test:fast` is the
-  CPU-only edit loop, `pnpm test:component` owns filesystem and subprocess checks, and
-  `pnpm test:network` is explicit because it needs loopback sockets. Use the tier commands when the
-  semantic boundary matters. Contract subprocess tests use two bounded workers; consumer and
-  system subprocess tests stay sequential in separate groups. Loading Vitest fails if a test path
-  has no tier or more than one. Any increase to a worker budget requires the complete stress proof,
-  not a retry-until-green run.
+- The root config uses [Vitest 5 native projects](https://vitest.dev/guide/projects).
+  `pnpm test:engine` runs the I/O-free mission-engine package with four workers;
+  `pnpm test:local` runs the remaining local package/repository tests with one worker because
+  they include indirect subprocess fixtures; `pnpm test:network` owns the UI, daemon, note and signal families
+  with one thread. Native `sequence.groupOrder` separates these groups when running all projects.
+  Shared global setup, per-file isolation and cleanup apply to every project.
+- Target a regression directly: `pnpm exec vitest run path/to/file.test.ts`, optionally adding
+  `--project=local`, `--project=engine` or `--project=network`. Filter by `-t` for a named case.
+  For actual runtime collection use `pnpm exec vitest list --no-static-parse --json=tests.json`;
+  Vitest 5's default static list is not evidence that modules loaded successfully.
+  No source scanner, proof-tier taxonomy, import regex or per-file registry chooses tests.
 - `pnpm lint` and `pnpm typecheck` — zero errors.
-- `pnpm anti-bloat:check` — the eight anti-bloat rules (skill ≤400 LOC, hook ≤100 LOC, discovery description non-blocking target ≤250 chars and hard cap 500, `.source` + audit note per skill, ...).
-- `pnpm graph:check` / `pnpm graph:check-bundle` — regenerate `catalog.v3.json`, its `model.json` compatibility projection, and the bundle when graph inputs change.
+- `pnpm anti-bloat:check` — discovery contracts (description target ≤250 chars and hard cap 500, technical skill names, `.source` provenance), agent tool isolation and hook syntax. Skills and hooks stay concise without editorial line caps.
 - `pnpm conformance:consumer` — pack the local CLI once, then prove account-free install,
   installed-hook execution and the Autopilot public surface for Claude, Codex, and both. The
   narrower `conformance:install`, `conformance:hooks` and `conformance:autopilot` commands select
   one suite through the same orchestrator. CI packs one exact-SHA artifact and makes Linux, macOS
-  and Windows verify and execute those same bytes. The default run also executes the latency
-  suite; select it alone with `pnpm conformance:consumer --suite latency`.
-- `pnpm sync:docs` — `CLAUDE.md` and `AGENTS.md` must stay in parity (a pre-commit hook enforces this; change one, change the other in the same commit).
-- `void-machine self-host sync --mode shadow` then `void-machine self-host doctor` — compile and exercise the current sources as isolated Claude + Codex artifacts. Generated bytes live only under `.void/generated/`; the command never owns native root agent files.
+  and Windows verify and execute those same bytes. Safety and compressed-size checks read that
+  same archive. On each OS, one offline npm install and a package-name invocation prepare
+  the immutable CLI shared by the suites; their writable projects remain independent. The available suites are install, hooks and
+  autopilot; the syntax-worker latency campaign was retired with that worker.
+- `CLAUDE.md` imports shared instructions from `AGENTS.md`; edit the common source.
+- `void-machine self-host sync` then `void-machine self-host doctor` — compile and exercise the current sources as isolated Claude + Codex artifacts. Generated bytes live only under `.void/machine/generated/`; the command never owns native root agent files.
 
-Self-host rollout modes are `shadow`, `warn`, `enforce`, and `release-gate`.
-`shadow`/`warn` report blockers without failing the command. `enforce` and
-`release-gate` fail on a missing, stale, drifted, or non-executable artifact;
-native runtime executables that are unavailable remain an explicit degraded
-state until their dedicated certification lane.
+Self-host has one validation: missing, stale or drifted artifacts fail; missing optional runtime
+CLIs remain degraded and untested. `self-host doctor` never builds. Legacy rollout receipts
+remain readable without changing severity; `--mode` is rejected explicitly. Ordinary `doctor`
+checks the published installation at `installRoot`, even in this repository. It is local by
+default (`--no-remote` is a compatible no-op); `check` owns remote version comparisons.
+The documentary repair flags `doctor --fix` and `--dry-run` are retired.
 
-## Programme and session handoff
+## Authority and session handoff
 
-An executing multi-session programme may install one versioned `.void/program.md` descriptor.
-Root `AGENTS.md` and `CLAUDE.md` load its global plan and spec; `ResumeBundle` composes it with the
-local `.void/machine/checkpoint.md` and Git so a later session can resume from a plain “continue”.
+[Explicit config authority](AUTOPILOT-AUTHORITY.md) requires schemaVersion 3 and an explicit
+boolean enabled. The native project/milestone locator lives in `progress.scope`; the milestone
+links the approved plan and native relations own progress. Historical programme files are kept
+without being read, moved or rewritten. Installation never migrates autonomous consent.
 
-The programme records durable context and routing: global plan, approved spec, optional progress
-provider and opaque scope, stable unit order, native ready/started/review/done roles, human gates,
-and the `void-autopilot` consent block. It does not duplicate a mutable current or next unit. The
-declared progress provider is the execution ledger:
-
-- recover exactly one unit in the declared started role before claiming new work;
-- claim the selected ready unit in the provider's started role before editing;
-- keep native blockers, ownership, comments and review evidence truthful when supported;
-- move to the declared review role only after the unit gates pass;
-- move to the declared done role only after merge and final verification;
-- never auto-complete a human gate.
-
-The `autopilot` block is required and carries consent to autonomous execution: `schemaVersion: 2`
-and an explicit `enabled`. It declares no merge gate: the loop merges into the integration branch on
-a local verdict, never into `deployBranch` or the repository default branch, and a person who merges
-themselves runs `void-machine autopilot merges --by-human`. A program that does not want autopilot declares
-`enabled: false` rather than omitting the block, because consent is never inferred from silence.
-`packages/cli/src/lib/autopilot/program.ts` is the single parser of this contract, and its tests
-validate this repository's own `.void/program.md` so the schema and the file cannot drift.
-
-Ready means every native blocker relation is complete. If a required provider capability is
-unavailable, only the action needing it stops; programme and checkpoint remain readable offline.
-A specific user request still overrides automatic selection. When every scoped unit and human gate
-is complete, the final programme change marks `.void/program.md` completed; it never repoints
-itself to unrelated work.
-
-The same protocol ships to consumer projects through the managed runtime-doc block. It is
-provider-agnostic and dormant unless the consumer has a project-owned `.void/program.md` with
-`status: executing`; `void-ticket` creates that descriptor only after an approved multi-unit pool
-and native dependencies exist. The local checkpoint is replaced on a deliberate session close and
-never carries the current or next unit.
+Read the complete checkpoint and reconcile all engaged tickets, PRs, Git and native workers.
+Keep the bounded planned list as intention, preserve human priorities and assignments, and
+refresh affected observations after a merge. Missing required provider, scope or plan stops
+only dependent selection. No duplicate worker for uncertain activity; no permission from
+membership alone. Claim selected work before editing, use review after its gates pass, and
+mark done only after merge and final verification. Human gates remain human.
 
 ## Commits
 
-Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Create each non-obvious decision with `void-machine decisions new`; accepted decision content is immutable and changes supersede it. The only in-place exception is a bounded repository-local reference migration whose surrounding text is unchanged and whose new target exists inside the repository. Never delete or rename an accepted file, and never edit a shared index. `pnpm decisions:check` validates the records and this narrow immutability exception.
+Conventional Commits, and every message ends with **why**, not just what (see `void-commit-discipline`). Any new convention added in a commit must be reflected in `docs/*.md` in the same commit. Write lasting structural decisions as short Markdown records with light frontmatter through `void-decide`. Keep stable unique names and IDs, historical metadata and replacement links. Ordinary corrections use normal Git commits; material changes create a linked new decision. `void-learn` still requires human agreement for doctrine changes.
 
 ## Filing a gap
 
 A perceived harness gap is filed **directly as a GitHub issue** on `voidcorp-core/void-machine` once it clears the agnostic + harness-worthy bar (see `docs/HARNESS_EVOLUTION.md`). There is no per-repo proposal queue.
+
+### Inspecting the prepared CLI
+
+`conformance:pack` checks original tracked deliveries with `derive:check` before
+any lifecycle generation, then packs once with pnpm. Its manifest binds source
+SHA, package name/version, digest and workflow run/attempt. Consumers reject a
+different checkout, changed checkout, run or digest; merge groups use their
+combined SHA through the existing `GATE_SHA` expression.
+
+`check:publish` and `check:size` read `VOID_CONFORMANCE_TARBALL` when supplied.
+Without it, each command checks freshness and prepares its own temporary CLI
+archive, including on an edited development tree, without claiming a clean HEAD
+attestation. Full `verify` shares one invocation-owned preparation on a clean
+tree; edited trees retain independent preparation. No artifact cache or
+cross-OS node_modules transfer is involved.
+
+Checkout trust tests own their fixture repositories and never rely on maintainer-local
+ignores or self-host outputs being absent. Mission, independent-review and publication
+proofs remain separate from native CI outcomes.

@@ -1,9 +1,0 @@
-Sources for `void-decide` skill (see `docs/plans/skill-audits/void-decide.md` for full audit):
-
-- Michael Nygard, "Documenting Architecture Decisions" (2011) — https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions — the original ADR format (Context / Decision / Consequences) and the immutable-record lifecycle.
-- adr.github.io / Markdown Architectural Decision Records (MADR) — https://adr.github.io/ — status and supersession lifecycle retained; sequential numbering rejected because it creates a parallel-writer coordination point.
-- joelparkerhenderson/architecture-decision-record — https://github.com/joelparkerhenderson/architecture-decision-record — templates surveyed; the terse ~50-line shape kept, heavier templates rejected.
-
-Strategy: native (no single source combines terse records, reversal-cost discipline and safe parallel authorship; retained the load-bearing format, added the rejected-alternative gate, UUID identity, exclusive one-file ownership and read-only projections).
-
-Promoted from pack-monorepo to core on 2026-06-04: ADRs are a universal craftsman concern, not monorepo-specific, and the repo meta-rule already mandates logging non-obvious decisions. Composes with plan, commit-discipline, source-driven-development (alternatives cite official docs), learn.

@@ -1,0 +1,7 @@
+Sources for the `migration-planner` agent (see `docs/plans/skill-audits/migration-planner.md` for the full audit):
+
+- void-machine `void-migrations` skill — the zero-downtime, two-phase, batched-backfill discipline the agent sequences into a plan (the skill prescribes safety; the agent produces the ordered, reversible plan).
+- Expand-contract / parallel-change pattern — Martin Fowler, "ParallelChange" https://martinfowler.com/bliki/ParallelChange.html — the reversible-step backbone of the plan.
+- void-machine `void-plan` skill — the executable-plan shape the agent emits (handed off for execution, which the agent does not perform).
+
+Strategy: original (compose). Planning only, never execution: sequenced, reversible (expand-contract) migration plan. Routes execution to tdd/plan. model: opus (sequencing/reasoning).

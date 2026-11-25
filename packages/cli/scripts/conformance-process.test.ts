@@ -98,16 +98,16 @@ describe('contained conformance process', () => {
 
 describe('packageManagerCommand', () => {
   it('runs the pnpm 12 native executable directly on Windows', () => {
-    const pnpmExe = 'C:\Program Files\pnpm\pnpm.exe';
+    const pnpmExe = 'C:\\Program Files\\pnpm\\pnpm.exe';
     expect(packageManagerCommand('pnpm', {
       platform: 'win32',
-      nodeExecutable: 'C:\node\node.exe',
+      nodeExecutable: 'C:\\node\\node.exe',
       environment: { npm_execpath: pnpmExe },
       isFile: (candidate) => candidate === pnpmExe,
     })).toEqual({ executable: pnpmExe, prefixArguments: [] });
   });
 
-  it.each(['C:\pnpm\missing.exe', 'C:\pnpm\pnpm.cmd'])(
+  it.each(['C:\\pnpm\\missing.exe', 'C:\\pnpm\\pnpm.cmd'])(
     'rejects missing native binaries and shell shims: %s', (candidate) => {
       expect(() => packageManagerCommand('pnpm', {
         platform: 'win32',

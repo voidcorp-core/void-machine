@@ -15,3 +15,7 @@ packages:
 overrides:
   esbuild: '>=0.28.1'
   postcss: '>=8.5.18'
+
+# esbuild installs and verifies its platform-specific binary.
+allowBuilds:
+  esbuild: true

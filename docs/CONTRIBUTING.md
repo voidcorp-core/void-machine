@@ -9,7 +9,10 @@ Use the pnpm version pinned in root `package.json` (currently 12.23.0), then run
 `pnpm-workspace.yaml`; the legacy `package.json#pnpm` field is ignored. Keep the
 package-manager and dependency documents generated in `pnpm-lock.yaml` together.
 Do not drop overrides or regenerate dependency versions to silence a configuration
-mismatch. See the [pnpm migration guide](https://pnpm.io/migration).
+mismatch. Only esbuild is approved to run its dependency installation script;
+other dependency builds remain subject to pnpm approval. Verify a pnpm migration
+with a fresh normal install before testing `--ignore-scripts`, since reusing an
+installation can hide missing build approvals. See the [pnpm migration guide](https://pnpm.io/migration).
 
 ## Before you write code
 

@@ -97,6 +97,26 @@ describe('contained conformance process', () => {
 });
 
 describe('packageManagerCommand', () => {
+  it('runs the pnpm 12 native executable directly on Windows', () => {
+    const pnpmExe = 'C:\\Program Files\\pnpm\\pnpm.exe';
+    expect(packageManagerCommand('pnpm', {
+      platform: 'win32',
+      nodeExecutable: 'C:\\node\\node.exe',
+      environment: { npm_execpath: pnpmExe },
+      isFile: (candidate) => candidate === pnpmExe,
+    })).toEqual({ executable: pnpmExe, prefixArguments: [] });
+  });
+
+  it.each(['C:\\pnpm\\missing.exe', 'C:\\pnpm\\pnpm.cmd'])(
+    'rejects missing native binaries and shell shims: %s', (candidate) => {
+      expect(() => packageManagerCommand('pnpm', {
+        platform: 'win32',
+        environment: { npm_execpath: candidate },
+        isFile: (path) => path.endsWith('.cmd'),
+      })).toThrow('cannot resolve pnpm executable or JavaScript entrypoint');
+    },
+  );
+
   it('runs pnpm through its JavaScript entrypoint on Windows', () => {
     const command = packageManagerCommand('pnpm', {
       platform: 'win32',
@@ -134,7 +154,7 @@ describe('packageManagerCommand', () => {
       nodeExecutable: 'C:\\node\\node.exe',
       environment: {},
       isFile: () => false,
-    })).toThrow('cannot resolve pnpm JavaScript entrypoint');
+    })).toThrow('cannot resolve pnpm executable or JavaScript entrypoint');
   });
 
   it('uses native executables on POSIX', () => {

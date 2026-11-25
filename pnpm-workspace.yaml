@@ -10,3 +10,8 @@ packages:
   - 'packages/hook-runner'
   - 'apps/*'
   - 'packages/void-machine'
+
+# Dependency resolution settings are read here by pnpm 12.
+overrides:
+  esbuild: '>=0.28.1'
+  postcss: '>=8.5.18'

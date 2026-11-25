@@ -241,7 +241,7 @@ function windowsCli(manager, options) {
     if (candidate !== undefined) return candidate;
   }
   throw new Error(
-    `conformance cannot resolve ${manager} JavaScript entrypoint on Windows`,
+    `conformance cannot resolve ${manager} executable or JavaScript entrypoint on Windows`,
   );
 }
 
@@ -257,6 +257,11 @@ export function packageManagerCommand(manager, overrides = {}) {
   };
   if (options.platform !== 'win32') {
     return { executable: manager, prefixArguments: [] };
+  }
+  const nativePnpm = options.environment.npm_execpath;
+  if (manager === 'pnpm' && typeof nativePnpm === 'string'
+    && /\.exe$/i.test(nativePnpm) && options.isFile(nativePnpm)) {
+    return { executable: nativePnpm, prefixArguments: [] };
   }
   return {
     executable: options.nodeExecutable,

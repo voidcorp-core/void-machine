@@ -2,6 +2,15 @@
 
 The working rules for this repo live in `CLAUDE.md` (mirrored as `AGENTS.md` for Codex) and the docs it points to. This file is the short index; those are the source of truth.
 
+## Install the workspace
+
+Use the pnpm version pinned in root `package.json` (currently 12.23.0), then run
+`pnpm install --frozen-lockfile`. pnpm 12 reads dependency overrides from
+`pnpm-workspace.yaml`; the legacy `package.json#pnpm` field is ignored. Keep the
+package-manager and dependency documents generated in `pnpm-lock.yaml` together.
+Do not drop overrides or regenerate dependency versions to silence a configuration
+mismatch. See the [pnpm migration guide](https://pnpm.io/migration).
+
 ## Before you write code
 
 1. Read `CLAUDE.md` — the anti-bloat discipline (eight hard rules), sourcing discipline, and hard rules for any added code. A PR that violates the anti-bloat rules is blocked.
